@@ -95,6 +95,7 @@ jobs:
           cargo clippy --no-default-features -- -D warnings || echo "Clippy warnings found (non-fatal)"
 
   # Parallel Python lint/test
+  # 并行的 Python lint/测试
   python:
     runs-on: ubuntu-latest
     needs: proto
@@ -119,6 +120,7 @@ jobs:
           pytest -q --tb=short || echo "Some Python tests failed (non-fatal)"
 
   # Optional coverage job (manual trigger only to speed up CI)
+  # 可选的覆盖率 job（仅手动触发，以加快 CI）
   coverage:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
