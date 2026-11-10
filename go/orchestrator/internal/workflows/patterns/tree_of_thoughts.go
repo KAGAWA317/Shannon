@@ -118,6 +118,7 @@ func TreeOfThoughts(
 	}
 
 	// Exploration queue (for BFS-like exploration with scoring)
+	// 每轮按 score 排序取最高分节点展开，本质是带评分的 best-first，而非严格 BFS。
 	queue := []*ThoughtNode{root}
 	allNodes := []*ThoughtNode{root}
 
@@ -161,6 +162,7 @@ func TreeOfThoughts(
 		result.TotalThoughts = thoughtsExplored
 
 		// Evaluate and prune branches
+		// 低于 PruningThreshold 的分支直接丢弃，不进 queue，用来控制探索规模。
 		for _, branch := range branches {
 			// Calculate score
 			branch.Score = evaluateThought(ctx, branch, query, config.EvaluationMethod, opts)
@@ -207,6 +209,7 @@ func TreeOfThoughts(
 	}
 
 	// Backtrack if enabled and confidence is low
+	// 仅在开启 backtrack 且置信度 < 0.5 时回看队列中剩余的高分分支。
 	if config.BacktrackEnabled && result.Confidence < 0.5 && len(queue) > 0 {
 		logger.Info("Backtracking to explore alternative paths")
 
@@ -386,6 +389,7 @@ func evaluateThought(
 ) float64 {
 
 	// Simple heuristic scoring
+	// 纯关键词启发式：正向词加分、含糊词减分，再按深度惩罚，避免长链虚高。
 	score := 0.5 // Base score
 
 	// Check for solution indicators
@@ -478,6 +482,7 @@ func findBestPath(root *ThoughtNode) []*ThoughtNode {
 	bestScore := 0.0
 
 	// DFS to find all paths
+	// 用路径平均分而非累积分比较，否则更长的路径天然占优。
 	var findPaths func(node *ThoughtNode, currentPath []*ThoughtNode, currentScore float64)
 	findPaths = func(node *ThoughtNode, currentPath []*ThoughtNode, currentScore float64) {
 		currentPath = append(currentPath, node)

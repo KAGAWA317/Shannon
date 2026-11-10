@@ -1,13 +1,20 @@
 # Research Strategy Configuration
+# 研究策略配置
 #
 # Model Tier Architecture (Cost Optimization):
+# 模型档位架构（成本优化）：
 # - Utility activities (coverage_eval, fact_extraction, subquery_gen): always "small"
+# - 辅助性 activity（coverage_eval、fact_extraction、subquery_gen）：始终使用 "small"
 # - Agent execution: varies by strategy (see agent_model_tier below)
+# - Agent 执行：按策略而定（见下方 agent_model_tier）
 # - Final synthesis: "large" for standard/deep/academic strategies, "medium" for quick
+# - 最终综合：standard/deep/academic 策略用 "large"，quick 用 "medium"
 #
 # This tiered approach reduces costs by 50-70% while maintaining quality.
+# 这种分级方式可在保持质量的同时将成本降低 50-70%。
 # Industry research shows agentic workflows with smaller models + iteration
 # match or outperform single large-model calls.
+# 行业研究表明，搭配较小模型 + 迭代的 agentic workflow，可以达到甚至超过单次大模型调用。
 
 strategies:
   quick:
@@ -17,6 +24,7 @@ strategies:
     gap_filling_enabled: false
     iterative_research_enabled: false
     # Model tier for agent execution (utility activities always use "small")
+    # Agent 执行使用的模型档位（辅助性 activity 始终使用 "small"）
     agent_model_tier: small
   standard:
     verification_enabled: true
@@ -28,6 +36,7 @@ strategies:
     gap_filling_check_citations: false
     iterative_max_iterations: 1
     # Standard uses small for agents; final synthesis auto-upgrades to large
+    # standard 的 Agent 使用 small；最终综合自动升级为 large
     agent_model_tier: small
   deep:
     verification_enabled: true
@@ -39,6 +48,7 @@ strategies:
     gap_filling_check_citations: false
     iterative_max_iterations: 2
     # Deep uses medium for agents; final synthesis auto-upgrades to large
+    # deep 的 Agent 使用 medium；最终综合自动升级为 large
     agent_model_tier: medium
   academic:
     verification_enabled: true
@@ -51,4 +61,5 @@ strategies:
     gap_filling_check_citations: false
     iterative_max_iterations: 2
     # Academic uses medium for agents; final synthesis auto-upgrades to large
+    # academic 的 Agent 使用 medium；最终综合自动升级为 large
     agent_model_tier: medium

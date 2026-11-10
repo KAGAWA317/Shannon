@@ -1,4 +1,7 @@
-"""Tests for vendor adapter pattern and loading."""
+"""Tests for vendor adapter pattern and loading.
+
+覆盖 vendor adapter 的注册 / 懒加载，以及 transform_body 的字段变换约定。
+"""
 
 import pytest
 from llm_service.tools.vendor_adapters import get_vendor_adapter
@@ -23,8 +26,12 @@ class TestVendorAdapterRegistry:
         assert adapter is None
 
     def test_vendor_adapter_graceful_fallback(self):
-        """get_vendor_adapter should not raise exceptions on import errors."""
+        """get_vendor_adapter should not raise exceptions on import errors.
+
+        vendor 模块缺失时返回 None，而不是把 ImportError 抛给调用方。
+        """
         # Should not raise even if vendor module doesn't exist
+        # vendor 模块不存在也必须返回 None，不能抛 exception
         try:
             adapter = get_vendor_adapter("nonexistent_vendor")
             assert adapter is None
@@ -98,8 +105,10 @@ class TestVendorAdapterInterface:
         result = adapter.transform_body(body, "queryMetrics", prompt_params)
 
         # Should not override existing account_id
+        # 已有值以调用方为准，不允许被 prompt_params 覆盖
         assert result["account_id"] == "existing_account"
         # Should inject missing user_id
+        # 只有缺失字段才从 prompt_params 补齐
         assert result["user_id"] == "user_123"
 
     def test_adapter_time_range_normalization(self):
@@ -253,6 +262,7 @@ class TestComplexVendorAdapter:
         adapter = self.ComplexVendorAdapter()
 
         # List filters should be wrapped in object
+        # list 形式的 filters 要包成 {logic, conditions}
         body = {
             "filters": [
                 {"field": "country", "operator": "eq", "value": "US"},

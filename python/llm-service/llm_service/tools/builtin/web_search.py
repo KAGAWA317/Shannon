@@ -1,5 +1,6 @@
 """
 Web Search Tool supporting multiple providers: Exa, Firecrawl, Google, Serper, and Bing
+Web Search tool，支持多个 provider：Exa、Firecrawl、Google、Serper 与 Bing
 """
 
 import aiohttp
@@ -22,8 +23,10 @@ logger = logging.getLogger(__name__)
 def _ensure_snippet(result: Dict[str, Any], min_length: int = 30) -> str:
     """
     Ensure result has a meaningful snippet, generate from available fields if missing.
+    确保结果包含有意义的 snippet，缺失时从可用字段生成。
 
     Priority: snippet -> text -> content -> description -> title + url
+    优先级：snippet -> text -> content -> description -> title + url
     """
     snippet = result.get("snippet", "")
 
@@ -66,6 +69,8 @@ class SearchProvider(Enum):
 
 # External API cost per search call (USD).
 # Recorded as 7500 synthetic tokens in token_usage ($2/1M billing rate).
+# 每次搜索调用产生的第三方 API 成本（美元）。
+# 在 token_usage 中记为 7500 个合成 token（按 $2/1M 计费）。
 SEARCH_PROVIDER_COSTS: Dict[str, float] = {
     SearchProvider.SERPAPI.value: 0.015,
     SearchProvider.SEARCHAPI.value: 0.004,
@@ -88,32 +93,46 @@ SEARCH_PROVIDER_MODELS: Dict[str, str] = {
 
 
 class WebSearchProvider:
-    """Base class for web search providers"""
+    """
+    Base class for web search providers
+    web 搜索 provider 的基类
+    """
 
     # Standardized timeout for all providers (in seconds)
+    # 所有 provider 统一使用的 timeout（秒）
     DEFAULT_TIMEOUT = 20
 
     @staticmethod
     def validate_api_key(api_key: str) -> bool:
-        """Validate API key format and presence"""
+        """
+        Validate API key format and presence
+        校验 API key 的格式与是否存在
+        """
         if not api_key or not isinstance(api_key, str):
             return False
         # Basic validation: should be at least 10 chars and not contain obvious test values
+        # 基础校验：至少 10 个字符，且不含明显的测试值
         if len(api_key.strip()) < 10:
             return False
         if api_key.lower() in ["test", "demo", "example", "your_api_key_here", "xxx"]:
             return False
         # Check for reasonable API key pattern (alphanumeric with some special chars)
+        # 检查是否符合合理的 API key 形态（字母数字加少量特殊字符）
         if not re.match(r"^[A-Za-z0-9\-_\.]+$", api_key.strip()):
             return False
         return True
 
     @staticmethod
     def sanitize_error_message(error: str) -> str:
-        """Sanitize error messages to prevent information disclosure"""
+        """
+        Sanitize error messages to prevent information disclosure
+        清洗错误信息，防止信息泄露
+        """
         # Remove URLs that might contain API keys or sensitive endpoints
+        # 移除可能包含 API key 或敏感端点的 URL
         sanitized = re.sub(r"https?://[^\s]+", "[URL_REDACTED]", str(error))
         # Remove potential API keys (common patterns)
+        # 移除潜在的 API key（常见 pattern）
         sanitized = re.sub(r"\b[A-Za-z0-9]{32,}\b", "[KEY_REDACTED]", sanitized)
         sanitized = re.sub(
             r"api[_\-]?key[\s=:]+[\w\-]+",
@@ -125,17 +144,22 @@ class WebSearchProvider:
             r"bearer\s+[\w\-\.]+", "Bearer [REDACTED]", sanitized, flags=re.IGNORECASE
         )
         # Remove potential file paths
+        # 移除潜在的文件路径
         sanitized = re.sub(
             r"/[\w/\-\.]+\.(py|json|yml|yaml|env)", "[PATH_REDACTED]", sanitized
         )
         # Limit length to prevent excessive logging
+        # 限制长度，避免日志过长
         if len(sanitized) > 200:
             sanitized = sanitized[:200] + "..."
         return sanitized
 
     @staticmethod
     def validate_max_results(max_results: int) -> int:
-        """Validate and sanitize max_results parameter"""
+        """
+        Validate and sanitize max_results parameter
+        校验并修正 max_results 参数
+        """
         if not isinstance(max_results, int):
             raise ValueError("max_results must be an integer")
         if max_results < 1:
@@ -152,7 +176,10 @@ class WebSearchProvider:
 
 
 class ExaSearchProvider(WebSearchProvider):
-    """Exa AI search provider - Semantic search optimized for AI applications"""
+    """
+    Exa AI search provider - Semantic search optimized for AI applications
+    Exa AI 搜索 provider——面向 AI 应用优化的语义搜索
+    """
 
     def __init__(self, api_key: str):
         if not self.validate_api_key(api_key):
@@ -169,6 +196,7 @@ class ExaSearchProvider(WebSearchProvider):
     ) -> List[Dict[str, Any]]:
         """
         Search using Exa AI.
+        使用 Exa AI 进行搜索。
 
         Args:
             query: Search query
@@ -176,10 +204,18 @@ class ExaSearchProvider(WebSearchProvider):
             search_type: "neural" (semantic), "keyword" (exact), or "auto" (intelligent blend)
             category: Optional filter - "company", "research paper", "news", "pdf",
                      "github", "tweet", "personal site", "linkedin", "financial report"
+
+        参数：
+            query: 搜索查询
+            max_results: 结果数量（1-100）
+            search_type: "neural"（语义）、"keyword"（精确）或 "auto"（智能混合）
+            category: 可选过滤项——"company"、"research paper"、"news"、"pdf"、
+                     "github"、"tweet"、"personal site"、"linkedin"、"financial report"
         """
         headers = {"x-api-key": self.api_key, "Content-Type": "application/json"}
 
         # Guard against invalid search_type values (LLM/tooling may send non-enum)
+        # 防御非法 search_type 取值（LLM/tooling 可能传入非枚举值）
         if not isinstance(search_type, str) or search_type.strip().lower() not in (
             "neural",
             "keyword",
@@ -191,6 +227,7 @@ class ExaSearchProvider(WebSearchProvider):
             search_type = "auto"
 
         # Use Exa's latest API parameters with proper text content extraction
+        # 使用 Exa 最新的 API 参数，并正确提取文本内容
         payload = {
             "query": query,
             "numResults": max_results,
@@ -233,6 +270,7 @@ class ExaSearchProvider(WebSearchProvider):
                 results = []
 
                 # Log the first result to see what fields are available
+                # 记录第一条结果，以便查看有哪些可用字段
                 if data.get("results"):
                     logger.debug(
                         f"Exa response sample - First result keys: {list(data['results'][0].keys())}"
@@ -272,7 +310,10 @@ class ExaSearchProvider(WebSearchProvider):
 
 
 class FirecrawlSearchProvider(WebSearchProvider):
-    """Firecrawl search provider - V2 API with search + scrape capabilities"""
+    """
+    Firecrawl search provider - V2 API with search + scrape capabilities
+    Firecrawl 搜索 provider——V2 API，具备搜索 + 抓取能力
+    """
 
     def __init__(self, api_key: str):
         if not self.validate_api_key(api_key):
@@ -317,6 +358,7 @@ class FirecrawlSearchProvider(WebSearchProvider):
                 results = []
 
                 # Firecrawl returns data in 'data' field
+                # Firecrawl 在 'data' 字段中返回数据
                 for result in data.get("data", []):
                     # Extract content from markdown if available
                     content = ""
@@ -341,7 +383,10 @@ class FirecrawlSearchProvider(WebSearchProvider):
 
 
 class GoogleSearchProvider(WebSearchProvider):
-    """Google Custom Search JSON API provider"""
+    """
+    Google Custom Search JSON API provider
+    谷歌自定义搜索（Custom Search）JSON API provider
+    """
 
     def __init__(self, api_key: str, search_engine_id: str = None):
         if not self.validate_api_key(api_key):
@@ -397,6 +442,7 @@ class GoogleSearchProvider(WebSearchProvider):
                     metatags = page_map.get("metatags", [{}])[0]
 
                     # Try to get more detailed content from metatags
+                    # 尝试从 metatags 获取更详细的内容
                     content = snippet
                     if metatags.get("og:description"):
                         content = metatags.get("og:description", "")[:500]
@@ -418,7 +464,10 @@ class GoogleSearchProvider(WebSearchProvider):
 
 
 class SerperSearchProvider(WebSearchProvider):
-    """Serper API provider - Fast and affordable Google search results"""
+    """
+    Serper API provider - Fast and affordable Google search results
+    Serper API provider——快速且低价的 Google 搜索结果
+    """
 
     def __init__(self, api_key: str):
         if not self.validate_api_key(api_key):
@@ -494,7 +543,10 @@ class SerperSearchProvider(WebSearchProvider):
 
 
 class SerpAPISearchProvider(WebSearchProvider):
-    """SerpAPI provider - Multi-engine search API supporting Google, Bing, Yahoo, Baidu, etc."""
+    """
+    SerpAPI provider - Multi-engine search API supporting Google, Bing, Yahoo, Baidu, etc.
+    SerpAPI provider——多引擎搜索 API，支持 Google、Bing、Yahoo、Baidu 等
+    """
 
     def __init__(self, api_key: str, engine: str = "google"):
         if not self.validate_api_key(api_key):
@@ -502,6 +554,7 @@ class SerpAPISearchProvider(WebSearchProvider):
         self.api_key = api_key
         self.base_url = "https://serpapi.com/search"
         # Supported engines: google, bing, yahoo, baidu, yandex, duckduckgo, etc.
+        # 支持的引擎：google、bing、yahoo、baidu、yandex、duckduckgo 等
         # See: https://serpapi.com/search-engine-apis
         self.engine = engine.lower() if engine else "google"
 
@@ -516,9 +569,11 @@ class SerpAPISearchProvider(WebSearchProvider):
         max_results = self.validate_max_results(max_results)
 
         # Use passed engine or fall back to instance default (avoids race condition)
+        # 使用传入的 engine，否则回退到实例默认值（避免竞态条件）
         effective_engine = engine.lower() if engine else self.engine
 
         # SerpAPI uses GET requests with query parameters
+        # SerpAPI 使用带查询参数的 GET request
         params = {
             "q": query,
             "api_key": self.api_key,
@@ -558,6 +613,7 @@ class SerpAPISearchProvider(WebSearchProvider):
                 results = []
 
                 # Handle Google Finance special response format
+                # 处理 Google Finance 的特殊 response 格式
                 if effective_engine == "google_finance":
                     # Extract summary (current price, change, etc.)
                     summary = data.get("summary", {})
@@ -587,6 +643,7 @@ class SerpAPISearchProvider(WebSearchProvider):
                     return results[:max_results]
 
                 # Handle Google Finance Markets special response format
+                # 处理 Google Finance Markets 的特殊 response 格式
                 if effective_engine == "google_finance_markets":
                     # Extract market trends
                     market_trends = data.get("market_trends", [])
@@ -619,6 +676,8 @@ class SerpAPISearchProvider(WebSearchProvider):
                 # Handle Google News special response format
                 if effective_engine == "google_news":
                     # Google News returns results in news_results, not organic_results
+                    # 处理 Google News 的特殊 response 格式
+                    # Google News 的结果在 news_results 中，而非 organic_results
                     news_results = data.get("news_results", [])
 
                     # Fallback to top_stories if news_results is empty
@@ -644,6 +703,7 @@ class SerpAPISearchProvider(WebSearchProvider):
                     return results
 
                 # Process organic search results (note: organic_results not organic!)
+                # 处理自然搜索结果（注意：字段是 organic_results，不是 organic！）
                 for result in data.get("organic_results", []):
                     results.append(
                         {
@@ -660,6 +720,7 @@ class SerpAPISearchProvider(WebSearchProvider):
                 if data.get("knowledge_graph"):
                     kg = data["knowledge_graph"]
                     # Safely extract URL from source field with type checking
+                    # 对 source 字段做类型检查，安全地提取 URL
                     kg_url = ""
                     kg_source = kg.get("source")
                     if isinstance(kg_source, dict):
@@ -686,7 +747,10 @@ class SerpAPISearchProvider(WebSearchProvider):
 
 
 class SearchAPISearchProvider(WebSearchProvider):
-    """SearchAPI.io provider - SerpAPI-compatible alternative with Google, Bing, Yahoo, Baidu, etc."""
+    """
+    SearchAPI.io provider - SerpAPI-compatible alternative with Google, Bing, Yahoo, Baidu, etc.
+    SearchAPI.io provider——兼容 SerpAPI 的替代方案，支持 Google、Bing、Yahoo、Baidu 等
+    """
 
     def __init__(self, api_key: str, engine: str = "google"):
         if not self.validate_api_key(api_key):
@@ -742,6 +806,7 @@ class SearchAPISearchProvider(WebSearchProvider):
                 results = []
 
                 # SearchAPI.io uses the same response structure as SerpAPI for Google
+                # 对 Google 而言，SearchAPI.io 使用与 SerpAPI 相同的 response 结构
 
                 # Handle Google News
                 if effective_engine == "google_news":
@@ -796,7 +861,10 @@ class SearchAPISearchProvider(WebSearchProvider):
 
 
 class BingSearchProvider(WebSearchProvider):
-    """Bing Search API v7 provider (Azure Cognitive Services)"""
+    """
+    Bing Search API v7 provider (Azure Cognitive Services)
+    必应搜索 API v7 provider（Azure 认知服务）
+    """
 
     def __init__(self, api_key: str):
         if not self.validate_api_key(api_key):

@@ -27,6 +27,7 @@ async def test_async_submit_task_includes_model_params():
 
     ac = AsyncShannonClient(base_url="http://example")
     # Monkeypatch ensure_client
+    # 替换（monkeypatch）ensure_client
     ac._ensure_client = _ensure_client  # type: ignore
 
     handle = await ac.submit_task(
@@ -107,6 +108,7 @@ def test_sync_submit_task_includes_model_params():
 
     c = ShannonClient(base_url="http://example")
     # Monkeypatch underlying async ensure_client
+    # 替换底层异步的 ensure_client
     c._async_client._ensure_client = _ensure_client  # type: ignore
 
     handle = c.submit_task(

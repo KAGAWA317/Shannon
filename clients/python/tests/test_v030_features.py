@@ -65,6 +65,7 @@ class TestTaskStatusFields:
             print(f"  mode: {status.mode}")
 
             # Model/provider info (critical for cost tracking)
+            # model/provider 信息（成本追踪的关键）
             print(f"  model_used: {status.model_used}")
             print(f"  provider: {status.provider}")
             assert status.model_used is not None, "model_used should be populated"
@@ -222,6 +223,7 @@ class TestSessionFields:
             print(f"  Retrieved title: '{session.title}'")
 
             # Note: title might be in context depending on backend implementation
+            # 注意：title 可能位于 context 中，具体取决于后端实现
             print("\n  ✓ Session title update validated")
 
         finally:

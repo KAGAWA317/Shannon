@@ -64,6 +64,10 @@ type HybridResult struct {
 //   - Execution is fully deterministic and replayable
 //
 // For more details, see: https://docs.temporal.io/develop/go/foundations#workflows
+// 无依赖的 task 并行执行（不超过 MaxConcurrency），有依赖的 task 等依赖完成后再跑。
+// 并发模型：workflow.Go 启动的协程运行在 Temporal 单线程确定性 event 循环中，"并发"是协作式的：
+// 所有协程同线程运行，仅在阻塞操作（channel 读、activity 调用、workflow.Sleep）处让出控制权；
+// 因此共享状态（completedTasks、taskResults）无需加锁即可安全访问，不存在竞态，执行完全确定、可重放。
 func ExecuteHybrid(
 	ctx workflow.Context,
 	tasks []HybridTask,
@@ -86,12 +90,14 @@ func ExecuteHybrid(
 	resultsChan := workflow.NewChannel(ctx)
 
 	// Track task completion status (safe without mutex due to Temporal's single-threaded model)
+	// Temporal 单线程模型下，不加互斥锁访问共享状态也是安全的。
 	completedTasks := make(map[string]bool)
 	taskResults := make(map[string]activities.AgentExecutionResult)
 	totalTokens := 0
 
 	// Merge prefilled results from external sources (child workflows, previous execution phases)
 	// This enables cross-phase dependency resolution
+	// 合并外部预填结果（子 workflow、前一阶段），从而支持跨阶段依赖解析。
 	if config.PrefilledResults != nil && len(config.PrefilledResults) > 0 {
 		for id, result := range config.PrefilledResults {
 			taskResults[id] = result

@@ -41,6 +41,7 @@ class EventType(str, Enum):
     STATUS_UPDATE = "STATUS_UPDATE"
     BUDGET_THRESHOLD = "BUDGET_THRESHOLD"
     # Control flow events (pause/resume/cancel) - SSE uses lowercase dot notation
+    # 控制流 event（pause/resume/cancel）——SSE 使用小写点号命名
     WORKFLOW_PAUSING = "workflow.pausing"
     WORKFLOW_PAUSED = "workflow.paused"
     WORKFLOW_RESUMED = "workflow.resumed"
@@ -49,7 +50,9 @@ class EventType(str, Enum):
     # Workflow lifecycle events
     WORKFLOW_FAILED = "WORKFLOW_FAILED"
     STREAM_END = "done"  # SSE transforms STREAM_END to "done"
+    # SSE 会把 STREAM_END 转换成「done」
     # OpenAI-style streaming events (used by some providers)
+    # OpenAI 风格的流式 event（部分 provider 使用）
     THREAD_MESSAGE_DELTA = "thread.message.delta"
     THREAD_MESSAGE_COMPLETED = "thread.message.completed"
 
@@ -93,6 +96,7 @@ class Event:
             except (json.JSONDecodeError, TypeError):
                 return None
         # Try parsing message as JSON for certain event types
+        # 对特定 event 类型，尝试把 message 解析为 JSON
         if self.type in [EventType.APPROVAL_REQUESTED, EventType.TOOL_INVOKED]:
             try:
                 return json.loads(self.message)

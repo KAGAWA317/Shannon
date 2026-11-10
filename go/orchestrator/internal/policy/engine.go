@@ -362,6 +362,7 @@ func (e *OPAEngine) parseResults(results rego.ResultSet, input *PolicyInput) *De
 
 // The cache key includes environment, mode, user, agent, token budget, rounded complexity and a hash of the query
 // to avoid query-pattern related false positives.
+// cache 键包含 environment、mode、user、agent、token budget、四舍五入后的 complexity 以及 query 的哈希，以避免因 query 模式差异导致误命中。
 
 type decisionCache struct {
 	cap    int
@@ -400,6 +401,7 @@ func (c *decisionCache) makeKey(input *PolicyInput) string {
 	_, _ = h.Write([]byte(strings.ToLower(input.Query)))
 	qh := h.Sum64()
 	// Round complexity to 2 decimals to reduce key churn
+	// complexity 保留两位小数，减少 cache 键的抖动
 	comp := fmt.Sprintf("%.2f", input.ComplexityScore)
 	return fmt.Sprintf("%s|%s|%s|%s|%d|%s|%x",
 		input.Environment, input.Mode, input.UserID, input.AgentID, input.TokenBudget, comp, qh,
@@ -461,6 +463,7 @@ func (c *decisionCache) Stats() (hits, misses int64) {
 // based on canary configuration, emergency controls, and rollout rules
 func (e *OPAEngine) determineEffectiveMode(input *PolicyInput) Mode {
 	// Emergency kill switch overrides everything - forces dry-run
+	// 紧急开关优先级最高——强制走 dry-run
 	if e.config.EmergencyKillSwitch {
 		e.logger.Debug("Emergency kill switch active - forcing dry-run mode",
 			zap.String("user_id", input.UserID),
@@ -507,6 +510,7 @@ func (e *OPAEngine) determineEffectiveMode(input *PolicyInput) Mode {
 	// Apply percentage-based rollout using deterministic hash
 	if e.config.Canary.EnforcePercentage > 0 {
 		// Create deterministic hash based on user and agent to ensure consistent routing
+		// 基于 user 与 agent 构造确定性哈希，确保路由一致
 		hash := e.calculateCanaryHash(input.UserID, input.AgentID, input.SessionID)
 		percentage := int(hash % 100)
 
@@ -529,6 +533,7 @@ func (e *OPAEngine) determineEffectiveMode(input *PolicyInput) Mode {
 	}
 
 	// Default to dry-run for safety during canary rollout
+	// canary 灰度期间默认走 dry-run 以确保安全
 	return ModeDryRun
 }
 
@@ -554,6 +559,7 @@ func (e *OPAEngine) applyModeToDecision(decision *Decision, effectiveMode Mode, 
 
 	case ModeDryRun:
 		// In dry-run mode, always allow but log what would have happened
+		// dry-run 模式下始终放行，但记录本应发生的决策
 		originalDecision := *decision // Copy original decision
 
 		decision.Allow = true // Override to allow in dry-run
@@ -597,6 +603,7 @@ func (e *OPAEngine) applyModeToDecision(decision *Decision, effectiveMode Mode, 
 func (e *OPAEngine) calculateCanaryHash(userID, agentID, sessionID string) uint32 {
 	// Create a deterministic string for hashing
 	// Include user and agent for consistent routing, but not session to avoid per-session variance
+	// 哈希包含 user 与 agent 以保证路由一致，但不含 session，避免同一用户在不同 session 间漂移
 	hashInput := fmt.Sprintf("%s|%s", userID, agentID)
 
 	// Use MD5 for consistent percentage distribution

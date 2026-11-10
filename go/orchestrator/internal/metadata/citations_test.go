@@ -13,10 +13,14 @@ import (
 func init() {
 	// Set config path for tests to use the actual config file
 	// Reset singleton FIRST before setting env var
+	// 为测试设置配置路径，使其使用真实配置文件
+	// 先重置单例，再设置环境变量
 	ResetCredibilityConfigForTest()
 
 	// Resolve repo-root config robustly by walking up from this test file's directory
 	// until a config/citation_credibility.yaml is found. Avoid absolute, machine-specific paths.
+	// 从本测试文件所在目录向上查找，稳健地定位仓库根目录的配置
+	// 直到找到 config/citation_credibility.yaml。避免写死机器相关的绝对路径。
 	if _, thisFile, _, ok := runtime.Caller(0); ok {
 		dir := filepath.Dir(thisFile)
 		for i := 0; i < 10; i++ { // walk up to repo root within reasonable bounds
@@ -457,6 +461,7 @@ func TestCollectCitations(t *testing.T) {
 		}
 
 		// Check first citation (should be arxiv with higher score)
+		// 检查首条引用（应为评分更高的 arxiv）
 		if !strings.Contains(citations[0].URL, "arxiv.org") {
 			t.Errorf("expected arxiv.org first, got %s", citations[0].URL)
 		}
@@ -573,6 +578,7 @@ func TestCollectCitations(t *testing.T) {
 		citations, stats := CollectCitations(results, now, 15)
 
 		// With max_per_domain=50 (config), all 5 citations from same domain are kept
+		// max_per_domain=50（配置）时，同一域名的 5 条引用全部保留
 		if len(citations) != 5 {
 			t.Errorf("expected 5 citations (all same domain, within max_per_domain limit), got %d", len(citations))
 		}
@@ -614,6 +620,7 @@ func TestCollectCitations(t *testing.T) {
 		}
 
 		// web_fetch should have high relevance (0.8)
+		// web_fetch 应有较高相关度（0.8）
 		if citations[0].RelevanceScore != 0.8 {
 			t.Errorf("expected relevance 0.8 for web_fetch, got %.2f", citations[0].RelevanceScore)
 		}
@@ -788,6 +795,7 @@ func TestExtractCitationFromSearchResult(t *testing.T) {
 }
 
 // safeTruncate safely truncates string for error messages
+// safeTruncate 为错误信息安全截断字符串
 func safeTruncate(s string, maxLen int) string {
 	r := []rune(s)
 	if len(r) <= maxLen {
@@ -817,6 +825,7 @@ func TestContainsLLMSignals(t *testing.T) {
 		{"structured: multi-field", "- **Industry:** Software\n- **Website:** https://example.com"},
 		{"structured: three-field", "- **CEO:** John\n- **Founded:** 2020\n- **Revenue:** $10M"},
 		// Phase 3.1: Generalized tool residue + Agent structured output
+		// 阶段 3.1：广义 tool 残留 + Agent 结构化输出
 		{"strong: attempt_tag", `<attempt_web_search query="google products">`},
 		{"strong: attempt_close", `</attempt_fetch>`},
 		{"strong: URL field", `**URL:** https://alphabet.com/about - Main corporate page`},
@@ -824,6 +833,7 @@ func TestContainsLLMSignals(t *testing.T) {
 	}
 
 	// Must NOT be falsely flagged (normal web content)
+	// 不得被误判（正常网页内容）
 	clean := []struct {
 		name string
 		text string
@@ -837,6 +847,7 @@ func TestContainsLLMSignals(t *testing.T) {
 		{"web fetch article", `How to use web fetch API in JavaScript`},
 		{"empty string", ``},
 		// Phase 3: Single structured field should not trigger
+		// 阶段 3：单个结构化字段不应触发
 		{"single field no trigger", `- **Industry:** Software Development and AI Research`},
 		{"real profile page", "Our company profile:\n- **Industry:** Technology\nWe focus on innovation."},
 	}
@@ -871,6 +882,7 @@ func TestEnsureSnippet(t *testing.T) {
 		expected string
 	}{
 		// Priority 1: Clean snippet of sufficient length
+		// 优先级 1：长度足够的干净 snippet
 		{
 			name:     "returns clean snippet when sufficient length",
 			snippet:  "This is a valid snippet with more than thirty characters.",
@@ -882,6 +894,7 @@ func TestEnsureSnippet(t *testing.T) {
 		},
 
 		// Priority 1b: Polluted snippet should be cleared
+		// 优先级 1b：受污染的 snippet 应被清除
 		{
 			name:     "clears polluted snippet and uses content",
 			snippet:  "</invoke></function_calls> some polluted text here",
@@ -893,6 +906,7 @@ func TestEnsureSnippet(t *testing.T) {
 		},
 
 		// Priority 2: Use content when snippet is too short
+		// 优先级 2：snippet 过短时改用 content
 		{
 			name:     "uses content when snippet too short",
 			snippet:  "Short",
@@ -926,6 +940,7 @@ func TestEnsureSnippet(t *testing.T) {
 		},
 
 		// Priority 4: Return short but clean snippet
+		// 优先级 4：返回较短但干净的 snippet
 		{
 			name:     "returns short clean snippet when no alternatives",
 			snippet:  "Short",
@@ -948,6 +963,7 @@ func TestEnsureSnippet(t *testing.T) {
 		},
 
 		// Edge case: Polluted snippet with no fallbacks
+		// 边界情况：受污染且无兜底来源的 snippet
 		{
 			name:     "returns empty when snippet polluted and no fallbacks",
 			snippet:  "Direct fetch of https://example.com would be needed",
@@ -971,6 +987,7 @@ func TestEnsureSnippet(t *testing.T) {
 		},
 
 		// Edge case: Unicode handling (30+ runes required)
+		// 边界情况：Unicode 处理（要求 30+ rune）
 		{
 			name:     "handles unicode correctly in length check",
 			snippet:  "日本語テキストが三十文字以上あります。これは有効なスニペットです。", // 32 runes
@@ -994,9 +1011,12 @@ func TestEnsureSnippet(t *testing.T) {
 
 // Benchmark tests for containsLLMSignals to measure performance
 // and guide optimization decisions (Priority 2 follow-up)
+// containsLLMSignals 的基准测试，用于衡量性能
+// 并为优化决策提供依据（优先级 2 后续项）
 
 func BenchmarkContainsLLMSignals_CleanText(b *testing.B) {
 	// Worst case: clean text requires checking all patterns
+	// 最坏情况：干净文本需要检查全部模式
 	text := `## Company Overview
 
 	PTMind was founded in 2010 as a technology company focused on data analytics
@@ -1044,6 +1064,7 @@ func BenchmarkContainsLLMSignals_StructuredFields(b *testing.B) {
 
 func BenchmarkContainsLLMSignals_WeakSignals(b *testing.B) {
 	// Moderate case: weak signals with extraction keyword
+	// 中等情况：弱信号加提取类关键词
 	text := `Let me extract the information. I found several items. Based on my research...`
 
 	b.ResetTimer()
@@ -1054,6 +1075,7 @@ func BenchmarkContainsLLMSignals_WeakSignals(b *testing.B) {
 
 func BenchmarkContainsLLMSignals_LongText(b *testing.B) {
 	// Stress test: long text (simulating real web content)
+	// 压力测试：长文本（模拟真实网页内容）
 	text := strings.Repeat("This is some normal web content. ", 100)
 
 	b.ResetTimer()

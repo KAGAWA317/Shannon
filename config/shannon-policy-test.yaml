@@ -1,5 +1,7 @@
 # Shannon Configuration with Policy Engine Enabled for Testing
+# 启用策略引擎的 Shannon 配置（用于测试）
 # This demonstrates the OPA Policy Engine Phase 0.5 implementation
+# 演示 OPA 策略引擎阶段 0.5 的实现
 
 service:
   port: 50052
@@ -13,6 +15,7 @@ agents:
   llm_service_endpoint: "http://llm-service:8000"
 
 # Policy Engine Configuration - ENABLED for testing
+# 策略引擎配置 - 测试环境下启用
 policy:
   enabled: true
   mode: "dry-run"  # Start with dry-run mode for testing
@@ -66,6 +69,7 @@ degradation:
     session_update: "proceed"
 
 # Vector DB Configuration - ENABLED for contextual retrieval testing
+# 向量库配置 - 测试 context 检索时启用
 vector:
   enabled: true
   host: ""

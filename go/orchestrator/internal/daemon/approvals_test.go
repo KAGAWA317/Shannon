@@ -75,6 +75,7 @@ func TestApprovalManager_Resolve_FirstWins(t *testing.T) {
 	}
 
 	// Second resolve should return ErrApprovalNotFound (already resolved)
+	// 第二次 resolve 应返回 ErrApprovalNotFound（已处理）
 	_, err = am.Resolve(ctx, "req-456")
 	if err != ErrApprovalNotFound {
 		t.Errorf("expected ErrApprovalNotFound, got %v", err)
@@ -170,6 +171,7 @@ func TestApprovalManager_CancelByConn(t *testing.T) {
 	}
 
 	// req-a and req-b should be gone
+	// req-a 与 req-b 应已被清除
 	_, err = am.Get(ctx, "req-a")
 	if err != ErrApprovalNotFound {
 		t.Errorf("req-a should be gone, got %v", err)

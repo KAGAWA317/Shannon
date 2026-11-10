@@ -8,6 +8,7 @@ import (
 )
 
 // ShannonConfig represents the main Shannon orchestrator configuration
+// ShannonConfig 表示 Shannon orchestrator 的主配置
 type ShannonConfig struct {
 	// Service configuration
 	Service ServiceConfig `json:"service" yaml:"service"`
@@ -109,6 +110,7 @@ type DegradationConfig struct {
 }
 
 // DegradationThresholds defines when to enter different degradation levels
+// DegradationThresholds 定义何时进入不同降级级别
 type DegradationThresholds struct {
 	Minor    DegradationLevelThreshold `json:"minor" yaml:"minor"`
 	Moderate DegradationLevelThreshold `json:"moderate" yaml:"moderate"`
@@ -116,6 +118,7 @@ type DegradationThresholds struct {
 }
 
 // DegradationLevelThreshold defines conditions for a degradation level
+// DegradationLevelThreshold 定义某个降级级别的触发条件
 type DegradationLevelThreshold struct {
 	CircuitBreakersOpen         int     `json:"circuit_breakers_open" yaml:"circuit_breakers_open"`
 	CriticalDependenciesDown    int     `json:"critical_dependencies_down" yaml:"critical_dependencies_down"`
@@ -134,6 +137,7 @@ type ModeDowngradeConfig struct {
 }
 
 // ModeDowngradeRules defines how modes should be downgraded
+// ModeDowngradeRules 定义模式应如何降级
 type ModeDowngradeRules struct {
 	ComplexToStandard bool `json:"complex_to_standard" yaml:"complex_to_standard"`
 	StandardToSimple  bool `json:"standard_to_simple" yaml:"standard_to_simple"`
@@ -151,6 +155,7 @@ type PartialResultsConfig struct {
 }
 
 // AggregationRule defines how to aggregate partial results
+// AggregationRule 定义如何聚合部分结果
 type AggregationRule struct {
 	MinimumResults   int     `json:"minimum_results" yaml:"minimum_results"`
 	SuccessThreshold float64 `json:"success_threshold" yaml:"success_threshold"`
@@ -218,6 +223,7 @@ type LoggingConfig struct {
 }
 
 // VectorConfig contains vector DB and embedding settings
+// VectorConfig 包含向量库与 embedding 相关设置
 type VectorConfig struct {
 	Enabled bool `json:"enabled" yaml:"enabled"`
 	// Qdrant
@@ -279,8 +285,10 @@ type SessionConfig struct {
 	MaxHistory int           `json:"max_history" yaml:"max_history"` // Maximum messages to keep in Redis per session
 	TTL        time.Duration `json:"ttl" yaml:"ttl"`                 // Session expiry time
 	CacheSize  int           `json:"cache_size" yaml:"cache_size"`   // Max sessions to keep in local cache
+	// 本地 cache 保留的最大 session 数
 
 	// Context window presets for server-side history retrieval
+	// 服务端历史检索的 context 窗口预设
 	ContextWindowDefault   int `json:"context_window_default" yaml:"context_window_default"`
 	ContextWindowDebugging int `json:"context_window_debugging" yaml:"context_window_debugging"`
 
@@ -294,12 +302,14 @@ type SessionConfig struct {
 }
 
 // FeatureFlagsConfig contains feature flags for optional/private features
+// FeatureFlagsConfig 包含可选/私有功能的开关
 type FeatureFlagsConfig struct {
 }
 
 // WorkflowConfig controls workflow behavior
 type WorkflowConfig struct {
 	// BypassSingleResult: skip synthesis if only one successful result
+	// BypassSingleResult：只有一个成功结果时跳过汇总
 	BypassSingleResult bool `json:"bypass_single_result" yaml:"bypass_single_result"`
 }
 
@@ -571,9 +581,11 @@ func DefaultShannonConfig() *ShannonConfig {
 func ValidateShannonConfig(config map[string]interface{}) error {
 	// Convert to ShannonConfig struct for validation (placeholder for future unmarshalling)
 	// shannonConfig := &ShannonConfig{}
+	// 转换为 ShannonConfig 结构体以便校验（占位，供后续反序列化使用）
 
 	// This is a simplified validation - in production you'd use a proper
 	// unmarshaling and validation library like go-playground/validator
+	// 这是简化校验——生产环境应使用正规的反序列化与校验库（如 go-playground/validator）
 
 	if service, ok := config["service"].(map[string]interface{}); ok {
 		if port, ok := service["port"].(float64); ok && (port < 1 || port > 65535) {
@@ -612,6 +624,7 @@ func ValidateShannonConfig(config map[string]interface{}) error {
 	}
 
 	// Validate session-related context windows and token budgets
+	// 校验 session 相关的 context 窗口与 token budget
 	if session, ok := config["session"].(map[string]interface{}); ok {
 		// Context windows must be [5, 200]
 		inWindow := func(v float64) bool { return v >= 5 && v <= 200 }
@@ -626,6 +639,7 @@ func ValidateShannonConfig(config map[string]interface{}) error {
 			}
 		}
 		// Primers/recents must be non-negative and bounded
+		// Primers/recents 必须非负且有上界
 		if v, ok := session["primers_count"].(float64); ok {
 			if v < 0 || v > 1000 {
 				return fmt.Errorf("primers_count must be between 0 and 1000, got %v", v)
@@ -637,6 +651,7 @@ func ValidateShannonConfig(config map[string]interface{}) error {
 			}
 		}
 		// Token budgets must be [1000, 200000] and per-task >= per-agent
+		// token budget 必须在 [1000, 200000] 之间，且 per-task >= per-agent
 		inBudget := func(v float64) bool { return v >= 1000 && v <= 200000 }
 		var perAgent, perTask float64
 		if v, ok := session["token_budget_per_agent"].(float64); ok {
@@ -660,9 +675,11 @@ func ValidateShannonConfig(config map[string]interface{}) error {
 }
 
 // ConfigurationCallback is called when significant configuration changes occur
+// 发生重大配置变更时调用 ConfigurationCallback
 type ConfigurationCallback func(oldConfig, newConfig *ShannonConfig) error
 
 // ShannonConfigManager provides typed access to Shannon configuration
+// ShannonConfigManager 提供 Shannon 配置的类型化访问
 type ShannonConfigManager struct {
 	configManager *ConfigManager
 	currentConfig *ShannonConfig
@@ -671,6 +688,7 @@ type ShannonConfigManager struct {
 }
 
 // NewShannonConfigManager creates a new Shannon-specific configuration manager
+// NewShannonConfigManager 创建 Shannon 专用配置管理器
 func NewShannonConfigManager(configManager *ConfigManager, logger *zap.Logger) *ShannonConfigManager {
 	return &ShannonConfigManager{
 		configManager: configManager,
@@ -683,11 +701,13 @@ func NewShannonConfigManager(configManager *ConfigManager, logger *zap.Logger) *
 // GetConfig returns the current Shannon configuration
 func (scm *ShannonConfigManager) GetConfig() *ShannonConfig {
 	// Return a copy to prevent external modification
+	// 返回副本，防止外部修改
 	config := *scm.currentConfig
 	return &config
 }
 
 // Initialize sets up configuration management for Shannon
+// Initialize 初始化 Shannon 的配置管理
 func (scm *ShannonConfigManager) Initialize() error {
 	// Register validator for shannon.yaml
 	scm.configManager.RegisterValidator("shannon.yaml", ValidateShannonConfig)
@@ -729,6 +749,7 @@ func (scm *ShannonConfigManager) handleConfigChange(event ChangeEvent) error {
 }
 
 // updateConfigFromMap updates the current config from a map
+// updateConfigFromMap 从 map 更新当前配置
 func (scm *ShannonConfigManager) updateConfigFromMap(configMap map[string]interface{}) error {
 	newConfig := DefaultShannonConfig()
 
@@ -883,6 +904,7 @@ func (scm *ShannonConfigManager) updateCircuitBreakerConfig(cbMap map[string]int
 }
 
 // updateSingleCircuitBreakerConfig updates a single circuit breaker config
+// updateSingleCircuitBreakerConfig 更新单个 circuit breaker 配置
 func (scm *ShannonConfigManager) updateSingleCircuitBreakerConfig(cbMap map[string]interface{}, config *CircuitBreakerConfig) {
 	if maxReq, ok := cbMap["max_requests"].(float64); ok {
 		config.MaxRequests = uint32(maxReq)
@@ -1149,6 +1171,7 @@ func (scm *ShannonConfigManager) updateAuthConfig(authMap map[string]interface{}
 // notifyConfigChanges triggers notifications for configuration changes
 func (scm *ShannonConfigManager) notifyConfigChanges(oldConfig, newConfig *ShannonConfig) {
 	// Check for endpoint changes that require service restarts or reconnections
+	// 检查需要重启服务或重连的端点变更
 	if oldConfig.Agents.AgentCoreEndpoint != newConfig.Agents.AgentCoreEndpoint {
 		scm.logger.Info("Agent Core endpoint changed",
 			zap.String("old", oldConfig.Agents.AgentCoreEndpoint),
@@ -1177,6 +1200,7 @@ func (scm *ShannonConfigManager) notifyConfigChanges(oldConfig, newConfig *Shann
 	}
 
 	// Notify of workflow behavior changes (useful in logs)
+	// 通知 workflow 行为变更（便于日志记录）
 	if oldConfig.Workflow != newConfig.Workflow {
 		scm.logger.Info("Workflow behavior changed",
 			zap.Bool("bypass_single_result", newConfig.Workflow.BypassSingleResult),
@@ -1185,6 +1209,7 @@ func (scm *ShannonConfigManager) notifyConfigChanges(oldConfig, newConfig *Shann
 }
 
 // RegisterCallback registers a callback to be called when configuration changes
+// RegisterCallback 注册配置变更时调用的回调
 func (scm *ShannonConfigManager) RegisterCallback(callback ConfigurationCallback) {
 	scm.callbacks = append(scm.callbacks, callback)
 	scm.logger.Info("Configuration callback registered")
@@ -1320,6 +1345,7 @@ func (scm *ShannonConfigManager) updateEmbeddingsConfig(embeddingsMap map[string
 }
 
 // triggerCallbacks calls all registered callbacks with configuration changes
+// triggerCallbacks 携带配置变更调用所有已注册的回调
 func (scm *ShannonConfigManager) triggerCallbacks(oldConfig, newConfig *ShannonConfig) {
 	for i, callback := range scm.callbacks {
 		if err := callback(oldConfig, newConfig); err != nil {

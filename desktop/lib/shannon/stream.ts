@@ -79,12 +79,14 @@ export function useRunStream(workflowId: string | null, restartKey: number = 0) 
                     }
                     
                     // Special case: [DONE] is sent as plain text, not JSON
+                    // 特例：[DONE] 以纯文本发送，不是 JSON
                     if (event.data === "[DONE]") {
                         return;
                     }
                     
                     const data = JSON.parse(event.data);
                     // Set the type from the SSE event name (eventType) if provided, otherwise fall back to data.type
+                    // 优先使用 SSE event 名（eventType）作为 type，否则回退到 data.type
                     const finalType = eventType || data.type;
                     const eventWithTimestamp = {
                         ...data,
@@ -93,6 +95,7 @@ export function useRunStream(workflowId: string | null, restartKey: number = 0) 
                     };
 
                     // Track last event id for resume support
+                    // 记录 last event id，用于断线续传
                     const candidateId = (event as any).lastEventId || data?.seq?.toString() || data?.stream_id || data?.id;
                     if (candidateId) {
                         lastEventIdRef.current = String(candidateId);

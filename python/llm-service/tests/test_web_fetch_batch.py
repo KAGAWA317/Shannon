@@ -3,6 +3,8 @@ Tests for web_fetch batch URL support
 
 Tests the batch mode functionality where multiple URLs can be fetched in parallel
 using the urls=[] parameter instead of making multiple single-URL calls.
+
+验证批量模式：用 urls=[] 参数并行抓取多个 URL，而不是发起多次单 URL 调用。
 """
 
 import pytest
@@ -14,7 +16,9 @@ from llm_service.tools.base import ToolResult, ToolParameterType
 
 
 class TestWebFetchParameterValidation:
-    """Tests for parameter validation (url vs urls)"""
+    """Tests for parameter validation (url vs urls)
+    参数校验（url 与 urls）的测试。
+    """
 
     @pytest.fixture
     def tool(self):
@@ -23,14 +27,18 @@ class TestWebFetchParameterValidation:
 
     @pytest.mark.asyncio
     async def test_error_when_neither_url_nor_urls_provided(self, tool):
-        """Should error when neither url nor urls are provided"""
+        """Should error when neither url nor urls are provided
+        url 和 urls 都未提供时应报错。
+        """
         result = await tool.execute()
         assert result.success is False
         assert "url or urls" in result.error.lower()
 
     @pytest.mark.asyncio
     async def test_error_when_both_url_and_urls_provided(self, tool):
-        """Should error when both url and urls are provided"""
+        """Should error when both url and urls are provided
+        同时提供 url 和 urls 时应报错。
+        """
         result = await tool.execute(
             url="https://example.com",
             urls=["https://a.com", "https://b.com"]
@@ -40,21 +48,28 @@ class TestWebFetchParameterValidation:
 
     @pytest.mark.asyncio
     async def test_error_when_urls_is_empty_list(self, tool):
-        """Should error when urls is an empty list"""
+        """Should error when urls is an empty list
+        urls 为空列表时应报错。
+        """
         result = await tool.execute(urls=[])
         assert result.success is False
         # Empty list is falsy, so error says "Must provide url or urls"
+        # 空列表是 falsy，因此错误信息为 "Must provide url or urls"
         assert "url" in result.error.lower()
 
     @pytest.mark.asyncio
     async def test_error_when_urls_has_invalid_entries(self, tool):
-        """Should error when all URLs in list are invalid"""
+        """Should error when all URLs in list are invalid
+        列表中所有 URL 都非法时应报错。
+        """
         result = await tool.execute(urls=["", None, "not-a-url"])
         assert result.success is False
 
 
 class TestWebFetchSingleUrlMode:
-    """Tests for single URL mode (backwards compatibility)"""
+    """Tests for single URL mode (backwards compatibility)
+    单 URL 模式（向后兼容）的测试。
+    """
 
     @pytest.fixture
     def tool(self):
@@ -63,7 +78,9 @@ class TestWebFetchSingleUrlMode:
 
     @pytest.mark.asyncio
     async def test_single_url_mode_still_works(self, tool):
-        """Single URL mode should work as before"""
+        """Single URL mode should work as before
+        单 URL 模式应和以前一样工作。
+        """
         mock_result = ToolResult(
             success=True,
             output={
@@ -79,11 +96,14 @@ class TestWebFetchSingleUrlMode:
             result = await tool.execute(url="https://example.com")
             assert result.success is True
             # Single URL mode returns the output directly (not in pages[])
+            # 单 URL 模式直接返回 output（不包在 pages[] 里）
             assert "url" in result.output or "pages" not in result.output
 
 
 class TestWebFetchBatchMode:
-    """Tests for batch URL fetching"""
+    """Tests for batch URL fetching
+    批量 URL 抓取的测试。
+    """
 
     @pytest.fixture
     def tool(self):
@@ -92,7 +112,9 @@ class TestWebFetchBatchMode:
 
     @pytest.mark.asyncio
     async def test_batch_mode_fetches_all_urls(self, tool):
-        """Batch mode should fetch all URLs and return aggregated results"""
+        """Batch mode should fetch all URLs and return aggregated results
+        批量模式应抓取所有 URL 并返回聚合结果。
+        """
         test_urls = ["https://a.com", "https://b.com", "https://c.com"]
 
         async def mock_fetch(url, max_length, subpages=0):
@@ -116,7 +138,9 @@ class TestWebFetchBatchMode:
 
     @pytest.mark.asyncio
     async def test_batch_mode_partial_success(self, tool):
-        """Batch mode should handle partial failures correctly"""
+        """Batch mode should handle partial failures correctly
+        批量模式应正确处理部分失败。
+        """
         test_urls = ["https://good.com", "https://bad.com"]
 
         call_count = 0
@@ -145,7 +169,9 @@ class TestWebFetchBatchMode:
 
     @pytest.mark.asyncio
     async def test_batch_mode_all_fail(self, tool):
-        """Batch mode should return failure when all URLs fail"""
+        """Batch mode should return failure when all URLs fail
+        所有 URL 都失败时，批量模式应返回失败。
+        """
         test_urls = ["https://bad1.com", "https://bad2.com"]
 
         async def mock_fetch(url, max_length, subpages=0):
@@ -161,7 +187,9 @@ class TestWebFetchBatchMode:
 
     @pytest.mark.asyncio
     async def test_batch_mode_respects_total_chars_cap(self, tool):
-        """Batch mode should stop when total_chars_cap is reached"""
+        """Batch mode should stop when total_chars_cap is reached
+        达到 total_chars_cap 后，批量模式应停止抓取。
+        """
         test_urls = [
             "https://a.com",
             "https://b.com",
@@ -171,6 +199,7 @@ class TestWebFetchBatchMode:
 
         async def mock_fetch(url, max_length, subpages=0):
             # Each returns 15000 chars
+            # 每个 URL 返回 15000 字符
             return ToolResult(
                 success=True,
                 output={
@@ -181,6 +210,7 @@ class TestWebFetchBatchMode:
 
         with patch.object(tool, '_fetch_pure_python', side_effect=mock_fetch):
             # Set cap to 40000 - should stop after 2-3 URLs
+            # 把上限设为 40000 —— 应在 2-3 个 URL 之后停止
             result = await tool.execute(urls=test_urls, total_chars_cap=40000)
 
             assert result.success is True
@@ -189,7 +219,9 @@ class TestWebFetchBatchMode:
 
     @pytest.mark.asyncio
     async def test_batch_mode_concurrency_limit(self, tool):
-        """Batch mode should respect concurrency limit"""
+        """Batch mode should respect concurrency limit
+        批量模式应遵守并发上限。
+        """
         concurrent_count = 0
         max_concurrent = 0
 
@@ -210,11 +242,14 @@ class TestWebFetchBatchMode:
             await tool.execute(urls=test_urls, concurrency=3)
 
         # Should never exceed concurrency limit
+        # 任何时候都不应超过并发上限
         assert max_concurrent <= 3
 
     @pytest.mark.asyncio
     async def test_batch_mode_skips_invalid_urls(self, tool):
-        """Batch mode should skip invalid URLs but process valid ones"""
+        """Batch mode should skip invalid URLs but process valid ones
+        批量模式应跳过非法 URL，只处理合法的。
+        """
         test_urls = [
             "https://valid.com",
             "not-a-url",
@@ -232,12 +267,15 @@ class TestWebFetchBatchMode:
             result = await tool.execute(urls=test_urls)
 
             # Should only process the 2 valid https URLs
+            # 只应处理 2 个合法的 https URL
             assert result.success is True
             assert result.output["succeeded"] == 2
 
     @pytest.mark.asyncio
     async def test_batch_mode_returns_correct_metadata(self, tool):
-        """Batch mode should return proper metadata"""
+        """Batch mode should return proper metadata
+        批量模式应返回正确的 metadata。
+        """
         test_urls = ["https://a.com", "https://b.com"]
 
         async def mock_fetch(url, max_length, subpages=0):
@@ -257,7 +295,9 @@ class TestWebFetchBatchMode:
 
 
 class TestWebFetchToolMetadata:
-    """Tests for tool metadata and schema"""
+    """Tests for tool metadata and schema
+    tool metadata 与 schema 的测试。
+    """
 
     def test_tool_has_urls_parameter(self):
         """Test that tool schema includes urls parameter"""
@@ -269,7 +309,9 @@ class TestWebFetchToolMetadata:
         assert "url" in param_names
 
     def test_url_parameter_is_optional(self):
-        """Test that url parameter is optional (for batch mode)"""
+        """Test that url parameter is optional (for batch mode)
+        url 参数应为可选（供批量模式使用）。
+        """
         tool = WebFetchTool()
         params = tool.parameters
 
@@ -278,17 +320,22 @@ class TestWebFetchToolMetadata:
         assert url_param.required is False
 
     def test_urls_parameter_is_array_type(self):
-        """Test that urls parameter is array type"""
+        """Test that urls parameter is array type
+        urls 参数应为数组类型。
+        """
         tool = WebFetchTool()
         params = tool.parameters
 
         urls_param = next((p for p in params if p.name == "urls"), None)
         assert urls_param is not None
         # ToolParameterType.ARRAY should be the type
+        # 类型应为 ToolParameterType.ARRAY
         assert "array" in str(urls_param.type).lower()
 
     def test_tool_has_batch_parameters(self):
-        """Test that tool schema includes batch-related parameters"""
+        """Test that tool schema includes batch-related parameters
+        tool schema 应包含批量模式相关参数。
+        """
         tool = WebFetchTool()
         params = tool.parameters
         param_names = [p.name for p in params]
@@ -297,7 +344,9 @@ class TestWebFetchToolMetadata:
         assert "total_chars_cap" in param_names
 
     def test_extract_prompt_parameter_exists(self):
-        """Test that tool schema includes extract_prompt parameter"""
+        """Test that tool schema includes extract_prompt parameter
+        tool schema 应包含 extract_prompt 参数。
+        """
         tool = WebFetchTool()
         param_names = [p.name for p in tool.parameters]
         assert "extract_prompt" in param_names
@@ -307,7 +356,9 @@ class TestWebFetchToolMetadata:
         assert ep_param.type == ToolParameterType.STRING
 
     def test_tool_description_mentions_batch_mode(self):
-        """Test that tool description explains batch mode"""
+        """Test that tool description explains batch mode
+        tool 描述应说明批量模式。
+        """
         tool = WebFetchTool()
         metadata = tool.metadata
 
@@ -316,7 +367,9 @@ class TestWebFetchToolMetadata:
 
 
 class TestWebFetchSSRFProtection:
-    """SSRF protection should apply to both single and batch modes."""
+    """SSRF protection should apply to both single and batch modes.
+    SSRF 防护对单 URL 和批量模式都应生效。
+    """
 
     @pytest.fixture
     def tool(self):
@@ -344,20 +397,27 @@ class TestWebFetchFirecrawlRateLimiting:
 
     When Firecrawl returns 429 (rate limit exceeded), the tool should skip
     the crawl fallback since the API-wide limit affects all endpoints.
+    当 Firecrawl 返回 429（超出 rate limit）时，应跳过 crawl 回退，
+    因为该限制作用于整个 API，会影响所有 endpoint。
     """
 
     @pytest.fixture
     def tool(self):
-        """Create WebFetchTool instance with Firecrawl enabled"""
+        """Create WebFetchTool instance with Firecrawl enabled
+        创建一个启用 Firecrawl 的 WebFetchTool 实例。
+        """
         tool = WebFetchTool()
         # Mock Firecrawl as available
+        # 把 Firecrawl mock 成可用状态
         tool._firecrawl = MagicMock()
         tool._firecrawl.api_key = "test-key"
         return tool
 
     @pytest.mark.asyncio
     async def test_429_skips_crawl_fallback(self, tool):
-        """When map+scrape returns 429, should skip crawl and raise immediately"""
+        """When map+scrape returns 429, should skip crawl and raise immediately
+        map+scrape 返回 429 时，应跳过 crawl 并立即抛出。
+        """
         call_count = {"map_scrape": 0, "crawl": 0}
 
         async def mock_map_and_scrape(*args, **kwargs):
@@ -371,6 +431,7 @@ class TestWebFetchFirecrawlRateLimiting:
         with patch.object(tool._firecrawl, '_map_and_scrape', mock_map_and_scrape):
             with patch.object(tool._firecrawl, '_crawl', mock_crawl):
                 # Call the internal method that handles fallback logic
+                # 调用处理回退逻辑的内部方法
                 try:
                     await tool._firecrawl._fetch_multi_page(
                         "https://example.com",
@@ -380,15 +441,19 @@ class TestWebFetchFirecrawlRateLimiting:
                     )
                 except Exception as e:
                     # Should raise 429 exception
+                    # 应抛出 429 exception
                     assert "429" in str(e) or "rate limit" in str(e).lower()
 
         # map_and_scrape was called but crawl was NOT called
+        # map_and_scrape 被调用了，但 crawl 没有被调用
         assert call_count["map_scrape"] == 1
         assert call_count["crawl"] == 0, "Crawl should be skipped on 429 rate limit"
 
     @pytest.mark.asyncio
     async def test_timeout_continues_to_crawl_fallback(self, tool):
-        """When map+scrape times out (408), should continue to crawl fallback"""
+        """When map+scrape times out (408), should continue to crawl fallback
+        map+scrape timeout（408）时，应继续走 crawl 回退。
+        """
         call_count = {"map_scrape": 0, "crawl": 0}
 
         async def mock_map_and_scrape(*args, **kwargs):
@@ -412,13 +477,18 @@ class TestWebFetchFirecrawlRateLimiting:
                     pass  # May fail for other reasons in test
 
         # Both methods should be called for timeout
+        # timeout 场景下两个方法都应被调用
         assert call_count["map_scrape"] == 1
         # Note: In real code, crawl IS called for timeout, but test may not reach it
+        # 注意：真实代码在 timeout 下确实会调用 crawl，但测试可能走不到那一步
+        # 这个测试校验的是错误处理上的区分
         # This test validates the distinction in error handling
 
     @pytest.mark.asyncio
     async def test_other_errors_continue_to_crawl_fallback(self, tool):
-        """When map+scrape fails with non-429 error, should continue to crawl"""
+        """When map+scrape fails with non-429 error, should continue to crawl
+        map+scrape 以非 429 错误失败时，应继续走 crawl 回退。
+        """
         call_count = {"map_scrape": 0, "crawl": 0}
 
         async def mock_map_and_scrape(*args, **kwargs):
@@ -442,5 +512,7 @@ class TestWebFetchFirecrawlRateLimiting:
                     pass
 
         # map_and_scrape was called
+        # map_and_scrape 被调用了
         assert call_count["map_scrape"] == 1
         # For non-429 errors, crawl fallback should be attempted
+        # 非 429 错误应尝试 crawl 回退

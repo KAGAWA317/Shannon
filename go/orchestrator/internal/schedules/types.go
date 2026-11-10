@@ -38,6 +38,7 @@ type Schedule struct {
 }
 
 // CreateScheduleInput is the input for creating a schedule
+// CreateScheduleInput 是创建 schedule 的输入
 type CreateScheduleInput struct {
 	UserID             uuid.UUID
 	TenantID           uuid.UUID
@@ -52,6 +53,7 @@ type CreateScheduleInput struct {
 }
 
 // UpdateScheduleInput is the input for updating a schedule
+// UpdateScheduleInput 是更新 schedule 的输入
 type UpdateScheduleInput struct {
 	ScheduleID         uuid.UUID
 	Name               *string

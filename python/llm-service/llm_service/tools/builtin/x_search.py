@@ -1,9 +1,13 @@
 """
 X Search Tool — search X/Twitter via xAI Responses API.
+X Search tool——通过 xAI Responses API 搜索 X/Twitter。
 
 Uses Grok's server-side ``x_search`` tool to retrieve posts and citations.
 The tool is provider-agnostic: any Shannon agent (Claude, GPT, etc.) can
 invoke it via a standard tool call; internally it delegates to xAI.
+使用 Grok 服务端的 ``x_search`` tool 获取帖文与引用。
+该 tool 与 provider 无关：任何 Shannon agent（Claude、GPT 等）都可
+通过标准 tool call 调用它；内部再委托给 xAI。
 """
 
 from __future__ import annotations
@@ -23,26 +27,37 @@ from ..base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolRes
 logger = logging.getLogger(__name__)
 
 # Defaults (overridable via env)
+# 默认值（可通过 env 覆盖）
 _DEFAULT_MODEL = "grok-4-1-fast-non-reasoning"
 _DEFAULT_RATE_LIMIT = 30  # req/min
+# 每分钟 request 数
 _DEFAULT_TIMEOUT = 60  # seconds
+# 秒
 
 # xAI Responses API x_search pricing: $5 / 1K calls = $0.005 per call
+# xAI Responses API x_search 定价：$5 / 1K 次调用 = 每次 $0.005
 _X_SEARCH_COST_PER_CALL = 0.005
 
 # Fallback token prices (per 1K) if models.yaml is unavailable.
 # Source of truth is config/models.yaml; these mirror grok-4-1-fast as of 2026-04.
+# models.yaml 不可用时的回退 token 价格（每 1K）。
+# 事实来源是 config/models.yaml；此处与 2026-04 的 grok-4-1-fast 一致。
 _FALLBACK_INPUT_PER_1K = 0.0002   # $0.20 / 1M
+# $0.20 / 1M
 _FALLBACK_OUTPUT_PER_1K = 0.0005  # $0.50 / 1M
+# $0.50 / 1M
 
 _XAI_PRICING_CACHE: Optional[Dict[str, Dict[str, float]]] = None
 
 
 def _load_xai_pricing() -> Dict[str, Dict[str, float]]:
     """Load xAI model pricing from config/models.yaml. Cached after first call.
+    从 config/models.yaml 加载 xAI 模型定价。首次调用后 cache。
 
     Mirrors the path-resolution used by llm_provider.manager._load_and_apply_pricing_overrides.
     Returns an empty dict when config is unavailable; callers fall back to constants.
+    与 llm_provider.manager._load_and_apply_pricing_overrides 的路径解析保持一致。
+    配置不可用时返回空 dict；调用方回退到常量。
     """
     global _XAI_PRICING_CACHE
     if _XAI_PRICING_CACHE is not None:
@@ -51,6 +66,7 @@ def _load_xai_pricing() -> Dict[str, Dict[str, float]]:
     config_path = os.getenv("MODELS_CONFIG_PATH", "/app/config/models.yaml")
     if not os.path.exists(config_path):
         # Local-dev fallback: walk up from this file to repo root (.../python/llm-service/...)
+        # 本地开发回退：从本文件向上定位仓库根目录（.../python/llm-service/...）
         alt = "./config/models.yaml"
         config_path = alt if os.path.exists(alt) else config_path
 
@@ -71,10 +87,14 @@ _XAI_BASE_URL_CACHE: Optional[str] = None
 
 def _resolve_xai_base_url() -> str:
     """Resolve the xAI Responses API base URL for x_search.
+    解析 x_search 使用的 xAI Responses API base URL。
 
     Precedence:
     1. ``XAI_BASE_URL`` env var (if non-empty) — explicit opt-in.
     2. Public default ``https://api.x.ai/v1``.
+    优先级：
+    1. ``XAI_BASE_URL`` env 变量（非空时）——显式选择加入。
+    2. 公共默认值 ``https://api.x.ai/v1``。
 
     We intentionally do NOT auto-inherit ``provider_settings.xai.base_url``
     from ``config/models.yaml``: that URL is set for the chat-completions
@@ -82,9 +102,16 @@ def _resolve_xai_base_url() -> str:
     the ``/responses`` endpoint or the server-side ``x_search`` tool.
     Operators who want x_search routed through a proxy must set
     ``XAI_BASE_URL`` explicitly.
+    我们有意不自动继承 ``config/models.yaml`` 中的
+    ``provider_settings.xai.base_url``：该 URL 是为 chat-completions
+    路径设置的，可能指向不暴露 ``/responses`` 端点或服务端
+    ``x_search`` tool 的 OpenAI 兼容代理。若运维希望 x_search 走代理，
+    必须显式设置 ``XAI_BASE_URL``。
 
     Empty-string env values are treated as unset, so a misconfigured
     deployment template won't produce an invalid ``/responses`` URL.
+    空字符串 env 值视为未设置，因此配置错误的部署模板不会产生
+    无效的 ``/responses`` URL。
     """
     global _XAI_BASE_URL_CACHE
     if _XAI_BASE_URL_CACHE is not None:
@@ -102,6 +129,9 @@ def _reload_caches() -> None:
     """Drop module-level pricing/base-url caches so the next call re-reads env
     and ``config/models.yaml``. Intended for hot-reload hooks and tests; no
     watcher is wired up yet (caches remain process-lifetime by default).
+    丢弃模块级 pricing/base-url cache，使下次调用重新读取 env
+    与 ``config/models.yaml``。用于热重载钩子和测试；目前尚未接入
+    watcher（默认 cache 生命周期与进程一致）。
     """
     global _XAI_PRICING_CACHE, _XAI_BASE_URL_CACHE
     _XAI_PRICING_CACHE = None
@@ -109,7 +139,8 @@ def _reload_caches() -> None:
 
 
 def _get_token_prices(model: str) -> Tuple[float, float]:
-    """Return (input_per_1k, output_per_1k) for an xAI model, with safe fallback."""
+    """Return (input_per_1k, output_per_1k) for an xAI model, with safe fallback.
+    返回 xAI 模型的 (input_per_1k, output_per_1k)，并带安全回退。"""
     pricing = _load_xai_pricing()
     entry = pricing.get(model) or {}
     ip = entry.get("input_per_1k")
@@ -121,7 +152,8 @@ def _get_token_prices(model: str) -> Tuple[float, float]:
 
 
 class XSearchTool(Tool):
-    """Search X/Twitter content via xAI Responses API."""
+    """Search X/Twitter content via xAI Responses API.
+    通过 xAI Responses API 搜索 X/Twitter 内容。"""
 
     def _get_metadata(self) -> ToolMetadata:
         return ToolMetadata(
@@ -141,6 +173,9 @@ class XSearchTool(Tool):
             # Real cost is per-call fee × N calls + token cost; reported via
             # ToolResult.cost_usd. cost_per_use stays 0 so callers that fall
             # back to the static metadata field don't systematically undercount.
+            # 真实成本 = 每次调用费用 × N 次 + token 成本；通过
+            # ToolResult.cost_usd 上报。cost_per_use 保持 0，避免回退到
+            # 静态 metadata 字段的调用方系统性少计。
             cost_per_use=0.0,
         )
 
@@ -212,9 +247,12 @@ class XSearchTool(Tool):
         timeout = int(os.getenv("X_SEARCH_TIMEOUT", str(_DEFAULT_TIMEOUT)))
         # Honor xAI base URL from (in order): XAI_BASE_URL env, provider_settings.xai.base_url
         # in config/models.yaml, or public xAI. Matches the resolution XAIProvider uses.
+        # xAI base URL 的优先级（依次）：XAI_BASE_URL env、config/models.yaml 中的
+        # provider_settings.xai.base_url、公共 xAI。与 XAIProvider 的解析方式一致。
         responses_url = f"{_resolve_xai_base_url()}/responses"
 
         # Build x_search tool parameters
+        # 构建 x_search tool 参数
         x_search_params: Dict[str, Any] = {}
 
         allowed = kwargs.get("allowed_handles", "")
@@ -251,11 +289,13 @@ class XSearchTool(Tool):
             x_search_params["to_date"] = str(to_date).strip()
 
         # Build Responses API payload
+        # 构建 Responses API payload
         tool_def: Dict[str, Any] = {"type": "x_search"}
         if x_search_params:
             tool_def.update(x_search_params)
 
         # Build prompt: let the calling LLM's instructions drive the output format
+        # 构建 prompt：由调用方 LLM 的指令决定输出格式
         instructions = kwargs.get("result_instructions", "")
         if instructions:
             prompt = (
@@ -265,6 +305,7 @@ class XSearchTool(Tool):
             )
         else:
             # Minimal default: detailed per-post listing
+            # 最小默认值：逐条详细列出帖文
             prompt = (
                 f"Search X/Twitter for: {query}\n\n"
                 "List each post individually with: author, date, full text, "
@@ -309,24 +350,31 @@ class XSearchTool(Tool):
         latency_ms = int((time.time() - start) * 1000)
 
         # Extract summary text and citations from response
+        # 从 response 中提取摘要文本与引用
         summary = self._extract_text(data)
         citations = self._extract_citations(data)
 
         # Extract x_search call count from usage.server_side_tool_usage_details
+        # 从 usage.server_side_tool_usage_details 提取 x_search 调用次数
         usage = data.get("usage") or {}
         tool_details = usage.get("server_side_tool_usage_details") or {}
         x_search_calls = int(tool_details.get("x_search_calls", 0) or 0)
 
         # Token usage
+        # token 用量
         input_tokens = int(usage.get("input_tokens", 0) or 0)
         output_tokens = int(usage.get("output_tokens", 0) or 0)
         # xAI Responses API: cached_tokens nested under input_tokens_details
+        # xAI Responses API：cached_tokens 嵌套在 input_tokens_details 下
         input_details = usage.get("input_tokens_details") or {}
         cached_tokens = int(input_details.get("cached_tokens", 0) or 0)
 
         # Cost: x_search per-call fee + token cost (centralized pricing + cache-aware).
         # Delegate token math to the shared helper so xAI/Kimi/Anthropic/OpenAI
         # cache semantics stay in one place (llm_provider.base.compute_token_cost).
+        # 成本：x_search 每次调用费用 + token 成本（集中定价 + 感知 cache）。
+        # token 计算委托给共享 helper，使 xAI/Kimi/Anthropic/OpenAI 的
+        # cache 语义集中在一处（llm_provider.base.compute_token_cost）。
         input_per_1k, output_per_1k = _get_token_prices(model)
         token_cost = compute_token_cost(
             input_per_1k=input_per_1k,
@@ -366,7 +414,8 @@ class XSearchTool(Tool):
 
     @staticmethod
     def _extract_text(data: Dict[str, Any]) -> str:
-        """Extract text content from Responses API output."""
+        """Extract text content from Responses API output.
+        从 Responses API 输出中提取文本内容。"""
         parts: List[str] = []
         output = data.get("output") or []
         if not isinstance(output, list):
@@ -394,7 +443,8 @@ class XSearchTool(Tool):
 
     @staticmethod
     def _extract_citations(data: Dict[str, Any]) -> List[str]:
-        """Extract citation URLs from Responses API output annotations."""
+        """Extract citation URLs from Responses API output annotations.
+        从 Responses API 输出的 annotations 中提取引用 URL。"""
         urls: List[str] = []
         seen: set = set()
         output = data.get("output") or []
@@ -405,6 +455,7 @@ class XSearchTool(Tool):
             if not isinstance(item, dict):
                 continue
             # Citations live in message.content[].annotations[]
+            # 引用位于 message.content[].annotations[]
             content_blocks = []
             if item.get("type") == "message":
                 content_blocks = item.get("content", []) or []

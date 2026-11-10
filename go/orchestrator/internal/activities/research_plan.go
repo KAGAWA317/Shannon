@@ -18,6 +18,7 @@ import (
 )
 
 // researchPlanLLMRequest is the HTTP request body for the LLM service
+// researchPlanLLMRequest 是发给 LLM service 的 HTTP request body。
 type researchPlanLLMRequest struct {
 	Query        string                 `json:"query"`
 	Context      map[string]interface{} `json:"context"`
@@ -25,6 +26,7 @@ type researchPlanLLMRequest struct {
 }
 
 // researchPlanLLMResponse is the HTTP response from the LLM service
+// researchPlanLLMResponse 是 LLM service 返回的 HTTP response。
 type researchPlanLLMResponse struct {
 	Message      string `json:"message"`
 	Intent       string `json:"intent"`
@@ -36,6 +38,7 @@ type researchPlanLLMResponse struct {
 }
 
 // reviewRedisState is the state stored in Redis for the review conversation
+// reviewRedisState 是 review session 存在 Redis 中的状态。
 type reviewRedisState struct {
 	WorkflowID    string                 `json:"workflow_id"`
 	Query         string                 `json:"query"`
@@ -52,10 +55,13 @@ type reviewRedisState struct {
 
 // GenerateResearchPlan calls the LLM service to generate an initial research plan
 // and initializes the Redis review state. This is a Temporal Activity.
+// GenerateResearchPlan 调用 LLM service 生成初始 research plan，
+// 并初始化 Redis 中的 review 状态；本函数是一个 Temporal Activity。
 func GenerateResearchPlan(ctx context.Context, in ResearchPlanInput) (ResearchPlanResult, error) {
 	logger := activity.GetLogger(ctx)
 
 	// 1. Call LLM service
+	// 1. 调用 LLM service。
 	base := os.Getenv("LLM_SERVICE_URL")
 	if base == "" {
 		base = "http://llm-service:8000"
@@ -66,6 +72,7 @@ func GenerateResearchPlan(ctx context.Context, in ResearchPlanInput) (ResearchPl
 		Query:        in.Query,
 		Context:      in.Context,
 		Conversation: nil, // First round: no conversation
+		// 首轮没有对话历史。
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
@@ -103,12 +110,14 @@ func GenerateResearchPlan(ctx context.Context, in ResearchPlanInput) (ResearchPl
 	}
 
 	// Determine intent (default to "feedback" if LLM didn't provide one)
+	// 判定 intent；LLM 没给时默认为 "feedback"。
 	intent := llmResp.Intent
 	if intent == "" {
 		intent = "feedback"
 	}
 
 	// Strip [RESEARCH_BRIEF]...[/RESEARCH_BRIEF] block (machine-consumed metadata, not for display)
+	// 去掉 [RESEARCH_BRIEF]...[/RESEARCH_BRIEF] 块：这部分 metadata 供机器消费，不用于展示。
 	briefRegex := regexp.MustCompile(`(?s)\[RESEARCH_BRIEF\]\n?(.*?)\n?\[/RESEARCH_BRIEF\]`)
 	displayMessage := llmResp.Message
 	var researchBrief string
@@ -119,6 +128,8 @@ func GenerateResearchPlan(ctx context.Context, in ResearchPlanInput) (ResearchPl
 
 	// Strip [INTENT:...] tag (already parsed above, not for display)
 	// Non-anchored to match tag anywhere in string (LLM may place it mid-response)
+	// 去掉 [INTENT:...] 标签：上面已解析过，不用于展示。
+	// 故意不做行首锚定，以便匹配出现在任意位置的标签（LLM 可能放在回复中间）。
 	intentTagRegex := regexp.MustCompile(`\s*\[INTENT:\w+\]\s*`)
 	displayMessage = strings.TrimSpace(intentTagRegex.ReplaceAllString(displayMessage, " "))
 
@@ -130,6 +141,7 @@ func GenerateResearchPlan(ctx context.Context, in ResearchPlanInput) (ResearchPl
 	}
 
 	// 2. Initialize Redis review state
+	// 2. 初始化 Redis 中的 review 状态。
 	redisURL := os.Getenv("REDIS_URL")
 	if redisURL == "" {
 		redisURL = "redis://redis:6379"
@@ -138,12 +150,15 @@ func GenerateResearchPlan(ctx context.Context, in ResearchPlanInput) (ResearchPl
 	if err != nil {
 		logger.Warn("Failed to parse Redis URL for review state", zap.Error(err))
 		// Non-fatal: workflow continues, Gateway creates state on first feedback
+		// 非致命：workflow 继续，由 Gateway 在首次 feedback 时创建状态。
 	} else {
 		rdb := redis.NewClient(redisOpts)
 		defer rdb.Close()
 
 		// Store stripped message in Redis (no [RESEARCH_BRIEF] or [INTENT:...])
 		// Always set currentPlan so users can approve at any point
+		// 往 Redis 写去掉标记后的 message（不含 [RESEARCH_BRIEF] 与 [INTENT:...]）。
+		// currentPlan 始终要设置，保证用户随时可以 approve。
 		currentPlan := displayMessage
 		state := reviewRedisState{
 			WorkflowID:    in.WorkflowID,
@@ -169,12 +184,15 @@ func GenerateResearchPlan(ctx context.Context, in ResearchPlanInput) (ResearchPl
 		ttl := in.TTL
 		if ttl == 0 {
 			ttl = 20 * time.Minute // default 15min + 5min buffer
+// 默认 15min 加 5min buffer。
 		} else {
 			ttl += 5 * time.Minute // add buffer
+// 追加 buffer。
 		}
 		key := fmt.Sprintf("review:%s", in.WorkflowID)
 		if err := rdb.Set(ctx, key, stateBytes, ttl).Err(); err != nil {
 			// Redis failure is critical for HITL - user won't be able to interact
+			// Redis 失败对 HITL 是致命的：用户将无法继续交互。
 			return ResearchPlanResult{}, fmt.Errorf("failed to initialize HITL review state in Redis: %w", err)
 		}
 		logger.Info("Initialized HITL review state in Redis",

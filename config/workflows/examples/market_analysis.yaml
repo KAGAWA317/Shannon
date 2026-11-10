@@ -24,6 +24,7 @@ nodes:
       description: "Analyze top competitors in parallel"
 
   # Market trends (parallel branch)
+  # 市场趋势（并行分支）
   - id: trends
     type: cognitive
     strategy: chain_of_thought
@@ -32,6 +33,7 @@ nodes:
     tools_allowlist: [web_search, calculator]
 
   # Customer analysis (parallel branch)
+  # 客户分析（并行分支）
   - id: customers
     type: simple
     strategy: react

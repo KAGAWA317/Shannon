@@ -86,6 +86,7 @@ Some content.
 		t.Errorf("Expected default version '1.0.0', got '%s'", skill.Version)
 	}
 	// Enabled should default to true when not specified
+	// 未指定时 Enabled 应默认为 true
 	if !skill.Enabled {
 		t.Error("Expected Enabled to default to true")
 	}

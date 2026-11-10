@@ -1,9 +1,13 @@
 # Source Type Configuration for Deep Research 2.0
+# Deep Research 2.0 的来源类型配置
 # This file defines how different source types map to search strategies and site filters.
+# 本文件定义不同来源类型如何映射到搜索策略与站点过滤条件。
 
 # Source type definitions with search strategies
+# 来源类型定义及其搜索策略
 source_types:
   # Official sources - highest authority for entity facts
+  # 官方来源 - 实体事实的最高权威
   official:
     description: "Company websites, .gov, .edu domains, official documentation"
     strategy: "site_filter"
@@ -13,6 +17,7 @@ source_types:
     max_results: 5
 
   # Aggregator sources - consolidated business intelligence
+  # 聚合类来源 - 整合后的商业情报
   aggregator:
     description: "Business intelligence platforms, company databases"
     strategy: "site_filter"
@@ -72,6 +77,7 @@ source_types:
     max_results: 12
 
   # Academic sources - research papers, scientific findings
+  # 学术来源 - 研究论文、科学发现
   academic:
     description: "Research papers, academic journals, preprints"
     strategy: "category"
@@ -332,6 +338,7 @@ regional_sources:
 
 # Dimension to source type mapping
 # Default source types recommended for each dimension category
+# 为每个维度类别推荐的默认来源类型
 dimension_source_mapping:
   # Company research dimensions
   entity_identity:
@@ -529,8 +536,10 @@ query_type_dimensions:
 
 # Entity-specific gap-filling queries (used when key info is missing)
 # These are fallback queries when standard dimension searches fail
+# 当常规维度搜索失败时使用的兜底查询
 entity_gap_queries:
   # For company research - query patterns when info is missing
+  # 用于公司研究 - 信息缺失时的查询模式
   founder_ceo:
     queries:
       - '"{entity}" founder CEO'
@@ -567,11 +576,13 @@ entity_gap_queries:
 # Search strategy configurations
 search_strategies:
   # Site filter strategy - use site: prefix
+  # 站点过滤策略 - 使用 site: 前缀
   site_filter:
     query_format: "site:{site} {query}"
     merge_strategy: "interleave"
 
   # Category strategy - use Exa category parameter
+  # 类别策略 - 使用 Exa 的 category 参数
   category:
     use_exa_category: true
     fallback_to_site_filter: true
@@ -582,6 +593,7 @@ search_strategies:
     use_autoprompt: true
 
   # Exact match strategy - for entity names
+  # 精确匹配策略 - 用于实体名称
   exact_match:
     query_format: '"{entity}" {query}'
     boost_exact: true
@@ -604,35 +616,49 @@ result_merging:
 
 # Entity relevance filtering
 # Used to filter out citations that don't mention the target entity
+# 用于过滤掉未提及目标实体的引用
 entity_relevance:
   # Require entity mention in title or snippet
+  # 要求标题或摘要中出现实体名称
   require_entity_mention: true
   # Minimum similarity between entity name and content (0.0-1.0)
+  # 实体名称与内容之间的最低相似度（0.0-1.0）
   min_name_similarity: 0.6
   # Allow partial matches (e.g., "Ptmind" matches "PTMIND Inc.")
+  # 允许部分匹配（例如 "Ptmind" 可匹配 "PTMIND Inc."）
   allow_partial_match: true
   # Skip relevance check for these source types (they're always relevant)
+  # 对这些来源类型跳过相关性检查（它们始终相关）
   skip_for_source_types: ["official"]
 
 # Forced prefetch sources for company research
 # These URLs are fetched early in the research workflow to ensure key info is gathered
+# 这些 URL 会在研究 workflow 早期抓取，以确保收集到关键信息
 # {slug} = lowercased entity name with spaces replaced by hyphens
+# {slug} = 实体名称小写，并将空格替换为连字符
 # {slug_underscore} = lowercased entity name with spaces replaced by underscores
+# {slug_underscore} = 实体名称小写，并将空格替换为下划线
 # {localized_name} = entity name in local language (passed from refinement)
+# {localized_name} = 本地语言下的实体名称（由 refinement 传入）
 prefetch_sources:
   company:
     # === Global/English Sources ===
     # NOTE: Crunchbase/LinkedIn/PitchBook removed - they block web scraping.
+    # 注意：已移除 Crunchbase/LinkedIn/PitchBook - 它们会阻止爬取。
     # Use web_search with site: filter instead to find cached/indexed content.
+    # 改用带 site: 过滤的 web_search 来查找已 cache/已索引的内容。
     # Competitor data (Owler allows scraping)
+    # 竞品数据（Owler 允许爬取）
     - pattern: "owler.com/company/{slug}"
       priority: 1
       info_types: ["competitors", "revenue", "employees"]
       subpages: 0
 
   # Japanese company sources (use localized_name for Japanese entity names)
+  # 日本公司来源（日本实体名称使用 localized_name）
   company_ja:
     # Japanese startup database - detailed funding/founder info
+    # 日本创业公司数据库 - 详细的融资/创始人信息
     - pattern: "initial.inc/companies/{slug}"
       priority: 1
       info_types: ["funding", "founders", "investors"]
@@ -643,6 +669,7 @@ prefetch_sources:
       info_types: ["funding", "founders", "employees"]
       subpages: 0
     # Press releases (often has founder/leadership info)
+    # 新闻稿（常包含创始人/管理层信息）
     - pattern: "prtimes.jp/main/html/searchrlp/company_id/{slug}"
       priority: 3
       info_types: ["news", "leadership", "announcements"]
@@ -659,6 +686,7 @@ prefetch_sources:
       subpages: 0
 
   # Chinese company sources (use localized_name for Chinese entity names)
+  # 中国公司来源（中国实体名称使用 localized_name）
   company_zh:
     # 天眼查 - Most comprehensive Chinese company database
     - pattern: "tianyancha.com/company/{slug}"

@@ -191,6 +191,7 @@ func RecordCanaryDecision(configuredMode, effectiveMode, routingReason, decision
 // RecordDenyReason records a denial reason (top reasons tracking)
 func RecordDenyReason(reason, mode string) {
 	// Hash the reason for consistent labeling while limiting cardinality
+	// 对 reason 做哈希，既保证标签一致，又限制指标基数
 	reasonHash := hashString(reason)
 	truncatedReason := util.TruncateString(reason, 50, true) // Limit label size
 	policyDenyReasons.WithLabelValues(reasonHash, mode, truncatedReason).Inc()

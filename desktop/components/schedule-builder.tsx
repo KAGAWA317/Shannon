@@ -50,6 +50,7 @@ const MINUTES = [0, 15, 30, 45];
 const DAYS_OF_MONTH = Array.from({ length: 28 }, (_, i) => i + 1); // 1-28 to avoid month-end issues
 
 // Parse cron to config (best effort)
+// 尽力把 cron 解析成结构化配置（best effort，无法识别时返回 null）
 function parseCronToConfig(cron: string): ScheduleConfig | null {
     const parts = cron.trim().split(/\s+/);
     if (parts.length !== 5) return null;
@@ -181,6 +182,8 @@ function parseDayOfWeek(dayOfWeek: string): number[] {
 
 // Calculate next N run times (simplified - uses browser local time for preview)
 // Note: Actual execution times are determined by backend using the specified timezone
+// 计算未来 N 次运行时间（简化实现 —— 预览使用浏览器本地时间）
+// 注意：实际执行时间由后端按指定的 timezone 决定
 function getNextRuns(cron: string, timezone: string, count: number = 3): Date[] {
     const runs: Date[] = [];
     const parts = cron.trim().split(/\s+/);
@@ -201,6 +204,8 @@ function getNextRuns(cron: string, timezone: string, count: number = 3): Date[] 
 
     // For hourly jobs, we only need to check ~24*7 iterations max
     // For daily/weekly/monthly, we need more iterations
+    // 每小时 job 最多只需检查约 24*7 次迭代
+    // 按天/周/月的 job 需要更多迭代
     const maxIterations = targetHour === null ? 200 : 1500;
 
     for (let i = 0; i < maxIterations && runs.length < count; i++) {

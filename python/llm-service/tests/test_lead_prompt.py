@@ -1,4 +1,6 @@
-"""Tests for Lead user prompt builder (_build_lead_user_prompt)."""
+"""Tests for Lead user prompt builder (_build_lead_user_prompt).
+Lead user prompt 构造器（_build_lead_user_prompt）的测试。
+"""
 
 import pytest
 
@@ -12,7 +14,9 @@ from llm_service.api.lead import (
 
 
 class TestBuildLeadUserPrompt:
-    """Test _build_lead_user_prompt renders all sections correctly."""
+    """Test _build_lead_user_prompt renders all sections correctly.
+    _build_lead_user_prompt 能正确渲染所有段落。
+    """
 
     def _make_budget(self, **kwargs):
         defaults = dict(
@@ -27,7 +31,9 @@ class TestBuildLeadUserPrompt:
         return LeadBudget(**defaults)
 
     def test_workspace_files_rendered(self):
-        """Lead user prompt should include workspace file inventory when provided."""
+        """Lead user prompt should include workspace file inventory when provided.
+        提供 workspace 文件时，prompt 应包含文件清单。
+        """
         body = LeadDecisionRequest(
             workflow_id="wf-test",
             event=LeadEvent(type="checkpoint", agent_id=""),
@@ -43,7 +49,9 @@ class TestBuildLeadUserPrompt:
         assert "data/comparison.csv" in prompt
 
     def test_no_workspace_files_section_when_empty(self):
-        """When no workspace files, the section should not appear."""
+        """When no workspace files, the section should not appear.
+        没有 workspace 文件时，该段落不应出现。
+        """
         body = LeadDecisionRequest(
             workflow_id="wf-test",
             event=LeadEvent(type="checkpoint", agent_id=""),
@@ -55,7 +63,9 @@ class TestBuildLeadUserPrompt:
         assert "## Workspace Files" not in prompt
 
     def test_workspace_files_capped_at_30(self):
-        """When more than 30 files, display is capped with a '... and N more' line."""
+        """When more than 30 files, display is capped with a '... and N more' line.
+        文件超过 30 个时，展示应被截断并追加 '... and N more' 一行。
+        """
         files = [f"file_{i:03d}.md" for i in range(50)]
         body = LeadDecisionRequest(
             workflow_id="wf-test",
@@ -68,11 +78,15 @@ class TestBuildLeadUserPrompt:
         prompt = _build_lead_user_prompt(body)
         assert "## Workspace Files (50 files)" in prompt
         assert "file_029.md" in prompt  # 30th file (index 29) should be shown
+        # 第 30 个文件（索引 29）应被展示
         assert "file_030.md" not in prompt  # 31st file should be hidden
+        # 第 31 个文件应被隐藏
         assert "... and 20 more" in prompt
 
     def test_budget_section_always_present(self):
-        """Budget section should always be rendered."""
+        """Budget section should always be rendered.
+        Budget 段落应始终渲染。
+        """
         body = LeadDecisionRequest(
             workflow_id="wf-test",
             event=LeadEvent(type="checkpoint", agent_id=""),
@@ -82,7 +96,9 @@ class TestBuildLeadUserPrompt:
         assert "## Budget" in prompt
 
     def test_human_input_event_rendered(self):
-        """human_input events should render the user's message."""
+        """human_input events should render the user's message.
+        human_input event 应渲染用户的消息。
+        """
         body = LeadDecisionRequest(
             workflow_id="wf-test",
             event=LeadEvent(type="human_input", human_message="Translate all files to Chinese"),
@@ -93,7 +109,9 @@ class TestBuildLeadUserPrompt:
         assert "Translate all files to Chinese" in prompt
 
     def test_original_query_injected_for_non_initial_plan(self):
-        """original_query should appear for non-initial_plan events."""
+        """original_query should appear for non-initial_plan events.
+        非 initial_plan event 应带上 original_query。
+        """
         body = LeadDecisionRequest(
             workflow_id="wf-test",
             event=LeadEvent(type="checkpoint", agent_id=""),
@@ -105,7 +123,9 @@ class TestBuildLeadUserPrompt:
         assert "Compare React vs Vue" in prompt
 
     def test_original_query_not_injected_for_initial_plan(self):
-        """original_query should NOT appear for initial_plan events."""
+        """original_query should NOT appear for initial_plan events.
+        initial_plan event 不应带上 original_query。
+        """
         body = LeadDecisionRequest(
             workflow_id="wf-test",
             event=LeadEvent(type="initial_plan"),
@@ -116,7 +136,9 @@ class TestBuildLeadUserPrompt:
         assert "## Original User Query" not in prompt
 
     def test_agent_states_rendered(self):
-        """Agent states section should show agent details."""
+        """Agent states section should show agent details.
+        Agent states 段落应展示各 agent 的细节。
+        """
         body = LeadDecisionRequest(
             workflow_id="wf-test",
             event=LeadEvent(type="checkpoint", agent_id=""),
@@ -134,7 +156,9 @@ class TestBuildLeadUserPrompt:
         assert "1 idle" in prompt
 
     def test_workspace_files_appear_between_agent_states_and_budget(self):
-        """Workspace files section should appear after Agent States and before Budget."""
+        """Workspace files section should appear after Agent States and before Budget.
+        Workspace files 段落应位于 Agent States 之后、Budget 之前。
+        """
         body = LeadDecisionRequest(
             workflow_id="wf-test",
             event=LeadEvent(type="checkpoint", agent_id=""),
@@ -151,7 +175,9 @@ class TestBuildLeadUserPrompt:
         assert agent_pos < ws_pos < budget_pos
 
     def test_hitl_messages_rendered_for_non_human_input_events(self):
-        """HITL message history should appear in non-human_input events."""
+        """HITL message history should appear in non-human_input events.
+        非 human_input event 中应展示 HITL 消息历史。
+        """
         body = LeadDecisionRequest(
             workflow_id="wf-test",
             event=LeadEvent(type="checkpoint", agent_id=""),
@@ -165,7 +191,9 @@ class TestBuildLeadUserPrompt:
         assert "MANDATORY" in prompt
 
     def test_hitl_messages_not_rendered_for_human_input_event(self):
-        """HITL messages should NOT duplicate when current event IS human_input."""
+        """HITL messages should NOT duplicate when current event IS human_input.
+        当前 event 本身就是 human_input 时，HITL 消息不应重复渲染。
+        """
         body = LeadDecisionRequest(
             workflow_id="wf-test",
             event=LeadEvent(type="human_input", human_message="翻译成日语"),

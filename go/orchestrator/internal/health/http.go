@@ -11,12 +11,14 @@ import (
 )
 
 // HTTPHandler provides HTTP endpoints for health checks
+// HTTPHandler 提供健康检查的 HTTP 端点
 type HTTPHandler struct {
 	manager *Manager
 	logger  *zap.Logger
 }
 
 // NewHTTPHandler creates a new HTTP handler for health checks
+// NewHTTPHandler 创建健康检查的 HTTP 处理器
 func NewHTTPHandler(manager *Manager, logger *zap.Logger) *HTTPHandler {
 	return &HTTPHandler{
 		manager: manager,
@@ -25,6 +27,7 @@ func NewHTTPHandler(manager *Manager, logger *zap.Logger) *HTTPHandler {
 }
 
 // RegisterRoutes registers health check endpoints with an HTTP mux
+// RegisterRoutes 把健康检查端点注册到 HTTP mux
 func (h *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/health", h.handleHealth)
 	mux.HandleFunc("/health/ready", h.handleReadiness)
@@ -33,6 +36,7 @@ func (h *HTTPHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 // handleHealth returns overall health status (for general monitoring)
+// handleHealth 返回整体健康状态（用于常规监控）
 func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		h.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -74,6 +78,7 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleReadiness returns readiness status (for k8s readiness probes)
+// handleReadiness 返回就绪状态（用于 k8s readiness 探针）
 func (h *HTTPHandler) handleReadiness(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		h.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -109,6 +114,7 @@ func (h *HTTPHandler) handleReadiness(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleLiveness returns liveness status (for k8s liveness probes)
+// handleLiveness 返回存活状态（用于 k8s liveness 探针）
 func (h *HTTPHandler) handleLiveness(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		h.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -144,6 +150,7 @@ func (h *HTTPHandler) handleLiveness(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleDetailedHealth returns detailed health information (for debugging)
+// handleDetailedHealth 返回详细健康信息（用于调试）
 func (h *HTTPHandler) handleDetailedHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		h.writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -158,6 +165,7 @@ func (h *HTTPHandler) handleDetailedHealth(w http.ResponseWriter, r *http.Reques
 	var detailed DetailedHealth
 	if cached {
 		// Return cached results without running new checks
+		// 直接返回 cache 结果，不执行新的检查
 		lastResults := h.manager.GetLastResults()
 		components := make(map[string]CheckResult)
 		for name, result := range lastResults {
@@ -183,6 +191,7 @@ func (h *HTTPHandler) handleDetailedHealth(w http.ResponseWriter, r *http.Reques
 		}
 
 		// Use manager's calculateOverallStatus method (need to make it accessible)
+		// 使用 manager 的 calculateOverallStatus 方法（需要将其导出）
 		overall := h.calculateOverallStatusForHTTP(components, summary)
 
 		detailed = DetailedHealth{
@@ -196,6 +205,7 @@ func (h *HTTPHandler) handleDetailedHealth(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Set HTTP status based on overall health
+	// 依据整体健康状态设置 HTTP 状态码
 	var statusCode int
 	switch detailed.Overall.Status {
 	case StatusHealthy:
@@ -217,6 +227,7 @@ func (h *HTTPHandler) handleDetailedHealth(w http.ResponseWriter, r *http.Reques
 }
 
 // calculateOverallStatusForHTTP duplicates the manager's logic for HTTP responses
+// calculateOverallStatusForHTTP 为 HTTP response 复制 manager 的判断逻辑
 func (h *HTTPHandler) calculateOverallStatusForHTTP(components map[string]CheckResult, summary HealthSummary) OverallHealth {
 	if summary.Total == 0 {
 		return OverallHealth{
@@ -296,6 +307,7 @@ func (h *HTTPHandler) writeError(w http.ResponseWriter, statusCode int, message 
 }
 
 // StartHealthServer starts a dedicated HTTP server for health checks
+// StartHealthServer 启动专用于健康检查的 HTTP 服务
 func StartHealthServer(manager *Manager, port int, logger *zap.Logger) *http.Server {
 	handler := NewHTTPHandler(manager, logger)
 	mux := http.NewServeMux()

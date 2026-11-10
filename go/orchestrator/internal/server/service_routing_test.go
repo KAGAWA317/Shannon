@@ -21,6 +21,7 @@ import (
 )
 
 // TestExecutionModeRouting verifies that different execution modes route to correct workflows
+// TestExecutionModeRouting 验证不同执行模式会路由到正确的 workflow
 func TestExecutionModeRouting(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -56,6 +57,8 @@ func TestExecutionModeRouting(t *testing.T) {
 
 			// Setup expectations
 			// GetID is called before we know the actual workflow ID, so return anything
+			// 设置期望
+			// GetID 在实际 workflow ID 确定之前被调用，因此返回任意值即可
 			mockWorkflowRun.On("GetID").Return(func() string {
 				// Will be task-test-user-{timestamp}
 				return "task-test-user-12345"
@@ -121,6 +124,7 @@ func TestExecutionModeRouting(t *testing.T) {
 			assert.Equal(t, tt.mode, resp.Decomposition.Mode)
 
 			// Verify correct workflow was called (check function name)
+			// 校验调用了正确的 workflow（检查函数名）
 			workflowName := ""
 			if capturedWorkflow != nil {
 				// Get function name using reflection
@@ -148,6 +152,7 @@ func TestExecutionModeRouting(t *testing.T) {
 }
 
 // TestDefaultExecutionMode verifies that when no mode is specified, it defaults to STANDARD
+// TestDefaultExecutionMode 验证未指定模式时默认为 STANDARD
 func TestDefaultExecutionMode(t *testing.T) {
 	// Create mock Temporal client
 	mockClient := &mocks.Client{}
@@ -206,6 +211,7 @@ func TestDefaultExecutionMode(t *testing.T) {
 	assert.Equal(t, "standard", capturedInput.Mode)
 
 	// Verify OrchestratorWorkflow was called (default for standard mode)
+	// 校验调用了 OrchestratorWorkflow（standard 模式的默认）
 	workflowName := ""
 	if capturedWorkflow != nil {
 		funcName := runtime.FuncForPC(reflect.ValueOf(capturedWorkflow).Pointer()).Name()
@@ -220,8 +226,10 @@ func TestDefaultExecutionMode(t *testing.T) {
 }
 
 // TestPriorityQueueRouting verifies that priority labels correctly route to appropriate task queues
+// TestPriorityQueueRouting 验证优先级标签能正确路由到相应 task queue
 func TestPriorityQueueRouting(t *testing.T) {
     // Enable priority queues for this test suite
+    // 为本测试套件启用优先级队列
     t.Setenv("PRIORITY_QUEUES", "true")
 	tests := []struct {
 		name          string
@@ -336,6 +344,7 @@ func TestPriorityQueueRouting(t *testing.T) {
 			assert.NotNil(t, resp)
 
 			// Verify the correct task queue was used
+			// 校验使用了正确的 task queue
 			assert.Equal(t, tt.expectedQueue, capturedOptions.TaskQueue,
 				"Priority '%s' should route to queue '%s'", tt.priority, tt.expectedQueue)
 
@@ -347,6 +356,8 @@ func TestPriorityQueueRouting(t *testing.T) {
 
 // TestPriorityQueueRouting_DefaultQueueWhenDisabled verifies that when PRIORITY_QUEUES
 // is not enabled, all priorities route to the default queue.
+// TestPriorityQueueRouting_DefaultQueueWhenDisabled 验证未启用 PRIORITY_QUEUES 时，
+// 所有优先级都路由到默认队列。
 func TestPriorityQueueRouting_DefaultQueueWhenDisabled(t *testing.T) {
     // Ensure priority queues are disabled
     t.Setenv("PRIORITY_QUEUES", "false")
@@ -384,6 +395,7 @@ func TestPriorityQueueRouting_DefaultQueueWhenDisabled(t *testing.T) {
     }
 
     // Create request with a high priority label (should be ignored when disabled)
+    // 构造带高优先级标签的 request（禁用时应被忽略）
     req := &pb.SubmitTaskRequest{
         Metadata: &common.TaskMetadata{
             UserId: "test-user",

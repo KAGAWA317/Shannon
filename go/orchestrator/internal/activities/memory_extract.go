@@ -48,12 +48,15 @@ type memoryTripleRecord struct {
 }
 
 // memoryIndexMu serializes MEMORY.md read-dedupe-write operations to prevent corruption.
+// memoryIndexMu 串行化 MEMORY.md 的 read-dedupe-write 操作，防止写坏文件。
 var memoryIndexMu sync.Mutex
 
 // safePathRe only allows lowercase alphanumeric, hyphens, underscores, and dots.
+// safePathRe 只允许小写字母数字、连字符、下划线和点号。
 var safePathRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*\.md$`)
 
 // validUserID validates user IDs before they are used for filesystem paths.
+// validUserID 在 user ID 被用作文件系统 path 之前做校验。
 func validUserID(userID string) error {
 	if userID == "" {
 		return fmt.Errorf("empty user_id")
@@ -79,6 +82,8 @@ func validUserID(userID string) error {
 
 // ExtractMemoryActivity calls the LLM to extract key findings from a task result
 // and writes them to the user's /memory directory. Best-effort: never returns error.
+// ExtractMemoryActivity 调用 LLM 从 task result 中抽取关键发现，
+// 写入该用户的 /memory 目录。Best-effort：永不返回 error。
 func ExtractMemoryActivity(ctx context.Context, input MemoryExtractInput) (*MemoryExtractResult, error) {
 	logger := activity.GetLogger(ctx)
 
@@ -109,6 +114,7 @@ func ExtractMemoryActivity(ctx context.Context, input MemoryExtractInput) (*Memo
 	extractURL := fmt.Sprintf("%s/memory/extract", llmServiceURL)
 
 	// Truncate to control cost
+	// 截断以控制 cost
 	query := input.Query
 	if len(query) > 1000 {
 		query = query[:1000]
@@ -170,11 +176,13 @@ func ExtractMemoryActivity(ctx context.Context, input MemoryExtractInput) (*Memo
 	}
 
 	// Cap summary length to keep MEMORY.md index dense
+	// 限制 summary 长度，让 MEMORY.md index 保持紧凑
 	if len(extraction.Summary) > 400 {
 		extraction.Summary = extraction.Summary[:400]
 	}
 
 	// Validate and sanitize suggested path
+	// 校验并清洗 LLM 给出的 suggested path
 	cleanPath, err := validateMemoryPath(extraction.SuggestedPath)
 	if err != nil {
 		logger.Warn("memory.extraction.invalid_path", "path", extraction.SuggestedPath, "error", err)
@@ -189,6 +197,7 @@ func ExtractMemoryActivity(ctx context.Context, input MemoryExtractInput) (*Memo
 	targetPath := filepath.Join(userMemDir, cleanPath)
 
 	// Final safety: ensure resolved path is inside userMemDir
+	// 最后一道保险：确认解析后的 path 仍在 userMemDir 内
 	absTarget, _ := filepath.Abs(targetPath)
 	absBase, _ := filepath.Abs(userMemDir)
 	if !strings.HasPrefix(absTarget, absBase+string(filepath.Separator)) {
@@ -215,6 +224,7 @@ func ExtractMemoryActivity(ctx context.Context, input MemoryExtractInput) (*Memo
 	if err := updateMemoryIndex(userMemDir, cleanPath, extraction.Summary); err != nil {
 		logger.Warn("memory.extraction.index_error", "error", err)
 		// File was written, just index failed — still count as extracted
+		// 文件已写入，只是 index 更新失败 —— 仍算作 extracted
 	}
 
 	logger.Info("memory.extraction.success",
@@ -230,6 +240,7 @@ func ExtractMemoryActivity(ctx context.Context, input MemoryExtractInput) (*Memo
 }
 
 // appendMemoryTriples appends validated triples to triples.jsonl as JSONL records.
+// appendMemoryTriples 把校验过的 triples 以 JSONL record 追加到 triples.jsonl。
 func appendMemoryTriples(memoryDir, sourceFile string, triples []memoryTriple) error {
 	if sourceFile == "" || len(triples) == 0 {
 		return nil
@@ -276,6 +287,7 @@ func appendMemoryTriples(memoryDir, sourceFile string, triples []memoryTriple) e
 }
 
 // validateMemoryPath validates and sanitizes the suggested path from the LLM.
+// validateMemoryPath 校验并清洗 LLM 给出的 suggested path。
 func validateMemoryPath(suggestedPath string) (string, error) {
 	if suggestedPath == "" {
 		return "", fmt.Errorf("empty path")
@@ -295,6 +307,7 @@ func validateMemoryPath(suggestedPath string) (string, error) {
 	}
 
 	// Flatten: strip directory prefix if LLM suggests subdirectories (e.g. "caching/redis.md" → "redis.md")
+	// 拍平：若 LLM 给出子目录则去掉目录前缀（例如 "caching/redis.md" → "redis.md"）
 	if strings.Contains(cleaned, string(filepath.Separator)) {
 		cleaned = filepath.Base(cleaned)
 	}
@@ -320,9 +333,13 @@ func validateMemoryPath(suggestedPath string) (string, error) {
 // maxMemoryIndexEntries is the maximum number of entries kept in the MEMORY.md index.
 // When exceeded, the oldest entries (by last-updated timestamp) are evicted from the
 // index. Content files remain on disk — only the index reference is removed.
+// maxMemoryIndexEntries 是 MEMORY.md index 保留的最大条目数。
+// 超出后按 last-updated 时间戳淘汰最旧的条目；内容文件仍留在磁盘上，
+// 只删除 index 中的引用。
 const maxMemoryIndexEntries = 50
 
 // memoryEntry represents a single parsed section from MEMORY.md.
+// memoryEntry 表示从 MEMORY.md 解析出的单个 section。
 type memoryEntry struct {
 	Path      string // filename from ## heading
 	Summary   string // description text
@@ -331,6 +348,8 @@ type memoryEntry struct {
 
 // parseMemoryIndex parses MEMORY.md into structured entries.
 // Each entry has format:
+// parseMemoryIndex 把 MEMORY.md 解析成结构化 entries。
+// 每个 entry 的格式如下：
 //
 //	## filename.md
 //	<!-- updated:2006-01-02T15:04:05Z -->
@@ -361,6 +380,8 @@ func parseMemoryIndex(content string) (header string, entries []memoryEntry) {
 
 		// Extract timestamp from <!-- updated:... --> comment.
 		// Always strip the comment line to prevent duplication on re-render.
+		// 从 <!-- updated:... --> 注释中取出时间戳。
+		// 无论是否解析成功都要剥掉该行，避免重新渲染时重复。
 		if strings.Contains(body, "<!-- updated:") {
 			if ts := extractTimestamp(body); !ts.IsZero() {
 				e.UpdatedAt = ts
@@ -429,6 +450,9 @@ func renderMemoryIndex(header string, entries []memoryEntry) string {
 // updateMemoryIndex atomically updates MEMORY.md with an entry for the given file.
 // If a heading for the path already exists, its description is updated (no duplicate).
 // When the index exceeds maxMemoryIndexEntries, the oldest entries are evicted.
+// updateMemoryIndex 以原子方式把一个文件对应的 entry 写进 MEMORY.md。
+// 若该 path 的 heading 已存在则原地更新描述（不产生重复项）。
+// 条目数超过 maxMemoryIndexEntries 时淘汰最旧的 entry。
 func updateMemoryIndex(memoryDir, canonicalPath, summary string) error {
 	memoryIndexMu.Lock()
 	defer memoryIndexMu.Unlock()
@@ -467,6 +491,8 @@ func updateMemoryIndex(memoryDir, canonicalPath, summary string) error {
 
 	// Evict oldest entries if over cap.
 	// Stable tiebreaker on Path ensures deterministic eviction when timestamps match.
+	// 超出上限时淘汰最旧的 entry。
+	// 时间戳相同时用 Path 做稳定 tiebreaker，保证淘汰结果确定。
 	if len(entries) > maxMemoryIndexEntries {
 		sort.Slice(entries, func(i, j int) bool {
 			if entries[i].UpdatedAt.Equal(entries[j].UpdatedAt) {

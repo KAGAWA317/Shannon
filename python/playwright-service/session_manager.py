@@ -128,6 +128,7 @@ class BrowserSessionManager:
             # Check session limit
             if len(self.sessions) >= MAX_SESSIONS:
                 # Try to evict oldest expired session
+                # 尝试驱逐最旧的已过期 session
                 await self._evict_oldest_unlocked()
                 if len(self.sessions) >= MAX_SESSIONS:
                     raise RuntimeError(f"Maximum sessions ({MAX_SESSIONS}) reached")
@@ -191,6 +192,7 @@ class BrowserSessionManager:
             return
 
         # First try to find expired sessions
+        # 优先查找已过期的 session
         expired = [s for s in self.sessions.values() if s.is_expired]
         if expired:
             oldest = min(expired, key=lambda s: s.last_accessed)
@@ -198,6 +200,7 @@ class BrowserSessionManager:
             return
 
         # No expired sessions, evict oldest
+        # 没有已过期 session 时，驱逐最旧的一个
         oldest = min(self.sessions.values(), key=lambda s: s.last_accessed)
         logger.warning("Evicting non-expired session %s due to limit", oldest.session_id)
         await self._close_session_unlocked(oldest.session_id)

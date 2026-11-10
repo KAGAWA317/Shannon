@@ -1,5 +1,7 @@
 """Example: model selection parameters in ShannonClient.
 
+示例：ShannonClient 中的 model 选择参数。
+
 Run:
   SHANNON_BASE_URL=http://localhost:8080 \
   SHANNON_API_KEY=sk_xxx \
@@ -19,6 +21,7 @@ def main() -> None:
         handle = client.submit_task(
             "Summarize this sentence: William Shakespeare was an English playwright, poet and actor. He is widely regarded as the greatest writer in the English language and the world's pre-eminent dramatist.",
             # Choose by tier, or override explicitly below
+            # 按 tier 选择，或在下方显式覆盖
             model_tier="small",
             mode="simple",  # simple | standard | complex | supervisor
             # model_override="gpt-5-nano-2025-08-07",

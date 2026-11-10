@@ -94,6 +94,7 @@ func Debate(
 	debateHistory := []string{}
 
 	// Phase 1: Initial positions
+	// 三个阶段：各自立论 → 互相反驳 → 收敛（moderator / 投票 / 直接综合）。
 	logger.Info("Phase 1: Gathering initial positions")
 
 	var initialPositions []DebatePosition
@@ -201,6 +202,7 @@ func Debate(
         debateHistory = append(debateHistory, fmt.Sprintf("%s: %s", position.AgentID, position.Position))
 
         // Record token usage for initial positions when not budgeted
+        // 非 budget 路径需自行记账；6/10 拆分是缺输入/输出计数时的经验估算。
         if opts.BudgetAgentMax <= 0 {
             wid := workflow.GetInfo(ctx).WorkflowExecution.ID
             if context != nil {
@@ -436,6 +438,7 @@ func Debate(
 	)
 
 	// Persist debate consensus for learning (fire-and-forget)
+	// fire-and-forget：持久化失败不影响本次结果，version gate 保证旧运行重放不触发。
 	consensusVersion := workflow.GetVersion(ctx, "persist_debate_consensus_v1", workflow.DefaultVersion, 1)
 	if consensusVersion >= 1 {
 		persistCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
@@ -573,6 +576,7 @@ func checkConsensus(positions []DebatePosition) bool {
 	}
 
 	// Simple consensus check: look for agreement keywords
+	// 用关键词占比近似共识，不做语义比对——成本低，但会漏掉换述式的一致。
 	agreementCount := 0
 	for _, pos := range positions {
 		lower := strings.ToLower(pos.Position)
@@ -591,6 +595,7 @@ func checkConsensus(positions []DebatePosition) bool {
 // moderateDebate uses a moderator to synthesize the debate
 func moderateDebate(ctx workflow.Context, positions []DebatePosition, query string, history []string, opts Options) string {
 	// Simplified moderation - in practice would use another agent
+	// 目前 moderator 只是复用综合逻辑，并没有真的调用第三个 agent。
 	return synthesizePositions(positions, query)
 }
 

@@ -6,6 +6,7 @@ import (
 )
 
 // CheckStatus represents the result of a health check
+// CheckStatus 表示健康检查的结果
 type CheckStatus int
 
 const (
@@ -31,6 +32,7 @@ func (s CheckStatus) String() string {
 }
 
 // CheckResult contains the result of a health check
+// CheckResult 包含健康检查的结果
 type CheckResult struct {
 	Status    CheckStatus            `json:"status"`
 	Message   string                 `json:"message,omitempty"`
@@ -43,21 +45,27 @@ type CheckResult struct {
 }
 
 // Checker defines the interface for health checks
+// Checker 定义健康检查的接口
 type Checker interface {
 	// Name returns the unique name of this health check
+	// Name 返回该健康检查的唯一名称
 	Name() string
 
 	// Check performs the health check and returns the result
+	// Check 执行健康检查并返回结果
 	Check(ctx context.Context) CheckResult
 
 	// IsCritical returns true if this check's failure should mark the service as unhealthy
+	// 若该检查失败即应判定服务不健康，则 IsCritical 返回 true
 	IsCritical() bool
 
 	// Timeout returns the maximum duration this check should take
+	// Timeout 返回该检查允许的最长耗时
 	Timeout() time.Duration
 }
 
 // Registrar allows components to register health checks
+// Registrar 允许各组件注册健康检查
 type Registrar interface {
 	// RegisterChecker registers a health check
 	RegisterChecker(checker Checker) error
@@ -78,9 +86,11 @@ type Reporter interface {
 	GetDetailedHealth(ctx context.Context) DetailedHealth
 
 	// IsReady returns true if the service is ready to serve requests
+	// 服务可接收 request 时 IsReady 返回 true
 	IsReady(ctx context.Context) bool
 
 	// IsLive returns true if the service is alive (for liveness probes)
+	// 服务存活时 IsLive 返回 true（用于 liveness 探针）
 	IsLive(ctx context.Context) bool
 }
 

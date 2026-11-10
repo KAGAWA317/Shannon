@@ -1,5 +1,6 @@
 """
 Tests for web_search tool - SerpAPI/SearchAPI.io multi-engine support and validation
+web_search tool 的测试 —— SerpAPI/SearchAPI.io 多引擎支持与参数校验。
 """
 
 import pytest
@@ -13,11 +14,14 @@ from llm_service.tools.builtin.web_search import (
 from llm_service.tools.base import ToolResult
 
 # Valid API key format (at least 10 chars, not test values)
+# 合法的 API key 格式（至少 10 个字符，且不是测试占位值）
 VALID_TEST_API_KEY = "sk_test_valid_api_key_12345"
 
 
 class TestSerpAPISearchProvider:
-    """Tests for SerpAPISearchProvider"""
+    """Tests for SerpAPISearchProvider
+    SerpAPISearchProvider 的测试。
+    """
 
     def test_init_default_engine(self):
         """Test default engine is google"""
@@ -36,7 +40,9 @@ class TestSerpAPISearchProvider:
 
     @pytest.mark.asyncio
     async def test_search_uses_passed_engine_not_instance(self):
-        """Test that search uses passed engine parameter, not instance state (race condition fix)"""
+        """Test that search uses passed engine parameter, not instance state (race condition fix)
+        search 使用传入的 engine 参数，而不是实例状态（修复竞态问题）。
+        """
         provider = SerpAPISearchProvider(api_key=VALID_TEST_API_KEY, engine="google")
 
         # Mock the aiohttp session
@@ -181,7 +187,9 @@ class TestSerpAPISearchProvider:
 
 
 class TestSearchAPISearchProvider:
-    """Tests for SearchAPISearchProvider"""
+    """Tests for SearchAPISearchProvider
+    SearchAPISearchProvider 的测试。
+    """
 
     def test_init_default_engine(self):
         provider = SearchAPISearchProvider(api_key=VALID_TEST_API_KEY)
@@ -407,7 +415,9 @@ class TestSearchAPISearchProvider:
 
 
 class TestWebSearchToolValidation:
-    """Tests for WebSearchTool parameter validation constants"""
+    """Tests for WebSearchTool parameter validation constants
+    WebSearchTool 参数校验常量的测试。
+    """
 
     def test_valid_engines_list(self):
         """Test that valid engines are defined"""
@@ -442,7 +452,9 @@ class TestWebSearchToolValidation:
 
 
 class TestWebSearchToolMetadata:
-    """Tests for WebSearchTool metadata and schema"""
+    """Tests for WebSearchTool metadata and schema
+    WebSearchTool metadata 与 schema 的测试。
+    """
 
     def test_tool_has_engine_parameter(self):
         """Test that tool schema includes engine parameter"""
@@ -454,6 +466,7 @@ class TestWebSearchToolMetadata:
         engine_param = next((p for p in params if p.name == "engine"), None)
         assert engine_param is not None
         assert engine_param.required is False  # Optional with default
+        # 可选参数，有默认值
 
     def test_tool_has_localization_parameters(self):
         """Test that tool schema includes localization parameters"""

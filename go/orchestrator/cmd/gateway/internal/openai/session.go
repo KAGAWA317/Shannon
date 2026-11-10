@@ -108,6 +108,10 @@ type SessionResult struct {
 // - If sessionID is empty, derives one from the request
 // - If sessionID is provided but owned by different user, creates new and flags collision
 // - Returns the session to use and whether headers should be echoed
+// ResolveSession 为 request 解析或创建 session：
+// - sessionID 为空时由 request 内容推导；
+// - sessionID 已提供但属于其他用户时，新建 session 并标记 collision；
+// - 返回应使用的 session 以及是否需要回写 header。
 func (sm *SessionManager) ResolveSession(
 	ctx context.Context,
 	providedSessionID string,
@@ -140,6 +144,7 @@ func (sm *SessionManager) ResolveSession(
 		if info.UserID != userID || info.TenantID != tenantID {
 			// Collision: session belongs to different user/tenant
 			// Generate new session and flag collision
+			// 冲突：session 属于其他 user/tenant，生成新 session 并标记 collision。
 			sm.logger.Info("Session collision detected, generating new session",
 				zap.String("provided_session", providedSessionID),
 				zap.String("user_id", userID),
@@ -162,6 +167,7 @@ func (sm *SessionManager) ResolveSession(
 		result.IsNew = false
 
 		// Update last used via bounded worker (prevents unbounded goroutines)
+		// 通过有界 worker 更新 last used，避免 goroutine 数量失控。
 		sm.enqueueTouchSession(providedSessionID)
 		return result, nil
 	}
@@ -178,6 +184,7 @@ func (sm *SessionManager) ResolveSession(
 }
 
 // deriveSessionID creates a deterministic session ID from request content
+// deriveSessionID 由 request 内容生成确定性的 session ID。
 func (sm *SessionManager) deriveSessionID(req *ChatCompletionRequest, userID string) string {
 	var parts []string
 
@@ -235,6 +242,8 @@ func (sm *SessionManager) getOrCreateSession(
 
 	// Create new session - include full user ID for isolation even if orchestrator
 	// doesn't strictly require it (defense in depth against session_id reuse after TTL)
+	// 新建 session——即使 orchestrator 并不强制要求，也把完整 user ID 纳入以保持隔离
+	// （纵深防御，防止 TTL 过期后 session_id 被复用）。
 	shannonSID = fmt.Sprintf("shannon-%s-%s", userID, sessionID)
 	info = &SessionInfo{
 		SessionID:    sessionID,
@@ -303,6 +312,7 @@ func (sm *SessionManager) getSessionInfo(ctx context.Context, sessionID string) 
 
 // doTouchSession updates the last used time and increments message count.
 // Called by the background worker to avoid unbounded goroutines.
+// doTouchSession 更新最后使用时间并累加消息数；由后台 worker 调用，避免 goroutine 数量失控。
 func (sm *SessionManager) doTouchSession(ctx context.Context, sessionID string) {
 	info, err := sm.getSessionInfo(ctx, sessionID)
 	if err != nil {

@@ -14,6 +14,13 @@ import (
 //     (one citation per line, already numbered), marking which were used inline
 //
 // citationsList is expected to be lines like: "[1] Title (URL) - Source, 2024-01-01"
+// FormatReportWithCitations 确保最终报告包含完整的
+// Sources 段，列出所有可用引用。它会：
+// 1) 解析 synthesis 中使用的行内引用（如 [1]、[2]）
+// 2) 从 synthesis 中移除已有的 "## Sources" 段
+// 3) 依据传入的 citationsList 重建并追加 Sources 段
+// （每行一条引用，已编号），并标注哪些在正文中被引用
+// citationsList 每行形如："[1] Title (URL) - Source, 2024-01-01"
 func FormatReportWithCitations(synthesis string, citationsList string) string {
     s := strings.TrimSpace(synthesis)
     if s == "" {
@@ -21,6 +28,7 @@ func FormatReportWithCitations(synthesis string, citationsList string) string {
     }
 
     // 1) Collect used citation indices from inline markers like [1], [12]
+    // 1) 从 [1]、[12] 等行内标记中收集被使用的引用编号
     used := map[int]bool{}
     re := regexp.MustCompile(`\[(\d{1,3})\]`)
     for _, m := range re.FindAllStringSubmatch(s, -1) {
@@ -40,6 +48,10 @@ func FormatReportWithCitations(synthesis string, citationsList string) string {
     //    Strategy: find the LAST occurrence of "## Sources" and truncate from there to end
     //    If not found, keep the synthesis as-is.
     //    Using last index avoids cutting content if the model references "## Sources" earlier in the body.
+    // 2) 从 synthesis 中移除已有的 Sources 段
+    // 策略：找到最后一次出现的 "## Sources" 并从该处截断到结尾
+    // 若未找到，则保持 synthesis 原样。
+    // 用最后一次出现可避免模型在正文前部提到 "## Sources" 时误删内容。
     cut := s
     lower := strings.ToLower(s)
     needle := strings.ToLower("## Sources")
@@ -48,6 +60,7 @@ func FormatReportWithCitations(synthesis string, citationsList string) string {
     }
 
     // 3) Build rebuilt Sources section from citationsList
+    // 3) 依据 citationsList 重建 Sources 段
     lines := strings.Split(strings.TrimSpace(citationsList), "\n")
     var rebuilt []string
     for _, ln := range lines {
@@ -76,6 +89,7 @@ func FormatReportWithCitations(synthesis string, citationsList string) string {
     }
 
     // Keep lines ordered by their numeric index if possible
+    // 尽量按数字编号排序各行
     sort.SliceStable(rebuilt, func(i, j int) bool {
         // Extract first number in each line
         first := func(s string) int {

@@ -1,5 +1,7 @@
 # Shannon Orchestrator Configuration
+# Shannon Orchestrator 配置
 # This file demonstrates the configuration system with hot-reload capability
+# 本文件演示具备热重载能力的配置系统
 
 service:
   port: 50052
@@ -51,10 +53,14 @@ circuit_breakers:
     enabled: true
 
 # MCP Tool Definitions (loaded at startup by llm-service)
+# MCP tool 定义（由 llm-service 在启动时加载）
 # IMPORTANT: Tool domains must be in MCP_ALLOWED_DOMAINS env var
+# 重要：tool 域名必须在 MCP_ALLOWED_DOMAINS 环境变量中
 # Use MCP_ALLOWED_DOMAINS="*" to allow all domains (development only!)
+# 使用 MCP_ALLOWED_DOMAINS="*" 可允许所有域名（仅限开发环境！）
 mcp_tools:
   # Test tool for development (uses the mock endpoint)
+  # 用于开发的测试 tool（使用 mock 端点）
   test_config_tool:
     enabled: true
     url: "http://localhost:8000/mcp/mock"
@@ -89,11 +95,16 @@ mcp_tools:
   #     X-API-Key: "${GAODE_API_KEY}"
 
 # OpenAPI Tool Definitions (loaded at startup by llm-service)
+# OpenAPI tool 定义（由 llm-service 在启动时加载）
 # IMPORTANT: Tool domains must be in OPENAPI_ALLOWED_DOMAINS env var
+# 重要：tool 域名必须在 OPENAPI_ALLOWED_DOMAINS 环境变量中
 # Use OPENAPI_ALLOWED_DOMAINS="*" to allow all domains (development only!)
+# 使用 OPENAPI_ALLOWED_DOMAINS="*" 可允许所有域名（仅限开发环境！）
 openapi_tools:
   # Add your OpenAPI tool integrations here.
+  # 在此添加你的 OpenAPI tool 集成。
   # See docs/openapi-tools.md for configuration guide.
+  # 配置指南见 docs/openapi-tools.md。
 
   # Example: Swagger PetStore API (uncomment to use)
   # petstore:
@@ -245,6 +256,7 @@ agents:
   retry_count: 3
   retry_backoff: "2s"
   # Use service DNS names inside Docker compose network
+  # 在 Docker compose 网络内使用服务 DNS 名称
   agent_core_endpoint: "agent-core:50051"
   llm_service_endpoint: "http://llm-service:8000"
 
@@ -298,6 +310,7 @@ vector:
   # redis_addr: ""  # Not used when use_redis_cache: false
   expected_embedding_dim: 1536  # OpenAI text-embedding-3-small dimension
   # MMR (Maximal Marginal Relevance) diversity settings
+  # MMR（最大边际相关性）多样性设置
   mmr_enabled: true              # Enable diversity re-ranking (set to true to activate)
   mmr_lambda: 0.7                # Balance between relevance (1.0) and diversity (0.0)
   mmr_pool_multiplier: 3         # Fetch 3x candidates for re-ranking
@@ -310,6 +323,7 @@ embeddings:
   cache_ttl: "1h"
   max_lru: 4096
   # Chunking configuration for long texts
+  # 长文本的分块配置
   chunking:
     enabled: true
     max_tokens: 4000       # Target chunk size in tokens
@@ -326,22 +340,26 @@ streaming:
   ring_capacity: 512  # Number of recent events to retain per workflow for replay
 
 # Workflow orchestration behavior
+# workflow 编排行为
 workflow:
   bypass_single_result: true  # Skip synthesis for single successful results
 
 # Workflow configurations
 workflows:
   # DAG workflow configuration
+  # DAG workflow 配置
   dag:
     simple_threshold: 0.3         # Complexity < this = simple task (single agent)
     max_parallel_agents: 5        # Maximum concurrent agents in DAG execution
 
   # Complexity thresholds for model tier selection
+  # 用于选择模型档位的复杂度阈值
   complexity:
     simple_threshold: 0.3         # < 0.3 = small model tier
     medium_threshold: 0.5         # 0.3-0.5 = medium model tier, > 0.5 = large model tier
 
   # Approval workflow configuration
+  # 审批 workflow 配置
   approval:
     enabled: false                # Enable human-in-the-loop approval
     complexity_threshold: 0.5     # Complexity >= this triggers approval
@@ -350,6 +368,7 @@ workflows:
       - code_execution
 
 # Cognitive workflow configurations
+# 认知 workflow 配置
 cognitive_workflows:
   exploratory:
     max_iterations: 10
@@ -371,4 +390,5 @@ cognitive_workflows:
     contradiction_threshold: 0.3
 
 # Feature flags for optional features
+# 可选功能的开关
 features: {}

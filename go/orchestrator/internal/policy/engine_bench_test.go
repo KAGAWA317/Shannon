@@ -26,6 +26,7 @@ func BenchmarkPolicyEvaluationCold(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		// Create new engine each time to avoid cache
+		// 每次新建 engine，避免命中 cache
 		freshEngine := setupBenchmarkEngine(b)
 		_, err := freshEngine.Evaluate(context.Background(), input)
 		if err != nil {
@@ -321,6 +322,7 @@ func reportBenchmarkResults(b *testing.B, description string) {
 		description, b.N, msPerOp, usPerOp, nsPerOp)
 
 	// Validate sub-millisecond claim
+	// 校验亚毫秒级性能目标是否达成
 	if msPerOp >= 1.0 {
 		b.Logf("WARNING: Operation took %.2f ms (>1ms target)", msPerOp)
 	} else {

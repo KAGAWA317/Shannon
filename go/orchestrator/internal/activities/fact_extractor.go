@@ -13,6 +13,7 @@ import (
 )
 
 // StructuredFact represents an extracted fact with confidence and provenance
+// StructuredFact 表示一条带置信度与来源的已抽取 fact。
 type StructuredFact struct {
 	ID             string   `json:"id"`
 	Statement      string   `json:"statement"`       // The factual claim
@@ -57,6 +58,7 @@ type FactExtractionResult struct {
 }
 
 // ExtractFacts extracts structured facts from a synthesis result
+// ExtractFacts 从 synthesis 结果中抽取结构化 facts。
 func (a *Activities) ExtractFacts(ctx context.Context, input FactExtractionInput) (*FactExtractionResult, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("ExtractFacts: starting",
@@ -76,7 +78,9 @@ func (a *Activities) ExtractFacts(ctx context.Context, input FactExtractionInput
 	reqBody := map[string]interface{}{
 		"query":       userContent,
 		"max_tokens":  8192, // Extended for detailed fact extraction
+		// 加大到 8192，以容纳详细的 fact 抽取输出。
 		"temperature": 0.1, // Low temperature for factual extraction
+		// 低 temperature，保证事实抽取稳定。
 		"agent_id":    "fact_extractor",
 		"model_tier":  "small",
 		"context": map[string]interface{}{
@@ -92,6 +96,7 @@ func (a *Activities) ExtractFacts(ctx context.Context, input FactExtractionInput
 
 	client := &http.Client{
 		Timeout:   120 * time.Second, // Longer timeout for large synthesis content
+		// 加长 timeout，应对大段 synthesis 内容。
 		Transport: interceptors.NewWorkflowHTTPRoundTripper(nil),
 	}
 
@@ -148,6 +153,7 @@ func (a *Activities) ExtractFacts(ctx context.Context, input FactExtractionInput
 			"error", err,
 		)
 		// Return empty result with metadata
+		// 返回带 metadata 的空结果，而不是报错。
 		result.Facts = []StructuredFact{}
 	}
 

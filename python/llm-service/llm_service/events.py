@@ -9,7 +9,10 @@ import contextlib
 
 
 class EventEmitter:
-    """Async, non-blocking event emitter posting to orchestrator /events."""
+    """Async, non-blocking event emitter posting to orchestrator /events.
+
+    异步、非阻塞的 event emitter，向 orchestrator 的 /events 投递。
+    """
 
     def __init__(
         self,
@@ -74,6 +77,7 @@ class EventEmitter:
             try:
                 batch = [await self._q.get()]
                 # small batch drain
+                # 小批量取出
                 for _ in range(50):
                     try:
                         batch.append(self._q.get_nowait())

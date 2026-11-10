@@ -18,6 +18,7 @@ func TestNewRegistry(t *testing.T) {
 
 func TestRegistryLoadDirectory(t *testing.T) {
 	// Create a temporary directory with test skills
+	// 创建含测试 skill 的临时目录
 	tmpDir, err := os.MkdirTemp("", "skills-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -124,6 +125,7 @@ Content for skill three.
 func TestRegistryLoadDirectory_NonExistent(t *testing.T) {
 	r := NewRegistry()
 	// Should not error for non-existent directory (silently skip)
+	// 目录不存在不应报错（静默跳过）
 	err := r.LoadDirectory("/nonexistent/path/12345")
 	if err != nil {
 		t.Errorf("Expected no error for non-existent dir, got: %v", err)
@@ -201,6 +203,7 @@ Content v2.
 	}
 
 	// Get by name should return latest version
+	// 按名称获取应返回最新版本
 	entry, ok := r.Get("versioned-skill")
 	if !ok {
 		t.Fatal("Failed to get versioned-skill")

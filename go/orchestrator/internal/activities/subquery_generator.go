@@ -14,6 +14,7 @@ import (
 )
 
 // SubqueryGeneratorInput is the input for generating gap-filling subqueries
+// SubqueryGeneratorInput 是生成补缺 subquery 的入参。
 type SubqueryGeneratorInput struct {
 	Query            string                 `json:"query"`
 	CoverageGaps     []CoverageGap          `json:"coverage_gaps"`
@@ -23,12 +24,14 @@ type SubqueryGeneratorInput struct {
 	Context          map[string]interface{} `json:"context,omitempty"`
 	ParentWorkflowID string                 `json:"parent_workflow_id,omitempty"`
 	// Deep Research 2.0: Source-type aware search
+	// Deep Research 2.0：检索时感知 source type。
 	EntityName       string   `json:"entity_name,omitempty"`        // Primary entity being researched
 	QueryType        string   `json:"query_type,omitempty"`         // company, industry, scientific, etc.
 	TargetLanguages  []string `json:"target_languages,omitempty"`   // Languages for regional searches
 }
 
 // GeneratedSubquery represents a generated subquery for gap-filling
+// GeneratedSubquery 表示一条用于填补覆盖缺口的 subquery。
 type GeneratedSubquery struct {
 	ID             string                 `json:"id"`
 	Query          string                 `json:"query"`
@@ -38,6 +41,7 @@ type GeneratedSubquery struct {
 	SourceTypes    []string               `json:"source_types"`     // Source types to target
 	ToolParameters map[string]interface{} `json:"tool_parameters"`  // Pre-structured tool params
 	// Task contract fields
+	// Task contract 字段。
 	OutputFormat   *OutputFormatSpec   `json:"output_format,omitempty"`
 	SourceGuidance *SourceGuidanceSpec `json:"source_guidance,omitempty"`
 	SearchBudget   *SearchBudgetSpec   `json:"search_budget,omitempty"`
@@ -45,6 +49,7 @@ type GeneratedSubquery struct {
 }
 
 // SubqueryGeneratorResult is the result of subquery generation
+// SubqueryGeneratorResult 是 subquery 生成的结果。
 type SubqueryGeneratorResult struct {
 	Subqueries    []GeneratedSubquery `json:"subqueries"`
 	TotalGenerated int                `json:"total_generated"`
@@ -57,6 +62,7 @@ type SubqueryGeneratorResult struct {
 }
 
 // GenerateSubqueries generates new subqueries to fill coverage gaps
+// GenerateSubqueries 针对覆盖缺口生成新的 subquery。
 func (a *Activities) GenerateSubqueries(ctx context.Context, input SubqueryGeneratorInput) (*SubqueryGeneratorResult, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("GenerateSubqueries: starting",
@@ -67,16 +73,19 @@ func (a *Activities) GenerateSubqueries(ctx context.Context, input SubqueryGener
 	)
 
 	// Default max subqueries
+	// 默认的最大 subquery 数。
 	maxSub := input.MaxSubqueries
 	if maxSub == 0 {
 		maxSub = 3 // Default: 3 gap-filling queries per iteration
 	}
 
 	// Build generation prompt
+	// 构造生成用的 prompt。
 	systemPrompt := buildSubqueryGenerationPrompt(input, maxSub)
 	userContent := buildSubqueryGenerationContent(input)
 
 	// Call LLM service
+	// 调用 LLM service。
 	llmServiceURL := getenvDefault("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
@@ -154,11 +163,13 @@ func (a *Activities) GenerateSubqueries(ctx context.Context, input SubqueryGener
 			"error", err,
 		)
 		// Fallback: generate basic subqueries from gaps
+		// 兜底：直接按缺口生成基础 subquery。
 		result.Subqueries = generateFallbackSubqueries(input, maxSub)
 		result.Reasoning = "Fallback generation due to parse error"
 	}
 
 	// Enforce max limit
+	// 强制截断到上限。
 	if len(result.Subqueries) > maxSub {
 		result.Subqueries = result.Subqueries[:maxSub]
 	}
@@ -173,6 +184,7 @@ func (a *Activities) GenerateSubqueries(ctx context.Context, input SubqueryGener
 }
 
 // buildSubqueryGenerationPrompt creates the system prompt
+// buildSubqueryGenerationPrompt 构造 system prompt。
 func buildSubqueryGenerationPrompt(input SubqueryGeneratorInput, maxSub int) string {
 	var sb strings.Builder
 
@@ -243,6 +255,7 @@ Return a JSON object:
 }
 
 // buildSubqueryGenerationContent builds user content
+// buildSubqueryGenerationContent 构造 user content。
 func buildSubqueryGenerationContent(input SubqueryGeneratorInput) string {
 	var sb strings.Builder
 
@@ -276,8 +289,10 @@ func buildSubqueryGenerationContent(input SubqueryGeneratorInput) string {
 }
 
 // parseSubqueryGenerationResponse parses the LLM response
+// parseSubqueryGenerationResponse 解析 LLM response。
 func parseSubqueryGenerationResponse(response string, result *SubqueryGeneratorResult, iteration int) error {
 	// Find JSON in response
+	// 从 response 里截出 JSON。
 	start := strings.Index(response, "{")
 	end := strings.LastIndex(response, "}")
 
@@ -321,11 +336,13 @@ func parseSubqueryGenerationResponse(response string, result *SubqueryGeneratorR
 		}
 
 		// Set default ID if empty
+		// ID 为空时补一个默认值。
 		if subquery.ID == "" {
 			subquery.ID = fmt.Sprintf("iter%d-gap%d", iteration, i+1)
 		}
 
 		// Parse source guidance if present
+		// 有 source guidance 就解析出来。
 		if sq.SourceGuidance != nil {
 			subquery.SourceGuidance = &SourceGuidanceSpec{
 				Required: sq.SourceGuidance["required"],
@@ -335,6 +352,7 @@ func parseSubqueryGenerationResponse(response string, result *SubqueryGeneratorR
 		}
 
 		// Parse boundaries if present
+		// 有 boundaries 就解析出来。
 		if sq.Boundaries != nil {
 			subquery.Boundaries = &BoundariesSpec{
 				InScope:    sq.Boundaries["in_scope"],
@@ -350,16 +368,20 @@ func parseSubqueryGenerationResponse(response string, result *SubqueryGeneratorR
 
 // generateFallbackSubqueries creates basic subqueries from gaps when parsing fails
 // Enhanced to use source_types.yaml config for targeted searches
+// generateFallbackSubqueries 在解析失败时按缺口生成基础 subquery；
+// 并会借助 source_types.yaml 配置做更有针对性的检索。
 func generateFallbackSubqueries(input SubqueryGeneratorInput, maxSub int) []GeneratedSubquery {
 	subqueries := make([]GeneratedSubquery, 0, maxSub)
 
 	// Load source types config
+	// 加载 source types 配置。
 	stConfig, err := config.LoadSourceTypes()
 	if err != nil {
 		stConfig = nil // Will use basic fallback
 	}
 
 	// Track which entity gap types we've already queried to avoid duplicates
+	// 记录已查过的 entity gap 类型，避免重复查询。
 	queriedInfoTypes := make(map[string]bool)
 
 	for i, gap := range input.CoverageGaps {
@@ -368,15 +390,18 @@ func generateFallbackSubqueries(input SubqueryGeneratorInput, maxSub int) []Gene
 		}
 
 		// Build base query from the gap
+		// 用缺口信息拼出基础 query。
 		baseQuery := gap.Area
 		if len(gap.Questions) > 0 {
 			baseQuery = gap.Questions[0]
 		}
 
 		// Get source types for this gap/dimension
+		// 取该缺口/dimension 对应的 source types。
 		sourceTypes := gap.SourceTypes
 		if len(sourceTypes) == 0 && stConfig != nil {
 			// Try to get recommended source types from config
+			// 尝试从配置中取推荐的 source types。
 			dimName := config.NormalizeDimensionName(gap.Area)
 			primary, _ := stConfig.GetSourceTypesForDimension(dimName)
 			sourceTypes = primary
@@ -386,9 +411,11 @@ func generateFallbackSubqueries(input SubqueryGeneratorInput, maxSub int) []Gene
 		}
 
 		// Deep Research 2.0: Use entity_gap_queries for specific missing info types
+		// Deep Research 2.0：对特定缺失信息类型使用 entity_gap_queries。
 		if input.EntityName != "" && stConfig != nil {
 			infoType := detectGapInfoType(gap.Area)
 			// Also check questions for info type detection
+			// 同时从 questions 里判断信息类型。
 			if infoType == "" && len(gap.Questions) > 0 {
 				for _, q := range gap.Questions {
 					if it := detectGapInfoType(q); it != "" {
@@ -398,6 +425,7 @@ func generateFallbackSubqueries(input SubqueryGeneratorInput, maxSub int) []Gene
 				}
 			}
 			// Generate entity gap queries if not already done for this type
+			// 该类型还没生成过时，生成 entity gap query。
 			if infoType != "" && !queriedInfoTypes[infoType] {
 				entityGapQueries := generateEntityGapQueries(stConfig, input.EntityName, infoType, input.Iteration, i)
 				for _, eq := range entityGapQueries {
@@ -410,8 +438,10 @@ func generateFallbackSubqueries(input SubqueryGeneratorInput, maxSub int) []Gene
 		}
 
 		// If we have an entity name and this is company research, add targeted queries
+		// 有实体名且属于公司研究时，补充针对性 query。
 		if input.EntityName != "" && (input.QueryType == "company" || input.QueryType == "") {
 			// Generate site-specific query for aggregator sources
+			// 为 aggregator 类来源生成限定站点的 query。
 			aggregatorQuery := generateSourceTypeQuery(stConfig, input.EntityName, baseQuery, "aggregator")
 			if aggregatorQuery != "" && len(subqueries) < maxSub {
 				subqueries = append(subqueries, GeneratedSubquery{
@@ -433,6 +463,7 @@ func generateFallbackSubqueries(input SubqueryGeneratorInput, maxSub int) []Gene
 		}
 
 		// Add standard query
+		// 追加标准 query。
 		if len(subqueries) < maxSub {
 			query := baseQuery
 			if input.EntityName != "" && !strings.Contains(strings.ToLower(baseQuery), strings.ToLower(input.EntityName)) {
@@ -457,6 +488,7 @@ func generateFallbackSubqueries(input SubqueryGeneratorInput, maxSub int) []Gene
 		}
 
 		// Add regional language queries if needed
+		// 需要时追加地区语言 query。
 		if len(input.TargetLanguages) > 0 && stConfig != nil && len(subqueries) < maxSub {
 			for _, lang := range input.TargetLanguages {
 				if lang == "en" {
@@ -467,6 +499,7 @@ func generateFallbackSubqueries(input SubqueryGeneratorInput, maxSub int) []Gene
 					srcName := regionalSources[0]
 					if rs, ok := stConfig.GetRegionalSource(srcName); ok && len(rs.Sites) > 0 {
 						// Use first site for targeted search
+						// 用首个站点做定向检索。
 						regionalQuery := fmt.Sprintf("site:%s %s", rs.Sites[0], input.EntityName)
 						if len(subqueries) < maxSub {
 							subqueries = append(subqueries, GeneratedSubquery{
@@ -492,6 +525,7 @@ func generateFallbackSubqueries(input SubqueryGeneratorInput, maxSub int) []Gene
 }
 
 // generateSourceTypeQuery creates a site-filtered query for a source type
+// generateSourceTypeQuery 为某 source type 生成限定站点的 query。
 func generateSourceTypeQuery(stConfig *config.SourceTypesConfig, entityName, baseQuery, sourceType string) string {
 	if stConfig == nil {
 		return ""
@@ -503,6 +537,7 @@ func generateSourceTypeQuery(stConfig *config.SourceTypesConfig, entityName, bas
 	}
 
 	// Use first 2-3 priority sites
+	// 取前 2-3 个优先站点。
 	maxSites := min(3, len(sites))
 	siteParts := make([]string, maxSites)
 	for i := 0; i < maxSites; i++ {
@@ -510,9 +545,11 @@ func generateSourceTypeQuery(stConfig *config.SourceTypesConfig, entityName, bas
 	}
 
 	// Build query with entity name
+	// 用实体名拼 query。
 	query := entityName
 	if baseQuery != "" && baseQuery != entityName {
 		// Extract key terms from base query
+		// 从基础 query 中提取关键词。
 		terms := extractKeyTerms(baseQuery)
 		if len(terms) > 0 {
 			query = fmt.Sprintf(`"%s" %s`, entityName, strings.Join(terms, " "))
@@ -520,12 +557,15 @@ func generateSourceTypeQuery(stConfig *config.SourceTypesConfig, entityName, bas
 	}
 
 	// Return query with site filter OR'd together
+	// 返回把站点过滤条件用 OR 连接后的 query。
 	return fmt.Sprintf("(%s) %s", strings.Join(siteParts, " OR "), query)
 }
 
 // extractKeyTerms extracts key search terms from a gap description
+// extractKeyTerms 从缺口描述里提取关键检索词。
 func extractKeyTerms(text string) []string {
 	// Simple extraction of key terms
+	// 关键词的简单提取方式。
 	keywords := []string{"funding", "founder", "CEO", "revenue", "products", "services",
 		"employees", "headquarters", "competitors", "market", "investors", "valuation",
 		"founded", "history", "team", "leadership", "customers", "pricing"}
@@ -549,12 +589,16 @@ func min(a, b int) int {
 
 // detectGapInfoType maps gap area text to entity_gap_queries keys from config
 // Returns the info type (e.g., "founder_ceo", "funding_history") if detected
+// detectGapInfoType 把缺口描述映射到配置里 entity_gap_queries 的 key；
+// 命中时返回对应信息类型（如 "founder_ceo"、"funding_history"）。
 func detectGapInfoType(gapArea string) string {
 	lower := strings.ToLower(gapArea)
 
 	// Map common gap descriptions to entity_gap_queries keys
+	// 把常见缺口描述映射到 entity_gap_queries 的 key。
 	patterns := map[string][]string{
 		// Founder / CEO / leadership information
+		// 创始人 / CEO / 管理层信息。
 		"founder_ceo": {
 			// English
 			"founder", "co-founder", "founding team", "founding members",
@@ -568,6 +612,7 @@ func detectGapInfoType(gapArea string) string {
 			"代表取締役", "経営陣", "経営チーム", "マネジメント", "幹部",
 		},
 		// Funding / investment history
+		// 融资 / 投资历史。
 		"funding_history": {
 			// English
 			"funding", "funding history", "investment", "investments", "raised",
@@ -582,6 +627,7 @@ func detectGapInfoType(gapArea string) string {
 			"投資", "出資", "出資ラウンド", "シリーズa", "シリーズb", "シードラウンド",
 		},
 		// Employee / headcount
+		// 员工数 / 人员规模。
 		"employee_count": {
 			// English
 			"employee", "employees", "employee count", "headcount",
@@ -592,6 +638,7 @@ func detectGapInfoType(gapArea string) string {
 			"従業員", "従業員数", "社員数", "人員", "人数", "人員規模", "従業員規模", "スタッフ数",
 		},
 		// Founding year / company age
+		// 成立年份 / 公司年限。
 		"founding_year": {
 			// English
 			"founded", "founded in", "founding", "founding year",
@@ -604,6 +651,7 @@ func detectGapInfoType(gapArea string) string {
 			"創業", "創業年", "創業日", "創立", "創立年", "創立日",
 		},
 		// Headquarters / location
+		// 总部 / 所在地。
 		"headquarters": {
 			// English
 			"headquarters", "hq", "head office", "headquarter",
@@ -616,6 +664,7 @@ func detectGapInfoType(gapArea string) string {
 			"本社", "本社所在地", "所在地", "本社オフィス", "本社住所", "住所", "拠点", "本部",
 		},
 		// Revenue / financial performance
+		// 营收 / 财务表现。
 		"revenue": {
 			// English
 			"revenue", "revenues", "arr", "annual recurring revenue",
@@ -642,6 +691,8 @@ func detectGapInfoType(gapArea string) string {
 
 // generateEntityGapQueries creates specific queries from entity_gap_queries config
 // Returns subqueries for the detected info type
+// generateEntityGapQueries 依据 entity_gap_queries 配置生成具体 query；
+// 返回该信息类型对应的 subquery 列表。
 func generateEntityGapQueries(stConfig *config.SourceTypesConfig, entityName, infoType string, iteration, gapIdx int) []GeneratedSubquery {
 	if stConfig == nil || entityName == "" || infoType == "" {
 		return nil
@@ -655,9 +706,11 @@ func generateEntityGapQueries(stConfig *config.SourceTypesConfig, entityName, in
 	var subqueries []GeneratedSubquery
 
 	// Use up to 2 queries per info type to avoid query explosion
+	// 每个信息类型最多用 2 条 query，避免 query 数量爆炸。
 	maxQueries := min(2, len(queries))
 	for i := 0; i < maxQueries; i++ {
 		// Replace {entity} placeholder with actual entity name
+		// 把 {entity} 占位符替换成真实实体名。
 		query := strings.ReplaceAll(queries[i], "{entity}", entityName)
 
 		subqueries = append(subqueries, GeneratedSubquery{

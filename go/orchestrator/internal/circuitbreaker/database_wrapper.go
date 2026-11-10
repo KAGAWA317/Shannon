@@ -80,10 +80,12 @@ func (dw *DatabaseWrapper) QueryRowContextCB(ctx context.Context, query string, 
 		row = dw.db.QueryRowContext(ctx, query, args...)
 		// We can't easily check for query errors here since sql.Row doesn't expose them
 		// The error will be checked when Scan() is called
+		// sql.Row 不会立即暴露查询错误，需等到调用 Scan() 时才能发现。
 		return nil
 	})
 
 	// Record metrics - assume success for QueryRow since errors are deferred
+	// 记录指标：QueryRow 的错误被延后，此处按成功计
 	state := dw.cb.State()
 	success := cbErr == nil
 	GlobalMetricsCollector.RecordRequest("postgresql", "database-client", state, success)
@@ -102,6 +104,7 @@ func (dw *DatabaseWrapper) QueryRowContext(ctx context.Context, query string, ar
 	if err != nil {
 		// Return a row that will error on Scan with circuit breaker error
 		// This is not ideal but maintains backward compatibility
+		// 返回一个在 Scan 时才报 circuit breaker 错误的 row；不理想，但保持了向后兼容。
 		return &sql.Row{}
 	}
 	return row
@@ -273,6 +276,7 @@ func (tw *TxWrapper) Commit() error {
 
 func (tw *TxWrapper) Rollback() error {
 	// Don't use circuit breaker for rollback - we always want to try it
+	// rollback 不走 circuit breaker——无论如何都要尝试执行
 	return tw.tx.Rollback()
 }
 
@@ -374,6 +378,7 @@ func (sw *StmtWrapper) QueryRowContext(ctx context.Context, args ...interface{})
 
 func (sw *StmtWrapper) Close() error {
 	// Don't use circuit breaker for close - we always want to try it
+	// close 不走 circuit breaker——无论如何都要尝试执行
 	return sw.stmt.Close()
 }
 

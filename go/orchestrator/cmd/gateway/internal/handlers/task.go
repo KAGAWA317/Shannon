@@ -33,6 +33,7 @@ import (
 )
 
 // ErrWorkspaceQuotaExceeded is returned when tenant workspace quota is exceeded
+// ErrWorkspaceQuotaExceeded 表示 tenant 的 workspace 配额已超限。
 var ErrWorkspaceQuotaExceeded = errors.New("workspace quota exceeded")
 
 // TaskHandler handles task-related HTTP requests
@@ -46,6 +47,7 @@ type TaskHandler struct {
 }
 
 // ResearchStrategiesConfig represents research strategy presets loaded from YAML
+// ResearchStrategiesConfig 表示从 YAML 加载的 research strategy preset。
 type ResearchStrategiesConfig struct {
 	Strategies map[string]struct {
 		MaxIterations            int    `yaml:"max_iterations"` // deprecated
@@ -66,10 +68,13 @@ type ResearchStrategiesConfig struct {
 // researchStrategiesPtr holds the latest parsed config, atomically swapped by
 // a background goroutine every 30 seconds. Readers call loadResearchStrategies()
 // which is a simple atomic load — no lock, no I/O on the hot path.
+// researchStrategiesPtr 保存最新解析结果，由后台 goroutine 每 30 秒原子替换；
+// 读取方调用 loadResearchStrategies()，热路径上只有一次原子读，无锁、无 I/O。
 var researchStrategiesPtr atomic.Pointer[ResearchStrategiesConfig]
 
 func init() {
 	// Eagerly load once at startup so the first request is never empty.
+	// 启动时先加载一次，保证首个 request 不会拿到空配置。
 	if cfg := readResearchStrategiesFromDisk(); cfg != nil {
 		researchStrategiesPtr.Store(cfg)
 	} else {
@@ -77,6 +82,7 @@ func init() {
 	}
 
 	// Background reloader — picks up YAML changes without Gateway restart.
+	// 后台重载：无需重启 Gateway 即可感知 YAML 变更。
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
@@ -91,6 +97,8 @@ func init() {
 // readResearchStrategiesFromDisk tries the standard candidate paths and returns
 // the parsed config, or nil on any error.
 // NOTE: Uses stdlib log (not zap) because this runs from init() before zap is configured.
+// readResearchStrategiesFromDisk 依次尝试标准候选路径，成功则返回解析后的配置，任何错误都返回 nil。
+// 注意：这里用标准库 log 而非 zap，因为它在 init() 中执行，此时 zap 尚未配置。
 func readResearchStrategiesFromDisk() *ResearchStrategiesConfig {
 	candidates := []string{"config/research_strategies.yaml", "/app/config/research_strategies.yaml"}
 	for _, p := range candidates {
@@ -113,6 +121,7 @@ func readResearchStrategiesFromDisk() *ResearchStrategiesConfig {
 }
 
 // loadResearchStrategies returns the latest cached config (lock-free).
+// loadResearchStrategies 返回最新 cache 的配置（无锁读取）。
 func loadResearchStrategies() (*ResearchStrategiesConfig, error) {
 	cfg := researchStrategiesPtr.Load()
 	if cfg == nil {
@@ -122,6 +131,7 @@ func loadResearchStrategies() (*ResearchStrategiesConfig, error) {
 }
 
 // applyStrategyPreset seeds ctxMap with preset defaults when absent
+// applyStrategyPreset 在 ctxMap 缺少对应键时，用 preset 的默认值填充。
 func applyStrategyPreset(ctxMap map[string]interface{}, strategy string) {
 	s := strings.ToLower(strings.TrimSpace(strategy))
 	if s == "" {
@@ -136,6 +146,7 @@ func applyStrategyPreset(ctxMap map[string]interface{}, strategy string) {
 		return
 	}
 	// Seed react_max_iterations (independent of deprecated max_iterations)
+	// 填充 react_max_iterations（与已废弃的 max_iterations 相互独立）。
 	if _, ok := ctxMap["react_max_iterations"]; !ok && preset.ReactMaxIterations >= 1 && preset.ReactMaxIterations <= 10 {
 		ctxMap["react_max_iterations"] = preset.ReactMaxIterations
 	}
@@ -144,6 +155,7 @@ func applyStrategyPreset(ctxMap map[string]interface{}, strategy string) {
 		ctxMap["max_concurrent_agents"] = preset.MaxConcurrentAgents
 	}
 	// Seed budget_agent_min (minimum per-agent token budget)
+	// 填充 budget_agent_min（每个 agent 的最小 token budget）。
 	if _, ok := ctxMap["budget_agent_min"]; !ok && preset.BudgetAgentMin > 0 {
 		ctxMap["budget_agent_min"] = preset.BudgetAgentMin
 	}
@@ -152,6 +164,7 @@ func applyStrategyPreset(ctxMap map[string]interface{}, strategy string) {
 		ctxMap["enable_verification"] = preset.VerificationEnabled
 	}
 	// Seed gap filling settings (always apply, not gated by max_iterations)
+	// 填充 gap filling 相关设置：始终生效，不受 max_iterations 控制。
 	if _, ok := ctxMap["gap_filling_enabled"]; !ok {
 		ctxMap["gap_filling_enabled"] = preset.GapFillingEnabled
 	}
@@ -165,14 +178,17 @@ func applyStrategyPreset(ctxMap map[string]interface{}, strategy string) {
 		ctxMap["gap_filling_check_citations"] = preset.GapFillingCheckCitations
 	}
 	// Seed model_tier from agent_model_tier (only if not already set by user)
+	// 由 agent_model_tier 填充 model_tier（仅当用户未显式设置时）。
 	if _, ok := ctxMap["model_tier"]; !ok && preset.AgentModelTier != "" {
 		ctxMap["model_tier"] = preset.AgentModelTier
 	}
 	// Seed iterative_research_enabled (DR 2.0 iterative loop; only seed when explicitly configured)
+	// 填充 iterative_research_enabled（DR 2.0 的迭代循环；仅在配置显式给出时才填充）。
 	if _, ok := ctxMap["iterative_research_enabled"]; !ok && preset.IterativeResearchEnabled != nil {
 		ctxMap["iterative_research_enabled"] = *preset.IterativeResearchEnabled
 	}
 	// Seed iterative_max_iterations for coverage evaluation loop (1-5)
+	// 为覆盖率评估循环填充 iterative_max_iterations（取值 1-5）。
 	if _, ok := ctxMap["iterative_max_iterations"]; !ok && preset.IterativeMaxIterations >= 1 && preset.IterativeMaxIterations <= 5 {
 		ctxMap["iterative_max_iterations"] = preset.IterativeMaxIterations
 	}
@@ -181,6 +197,8 @@ func applyStrategyPreset(ctxMap map[string]interface{}, strategy string) {
 // applyTaskContextAndLabels normalizes and validates task context and mode, then
 // applies them to the gRPC request. Returns false if a validation error response
 // has already been sent to the client.
+// applyTaskContextAndLabels 先规范化并校验 task context 与 mode，再写入 gRPC request；
+// 若已向客户端返回校验错误则返回 false。
 func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchpb.SubmitTaskRequest, w http.ResponseWriter, r *http.Request) bool {
 	// Ensure context map exists so we can inject optional fields safely
 	ctxMap := map[string]interface{}{}
@@ -191,6 +209,7 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 	}
 
 	// Normalize alias: context.template_name -> context.template (if not already set)
+	// 别名归一化：context.template_name → context.template（仅在尚未设置时）。
 	if _, ok := ctxMap["template"]; !ok {
 		if v, ok2 := ctxMap["template_name"].(string); ok2 {
 			if tv := strings.TrimSpace(v); tv != "" {
@@ -216,6 +235,7 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 
 		// SECURITY: Check authorization for dangerous skills
 		// Dangerous skills require admin/owner role OR explicit skills:dangerous scope
+		// 安全：校验危险 skill 的授权——需要 admin/owner 角色，或显式拥有 skills:dangerous scope。
 		if skill.Dangerous {
 			// Get userCtx from request context (already validated in SubmitTask)
 			userCtx, _ := r.Context().Value(auth.UserContextKey).(*auth.UserContext)
@@ -249,6 +269,7 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 		ctxMap["system_prompt"] = skill.Content
 
 		// If skill declares a role, set it (bypasses decomposition)
+		// 若 skill 声明了 role，则直接设置（跳过 task 分解）。
 		if skill.RequiresRole != "" {
 			ctxMap["role"] = skill.RequiresRole
 		}
@@ -339,6 +360,7 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 
 	// Apply research strategy presets (seed defaults only when absent)
 	// Default to "standard" for force_research when no strategy specified
+	// 应用 research strategy preset（仅补缺失的默认值）；force_research 未指定 strategy 时默认用 standard。
 	rs, rsOk := ctxMap["research_strategy"].(string)
 	if !rsOk || strings.TrimSpace(rs) == "" {
 		if forceResearch, _ := ctxMap["force_research"].(bool); forceResearch {
@@ -351,6 +373,7 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 	}
 
 	// Conflict validation: disable_ai=true cannot be combined with model controls
+	// 冲突校验：disable_ai=true 时不能同时指定 model 相关控制项。
 	var disableAI bool
 	if v, exists := ctxMap["disable_ai"]; exists {
 		switch t := v.(type) {
@@ -397,6 +420,7 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 	}
 
 	// Propagate optional mode via labels for routing (e.g., supervisor)
+	// 把可选的 mode 通过 labels 传给下游用于路由（如 supervisor）。
 	if m := strings.TrimSpace(strings.ToLower(req.Mode)); m != "" {
 		switch m {
 		case "simple", "standard", "complex", "supervisor":
@@ -439,15 +463,19 @@ type TaskRequest struct {
 	Context   map[string]interface{} `json:"context,omitempty"`
 	// Optional execution mode hint (e.g., "supervisor").
 	// Routed via metadata labels to orchestrator.
+	// 可选的执行 mode 提示（如 supervisor），通过 metadata labels 交给 orchestrator 路由。
 	Mode string `json:"mode,omitempty"`
 	// Optional skill name to apply (expands into system_prompt + role).
 	// Skills are markdown-based task definitions loaded from config/skills/.
+	// 可选的 skill 名称（会展开为 system_prompt + role）；skill 是 Markdown 形式的 task 定义，从 config/skills/ 加载。
 	Skill string `json:"skill,omitempty"`
 	// Optional model tier hint; if provided, inject into context
 	// so downstream services can honor it (small|medium|large).
+	// 可选的 model tier 提示；提供后写入 context，供下游服务采用（small|medium|large）。
 	ModelTier string `json:"model_tier,omitempty"`
 	// Optional specific model override; if provided, inject into context
 	// (e.g., "gpt-5-2025-08-07", "gpt-5-pro-2025-10-06", "claude-sonnet-4-5-20250929").
+	// 可选的具体模型覆盖；提供后写入 context（如 "gpt-5-2025-08-07"、"gpt-5-pro-2025-10-06"、"claude-sonnet-4-5-20250929"）。
 	ModelOverride    string `json:"model_override,omitempty"`
 	ProviderOverride string `json:"provider_override,omitempty"`
 	// Phase 6: Strategy presets (mapped into context)
@@ -518,6 +546,7 @@ func (h *TaskHandler) SubmitTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Limit request body size to accommodate multimodal payloads.
+	// 限制 request 体大小，同时为多模态 payload 留出空间。
 	r.Body = http.MaxBytesReader(w, r.Body, attachments.MaxMultimodalBodyBytes)
 
 	// Parse request body
@@ -528,6 +557,7 @@ func (h *TaskHandler) SubmitTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate request — allow empty query when attachments are present
+	// 校验 request——存在附件时允许 query 为空。
 	hasAttachments := false
 	if req.Context != nil {
 		if atts, ok := req.Context["attachments"]; ok {
@@ -551,6 +581,7 @@ func (h *TaskHandler) SubmitTask(w http.ResponseWriter, r *http.Request) {
 
 	// Extract and store inline base64 attachments from context.attachments.
 	// Replace raw data with lightweight Redis references before forwarding.
+	// 从 context.attachments 中取出内联 base64 附件并存储，转发前把原始数据替换为轻量的 Redis 引用。
 	if err := h.extractAndStoreContextAttachments(ctx, req.SessionID, req.Context); err != nil {
 		h.sendError(w, err.Error(), http.StatusBadRequest)
 		return
@@ -558,6 +589,7 @@ func (h *TaskHandler) SubmitTask(w http.ResponseWriter, r *http.Request) {
 
 	// NOTE: Workspace quota check deferred to Phase 2.
 	// Current count-based approach is too coarse - blocks all tasks, not just workspace-using ones.
+	// 注意：workspace 配额检查推迟到 Phase 2；当前基于数量的做法过于粗糙，会拦住所有 task 而不只是使用 workspace 的 task。
 
 	// Build gRPC request
 	grpcReq := &orchpb.SubmitTaskRequest{
@@ -623,6 +655,7 @@ func (h *TaskHandler) SubmitTask(w http.ResponseWriter, r *http.Request) {
 
 // SubmitTaskAndGetStreamURL handles POST /api/v1/tasks/stream
 // Submits a task and returns a stream URL for SSE consumption.
+// SubmitTaskAndGetStreamURL 处理 POST /api/v1/tasks/stream：提交 task 并返回供 SSE 消费的 stream URL。
 func (h *TaskHandler) SubmitTaskAndGetStreamURL(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -718,6 +751,7 @@ func (h *TaskHandler) SubmitTaskAndGetStreamURL(w http.ResponseWriter, r *http.R
 	)
 
 	// Prepare stream URL (clients will use EventSource on this URL)
+	// 准备 stream URL（客户端会用 EventSource 连接该地址）。
 	streamURL := fmt.Sprintf("/api/v1/stream/sse?workflow_id=%s", resp.WorkflowId)
 
 	// Headers for discoverability
@@ -786,15 +820,18 @@ func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Optionally parse as JSON for backward compatibility (response field)
 	// If result is valid JSON, populate response field; otherwise leave it nil
+	// 为向后兼容，尝试把 result 解析为 JSON：成功则填充 response 字段，否则保持 nil。
 	if resp.Result != "" {
 		var responseData map[string]interface{}
 		if err := json.Unmarshal([]byte(resp.Result), &responseData); err == nil {
 			statusResp.Response = responseData
 		}
 		// If unmarshal fails, it's plain text - only result field will be populated
+		// 反序列化失败说明是纯文本，此时只会填充 result 字段。
 	}
 
 	// Enrich with metadata from database (query, session_id, mode, model, provider, tokens, cost, metadata, response)
+	// 用数据库中的 metadata 补全 response（query、session_id、mode、model、provider、tokens、cost、metadata、response）。
 	var (
 		q                sql.NullString
 		sid              sql.NullString
@@ -871,6 +908,7 @@ func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 			statusResp.Metadata = metadata
 
 			// Extract context from metadata if available (stored as metadata.task_context)
+			// 若存在则从 metadata 中取出 context（存放在 metadata.task_context）。
 			if taskContext, ok := metadata["task_context"].(map[string]interface{}); ok {
 				statusResp.Context = taskContext
 			}
@@ -1094,6 +1132,7 @@ func (h *TaskHandler) StreamTask(w http.ResponseWriter, r *http.Request) {
 	// Rewrite the request to proxy to admin server
 	// This will be handled by the streaming proxy
 	// For now, we'll redirect to the SSE endpoint with workflow_id
+	// 改为代理到 admin server 的 request，由 streaming proxy 处理；目前直接重定向到带 workflow_id 的 SSE 端点。
 	redirectURL := fmt.Sprintf("/api/v1/stream/sse?workflow_id=%s", taskID)
 
 	// Copy any additional query parameters
@@ -1139,6 +1178,7 @@ func (h *TaskHandler) CancelTask(w http.ResponseWriter, r *http.Request) {
 
 	// Call CancelTask gRPC
 	// Service layer enforces ownership and handles all auth/authorization
+	// 调用 CancelTask gRPC；归属校验与 authentication/authorization 全部由 service 层负责。
 	cancelReq := &orchpb.CancelTaskRequest{
 		TaskId: taskID,
 		Reason: req.Reason,
@@ -1371,6 +1411,7 @@ func (h *TaskHandler) GetControlState(w http.ResponseWriter, r *http.Request) {
 }
 
 // buildModelBreakdown queries token_usage table to build detailed model breakdown
+// buildModelBreakdown 查询 token_usage 表，构建按 model 拆分的用量明细。
 func (h *TaskHandler) buildModelBreakdown(ctx context.Context, workflowID string) []map[string]interface{} {
 	// Query token_usage table grouped by model
 	query := `
@@ -1465,6 +1506,8 @@ func (h *TaskHandler) sendError(w http.ResponseWriter, message string, code int)
 // base64 data, stores each blob in Redis via the attachment store, and replaces
 // the entry with a lightweight reference (id + media_type + filename + size_bytes).
 // Attachments without "data" (already references or URL-based) are passed through.
+// extractAndStoreContextAttachments 检查 ctxMap["attachments"] 中的内联 base64 数据，把每个 blob 存入 Redis，
+// 并替换为轻量引用（id + media_type + filename + size_bytes）；没有 "data" 字段的条目（已是引用或 URL）原样透传。
 func (h *TaskHandler) extractAndStoreContextAttachments(ctx context.Context, sessionID string, ctxMap map[string]interface{}) error {
 	if ctxMap == nil {
 		return nil
@@ -1494,6 +1537,7 @@ func (h *TaskHandler) extractAndStoreContextAttachments(ctx context.Context, ses
 
 		// If the entry has a "data" field, it contains base64-encoded content
 		// that should be offloaded to Redis.
+		// 若条目含 "data" 字段，说明内容是 base64 编码，需要转存到 Redis。
 		dataStr, hasData := am["data"].(string)
 		if !hasData {
 			// URL-based or pre-existing ref — require MIME and reject dangerous
@@ -1501,6 +1545,9 @@ func (h *TaskHandler) extractAndStoreContextAttachments(ctx context.Context, ses
 			// audio-video / octet-stream MIMEs are NOT rejected here: the daemon
 			// fetches via URL and uses bash / archive_extract on the other end.
 			// Cloud-side extraction (Phase 3) is opportunistic, not a gate.
+			// URL 形式或已有引用：只要求 MIME 存在并拒绝危险类型。按 attachment-format-parity §2 P0，
+			// 未知/归档/音视频/octet-stream 等 MIME 不在此处拒绝——daemon 会按 URL 拉取，并在另一端用 bash / archive_extract 处理；
+			// 云端提取（Phase 3）是机会性的，不作为门禁。
 			mt, _ := am["media_type"].(string)
 			if mt == "" {
 				return fmt.Errorf("attachment media_type is required for URL-based attachments")
@@ -1538,11 +1585,13 @@ func (h *TaskHandler) extractAndStoreContextAttachments(ctx context.Context, ses
 		mediaType, _ := am["media_type"].(string)
 		filename, _ := am["filename"].(string)
 		// Sanitize filename to prevent path traversal (e.g. "../../etc/passwd" → "passwd")
+		// 清洗文件名以防路径穿越（如 "../../etc/passwd" → "passwd"）。
 		if filename != "" {
 			filename = filepath.Base(filename)
 		}
 
 		// Require media_type for base64 attachments (prevents silent degradation downstream)
+		// base64 附件必须带 media_type，避免下游静默降级。
 		if mediaType == "" {
 			return fmt.Errorf("attachment media_type is required for base64 attachments")
 		}
@@ -1551,6 +1600,8 @@ func (h *TaskHandler) extractAndStoreContextAttachments(ctx context.Context, ses
 		// forward to Anthropic or run extraction). Passthrough types belong to
 		// URL-only refs (see the !hasData branch above). Dangerous types are
 		// always rejected.
+		// 内联 base64 路径意味着云端真正持有字节，会生成内联 LLM content block，因此只接受 IsExtractable 类型
+		// （云端转发给 Anthropic 或执行提取）；passthrough 类型只用于 URL 引用（见上面的 !hasData 分支）；危险类型一律拒绝。
 		if attachments.IsDangerous(mediaType) {
 			return fmt.Errorf("rejected attachment type: %s (executables / installers are not accepted)", mediaType)
 		}
@@ -1594,6 +1645,8 @@ func sanitizeAttachmentThumbnail(raw interface{}) (string, bool) {
 // checkWorkspaceQuota checks if the tenant has exceeded their workspace quota.
 // Uses count-based approach: count active sessions for tenant, compare to workspace_max_size_gb.
 // This is a simple proxy since each workspace uses approximately 1GB of storage.
+// checkWorkspaceQuota 检查 tenant 是否超出 workspace 配额：按活跃 session 数估算
+// （假设每个 workspace 约占 1GB），与 workspace_max_size_gb 比较。
 func (h *TaskHandler) checkWorkspaceQuota(ctx context.Context, tenantID uuid.UUID) error {
 	// Skip quota check if db is not configured (e.g., in tests)
 	if h.db == nil {
@@ -1609,6 +1662,7 @@ func (h *TaskHandler) checkWorkspaceQuota(ctx context.Context, tenantID uuid.UUI
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// Tenant not found in auth.tenants - use default quota (5GB = 5 workspaces)
+			// auth.tenants 中找不到该 tenant——使用默认配额（5GB，即 5 个 workspace）。
 			h.logger.Debug("Tenant not found in auth.tenants, using default quota",
 				zap.String("tenant_id", tenantID.String()))
 			return nil
@@ -1625,6 +1679,7 @@ func (h *TaskHandler) checkWorkspaceQuota(ctx context.Context, tenantID uuid.UUI
 	}
 
 	// Count active sessions for this tenant as a proxy for workspace count
+	// 用该 tenant 的活跃 session 数近似 workspace 数量。
 	var sessionCount int
 	err = h.db.GetContext(ctx, &sessionCount, `
 		SELECT COUNT(*) FROM sessions
@@ -1649,6 +1704,7 @@ func (h *TaskHandler) checkWorkspaceQuota(ctx context.Context, tenantID uuid.UUI
 
 // SendSwarmMessage handles POST /api/v1/swarm/{workflowID}/message
 // Sends a human message to a running SwarmWorkflow's Lead agent.
+// SendSwarmMessage 处理 POST /api/v1/swarm/{workflowID}/message：向运行中的 SwarmWorkflow 的 Lead agent 发送人工消息。
 func (h *TaskHandler) SendSwarmMessage(w http.ResponseWriter, r *http.Request) {
 	// Verify tenant ownership
 	userCtx, ok := r.Context().Value(auth.UserContextKey).(*auth.UserContext)
@@ -1664,6 +1720,7 @@ func (h *TaskHandler) SendSwarmMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify the workflow belongs to the caller's tenant and get session_id
+	// 校验该 workflow 属于调用方 tenant，并取出 session_id。
 	if h.db == nil {
 		h.sendError(w, "Service unavailable", http.StatusServiceUnavailable)
 		return
@@ -1683,6 +1740,7 @@ func (h *TaskHandler) SendSwarmMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Limit request body to 64KB to prevent oversized Temporal signal payloads
+	// request 体限制 64KB，避免 Temporal signal payload 过大。
 	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 
 	type swarmMessageRequest struct {
@@ -1723,6 +1781,7 @@ func (h *TaskHandler) SendSwarmMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Persist HITL message to session history for multi-turn context
+	// 把 HITL 消息写入 session history，供多轮 context 使用。
 	if h.sessionMgr != nil && sessionID != "" {
 		if addErr := h.sessionMgr.AddMessage(r.Context(), sessionID, session.Message{
 			ID:        fmt.Sprintf("msg-%d", time.Now().UnixNano()),

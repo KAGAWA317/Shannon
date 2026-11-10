@@ -158,6 +158,7 @@ func TestDatabaseWrapper_CircuitBreakerTriggering(t *testing.T) {
 	ctx := context.Background()
 
 	// Set up expected pings (circuit breaker opens after 5 failures)
+	// 预置期望的 ping（累计 5 次失败后 circuit breaker 会 open）
 	for i := 0; i < 5; i++ {
 		mock.ExpectPing().WillReturnError(sql.ErrConnDone)
 	}
@@ -176,6 +177,7 @@ func TestDatabaseWrapper_CircuitBreakerTriggering(t *testing.T) {
 	}
 
 	// Subsequent calls should fail fast
+	// 之后的调用应快速失败（fail fast），不再打到 DB
 	err = wrapper.PingContext(ctx)
 	if err != ErrCircuitBreakerOpen {
 		t.Errorf("Expected circuit breaker open error, got %v", err)
@@ -222,6 +224,7 @@ func TestDatabaseWrapper_QueryRowContextCB(t *testing.T) {
 
 	// Test circuit breaker error propagation
 	// Create a separate mock with ping monitoring for circuit breaker test
+	// circuit breaker 状态与 wrapper 绑定，故另建一个带 ping 监控的 mock
 	dbForCB, mockForCB, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	if err != nil {
 		t.Fatalf("Failed to create sqlmock for circuit breaker test: %v", err)
@@ -236,6 +239,7 @@ func TestDatabaseWrapper_QueryRowContextCB(t *testing.T) {
 	}
 
 	// First trip the circuit breaker
+	// 先把 circuit breaker 打到 open
 	for i := 0; i < 5; i++ {
 		wrapperForCB.PingContext(ctx)
 	}

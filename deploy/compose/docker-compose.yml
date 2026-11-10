@@ -79,8 +79,10 @@ services:
       - CONFIG_PATH=/app/config/features.yaml
       - METRICS_PORT=${AGENT_CORE_METRICS_PORT:-2113}
       # Tool parallelism: number of concurrent tool executions (default 1 for sequential)
+      # tool 并行度：并发 tool 执行数（默认 1，即串行）
       - TOOL_PARALLELISM=${TOOL_PARALLELISM:-1}
       # Optional distributed rate limiting (leave empty to use in-memory limiter)
+      # 可选的分布式 rate limit（留空则使用内存 limiter）
       - ENFORCE_RATE_REDIS_URL=${ENFORCE_RATE_REDIS_URL:-}
       - ENFORCE_TIMEOUT_SECONDS=${ENFORCE_TIMEOUT_SECONDS:-300}
       - ENFORCE_MAX_TOKENS=${ENFORCE_MAX_TOKENS:-32768}
@@ -91,17 +93,22 @@ services:
       - LLM_SERVICE_URL=${LLM_SERVICE_URL:-http://llm-service:8000}
       - LLM_TIMEOUT_SECONDS=${LLM_TIMEOUT_SECONDS:-360}
       # Python WASI interpreter configuration
+      # Python WASI 解释器配置
       - PYTHON_WASI_WASM_PATH=/opt/wasm-interpreters/python-3.11.4.wasm
       - WASI_MEMORY_LIMIT_MB=${WASI_MEMORY_LIMIT_MB:-512}
       - WASI_TIMEOUT_SECONDS=${WASI_TIMEOUT_SECONDS:-60}
       # Session workspace isolation (Phase 3) - enabled by default
+      # session 工作区隔离（阶段 3）- 默认启用
       - SHANNON_USE_WASI_SANDBOX=${SHANNON_USE_WASI_SANDBOX:-1}
       - SHANNON_SESSION_WORKSPACES_DIR=${SHANNON_SESSION_WORKSPACES_DIR:-/tmp/shannon-sessions}
       - SHANNON_USER_MEMORY_DIR=${SHANNON_USER_MEMORY_DIR:-/tmp/shannon-users}
       # Python executor mode: "wasi" (default) or "firecracker"
+      # Python 执行器模式："wasi"（默认）或 "firecracker"
       # When using firecracker, agent-core checks health and falls back to WASI if unavailable
+      # 使用 firecracker 时，agent-core 会先检查健康状况，不可用则回退到 WASI
       - PYTHON_EXECUTOR_MODE=${PYTHON_EXECUTOR_MODE:-wasi}
       # Firecracker executor URL (only used when PYTHON_EXECUTOR_MODE is "firecracker")
+      # Firecracker 执行器 URL（仅当 PYTHON_EXECUTOR_MODE 为 "firecracker" 时使用）
       # - FIRECRACKER_EXECUTOR_URL=${FIRECRACKER_EXECUTOR_URL:-http://firecracker-executor:9001}
     depends_on:
       temporal:
@@ -137,6 +144,7 @@ services:
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
       - POSTGRES_SSLMODE=${POSTGRES_SSLMODE:-disable}
       # CRITICAL: JWT_SECRET must match gateway's secret for JWT validation
+      # 关键：JWT_SECRET 必须与网关的密钥一致，才能通过 JWT 校验
       - JWT_SECRET=${JWT_SECRET:-development-only-secret-change-in-production}
       - CONFIG_PATH=/app/config/features.yaml
       - MODELS_CONFIG_PATH=${MODELS_CONFIG_PATH:-/app/config/models.yaml}
@@ -144,22 +152,30 @@ services:
       - AGENT_TIMEOUT_SECONDS=${AGENT_TIMEOUT_SECONDS:-600}
       - DECOMPOSE_TIMEOUT_SECONDS=${DECOMPOSE_TIMEOUT_SECONDS:-90}
       # Optional: Account MCP tool costs in tokens (cost*1000); default off
+      # 可选：将 MCP tool 成本折算为 Token（cost*1000）；默认关闭
       - MCP_COST_TO_TOKENS=${MCP_COST_TO_TOKENS:-0}
       # Priority-based task queues: set to 'on' to enable separate workers per priority
+      # 基于优先级的 task 队列：设为 'on' 可为每个优先级启用独立 worker
       - PRIORITY_QUEUES=${PRIORITY_QUEUES:-}
       # Enable automatic tool selection for parallel execution
+      # 为并行执行启用自动 tool 选择
       - ENABLE_TOOL_SELECTION=${ENABLE_TOOL_SELECTION:-1}
       # Stop injecting python_executor when decomposition returns empty tools.
+      # 当分解结果返回空 tool 列表时，停止注入 python_executor。
       # Empty tools → Rust passes None → Python falls back to role preset.
+      # 空 tool → Rust 传 None → Python 回退到角色预设。
       - DISABLE_DEFAULT_TOOLS=${DISABLE_DEFAULT_TOOLS:-1}
       # Enable LLM event streaming (prompts, partials, outputs)
+      # 启用 LLM event streaming（prompt、部分输出、最终输出）
       - ENABLE_LLM_PARTIALS=${ENABLE_LLM_PARTIALS:-1}
       - PARTIAL_CHUNK_CHARS=${PARTIAL_CHUNK_CHARS:-512}
       - EVENTLOG_BATCH_SIZE=${EVENTLOG_BATCH_SIZE:-100}
       - EVENTLOG_BATCH_INTERVAL_MS=${EVENTLOG_BATCH_INTERVAL_MS:-100}
       # Enable detailed citation extraction logs in orchestrator (set to 0 to disable)
+      # 在 orchestrator 中启用详细的引用提取日志（设为 0 可关闭）
       - CITATIONS_DEBUG=${CITATIONS_DEBUG:-1}
       # Budget and rate limiting
+      # budget 与 rate limit
       - BACKPRESSURE_THRESHOLD=${BACKPRESSURE_THRESHOLD:-}
       - MAX_BACKPRESSURE_DELAY_MS=${MAX_BACKPRESSURE_DELAY_MS:-}
       - CIRCUIT_FAILURE_THRESHOLD=${CIRCUIT_FAILURE_THRESHOLD:-}
@@ -172,6 +188,7 @@ services:
       # Provider rate control
       - PROVIDER_RATE_CONTROL_ENABLED=${PROVIDER_RATE_CONTROL_ENABLED:-false}
       # Priority worker concurrency (optional; defaults shown)
+      # 优先级 worker 并发数（可选；此处为默认值）
       - WORKER_ACT_CRITICAL=${WORKER_ACT_CRITICAL:-12}
       - WORKER_WF_CRITICAL=${WORKER_WF_CRITICAL:-12}
       - WORKER_ACT_HIGH=${WORKER_ACT_HIGH:-10}
@@ -181,6 +198,7 @@ services:
       - WORKER_ACT_LOW=${WORKER_ACT_LOW:-4}
       - WORKER_WF_LOW=${WORKER_WF_LOW:-4}
       # Single-queue mode concurrency (used when PRIORITY_QUEUES is off)
+      # 单队列模式的并发数（PRIORITY_QUEUES 关闭时使用）
       - WORKER_ACT=${WORKER_ACT:-10}
       - WORKER_WF=${WORKER_WF:-10}
       # Human-in-the-loop approval settings
@@ -193,11 +211,14 @@ services:
       - EVENTS_INGEST_URL=${EVENTS_INGEST_URL:-http://orchestrator:8081/events}
       - EVENTS_AUTH_TOKEN=${EVENTS_AUTH_TOKEN:-}
       # Template configuration
+      # 模板配置
       - TEMPLATES_PATH=${TEMPLATES_PATH:-/app/config/workflows/examples:/app/config/workflows/user}
       - SYNTHESIS_TEMPLATES_DIR=${SYNTHESIS_TEMPLATES_DIR:-/app/config/templates/synthesis}
       # Session workspaces (swarm shared workspace)
+      # session 工作区（swarm 共享工作区）
       - SHANNON_SESSION_WORKSPACES_DIR=${SHANNON_SESSION_WORKSPACES_DIR:-/tmp/shannon-sessions}
       # User-level memory extraction (Phase 2)
+      # 用户级记忆提取（阶段 2）
       - SHANNON_USER_MEMORY_DIR=${SHANNON_USER_MEMORY_DIR:-/tmp/shannon-users}
       - USER_MEMORY_ENABLED=${USER_MEMORY_ENABLED:-1}
     depends_on:
@@ -284,6 +305,7 @@ services:
       - EXA_API_KEY=${EXA_API_KEY}
       - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY}
       # Exa auto-fetch configuration (fetch full content after search)
+      # Exa 自动抓取配置（搜索后抓取全文内容）
       - WEB_SEARCH_EXA_AUTO_FETCH_ENABLED=${WEB_SEARCH_EXA_AUTO_FETCH_ENABLED:-1}
       - WEB_SEARCH_EXA_AUTO_FETCH_TOP_K=${WEB_SEARCH_EXA_AUTO_FETCH_TOP_K:-0}
       - WEB_SEARCH_EXA_AUTO_FETCH_MAX_LENGTH=${WEB_SEARCH_EXA_AUTO_FETCH_MAX_LENGTH:-8000}
@@ -313,6 +335,7 @@ services:
       # Agent Core address for WASI execution
       - AGENT_CORE_ADDR=agent-core:50051
       # Session workspace isolation (Phase 3) - enabled by default
+      # session 工作区隔离（阶段 3）- 默认启用
       - SHANNON_USE_WASI_SANDBOX=${SHANNON_USE_WASI_SANDBOX:-1}
       - SHANNON_SESSION_WORKSPACES_DIR=${SHANNON_SESSION_WORKSPACES_DIR:-/tmp/shannon-sessions}
       - SHANNON_USER_MEMORY_DIR=${SHANNON_USER_MEMORY_DIR:-/tmp/shannon-users}
@@ -321,9 +344,11 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-localhost:4317}
       - OTEL_ENABLED=${OTEL_ENABLED:-false}
       # Events ingestion
+      # event 摄取
       - EVENTS_INGEST_URL=${EVENTS_INGEST_URL:-http://orchestrator:8081/events}
       - EVENTS_AUTH_TOKEN=${EVENTS_AUTH_TOKEN:-}
       # Playwright screenshot service (optional - for popup dismissal screenshots)
+      # Playwright 截图服务（可选 - 用于弹窗关闭时的截图）
       - PLAYWRIGHT_SERVICE_URL=${PLAYWRIGHT_SERVICE_URL:-http://playwright-service:8002}
     depends_on:
       redis:
@@ -386,7 +411,9 @@ services:
       - POSTGRES_SSLMODE=${POSTGRES_SSLMODE:-disable}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379}
       # IMPORTANT: Change JWT_SECRET in production! Use a strong, random secret.
+      # 重要：生产环境请务必修改 JWT_SECRET！请使用足够强的随机密钥。
       # Generate one with: openssl rand -hex 32
+      # 可用以下命令生成：openssl rand -hex 32
       - JWT_SECRET=${JWT_SECRET:-development-only-secret-change-in-production}
       - GATEWAY_SKIP_AUTH=${GATEWAY_SKIP_AUTH:-1}
       - SHANNON_USER_MEMORY_DIR=${SHANNON_USER_MEMORY_DIR:-/tmp/shannon-users}

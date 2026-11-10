@@ -69,6 +69,9 @@ var (
 	// Note: Template compilation cache not implemented yet
 	// Templates are compiled on-demand; compilation is fast enough
 	// that caching provides minimal benefit. May add in future if needed.
+	// 注意：模板编译 cache 尚未实现
+	// 模板按需编译，编译足够快，
+	// cache 收益很小。将来确有需要再加。
 
 	PatternDegraded = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -160,6 +163,7 @@ var (
 		},
 		[]string{"type", "source", "result"}, // type: session/semantic/hierarchical-recent, source: qdrant, result: hit/miss
 		// Note: hierarchical-semantic reuses "semantic" type to avoid double-counting
+		// 注意：hierarchical-semantic 复用 "semantic" 类型，避免重复计数
 	)
 
 	MemoryItemsRetrieved = promauto.NewHistogramVec(
@@ -172,6 +176,8 @@ var (
 	)
 
 	// Note: Memory hit rate is calculated via Prometheus query:
+	// rate(shannon_memory_fetches_total{result="hit"}[5m]) / rate(shannon_memory_fetches_total[5m])
+	// 注意：内存命中率通过 Prometheus 查询计算：
 	// rate(shannon_memory_fetches_total{result="hit"}[5m]) / rate(shannon_memory_fetches_total[5m])
 
 	CompressionEvents = promauto.NewCounterVec(
@@ -540,6 +546,7 @@ var (
 )
 
 // RecordWorkflowMetrics records metrics for a completed workflow
+// RecordWorkflowMetrics 记录已完成 workflow 的指标
 func RecordWorkflowMetrics(workflowType, mode, status string, durationSeconds float64, tokensUsed int, costUSD float64) {
 	WorkflowsCompleted.WithLabelValues(workflowType, mode, status).Inc()
 	WorkflowDuration.WithLabelValues(workflowType, mode).Observe(durationSeconds)
@@ -547,6 +554,7 @@ func RecordWorkflowMetrics(workflowType, mode, status string, durationSeconds fl
 	if tokensUsed > 0 {
 		TaskTokensUsed.Observe(float64(tokensUsed))
 		// Don't add to SessionTokensTotal here - it's tracked in session updates to avoid double-counting
+		// 此处不要累加 SessionTokensTotal——它在 session 更新中统计，避免重复计数
 	}
 
 	if costUSD > 0 {
@@ -555,12 +563,14 @@ func RecordWorkflowMetrics(workflowType, mode, status string, durationSeconds fl
 }
 
 // RecordAgentMetrics records metrics for an agent execution
+// RecordAgentMetrics 记录 agent 执行的指标
 func RecordAgentMetrics(agentID, mode string, durationMs float64) {
 	AgentExecutions.WithLabelValues(agentID, mode).Inc()
 	AgentExecutionDuration.WithLabelValues(agentID, mode).Observe(durationMs)
 }
 
 // RecordGRPCMetrics records metrics for a gRPC request
+// RecordGRPCMetrics 记录 gRPC request 的指标
 func RecordGRPCMetrics(service, method, status string, durationSeconds float64) {
 	GRPCRequestsTotal.WithLabelValues(service, method, status).Inc()
 	GRPCRequestDuration.WithLabelValues(service, method).Observe(durationSeconds)
@@ -590,6 +600,7 @@ func RecordEmbeddingMetrics(model, status string, durationSeconds float64) {
 }
 
 // RecordChunkingMetrics records metrics for Q&A chunking
+// RecordChunkingMetrics 记录 Q&A 分块的指标
 func RecordChunkingMetrics(sessionID string, numChunks int, avgChunkSize float64) {
 	if numChunks > 1 {
 		ChunksPerQA.Observe(float64(numChunks))
@@ -601,6 +612,7 @@ func RecordChunkingMetrics(sessionID string, numChunks int, avgChunkSize float64
 }
 
 // RecordRetrievalTokens records the token budget used in retrieval
+// RecordRetrievalTokens 记录检索使用的 token budget
 func RecordRetrievalTokens(retrievalType string, tokens int) {
 	if tokens > 0 {
 		RetrievalTokenBudget.WithLabelValues(retrievalType).Observe(float64(tokens))
@@ -615,6 +627,7 @@ func RecordChunkAggregation(durationSeconds float64) {
 }
 
 // RecordModelTierRequest records when a specific tier is requested
+// RecordModelTierRequest 记录 request 指定 tier 的 event
 func RecordModelTierRequest(tier string) {
 	if tier != "" {
 		ModelTierRequested.WithLabelValues(tier).Inc()
@@ -622,6 +635,7 @@ func RecordModelTierRequest(tier string) {
 }
 
 // RecordModelTierSelection records when a specific tier+provider is selected
+// RecordModelTierSelection 记录选中特定 tier+provider 的 event
 func RecordModelTierSelection(tier, provider string) {
 	if tier != "" && provider != "" {
 		ModelTierSelected.WithLabelValues(tier, provider).Inc()
@@ -629,6 +643,7 @@ func RecordModelTierSelection(tier, provider string) {
 }
 
 // RecordTierDrift records when selected tier differs from requested
+// RecordTierDrift 记录选中 tier 与 request 不一致的 event
 func RecordTierDrift(requestedTier, selectedTier, reason string) {
 	if requestedTier != "" && selectedTier != "" && requestedTier != selectedTier {
 		TierSelectionDrift.WithLabelValues(requestedTier, selectedTier, reason).Inc()
@@ -636,6 +651,7 @@ func RecordTierDrift(requestedTier, selectedTier, reason string) {
 }
 
 // RecordProviderOverride records when provider override is requested and respected
+// RecordProviderOverride 记录 request 的 provider 覆盖被遵从的 event
 func RecordProviderOverride(provider string, respected bool) {
 	if provider != "" {
 		ProviderOverrideRequested.WithLabelValues(provider).Inc()
@@ -646,6 +662,7 @@ func RecordProviderOverride(provider string, respected bool) {
 }
 
 // RecordProviderDrift records when selected provider differs from requested
+// RecordProviderDrift 记录选中 provider 与 request 不一致的 event
 func RecordProviderDrift(requestedProvider, selectedProvider, reason string) {
 	if requestedProvider != "" && selectedProvider != "" && requestedProvider != selectedProvider {
 		ProviderSelectionDrift.WithLabelValues(requestedProvider, selectedProvider, reason).Inc()

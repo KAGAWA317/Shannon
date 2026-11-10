@@ -1,4 +1,8 @@
-"""Tests for verify.py claim verification utilities."""
+"""Tests for verify.py claim verification utilities.
+
+覆盖 verify.py 的 claim 校验 tool：语言检测、分词、BM25 打分、citation 编号提取，
+以及 Pydantic 模型的默认值。
+"""
 
 import pytest
 from llm_service.api.verify import (
@@ -23,6 +27,7 @@ class TestDetectLanguage:
 
     def test_japanese_text(self):
         # Japanese is grouped with CJK, returns "zh"
+        # 日文同属 CJK 字符集，检测结果归为 "zh"
         assert detect_language("これは日本語の文です。") == "zh"
 
     def test_mixed_mostly_english(self):
@@ -41,6 +46,7 @@ class TestTokenize:
     def test_english_tokenization(self):
         tokens = tokenize("The quick brown fox")
         # Note: tokenize does NOT filter stopwords, just tokenizes
+        # 注意：tokenize 不过滤 stopword，只做分词
         assert "quick" in tokens
         assert "brown" in tokens
         assert "fox" in tokens
@@ -49,6 +55,7 @@ class TestTokenize:
     def test_chinese_tokenization(self):
         tokens = tokenize("人工智能技术")
         # Character-based tokenization for CJK
+        # CJK 按单字切分
         assert len(tokens) > 0
         assert "人" in tokens
         assert "工" in tokens
@@ -57,6 +64,7 @@ class TestTokenize:
         tokens = tokenize("AI人工智能 technology")
         assert "technology" in tokens
         # CJK characters are extracted individually
+        # CJK 字符逐个提取，英文仍按词切
         assert "人" in tokens
         assert len(tokens) > 1
 
@@ -141,6 +149,7 @@ class TestModels:
 
     def test_citation_model_extra_fields_ignored(self):
         # Should not raise even with extra fields (extra="ignore")
+        # 多余字段被忽略（extra="ignore"），不应抛 exception
         citation = Citation(url="https://example.com", unknown_field="test")
         assert citation.url == "https://example.com"
 

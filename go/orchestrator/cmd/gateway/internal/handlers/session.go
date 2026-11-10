@@ -132,6 +132,7 @@ type SessionSummary struct {
 	LatestTaskStatus string `json:"latest_task_status,omitempty"`
 
 	// Research detection (computed from first task)
+	// 研究 task 判定（根据首个 task 计算）。
 	IsResearchSession bool   `json:"is_research_session"`
 	FirstTaskMode     string `json:"first_task_mode,omitempty"`
 }
@@ -205,6 +206,7 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Note: Access control enforced in query (user_id and tenant_id WHERE clauses)
+	// 注意：访问控制已写入查询条件（user_id 与 tenant_id 的 WHERE 子句）。
 
 	// Parse context JSON first to get external_id if present
 	var contextData map[string]interface{}
@@ -213,9 +215,11 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get task count for this session from task_executions (check both UUID and external_id)
+	// 从 task_executions 统计该 session 的 task 数（同时按 UUID 和 external_id 查）。
 	var taskCount int
 	if extID, ok := contextData["external_id"].(string); ok && extID != "" {
 		// Session has external_id, check both session.ID and external_id
+		// session 有 external_id 时，同时按 session.ID 和 external_id 查询。
 		err = h.db.GetContext(ctx, &taskCount, `
 			SELECT COUNT(*) FROM task_executions
 			WHERE (session_id = $1 OR session_id = $2) AND user_id = $3 AND tenant_id = $4
@@ -238,6 +242,9 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 	// session.TokensUsed into Redis, so the DB is the only path that
 	// guarantees cache cost shows up here. Redis is used only as a
 	// fallback while a session has no completed task rows yet.
+	// 优先使用 task_executions 的聚合结果：它累加 cache_aware_total_tokens，能反映包含 prompt cache 的真实 session 成本。
+	// 许多 workflow 仍把未含 cache 的 session.TokensUsed 写入 Redis，因此只有 DB 这条路径能保证 cache 成本被计入；
+	// Redis 仅在 session 尚无已完成 task 记录时作为兜底。
 	tokensUsed := 0
 	{
 		var aggregatedTokens int
@@ -260,8 +267,10 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 
 	// Fallback to Redis real-time counter when DB has no rows yet.
 	// Note: Don't use session.TokensUsed - it's not reliably updated.
+	// DB 还没有记录时，退回 Redis 的实时计数器。注意：不要用 session.TokensUsed——它并不保证被更新。
 	if tokensUsed == 0 && h.redis != nil {
 		// Try both possible Redis keys: the input sessionID and any external_id
+		// 依次尝试两种 Redis key：传入的 sessionID 以及可能的 external_id。
 		keysToTry := []string{fmt.Sprintf("session:%s", sessionID)}
 		if extID, ok := contextData["external_id"].(string); ok && extID != "" {
 			keysToTry = append(keysToTry, fmt.Sprintf("session:%s", extID))
@@ -282,12 +291,14 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 
 	// Check if this is a research session
 	// Priority: session.context (set at session creation) > first task's metadata
+	// 判断是否为研究 task：优先级为 session.context（创建时写入）> 首个 task 的 metadata。
 	isResearchSession := false
 	researchStrategy := ""
 	foundResearchInContext := false
 	foundStrategyInContext := false
 
 	// Check session context first (more reliable)
+	// 先看 session context（更可靠）。
 	if fr, ok := contextData["force_research"].(bool); ok && fr {
 		isResearchSession = true
 		foundResearchInContext = true
@@ -298,6 +309,7 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fall back to first task's metadata for any fields not found in session context
+	// session context 中缺失的字段，回退到首个 task 的 metadata。
 	if !foundResearchInContext || !foundStrategyInContext {
 		var firstTaskMetadata sql.NullString
 		if extID, ok := contextData["external_id"].(string); ok && extID != "" {
@@ -386,6 +398,7 @@ func (h *SessionHandler) GetSessionHistory(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Verify session exists and user has access (also get id and external_id for task query)
+	// 校验 session 存在且用户有访问权（同时取出 id 和 external_id 供 task 查询使用）。
 	var sessionData struct {
 		ID         string  `db:"id"`
 		UserID     string  `db:"user_id"`
@@ -411,6 +424,7 @@ func (h *SessionHandler) GetSessionHistory(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Query all tasks for this session (check both UUID and external_id with user_id and tenant_id filter)
+	// 查询该 session 的所有 task（同时按 UUID 和 external_id 匹配，并带上 user_id 与 tenant_id 过滤）。
 	var rows *sqlx.Rows
 	if sessionData.ExternalID != nil && *sessionData.ExternalID != "" {
 		// Session has external_id, check both session.ID and external_id
@@ -550,6 +564,7 @@ func (h *SessionHandler) GetSessionHistory(w http.ResponseWriter, r *http.Reques
 
 // GetSessionEvents handles GET /api/v1/sessions/{sessionId}/events
 // Returns grouped turns (one per task) including full events per turn.
+// GetSessionEvents 处理 GET /api/v1/sessions/{sessionId}/events，返回按 task 分组的多轮对话，每轮包含完整 event。
 func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -706,6 +721,7 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 	if len(wfIDs) > 0 {
 		// Safe IN expansion using sqlx.In and rebind for Postgres
 		// Conditionally include payload based on query parameter
+		// 用 sqlx.In 安全展开 IN 条件并对 Postgres 重新绑定；payload 是否返回由查询参数决定。
 		baseQuery := `
             SELECT workflow_id, type, COALESCE(agent_id,''), COALESCE(message,''), timestamp, COALESCE(seq,0), COALESCE(stream_id,'')`
 		if includePayload {
@@ -722,6 +738,7 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 			return
 		}
 		// Force PostgreSQL-style bindvars for predictable queries
+		// 强制使用 PostgreSQL 风格的占位符，保证查询行为可预期。
 		inQuery = sqlx.Rebind(sqlx.DOLLAR, inQuery)
 
 		rows, qerr := h.db.QueryxContext(ctx, inQuery, args...)
@@ -732,6 +749,7 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 		}
 		defer rows.Close()
 		// Safety: cap total events to avoid excessive memory usage per request
+		// 安全上限：单次 request 的 event 总数封顶，避免占用过多内存。
 		const maxEventsPerRequest = 5000
 		totalEvents := 0
 		for rows.Next() {
@@ -772,6 +790,7 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 		evs := eventsByWF[t.WorkflowID]
 		// Final output fallback: result -> first LLM_OUTPUT message -> ""
 		// Exclude title_generator agent as its output is the session title, not task result
+		// 最终输出兜底顺序：result → 首条 LLM_OUTPUT 消息 → 空串；排除 title_generator agent，它的输出是 session 标题而非 task 结果。
 		final := strings.TrimSpace(t.Result.String)
 		if final == "" {
 			for _, e := range evs {
@@ -923,6 +942,8 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	// Note: task_executions.session_id is VARCHAR, sessions.id is UUID - match by id or external_id
 	// Aggregate tokens_used from task_executions (more accurate than sessions.tokens_used which may not be updated).
 	// cache_aware_total_tokens (migration 121) reflects true cost incl. prompt cache.
+	// 查询该用户的 session。注意：task_executions.session_id 是 VARCHAR，sessions.id 是 UUID，需按 id 或 external_id 匹配；
+	// token 用量从 task_executions 聚合（比可能未更新的 sessions.tokens_used 更准确）；cache_aware_total_tokens（migration 121）含 prompt cache，反映真实成本。
 	rows, err := h.db.QueryxContext(ctx, `
         SELECT
             s.id,
@@ -1039,6 +1060,7 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		if sess.LastActivityAt.Valid {
 			summary.LastActivityAt = &sess.LastActivityAt.Time
 			// Consider active if last activity within 24 hours
+			// 最近 24 小时内有 activity 即视为活跃。
 			summary.IsActive = time.Since(sess.LastActivityAt.Time) < 24*time.Hour
 		}
 
@@ -1073,8 +1095,10 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 		// Research detection - check session context first, then fall back to first task mode
 		// Priority: session.context.first_task_mode > session.context.role > task_executions.mode
+		// 研究 task 判定：先看 session context，再回退到首个 task 的 mode；优先级为 session.context.first_task_mode > session.context.role > task_executions.mode。
 		if summary.Context != nil {
 			// Check for first_task_mode in session context (set by backend when session created)
+			// 检查 session context 中的 first_task_mode（后端创建 session 时写入）。
 			if ftm, ok := summary.Context["first_task_mode"].(string); ok && ftm != "" {
 				summary.FirstTaskMode = ftm
 			} else if role, ok := summary.Context["role"].(string); ok && role != "" {
@@ -1090,6 +1114,7 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 		isResearch := false
 		// Check session context for research flags first (more reliable than task metadata)
+		// 先检查 session context 中的研究标记（比 task metadata 更可靠）。
 		if summary.Context != nil {
 			if fr, ok := summary.Context["force_research"].(bool); ok && fr {
 				isResearch = true
@@ -1143,12 +1168,16 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		// Prepare keys for MGET using the canonical session ID.
 		// For list view, we only use "session:<uuid>" to keep the call efficient.
 		// External IDs are still honored for per-session views (GetSession / history / events).
+		// 用规范 session ID 准备 MGET 的 key。列表视图只用 "session:<uuid>" 以保证效率；
+		// 单 session 视图（GetSession / history / events）仍会识别 external_id。
 		var keys []string
 		for _, s := range sessions {
 			keys = append(keys, fmt.Sprintf("session:%s", s.SessionID))
 			// We don't have external_id in SessionSummary easily available without parsing context
 			// For list view, we'll stick to session ID for now to keep it efficient.
 			// If external_id is critical for token counts in list view, we'd need to fetch it.
+			// 列表视图拿不到 external_id（需要解析 context 才有），因此这里只用 session ID；
+			// 若列表视图的 token 统计必须覆盖 external_id，需要额外查询。
 		}
 
 		// Execute MGET
@@ -1242,6 +1271,7 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Sanitize title: strip control characters (newlines, tabs, zero-width chars, etc.)
+	// 清洗标题：去掉控制字符（换行、制表符、零宽字符等）。
 	title = strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) || r == '\u200B' || r == '\uFEFF' {
 			return -1 // Remove control characters, zero-width space, and BOM
@@ -1256,6 +1286,7 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Check character count (runes) not byte count to match truncation logic
+	// 按 rune 而非字节计数，与截断逻辑保持一致。
 	if len([]rune(title)) > 60 {
 		h.sendError(w, "Title must be 60 characters or less", http.StatusBadRequest)
 		return
@@ -1307,6 +1338,7 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Update database (with deleted_at guard for race hardening)
+	// 更新数据库（带 deleted_at 条件，缓解并发竞态）。
 	_, err = h.db.ExecContext(ctx, `
 		UPDATE sessions
 		SET context = $1, updated_at = NOW()
@@ -1323,8 +1355,10 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 
 	// Also update Redis cache if available (best-effort)
 	// Session manager may store sessions under different keys depending on how they were created
+	// 同时尽力更新 Redis cache；session manager 可能按创建方式使用不同的 key。
 	if h.redis != nil {
 		// Try multiple possible Redis keys: input sessionID, DB UUID, and external_id
+		// 依次尝试可能的 Redis key：传入的 sessionID、DB 中的 UUID 以及 external_id。
 		keysToTry := []string{
 			fmt.Sprintf("session:%s", sessionID),  // Original input (could be UUID or external_id)
 			fmt.Sprintf("session:%s", session.ID), // Database UUID
@@ -1351,6 +1385,7 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 			}
 
 			// Update context in Redis session (lowercase "context" to match Session struct)
+			// 更新 Redis session 中的 context（键名用小写 "context" 以匹配 Session 结构体）。
 			if redisCtx, ok := redisSession["context"].(map[string]interface{}); ok {
 				redisCtx[SessionContextKeyTitle] = title
 			} else {
@@ -1358,6 +1393,7 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 			}
 
 			// Write back to Redis with KeepTTL to preserve expiration
+			// 用 KeepTTL 写回 Redis，保留原有过期时间。
 			if updatedData, err := json.Marshal(redisSession); err != nil {
 				h.logger.Warn("Failed to marshal updated Redis session",
 					zap.String("redis_key", redisKey),
@@ -1406,6 +1442,7 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract session ID (accepts both UUID and external_id for consistency)
+	// 取出 session ID（为保持一致，同时接受 UUID 和 external_id）。
 	sessionID := r.PathValue("sessionId")
 	if sessionID == "" {
 		h.sendError(w, "Session ID is required", http.StatusBadRequest)
@@ -1413,6 +1450,7 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Ownership check and fetch canonical/id mapping (do not filter on deleted_at to keep idempotency)
+	// 校验归属并取出 canonical ID / id 映射（不过滤 deleted_at，以保持幂等）。
 	var sessMeta struct {
 		ID         string  `db:"id"`
 		UserID     string  `db:"user_id"`
@@ -1450,6 +1488,7 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 
 	// Resolve workspace key using same logic as file APIs (workspace.go:279-302)
 	// CRITICAL: workspace paths use external_id if present, not session UUID
+	// 用与文件 API 相同的逻辑解析 workspace key（workspace.go:279-302）。关键：workspace 路径使用 external_id（若存在），而不是 session UUID。
 	workspaceKey := sessMeta.ID
 	if sessMeta.ExternalID != nil && strings.TrimSpace(*sessMeta.ExternalID) != "" {
 		workspaceKey = strings.TrimSpace(*sessMeta.ExternalID)
@@ -1457,6 +1496,7 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 
 	// SECURITY: Validate workspaceKey and ensure path can't escape base dir
 	// (external_id isn't validated at DB write time - reuse workspace.go guardrails)
+	// 安全：校验 workspaceKey，确保路径无法逃出基目录（external_id 在写入 DB 时未做校验，因此复用 workspace.go 的防护）。
 	workspacePath, err := h.buildWorkspacePath(workspaceKey)
 	if err != nil {
 		h.logger.Warn("Invalid workspace key, skipping cleanup",
@@ -1477,6 +1517,7 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	// Clear Redis cache for this session (best-effort)
 	if h.redis != nil {
 		// Try all possible keys: original input, DB UUID, and external_id (if present)
+		// 尝试所有可能的 key：原始输入、DB 中的 UUID 以及 external_id（若有）。
 		keys := []string{fmt.Sprintf("session:%s", sessionID), fmt.Sprintf("session:%s", sessMeta.ID)}
 		if sessMeta.ExternalID != nil && *sessMeta.ExternalID != "" {
 			keys = append(keys, fmt.Sprintf("session:%s", *sessMeta.ExternalID))
@@ -1494,6 +1535,7 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 
 // buildWorkspacePath validates the workspace key and builds a safe path.
 // Uses same guardrails as workspace.go to prevent path traversal.
+// buildWorkspacePath 校验 workspace key 并构造安全路径，沿用 workspace.go 的防护以避免路径穿越。
 func (h *SessionHandler) buildWorkspacePath(workspaceKey string) (string, error) {
 	if err := validateSessionWorkspaceID(workspaceKey); err != nil {
 		return "", err
@@ -1515,6 +1557,7 @@ func (h *SessionHandler) buildWorkspacePath(workspaceKey string) (string, error)
 
 // validateSessionWorkspaceID validates that a session ID is safe for use in paths.
 // Replicates validation from workspace.go:validateWorkspaceSessionID.
+// validateSessionWorkspaceID 校验 session ID 可安全用于路径，规则与 workspace.go:validateWorkspaceSessionID 一致。
 func validateSessionWorkspaceID(sessionID string) error {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
@@ -1537,6 +1580,7 @@ func validateSessionWorkspaceID(sessionID string) error {
 }
 
 // cleanupWorkspace calls the Firecracker executor to clean up workspace files.
+// cleanupWorkspace 调用 Firecracker executor 清理 workspace 文件。
 func (h *SessionHandler) cleanupWorkspace(ctx context.Context, sessionID, workspacePath string) error {
 	reqBody, err := json.Marshal(map[string]string{
 		"session_id":     sessionID,

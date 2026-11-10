@@ -23,9 +23,12 @@ import "testing"
 // }
 
 // Placeholder test to prevent empty test file error
+// 占位测试，避免空的测试文件报错
 func TestPlaceholder(t *testing.T) {
 	// This test exists to prevent "no tests to run" error
 	// Real Redis Streams tests should be added here
+	// 该测试用于避免 "no tests to run" 错误
+	// 真正的 Redis Streams 测试应加在此处
 	t.Skip("Redis Streams tests to be implemented")
 }
 
@@ -43,6 +46,7 @@ func TestManagerReplayIntegration(t *testing.T) {
 		m.Publish(wf, Event{WorkflowID: wf})
 	}
 	// Next publish increments seq; replay since 3 should return seq 4..6 depending on internal assignment
+	// 下一次 publish 会递增 seq；since 3 的回放应返回 seq 4..6，取决于内部分配
 	evs := m.ReplaySince(wf, 3)
 	for _, e := range evs {
 		if e.Seq <= 3 {

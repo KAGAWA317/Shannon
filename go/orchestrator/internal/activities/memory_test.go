@@ -80,6 +80,7 @@ func initializeTestServices() {
 // TestChunkingPipeline tests the full chunking pipeline from write to retrieval
 func TestChunkingPipeline(t *testing.T) {
 	// Create a long answer that should trigger chunking
+	// 构造一个足够长、应触发 chunking 的 answer
 	longAnswer := generateLongText(5000) // ~5000 tokens
 
 	tests := []struct {
@@ -238,6 +239,7 @@ func TestDeterministicChunkIDs(t *testing.T) {
 	chunks1 := result1.ChunksCreated
 
 	// Second write (should be idempotent)
+	// 第二次写入（应保持幂等）
 	result2, err := recordQueryCore(ctx, input)
 	require.NoError(t, err)
 	require.True(t, result2.Stored)
@@ -247,6 +249,7 @@ func TestDeterministicChunkIDs(t *testing.T) {
 	assert.Equal(t, chunks1, chunks2)
 
 	// Verify no duplicates in storage by retrieving
+	// 通过检索验证存储中没有重复
 	fetchInput := FetchSemanticMemoryInput{
 		Query:     "Test idempotency",
 		SessionID: sessionID,
@@ -266,12 +269,14 @@ func TestBatchEmbeddingEfficiency(t *testing.T) {
 	ctx := context.Background()
 
 	// Mock embedding service to count calls
+	// mock embedding service 以统计调用次数
 	mockEmbedding := &mockEmbeddingService{
 		singleCalls: 0,
 		batchCalls:  0,
 	}
 
 	// Replace global embedding service temporarily
+	// 临时替换全局 embedding service
 	oldService := embeddings.Get()
 	embeddings.Initialize(embeddings.Config{
 		BaseURL:      "http://mock",
@@ -391,10 +396,12 @@ func TestChunkOverlapCorrectness(t *testing.T) {
 		next := chunks[i+1].Text
 
 		// The end of current chunk should appear at the beginning of next chunk
+		// 当前 chunk 的结尾应出现在下一个 chunk 的开头
 		overlapSize := 20 // Based on our config
 		currentEnd := current[len(current)-overlapSize:]
 
 		// Some overlap should exist (not exact due to tokenization)
+		// 应存在一定重叠（因 tokenization 不会完全精确）
 		assert.True(t, strings.Contains(next, currentEnd[:10]),
 			"Chunks should have overlap")
 	}
@@ -413,6 +420,7 @@ func TestDimensionValidation(t *testing.T) {
 
 	err := vectordb.ValidateAndInitialize(cfg)
 	// This will fail in unit tests without real Qdrant, but tests the flow
+	// 在没有真实 Qdrant 的单元测试中会失败，但可验证流程
 	if err != nil {
 		assert.Contains(t, err.Error(), "dimension") // Should mention dimensions
 	}
@@ -479,6 +487,7 @@ func TestConfigurableSummaryLimits(t *testing.T) {
 
 func generateLongText(tokens int) string {
 	// Approximate 1 token = 4 characters
+	// 近似认为 1 token = 4 个字符
 	chars := tokens * 4
 	base := "This is a test sentence that will be repeated many times. "
 	repeats := chars / len(base)
@@ -501,6 +510,7 @@ func calculateDiversity(items []string) float64 {
 	}
 
 	// Simple diversity metric: average string difference
+	// 简单的多样性指标：字符串差异的平均值
 	totalDiff := 0.0
 	comparisons := 0
 
@@ -520,6 +530,7 @@ func calculateDiversity(items []string) float64 {
 
 func stringDifference(s1, s2 string) float64 {
 	// Simple character-based difference
+	// 简单的基于字符的差异计算
 	maxLen := len(s1)
 	if len(s2) > maxLen {
 		maxLen = len(s2)

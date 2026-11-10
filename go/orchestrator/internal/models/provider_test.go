@@ -42,6 +42,7 @@ func TestDetectProvider(t *testing.T) {
 		{"XAI Grok 4.20 Reasoning", "grok-4.20-0309-reasoning", "xai"},
 
 		// Llama/Meta models - should map to "ollama" (local deployment)
+		// Llama/Meta 模型——应映射为 "ollama"（本地部署）
 		{"Llama 3.2", "llama-3.2-3b", "ollama"},
 		{"Llama 4 Scout", "llama-4-scout", "ollama"},
 		{"Llama 3.1", "llama-3.1-405b", "ollama"},
@@ -88,6 +89,8 @@ func TestDetectProvider(t *testing.T) {
 func TestDetectProvider_LlamaConsistency(t *testing.T) {
 	// Critical test: all llama models should return "ollama" (not "meta")
 	// This ensures consistency across the codebase
+	// 关键测试：所有 llama 模型都应返回 "ollama"（而非 "meta"）
+	// 以保证代码库内的一致性
 	llamaModels := []string{
 		"llama-3.2-3b",
 		"llama-4-scout",

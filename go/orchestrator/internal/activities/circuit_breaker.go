@@ -8,6 +8,7 @@ import (
 )
 
 // CircuitBreakerState represents the current state of the circuit breaker
+// CircuitBreakerState 表示 circuit breaker 的当前状态。
 type CircuitBreakerState int
 
 const (
@@ -17,6 +18,7 @@ const (
 )
 
 // CircuitBreaker implements a simple circuit breaker pattern for database queries
+// CircuitBreaker 为数据库查询实现了一个简单的 circuit breaker 模式。
 type CircuitBreaker struct {
 	mu              sync.RWMutex
 	state           CircuitBreakerState
@@ -31,6 +33,7 @@ type CircuitBreaker struct {
 }
 
 // NewCircuitBreaker creates a new circuit breaker with default settings
+// NewCircuitBreaker 用默认参数创建 circuit breaker。
 func NewCircuitBreaker() *CircuitBreaker {
 	return &CircuitBreaker{
 		state:           StateClosed,
@@ -41,13 +44,16 @@ func NewCircuitBreaker() *CircuitBreaker {
 }
 
 // ErrCircuitOpen is returned when the circuit breaker is open
+// circuit breaker 处于 open 状态时返回 ErrCircuitOpen。
 var ErrCircuitOpen = errors.New("circuit breaker is open")
 
 // Call executes the function with circuit breaker protection
+// Call 在 circuit breaker 保护下执行给定函数。
 func (cb *CircuitBreaker) Call(ctx context.Context, fn func(context.Context) error) error {
 	cb.mu.Lock()
 
 	// Check if we should transition from Open to Half-Open
+	// 判断是否应从 Open 切换到 Half-Open。
 	if cb.state == StateOpen {
 		if time.Since(cb.lastFailureTime) > cb.resetTimeout {
 			cb.state = StateHalfOpen
@@ -61,6 +67,7 @@ func (cb *CircuitBreaker) Call(ctx context.Context, fn func(context.Context) err
 	cb.mu.Unlock()
 
 	// Execute the function
+	// 执行函数。
 	err := fn(ctx)
 
 	cb.mu.Lock()
@@ -102,6 +109,7 @@ func (cb *CircuitBreaker) onFailure() {
 }
 
 // GetState returns the current state of the circuit breaker
+// GetState 返回 circuit breaker 当前状态。
 func (cb *CircuitBreaker) GetState() CircuitBreakerState {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
@@ -109,6 +117,7 @@ func (cb *CircuitBreaker) GetState() CircuitBreakerState {
 }
 
 // Reset manually resets the circuit breaker
+// Reset 手动重置 circuit breaker。
 func (cb *CircuitBreaker) Reset() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
@@ -118,9 +127,11 @@ func (cb *CircuitBreaker) Reset() {
 }
 
 // Global circuit breaker for database operations
+// 数据库操作使用的全局 circuit breaker。
 var dbCircuitBreaker = NewCircuitBreaker()
 
 // WithCircuitBreaker wraps a database operation with circuit breaker protection
+// WithCircuitBreaker 用 circuit breaker 包住一次数据库操作。
 func WithCircuitBreaker(ctx context.Context, operation func(context.Context) error) error {
 	return dbCircuitBreaker.Call(ctx, operation)
 }

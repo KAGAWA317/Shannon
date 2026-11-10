@@ -21,6 +21,7 @@ type EmbeddingCache interface {
 }
 
 // LocalLRU is a simple in-process LRU with TTL
+// LocalLRU 是简单的进程内 LRU（带 TTL）
 type LocalLRU struct {
 	mu   sync.Mutex
 	cap  int
@@ -101,6 +102,7 @@ func (r *RedisCache) Get(ctx context.Context, key string) ([]float32, bool) {
 		return nil, false
 	}
 	// decode bytes as float32 slice (naive 4-byte chunks)
+	// 把字节解码为 float32 切片（按 4 字节朴素切分）
 	if len(b)%4 != 0 {
 		return nil, false
 	}
@@ -131,3 +133,6 @@ func MakeKey(model, text string) string {
 // unsafePointer is a local alias to avoid importing unsafe at top-level API points
 // We keep the unsafe usage contained inside the cache serialization only.
 // Note: unsafe conversions are limited to cache serialization/deserialization.
+// unsafePointer 是本地别名，避免在顶层 API 处引入 unsafe
+// 把 unsafe 的使用限制在 cache 序列化内部。
+// 注意：unsafe 转换仅限 cache 的序列化/反序列化。

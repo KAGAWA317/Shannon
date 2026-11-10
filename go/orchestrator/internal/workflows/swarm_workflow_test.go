@@ -20,6 +20,7 @@ import (
 // publish_data, and request_help do NOT increment consecutiveNonToolActions.
 // Before the fix, 3 consecutive collaborative actions incorrectly triggered
 // convergence detection and terminated the agent.
+// 回归点：send_message / publish_data / request_help 属于协作进展，不能计入"连续无 tool"的收敛判据。
 func TestCollaborativeActionsDoNotTriggerConvergence(t *testing.T) {
 	testSuite := &testsuite.WorkflowTestSuite{}
 	env := testSuite.NewTestWorkflowEnvironment()
@@ -87,6 +88,7 @@ func TestCollaborativeActionsDoNotTriggerConvergence(t *testing.T) {
 	assert.True(t, result.Success)
 	assert.Equal(t, "completed after collaboration", result.Response)
 	// Agent ran all 5 iterations (4 send_message + 1 done), NOT stopped at iteration 3
+	// 若被误判收敛会在第 3 轮终止，这里断言跑满 5 轮。
 	assert.Equal(t, 5, result.Iterations)
 }
 
@@ -223,6 +225,7 @@ func TestPublishDataDoesNotTriggerConvergence(t *testing.T) {
 
 // TestMailboxSinceSeqIncrementsPerIteration verifies that FetchAgentMessages
 // is called with increasing SinceSeq values so messages aren't re-read.
+// 用递增的 SinceSeq 做游标，避免每轮重复拉取同一条消息。
 func TestMailboxSinceSeqIncrementsPerIteration(t *testing.T) {
 	testSuite := &testsuite.WorkflowTestSuite{}
 	env := testSuite.NewTestWorkflowEnvironment()
@@ -320,6 +323,7 @@ func TestMailboxSinceSeqIncrementsPerIteration(t *testing.T) {
 // TestIdleSignalCarriesResultSummary verifies that when a swarm agent does
 // done→idle, the savedDoneResponse is preserved and returned on shutdown.
 // This proves the idle signal pipeline carries result_summary to the parent.
+// done 在 swarm 下被改写为 idle，回复要先存起来，shutdown 时再作为结果返回。
 func TestIdleSignalCarriesResultSummary(t *testing.T) {
 	testSuite := &testsuite.WorkflowTestSuite{}
 	env := testSuite.NewTestWorkflowEnvironment()
@@ -394,6 +398,7 @@ func TestIdleSignalCarriesResultSummary(t *testing.T) {
 // TestSavedDoneResponseClearedOnReassignment verifies that when an agent
 // gets a new task after being idle, the old savedDoneResponse is cleared.
 // This prevents stale results from being returned on subsequent shutdown.
+// 重新派活时必须清掉旧回复，否则下次 shutdown 会返回上一个 task 的结果。
 func TestSavedDoneResponseClearedOnReassignment(t *testing.T) {
 	testSuite := &testsuite.WorkflowTestSuite{}
 	env := testSuite.NewTestWorkflowEnvironment()
@@ -487,6 +492,7 @@ func TestSavedDoneResponseClearedOnReassignment(t *testing.T) {
 // TestAgentRolePropagatedToResult verifies that AgentLoopResult carries the
 // Role from AgentLoopInput through all return paths. This ensures the role
 // flows through to AgentExecutionResult during synthesis conversion.
+// role 要一路带到 AgentExecutionResult，合成阶段靠它区分 agent 职责。
 func TestAgentRolePropagatedToResult(t *testing.T) {
 	testSuite := &testsuite.WorkflowTestSuite{}
 	env := testSuite.NewTestWorkflowEnvironment()
@@ -749,6 +755,7 @@ func TestErrorPropagationInResultSummary(t *testing.T) {
 func TestLooksLikeToolJSON(t *testing.T) {
 	// looksLikeToolJSON is deliberately narrow — only catches file_write blobs
 	// and raw action JSON, not arbitrary JSON which may contain valid structured results.
+	// 判定刻意收窄：只拦 file_write 大块内容与裸 action JSON，合法结构化结果不能被误删。
 	longContent := strings.Repeat("x", 501)
 	tests := []struct {
 		name   string
@@ -783,6 +790,7 @@ func TestLooksLikeToolJSON(t *testing.T) {
 func TestSpawnAgentLeadActionFieldDefaults(t *testing.T) {
 	// Verify LeadAction zero-value defaults for spawn_agent.
 	// Regression guard: if fields are renamed or removed, this fails at compile time.
+	// 编译期护栏：字段改名/删除会直接让这个测试编译失败。
 	action := activities.LeadAction{
 		Type: "spawn_agent",
 	}
@@ -882,6 +890,7 @@ func TestAgentTaskMapTracking(t *testing.T) {
 func TestReassignmentMaxIterations(t *testing.T) {
 	// B1: With maxReassignments=2 and maxTotalIterations=80,
 	// the maximum iterations after 2 reassignments should be 80 (50 + 15 + 15).
+	// 每次重新派活 +15 轮，总量封顶 80，防止 agent 被无限续命。
 	input := AgentLoopInput{
 		MaxIterations: 50,
 	}
@@ -909,6 +918,7 @@ func TestReassignmentMaxIterations(t *testing.T) {
 
 func TestHasAssignablePendingTask(t *testing.T) {
 	// B2: Only unblocked pending tasks should count as "assignable"
+	// 只有依赖已满足的 pending task 才算可派，否则 Lead 会派给跑不动的 agent。
 	tests := []struct {
 		name     string
 		tasks    []activities.SwarmTask
@@ -1022,6 +1032,7 @@ func TestIsSearchSaturated(t *testing.T) {
 
 // TestConvertHistoryForLead verifies session history truncation and formatting
 // for Lead multi-turn context injection.
+// 只保留最近 6 条，assistant 长回复截断到约 800 字符，控制 Lead 的 context 体积。
 func TestConvertHistoryForLead(t *testing.T) {
 	tests := []struct {
 		name            string

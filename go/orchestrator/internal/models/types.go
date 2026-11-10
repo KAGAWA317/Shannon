@@ -38,6 +38,7 @@ type TaskRequest struct {
 }
 
 // TaskResponse represents the result of task execution
+// TaskResponse 表示 task 执行的结果
 type TaskResponse struct {
 	TaskID  string            `json:"task_id"`
 	Status  string            `json:"status"`
@@ -47,6 +48,7 @@ type TaskResponse struct {
 }
 
 // ComplexityScore represents the analyzed complexity of a task
+// ComplexityScore 表示 task 分析后的复杂度
 type ComplexityScore struct {
 	Mode             string      `json:"mode"`
 	Score            float64     `json:"score"`
@@ -59,6 +61,7 @@ type ComplexityScore struct {
 }
 
 // AgentTask represents a task for a single agent
+// AgentTask 表示交给单个 agent 的 task
 type AgentTask struct {
 	AgentID      string   `json:"agent_id"`
 	TaskID       string   `json:"task_id"`
@@ -69,6 +72,7 @@ type AgentTask struct {
 }
 
 // AgentResult represents the result from an agent execution
+// AgentResult 表示 agent 执行返回的结果
 type AgentResult struct {
 	AgentID string            `json:"agent_id"`
 	TaskID  string            `json:"task_id"`
@@ -111,6 +115,7 @@ type SessionContext struct {
 }
 
 // TaskSummary provides a summary of a task
+// TaskSummary 提供 task 的摘要
 type TaskSummary struct {
 	TaskID      string      `json:"task_id"`
 	Query       string      `json:"query"`

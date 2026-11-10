@@ -6,6 +6,7 @@ import (
 )
 
 // compactTokens formats a token count into a compact human form, e.g. 14800 -> "14.8k".
+// compactTokens 把 token 数格式化成紧凑的可读形式，如 14800 -> "14.8k"。
 func compactTokens(tokens int) string {
 	if tokens < 1000 {
 		return fmt.Sprintf("%d", tokens)
@@ -19,6 +20,7 @@ func compactTokens(tokens int) string {
 }
 
 // msgTruncate shortens a string for display, adding ellipsis if needed.
+// msgTruncate 把字符串截短用于展示，必要时加省略号。
 func msgTruncate(s string, maxLen int) string {
 	return truncateQuery(s, maxLen)
 }
@@ -123,6 +125,7 @@ func MsgAgentWorking(agentName string) string {
 // -----------------------------------------------------------------------------
 
 // MsgProgress reports step progress.
+// MsgProgress 上报步骤进度，step/total 越界时会先夹到合法区间。
 func MsgProgress(step, total int) string {
 	if total <= 0 {
 		total = 1
@@ -288,6 +291,7 @@ func MsgToolCompleted(toolName string, response string) string {
 	}
 
 	// Extract first meaningful line or sentence
+	// 取第一行有意义的内容作为摘要。
 	summary := extractSummary(response, 80)
 	if summary == "" {
 		return fmt.Sprintf("%s done", humanizeToolName(toolName))
@@ -302,6 +306,7 @@ func MsgToolFailed(toolName string) string {
 }
 
 // humanizeToolName converts tool_name to "Tool Name" format.
+// humanizeToolName 把 tool_name 转成 "Tool Name" 这种可读形式。
 func humanizeToolName(toolName string) string {
 	switch toolName {
 	case "web_search":
@@ -400,6 +405,7 @@ func humanizeAction(action string) string {
 		return "requesting help"
 	default:
 		// For tool-specific actions like "web_search", "file_write"
+		// tool 类动作（如 "web_search"、"file_write"）交给 humanizeToolName 处理。
 		return humanizeToolName(action)
 	}
 }
@@ -446,26 +452,32 @@ func MsgResearchConfirmed() string { return "Got it — starting research" }
 func MsgResearchTimedOut() string { return "Review timed out" }
 
 // extractSummary extracts a brief summary from response text.
+// extractSummary 从 response 文本中提取一句简短摘要。
 func extractSummary(text string, maxLen int) string {
 	// Clean up the text
+	// 先清理文本。
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return ""
 	}
 
 	// Try to get first line that's not empty or a header
+	// 找第一行非空、且不是标题的内容。
 	lines := strings.Split(text, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		// Skip empty lines, headers, and JSON-like content
+		// 跳过空行、标题行与类 JSON 内容。
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "{") {
 			continue
 		}
 		// Found a good line
+		// 找到可用的一行。
 		return truncateQuery(line, maxLen)
 	}
 
 	// Fallback: truncate the whole text
+	// 兜底：直接截断整段文本。
 	return truncateQuery(text, maxLen)
 }
 

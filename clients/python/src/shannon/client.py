@@ -32,6 +32,8 @@ def _parse_timestamp(ts_str: str) -> datetime:
     except ValueError:
         # Handle timestamps with more than 6 decimal places
         # Python's fromisoformat accepts 0-6 decimal places
+        # 处理小数位超过 6 位的 timestamp
+        # Python 的 fromisoformat 只接受 0-6 位小数
         if "." in ts_str:
             # Split into parts
             if "+" in ts_str:
@@ -45,9 +47,11 @@ def _parse_timestamp(ts_str: str) -> datetime:
                 tz = ""
 
             # Split datetime into date+time and microseconds
+            # 把 datetime 拆成日期时间与微秒两部分
             if "." in date_time:
                 base, microseconds = date_time.split(".", 1)
                 # Pad or truncate to 6 digits
+                # 补齐或截断到 6 位
                 if len(microseconds) < 6:
                     microseconds = microseconds.ljust(6, "0")
                 elif len(microseconds) > 6:
@@ -223,6 +227,7 @@ class AsyncShannonClient:
         client = await self._ensure_client()
 
         # Validate before sending
+        # 发送前先校验
         if not isinstance(query, str) or not query.strip():
             raise errors.ValidationError("Query is required", code="400")
         if len(query) > MAX_QUERY_LEN:
@@ -265,6 +270,7 @@ class AsyncShannonClient:
 
             data = response.json()
             # Prefer header workflow ID if present
+            # 如果 header 中带有 workflow ID，则优先使用
             wf_id = response.headers.get("X-Workflow-ID") or data.get("workflow_id") or data.get("task_id")
             sess_id = response.headers.get("X-Session-ID") or session_id
             handle = TaskHandle(
@@ -315,6 +321,7 @@ class AsyncShannonClient:
         client = await self._ensure_client()
 
         # Validate before sending
+        # 发送前先校验
         if not isinstance(query, str) or not query.strip():
             raise errors.ValidationError("Query is required", code="400")
         if len(query) > MAX_QUERY_LEN:
@@ -357,6 +364,7 @@ class AsyncShannonClient:
 
             data = response.json()
             # Prefer header workflow ID if present
+            # 如果 header 中带有 workflow ID，则优先使用
             wf_id = response.headers.get("X-Workflow-ID") or data.get("workflow_id") or data.get("task_id")
             sess_id = response.headers.get("X-Session-ID") or session_id
             handle = TaskHandle(
@@ -414,11 +422,14 @@ class AsyncShannonClient:
                 status = TaskStatusEnum.FAILED
 
             # Parse result (check both result and response fields)
+            # 解析 result（同时检查 result 与 response 字段）
             result = None
             # Prioritize direct result field (current API format)
+            # 优先使用顶层 result 字段（当前 API 格式）
             if data.get("result"):
                 result = data["result"]
             # Fall back to response field for backward compatibility
+            # 回退到 response 字段以兼容旧版本
             elif data.get("response"):
                 if isinstance(data["response"], dict):
                     result = data["response"].get("result")
@@ -699,6 +710,7 @@ class AsyncShannonClient:
             )
 
             # Gateway returns 202 Accepted
+            # Gateway 返回 202 Accepted
             if response.status_code not in (200, 202):
                 self._handle_http_error(response)
 
@@ -739,15 +751,18 @@ class AsyncShannonClient:
             )
 
             # Gateway returns 202 Accepted for async operations
+            # 异步操作由 Gateway 返回 202 Accepted
             if response.status_code not in (200, 202):
                 self._handle_http_error(response)
 
             # Handle empty response body (202 Accepted may have no body)
+            # 处理空 response body（202 Accepted 可能没有 body）
             try:
                 data = response.json()
                 return data.get("success", False)
             except (json.JSONDecodeError, ValueError):
                 # Empty or malformed response - default to True for successful status codes
+                # response 为空或格式错误时，状态码成功则默认返回 True
                 return True
 
         except httpx.HTTPError as e:
@@ -787,11 +802,13 @@ class AsyncShannonClient:
                 self._handle_http_error(response)
 
             # Handle empty response body (202 Accepted may have no body)
+            # 处理空 response body（202 Accepted 可能没有 body）
             try:
                 data = response.json()
                 return data.get("success", False)
             except (json.JSONDecodeError, ValueError):
                 # Empty or malformed response - default to True for successful status codes
+                # response 为空或格式错误时，状态码成功则默认返回 True
                 return True
 
         except httpx.HTTPError as e:
@@ -1322,6 +1339,7 @@ class AsyncShannonClient:
             history = []
 
             # Gateway returns tasks under "tasks" with started_at/completed_at and total_tokens
+            # Gateway 在 tasks 字段下返回 task，包含 started_at/completed_at 与 total_tokens
             for item in data.get("tasks", []):
                 created_at_val = item.get("started_at") or item.get("created_at")
                 history.append(SessionHistoryItem(
@@ -1481,6 +1499,7 @@ class AsyncShannonClient:
             )
 
             # 204 No Content is success
+            # 204 No Content 即视为成功
             if response.status_code not in [200, 204]:
                 self._handle_http_error(response)
 
@@ -2612,6 +2631,7 @@ class AsyncShannonClient:
             s = data.get("skill", data)
 
             # Backend may return PascalCase (Go struct) or lowercase keys
+            # 后端可能返回 PascalCase（Go struct）或小写 key
             def _g(key: str, default=None):
                 return s.get(key, s.get(key[0].upper() + key[1:], default))
 
@@ -3344,6 +3364,7 @@ class AsyncShannonClient:
                 async with httpx.AsyncClient(timeout=sse_timeout) as client:
                     async with client.stream("GET", url, params=params, headers=headers) as response:
                         # Gateway may return 404 (not found) or 400 after completion
+                        # task 完成后 Gateway 可能返回 404（未找到）或 400
                         if response.status_code in (404, 400):
                             break
                         if response.status_code != 200:
@@ -3360,6 +3381,7 @@ class AsyncShannonClient:
                         async for line in response.aiter_lines():
                             if not line:
                                 # Empty line = event boundary
+                                # 空行表示一个 event 的结束
                                 if event_data:
                                     data_str = "\n".join(event_data)
                                     if data_str == "[DONE]":
@@ -3375,11 +3397,13 @@ class AsyncShannonClient:
                                     try:
                                         event_json = json.loads(data_str)
                                         # If server provided event name and no type in JSON, use it
+                                        # 若服务端提供了 event name 且 JSON 中没有 type，则采用该名称
                                         if event_name and isinstance(event_json, dict) and not event_json.get("type"):
                                             event_json["type"] = event_name
                                         event = self._parse_sse_event(event_json, event_id)
 
                                         # Update resume point
+                                        # 更新断点续传位置
                                         if event.stream_id:
                                             last_resume_id = event.stream_id
                                         elif event.seq:
@@ -3408,6 +3432,7 @@ class AsyncShannonClient:
                                 event_data.append(line[5:].strip())
                             elif line.startswith(":"):
                                 # Comment, ignore
+                                # 注释行，忽略
                                 pass
 
                         if event_data:
@@ -3424,6 +3449,7 @@ class AsyncShannonClient:
                                 return
 
                 # Stream ended normally
+                # stream 正常结束
                 break
 
             except (httpx.HTTPError, errors.ConnectionError) as e:
@@ -3434,6 +3460,7 @@ class AsyncShannonClient:
                     )
 
                 # Exponential backoff with absolute timeout check
+                # 指数退避，并检查绝对 timeout
                 retries += 1
                 exp_wait = min(2**retries, 30)
                 if server_retry_ms is not None:
@@ -3512,6 +3539,7 @@ class AsyncShannonClient:
             headers.append(("traceparent", traceparent))
 
         # Timeout handling: websockets.connect has 'open_timeout' and 'close_timeout'
+        # timeout 处理：websockets.connect 提供 open_timeout 与 close_timeout
         connect_kwargs = {}
         if timeout is not None:
             connect_kwargs["open_timeout"] = timeout
@@ -4254,6 +4282,7 @@ class ShannonClient:
                 yield event
 
         # Convert async generator to sync iterator
+        # 将异步生成器转换为同步迭代器
         async_gen = _async_gen()
         try:
             while True:
@@ -4301,11 +4330,13 @@ class ShannonClient:
         try:
             if self._loop is None or self._loop.is_closed():
                 # Run close without persisting a new loop
+                # 在不新建 event loop 的情况下执行 close
                 asyncio.run(self._async_client.close())
             else:
                 self._run(self._async_client.close())
         except RuntimeError:
             # Fallback if asyncio.run() not allowed in current context
+            # 当前 context 不允许 asyncio.run() 时的兜底方案
             self._run(self._async_client.close())
 
     def __enter__(self):

@@ -28,6 +28,7 @@ func checkTokenBudgetStub(ctx context.Context, in activities.BudgetCheckInput) (
 }
 
 // Stub for decomposition to force cognitive strategy
+// 固定返回 react，用来验证 router 会按 CognitiveStrategy 路由到对应子 workflow。
 func decomposeReactStub(ctx context.Context, in activities.DecompositionInput) (activities.DecompositionResult, error) {
 	_ = ctx
 	_ = in
@@ -59,6 +60,7 @@ func TestOrchestratorRoutesToReactWhenStrategySpecified(t *testing.T) {
 	env.RegisterActivityWithOptions(func(ctx context.Context, in activities.PatternMetricsInput) error { return nil }, activity.RegisterOptions{Name: "RecordPatternMetrics"})
 
 	// Register stub for streaming events to avoid ActivityNotRegisteredError
+	// 即使测试不校验 event 也必须注册，否则 activity 调用直接失败。
 	env.RegisterActivityWithOptions(func(ctx context.Context, in activities.EmitTaskUpdateInput) error { return nil }, activity.RegisterOptions{Name: "EmitTaskUpdate"})
 
 	input := TaskInput{Query: "q", UserID: "u", SessionID: "s"}

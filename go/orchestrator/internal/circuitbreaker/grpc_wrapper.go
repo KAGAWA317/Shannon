@@ -40,6 +40,7 @@ func (gw *GRPCWrapper) Execute(ctx context.Context, fn func() error) error {
 	cbErr := gw.cb.Execute(ctx, func() error {
 		originalErr = fn()
 		// Only count server/transient errors toward circuit breaker state
+		// 只有服务端/瞬时错误才计入 circuit breaker 状态
 		if originalErr != nil && isCircuitBreakerError(originalErr) {
 			return originalErr
 		}
@@ -48,6 +49,7 @@ func (gw *GRPCWrapper) Execute(ctx context.Context, fn func() error) error {
 	})
 
 	// Record metrics based on actual error, not circuit breaker decision
+	// 指标按真实错误记录，而不是按 circuit breaker 的放行/拒绝结果记录
 	state := gw.cb.State()
 	var success bool
 	var err error

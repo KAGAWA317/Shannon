@@ -120,6 +120,7 @@ func (mc *MetricsCollector) UpdateMetrics() {
 
 		// Note: Individual request counters are updated in RecordRequest
 		// No need to update them here as they are counters, not gauges
+		// 单次 request 计数已在 RecordRequest 中更新；这里是 counter 而非 gauge，无需重复设置。
 	}
 }
 

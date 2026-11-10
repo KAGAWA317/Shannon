@@ -1,4 +1,5 @@
 //! Guest agent library for unit testing.
+//! 用于单元测试的 guest agent 库。
 
 use serde::{Deserialize, Serialize};
 

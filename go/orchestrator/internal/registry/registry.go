@@ -39,6 +39,7 @@ func NewOrchestratorRegistry(
 }
 
 // RegisterWorkflows registers all workflows based on configuration
+// RegisterWorkflows 按配置注册所有 workflow
 func (r *OrchestratorRegistry) RegisterWorkflows(w worker.Worker) error {
 	r.logger.Info("Registering workflows")
 
@@ -76,6 +77,7 @@ func (r *OrchestratorRegistry) RegisterWorkflows(w worker.Worker) error {
 	r.logger.Info("Registered agent workflow")
 
 	// Swarm agent workflows (persistent multi-turn agents)
+	// Swarm agent workflow（持久化多轮 agent）
 	w.RegisterWorkflow(workflows.SwarmWorkflow)
 	w.RegisterWorkflow(workflows.AgentLoop)
 	r.logger.Info("Registered swarm agent workflows")
@@ -88,6 +90,7 @@ func (r *OrchestratorRegistry) RegisterWorkflows(w worker.Worker) error {
 }
 
 // RegisterActivities registers all activities based on configuration
+// RegisterActivities 按配置注册所有 activity
 func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 	r.logger.Info("Registering activities")
 
@@ -99,6 +102,7 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 	w.RegisterActivity(activities.ExecuteSimpleTask) // Consolidated activity for simple tasks
 	w.RegisterActivity(activities.SynthesizeResults)
 	// LLM-backed synthesis (can be selected via workflow versioning)
+	// 基于 LLM 的汇总（可通过 workflow 版本控制选择）
 	w.RegisterActivity(activities.SynthesizeResultsLLM)
 	// Reflection activity for quality evaluation
 	w.RegisterActivity(acts.EvaluateResult)
@@ -113,8 +117,10 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 	// Claim verification activity (Phase 4)
 	w.RegisterActivityWithOptions(acts.VerifyClaimsActivity, activity.RegisterOptions{Name: "VerifyClaimsActivity"})
 	// Citation Agent activity (post-synthesis citation injection)
+	// Citation Agent activity（汇总后注入引用）
 	w.RegisterActivityWithOptions(acts.AddCitations, activity.RegisterOptions{Name: "AddCitations"})
 	// Citation V2 activities (Deep Research with Verify batch)
+	// Citation V2 activity（带 Verify 批次的 Deep Research）
 	w.RegisterActivityWithOptions(acts.AddCitationsWithVerify, activity.RegisterOptions{Name: "AddCitationsWithVerify"})
 	w.RegisterActivityWithOptions(acts.VerifyBatch, activity.RegisterOptions{Name: "VerifyBatch"})
 	// Configuration activity
@@ -148,6 +154,7 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 	w.RegisterActivity(activities.AuthorizeTeamAction)
 
 	// Forced tool execution (used by auto file_write guard in swarm)
+	// 强制 tool 执行（供 swarm 中的自动 file_write 保护使用）
 	w.RegisterActivity(activities.ExecuteAgentWithForcedTools)
 
 	// P2P mailbox + workspace (receiver methods)
@@ -182,6 +189,7 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 	w.RegisterActivityWithOptions(acts.DecomposeTask, activity.RegisterOptions{Name: constants.DecomposeTaskActivity})
 	w.RegisterActivityWithOptions(acts.RefineResearchQuery, activity.RegisterOptions{Name: constants.RefineResearchQueryActivity})
 	// Legacy activity name for Temporal replay compatibility
+	// 为 Temporal 重放兼容保留的旧 activity 名称
 	w.RegisterActivityWithOptions(acts.AnalyzeComplexity, activity.RegisterOptions{Name: constants.AnalyzeComplexityActivity})
 	w.RegisterActivityWithOptions(acts.UpdateSessionResult, activity.RegisterOptions{
 		Name: constants.UpdateSessionResultActivity,
@@ -206,6 +214,8 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 
 	// Daemon dispatch activity — always registered for Temporal replay safety.
 	// If DaemonHub is nil, the activity returns "not configured" without dispatching.
+	// Daemon 派发 activity——为 Temporal 重放安全始终注册。
+	// DaemonHub 为 nil 时，该 activity 返回 "not configured" 而不派发。
 	daemonActs := scheduled.NewDaemonActivities(r.config.DaemonHub)
 	w.RegisterActivityWithOptions(daemonActs.DaemonDispatchActivity, activity.RegisterOptions{
 		Name: constants.DaemonDispatchActivity,
@@ -243,11 +253,13 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 	}
 
 	// Swarm agent activity (persistent agent loop step)
+	// Swarm agent activity（持久化 agent 循环的单步）
 	w.RegisterActivityWithOptions(activities.AgentLoopStep, activity.RegisterOptions{
 		Name: constants.AgentLoopStepActivity,
 	})
 
 	// Minimal streaming_v1 event emitter (always safe to register)
+	// 最简的 streaming_v1 event 发射器（始终可安全注册）
 	w.RegisterActivityWithOptions(activities.EmitTaskUpdate, activity.RegisterOptions{
 		Name: "EmitTaskUpdate",
 	})
@@ -271,6 +283,8 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 
 	// Persistence activities for agent and tool executions
 	// These use a global dbClient that must be set during initialization
+	// agent 与 tool 执行的持久化 activity
+	// 它们使用初始化时必须设置的全局 dbClient
 	w.RegisterActivity(activities.PersistAgentExecutionStandalone)
 	w.RegisterActivity(activities.PersistToolExecutionStandalone)
 
@@ -312,13 +326,17 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 }
 
 // registerEnterpriseWorkflows is a stub in the open source version.
+// registerEnterpriseWorkflows 在开源版本中是空实现。
 func (r *OrchestratorRegistry) registerEnterpriseWorkflows(w worker.Worker) {
 	// Enterprise workflows (ads research, Sagasu) are not available in OSS.
+	// 企业版 workflow（广告研究、Sagasu）在 OSS 中不可用。
 }
 
 // registerEnterpriseActivities registers enterprise-only activities (stub in open source).
+// registerEnterpriseActivities 注册仅企业版可用的 activity（开源版本为空实现）。
 func (r *OrchestratorRegistry) registerEnterpriseActivities(w worker.Worker) {
 	// Agent executor activity (single-purpose deterministic agents)
+	// Agent executor activity（单一用途的确定性 agent）
 	w.RegisterActivityWithOptions(activities.ExecuteAgentActivity, activity.RegisterOptions{
 		Name: "ExecuteAgentActivity",
 	})

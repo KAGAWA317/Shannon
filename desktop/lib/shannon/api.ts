@@ -10,10 +10,12 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 // =============================================================================
 
 // Auth headers helper - uses API key if available, falls back to JWT token, then X-User-Id for dev
+// auth 请求头辅助函数：优先用 API key，其次 JWT token，开发环境最后回退到 X-User-Id
 function getAuthHeaders(): Record<string, string> {
     const headers: Record<string, string> = {};
 
     // Try API key first (preferred for OSS backend)
+    // 优先尝试 API key（OSS 后端推荐方式）
     const apiKey = getAPIKey();
     if (apiKey) {
         headers["X-API-Key"] = apiKey;
@@ -21,6 +23,7 @@ function getAuthHeaders(): Record<string, string> {
     }
 
     // Try JWT token (for authenticated users without API key)
+    // 尝试 JWT token（适用于无 API key 的已登录用户）
     const token = getAccessToken();
     if (token) {
         headers["Authorization"] = `Bearer ${token}`;
@@ -29,6 +32,7 @@ function getAuthHeaders(): Record<string, string> {
 
     // Fallback to X-User-Id for local development without auth
     // Default user ID matches migrations/postgres/003_authentication.sql seed data
+    // 无 auth 的本地开发回退到 X-User-Id；默认用户 ID 与 migrations/postgres/003_authentication.sql 的种子数据一致
     const userId = process.env.NEXT_PUBLIC_USER_ID;
     if (userId) {
         headers["X-User-Id"] = userId;
@@ -239,12 +243,14 @@ export function getStreamUrl(workflowId: string): string {
     const baseUrl = `${API_BASE_URL}/api/v1/stream/sse?workflow_id=${workflowId}`;
 
     // Add API key for SSE auth (EventSource can't use headers)
+    // SSE auth 时附加 API key（EventSource 无法设置请求头）
     const apiKey = getAPIKey();
     if (apiKey) {
         return `${baseUrl}&api_key=${encodeURIComponent(apiKey)}`;
     }
 
     // Fallback to token for SSE auth
+    // SSE auth 回退到 token
     const token = getAccessToken();
     if (token) {
         return `${baseUrl}&token=${encodeURIComponent(token)}`;
@@ -573,6 +579,7 @@ export async function approveReviewPlan(workflowId: string, version?: number): P
         ...getAuthHeaders(),
     };
     // Add optimistic concurrency check if version provided
+    // 传入 version 时增加乐观并发校验
     if (version !== undefined) {
         headers["If-Match"] = String(version);
     }
@@ -921,6 +928,7 @@ export async function getSkill(name: string): Promise<SkillDetailResponse> {
 /**
  * Get the synthesis model tier preference.
  * Returns undefined to use backend default.
+ * 获取 synthesis model tier 偏好；返回 undefined 表示使用后端默认值
  */
 export function getSynthesisModelTier(): string | undefined {
     return undefined;
@@ -928,6 +936,7 @@ export function getSynthesisModelTier(): string | undefined {
 
 // =============================================================================
 // Blob References (for large image data stored server-side)
+// 图片 Blob 引用（大体积图片数据存放在服务端）
 // =============================================================================
 
 export interface BlobReference {
@@ -938,17 +947,20 @@ export interface BlobReference {
 /**
  * Resolve a blob reference to its base64 image data.
  * Falls back to inline data if present in the object.
+ * 将 blob 引用解析为 base64 图片数据；对象中存在内联数据时回退使用
  */
 export async function resolveImageField(
     fieldName: string,
     obj: Record<string, any>
 ): Promise<string | null> {
     // Check for inline base64 first
+    // 先检查内联 base64
     if (obj[fieldName] && typeof obj[fieldName] === "string") {
         return obj[fieldName];
     }
 
     // Check for blob reference
+    // 检查 blob 引用
     const refKey = `${fieldName}_ref`;
     const blobRef = obj[refKey] as BlobReference | undefined;
     if (!blobRef?.blob_id) return null;

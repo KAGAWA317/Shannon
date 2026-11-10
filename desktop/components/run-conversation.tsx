@@ -19,6 +19,7 @@ import NextImage from "next/image";
 import React, { type ReactNode, useState, useMemo, memo, useEffect } from "react";
 
 // Stub: model display names (inline fallback)
+// 占位实现：模型显示名（内联回退）
 function getModelDisplayName(model: string): string { return model; }
 function getProviderDisplayName(provider: string): string { return provider; }
 function useIsIOS(): boolean { return false; }
@@ -46,6 +47,7 @@ interface Message {
     taskId?: string;
     eventType?: string; // For status messages
     // Browser automation specific
+    // 浏览器自动化专用字段
     isScreenshot?: boolean;
     isBrowserError?: boolean;
     metadata?: {
@@ -58,6 +60,7 @@ interface Message {
         provider?: string;
         citations?: Citation[];
         // Browser automation metadata
+        // 浏览器自动化 metadata
         screenshot?: string; // Base64 PNG
         screenshotPath?: string; // Workspace file path for SCREENSHOT_SAVED
         sessionId?: string; // Session ID for workspace file fetch
@@ -70,6 +73,7 @@ interface Message {
 }
 
 // Status message icon mapping based on event type
+// 按 event 类型映射状态消息图标
 function StatusIcon({ eventType }: { eventType?: string }) {
     switch (eventType) {
         case "AGENT_THINKING":
@@ -90,6 +94,7 @@ function StatusIcon({ eventType }: { eventType?: string }) {
         case "TOOL_OBSERVATION":
             return <Sparkles className="h-3.5 w-3.5 text-emerald-500" />;
         // Browser automation events
+        // 浏览器自动化 event
         case "TOOL_STARTED":
             return <Globe className="h-3.5 w-3.5 text-blue-500 animate-pulse" />;
         case "TOOL_COMPLETED":
@@ -130,9 +135,11 @@ function StatusIcon({ eventType }: { eventType?: string }) {
 }
 
 // Helper to convert simple URL citations to Citation objects
+// 辅助函数：将简单 URL 引用转换为 Citation 对象
 function convertUrlsToCitations(urls: string[]): Citation[] {
     return urls.map(url => {
         // Extract domain as source
+        // 提取域名作为来源
         let domain = "";
         try {
             domain = new URL(url).hostname.replace("www.", "");
@@ -148,6 +155,7 @@ function convertUrlsToCitations(urls: string[]): Citation[] {
 }
 
 // Helper to extract domain info from URL
+// 辅助函数：从 URL 中提取域名信息
 function getDomainInfo(url: string, source?: string): { domain: string; sourceName: string } {
     let domain = "";
     let sourceName = source || "";
@@ -166,6 +174,7 @@ function getDomainInfo(url: string, source?: string): { domain: string; sourceNa
 }
 
 // Helper to generate a readable title from URL when no title available
+// 没有标题时，根据 URL 生成可读标题
 function getReadableTitle(url: string, title?: string): string {
     if (title) return title;
 
@@ -174,12 +183,14 @@ function getReadableTitle(url: string, title?: string): string {
         const params = parsed.searchParams;
 
         // Check for common search query params
+        // 检查常见的搜索查询参数
         const searchQuery = params.get('q') || params.get('query') || params.get('search') || params.get('s');
         if (searchQuery) {
             return `Search: "${decodeURIComponent(searchQuery)}"`;
         }
 
         // Clean up pathname
+        // 清理路径部分
         let path = parsed.pathname;
         if (path === '/' || path === '') {
             return parsed.hostname.replace(/^www\./, '');
@@ -215,13 +226,16 @@ interface RunConversationProps {
 
 
 // Component to render text with citation badges grouped by domain
+// 渲染文本并按域名分组展示引用徽章的组件
 function TextWithCitations({ text, citations }: { text: string; citations?: Citation[] }) {
     if (!citations || citations.length === 0 || typeof text !== 'string') {
         return <>{text}</>;
     }
 
     // Find all citation references like [1], [2], [1][2][3], etc.
+    // 查找所有形如 [1]、[2]、[1][2][3] 的引用标记
     // Group consecutive citations by domain
+    // 将连续引用按域名分组
     const citationPattern = /(\[(\d+)\])+/g;
     const parts: (string | ReactNode)[] = [];
     let lastIndex = 0;
@@ -231,6 +245,7 @@ function TextWithCitations({ text, citations }: { text: string; citations?: Cita
         const fullMatch = match[0]; // e.g., "[1][2][3]" or "[1]"
 
         // Extract all citation indices from this match
+        // 从该匹配中提取所有引用序号
         const indices: number[] = [];
         const singlePattern = /\[(\d+)\]/g;
         let singleMatch;
@@ -239,6 +254,7 @@ function TextWithCitations({ text, citations }: { text: string; citations?: Cita
         }
 
         // Get citations and group by domain
+        // 获取引用并按域名分组
         const citationsForMatch: Citation[] = [];
         for (const idx of indices) {
             const citation = citations[idx - 1]; // Citations are 1-indexed
@@ -248,12 +264,14 @@ function TextWithCitations({ text, citations }: { text: string; citations?: Cita
         }
 
         // Add text before citation
+        // 添加引用之前的文本
         if (match.index > lastIndex) {
             parts.push(text.substring(lastIndex, match.index));
         }
 
         if (citationsForMatch.length > 0) {
             // Group by domain
+            // 按域名分组
             const byDomain = new Map<string, { citations: Citation[]; sourceName: string; domain: string }>();
 
             for (const citation of citationsForMatch) {
@@ -267,6 +285,7 @@ function TextWithCitations({ text, citations }: { text: string; citations?: Cita
             }
 
             // Render badges for each domain group - use domain as stable key
+            // 为每个域名分组渲染徽章，使用域名作为稳定 key
             byDomain.forEach(({ citations: domainCitations, sourceName, domain }) => {
                 parts.push(
                     <CitationBadge
@@ -279,6 +298,7 @@ function TextWithCitations({ text, citations }: { text: string; citations?: Cita
             });
         } else {
             // No valid citations found, render as plain text
+            // 未找到有效引用，按纯文本渲染
             parts.push(fullMatch);
         }
 
@@ -286,6 +306,7 @@ function TextWithCitations({ text, citations }: { text: string; citations?: Cita
     }
 
     // Add remaining text
+    // 添加剩余文本
     if (lastIndex < text.length) {
         parts.push(text.substring(lastIndex));
     }
@@ -294,19 +315,25 @@ function TextWithCitations({ text, citations }: { text: string; citations?: Cita
 }
 
 // Memoized markdown components for better performance
+// 记忆化 markdown 组件以提升性能
 const baseMarkdownComponents = getMarkdownComponents();
 
 // Helper to strip Sources/References section from content
 // Since users can access citations via the popup button, we hide the inline section
+// 辅助函数：从内容中移除 Sources/References 章节。
+// 用户可通过弹窗按钮查看引用，因此隐藏内联章节
 function stripSourcesSection(text: string): string {
     // Match common patterns for Sources/References sections at the end of content
     // Supports: ## Sources, ## References, ## Citations, **Sources**, ---\n## Sources, etc.
     // Also supports Japanese: 参照, 参考文献, 引用元
+    // 匹配内容末尾常见的 Sources/References 章节模式；支持 ## Sources、## References、## Citations、**Sources** 等写法，也支持日文“参照、参考文献、引用元”
     const patterns = [
         // Markdown heading patterns (## Sources, ### References, etc.)
+        // Markdown 标题模式（## Sources、### References 等）
         /\n---\s*\n##?\s*(?:Sources|References|Citations|参照|参考文献|引用元)[\s\S]*$/i,
         /\n##?\s*(?:Sources|References|Citations|参照|参考文献|引用元)\s*\n[\s\S]*$/i,
         // Bold heading patterns (**Sources**, **References**)
+        // 粗体标题模式（**Sources**、**References**）
         /\n\*\*(?:Sources|References|Citations|参照|参考文献|引用元)\*\*:?\s*\n[\s\S]*$/i,
     ];
 
@@ -321,8 +348,10 @@ function stripSourcesSection(text: string): string {
 }
 
 // Component to render markdown with inline citation components
+// 使用内联引用组件渲染 markdown 的组件
 export const MarkdownWithCitations = memo(function MarkdownWithCitations({ content, citations }: { content: string; citations?: Citation[] }) {
     // Ensure content is a string - handle object content gracefully
+    // 确保 content 为字符串，优雅处理对象类型内容
     const displayContent = useMemo(() => {
         let text: string;
         if (typeof content !== 'string') {
@@ -339,24 +368,29 @@ export const MarkdownWithCitations = memo(function MarkdownWithCitations({ conte
         }
 
         // Strip the Sources/References section since users can access via popup button
+        // 移除 Sources/References 章节，用户可通过弹窗按钮访问
         return stripSourcesSection(text);
     }, [content]);
 
     // Memoize the components object to prevent recreation on every render
+    // 记忆化 components 对象，避免每次渲染重新创建
     const components = useMemo(() => {
         if (!citations || citations.length === 0) {
             return baseMarkdownComponents;
         }
 
         // Helper to process children with citations - handles nested React elements recursively
+        // 处理带引用的 children，递归处理嵌套 React 元素
         const processChildren = (children: React.ReactNode): React.ReactNode => {
             return React.Children.map(children, (child, index) => {
                 if (typeof child === 'string') {
                     // Use a stable key based on content hash instead of index
+                    // 基于内容哈希而非索引生成稳定 key
                     const stableKey = `text-${index}-${child.slice(0, 20).replace(/\s/g, '')}`;
                     return <TextWithCitations key={stableKey} text={child} citations={citations} />;
                 }
                 // Handle React elements with children (e.g., <strong>, <em>, <a>)
+                // 处理带 children 的 React 元素（如 <strong>、<em>、<a>）
                 if (React.isValidElement(child)) {
                     const childProps = child.props as { children?: React.ReactNode };
                     if (childProps.children) {
@@ -396,11 +430,14 @@ export const MarkdownWithCitations = memo(function MarkdownWithCitations({ conte
 });
 
 // Extract markdown components for reuse
+// 提取 markdown 组件以便复用
 function getMarkdownComponents() {
     return {
         code: ({ className, children, ...props }: any) => {
             // react-markdown v10 no longer passes `inline` prop.
             // Block code has language-* class (from rehypeHighlight) and is wrapped in <pre>.
+            // react-markdown v10 不再传递 `inline` 属性；
+            // 块级代码带有 language-* class（由 rehypeHighlight 添加）并被 <pre> 包裹
             const isBlock = /language-|hljs/.test(className || '');
             return isBlock ? (
                 <code className={cn("block p-3 rounded-lg bg-muted/50 overflow-x-auto whitespace-pre font-mono text-xs", className)} {...props}>
@@ -421,6 +458,7 @@ function getMarkdownComponents() {
             <p className="leading-relaxed break-words" {...props}>{children}</p>
         ),
         // Headings - adjusted for better readability
+        // 标题：为提升可读性做了调整
         h1: ({ children, ...props }: any) => (
             <h1 className="!mt-3 !mb-2 !font-bold !text-xl !text-current" {...props}>{children}</h1>
         ),
@@ -495,6 +533,7 @@ function getMarkdownComponents() {
 }
 
 // Browser screenshot preview component
+// 浏览器截图预览组件
 function ScreenshotPreview({
     screenshot,
     screenshotPath,
@@ -514,21 +553,25 @@ function ScreenshotPreview({
     const [fetchError, setFetchError] = useState(false);
 
     // Fetch screenshot from workspace when path-based props are provided
+    // 传入基于路径的 props 时，从工作区获取截图
     useEffect(() => {
         if (!screenshotPath || !sessionId || screenshot) return;
         // Sanitize path to prevent traversal
+        // 清理路径以防止目录遍历
         const safePath = screenshotPath.replace(/\.\.\//g, '').replace(/^\//, '');
         if (!safePath) return;
         let cancelled = false;
         setIsLoading(true);
         setFetchError(false);
         // Workspace file fetch not available in OSS — show path as fallback
+        // OSS 版不支持获取工作区文件，退化为显示路径
         setFetchError(true);
         setIsLoading(false);
         return () => { cancelled = true; };
     }, [screenshotPath, sessionId, screenshot]);
 
     // Handle both raw base64 and data URL formats
+    // 同时处理原始 base64 和 data URL 格式
     const imgSrc = screenshot
         ? (screenshot.startsWith('data:') ? screenshot : `data:image/png;base64,${screenshot}`)
         : fetchedSrc;
@@ -601,6 +644,7 @@ function ScreenshotPreview({
 }
 
 // Browser error message with retry button
+// 带 retry 按钮的浏览器错误消息
 function BrowserErrorMessage({ 
     error, 
     tool, 
@@ -615,6 +659,7 @@ function BrowserErrorMessage({
     const [countdown, setCountdown] = useState(retryAfterSeconds || 0);
     
     // Countdown timer for rate limits
+    // rate limit 场景的倒计时定时器
     useEffect(() => {
         if (countdown <= 0) return;
         const timer = setInterval(() => {
@@ -664,6 +709,7 @@ function BrowserErrorMessage({
 }
 
 // Citation badge component - shows domain name with count, hover shows all citations
+// 引用徽章组件：显示域名及数量，悬停时展示全部引用
 const CitationBadge = memo(function CitationBadge({ citations, sourceName, domain }: { citations: Citation[]; sourceName: string; domain: string }) {
     const count = citations.length;
     const firstCitation = citations[0];
@@ -762,14 +808,17 @@ const CitationBadge = memo(function CitationBadge({ citations, sourceName, domai
     );
 }, (prev, next) => {
     // Custom comparison to prevent re-renders when citations array reference changes but content is same
+    // 自定义比较逻辑：引用数组引用变化但内容相同时避免重渲染
     if (prev.domain !== next.domain) return false;
     if (prev.sourceName !== next.sourceName) return false;
     if (prev.citations.length !== next.citations.length) return false;
     
     // Deep compare all citation URLs to ensure accuracy even if grouping looks same
+    // 深度比较所有引用 URL，即使分组看似相同也确保准确
     for (let i = 0; i < prev.citations.length; i++) {
         if (prev.citations[i].url !== next.citations[i].url) return false;
         // Optionally check title if it changes during streaming, though less critical
+        // 可选地检查标题（流式过程中可能变化），但优先级较低
         if (prev.citations[i].title !== next.citations[i].title) return false;
     }
     
@@ -777,6 +826,7 @@ const CitationBadge = memo(function CitationBadge({ citations, sourceName, domai
 });
 
 // MessageItem component to isolate updates and memoize citations
+// MessageItem 组件：隔离更新并记忆化引用
 const MessageItem = memo(function MessageItem({
     message,
     agentType,
@@ -791,10 +841,13 @@ const MessageItem = memo(function MessageItem({
     onCopy: (id: string, content: string) => void
 }) {
     // Use a ref to hold the citations array to ensure reference stability across renders
+    // 用 ref 保存引用数组，确保跨渲染的引用稳定性
     const citationsRef = React.useRef<Citation[] | undefined>(undefined);
     
     // Memoize citations array with deep comparison to prevent unnecessary re-renders
     // of CitationBadge and MarkdownWithCitations when new array references come in but content is same
+    // 用深度比较记忆化引用数组，
+    // 避免新数组引用但内容相同时 CitationBadge 和 MarkdownWithCitations 的无谓重渲染
     const rawCitations = message.metadata?.citations ||
              (message.metadata?.artifacts?.citations
                  ? convertUrlsToCitations(message.metadata.artifacts.citations)
@@ -805,17 +858,20 @@ const MessageItem = memo(function MessageItem({
     } else if (rawCitations && citationsRef.current) {
         // Simple deep check: length and first/last URL
         // If length changed or first/last item changed, update ref
+        // 简单的深度检查：长度及首尾 URL
         const prev = citationsRef.current;
         const next = rawCitations;
         
         let changed = prev.length !== next.length;
         if (!changed && prev.length > 0) {
             // Check first and last for efficiency
+            // 为效率起见只检查首尾
             if (prev[0].url !== next[0].url) changed = true;
             if (prev[prev.length - 1].url !== next[next.length - 1].url) changed = true;
             
             // If still arguably same, check random middle one just in case?
             // Usually streaming appends or replaces all.
+            // 若仍判定相同，再抽查中间一项以防万一；流式输出通常是追加或整体替换
         }
         
         if (changed) {
@@ -892,6 +948,7 @@ const MessageItem = memo(function MessageItem({
                             </pre>
                         ) : (
                             // Check if content is a tool output that should be rendered with rich UI
+                            // 检查内容是否为 tool 输出，需要用富 UI 渲染
                             (() => {
                                 const contentStr = typeof message.content === "string" ? message.content : String(message.content ?? "");
                                 const toolOutput = detectToolOutputType(contentStr);
@@ -959,10 +1016,12 @@ const MessageItem = memo(function MessageItem({
 });
 
 // Sources button component - shows favicons and opens citations popup
+// Sources 按钮组件：显示 favicon 并打开引用弹窗
 function SourcesButton({ citations }: { citations: Citation[] }) {
     if (!citations || citations.length === 0) return null;
 
     // Get unique domains for favicon display (max 5)
+    // 获取去重域名用于 favicon 展示（最多 5 个）
     const uniqueDomains = Array.from(new Set(
         citations.map(c => getDomainInfo(c.url, c.source).domain)
     )).slice(0, 5);
@@ -1015,6 +1074,7 @@ function SourcesButton({ citations }: { citations: Citation[] }) {
                             const displayTitle = getReadableTitle(citation.url, citation.title);
 
                             // Generate description from URL path
+                            // 根据 URL 路径生成描述
                             let description = "";
                             if (citation.title) {
                                 try {
@@ -1085,6 +1145,8 @@ function SourcesButton({ citations }: { citations: Citation[] }) {
 
 // Moved outside component to prevent recreation on every render
 // These agents produce final output that should be displayed (not intermediate)
+// 移到组件外部，避免每次渲染重新创建；
+// 这些 agent 产出需要展示的最终输出（而非中间结果）
 const directOutputAgents = ["simple-agent", "final_output", "swarm-lead"];
 
 function isIntermediateMessage(msg: Message): boolean {
@@ -1092,17 +1154,21 @@ function isIntermediateMessage(msg: Message): boolean {
     const sender = msg.sender || "";
 
     // Check if it's a tool call message (JSON with selected_tools)
+    // 判断是否为 tool 调用消息（含 selected_tools 的 JSON）
     if (msg.content && msg.content.trim().startsWith('{') && msg.content.includes('"selected_tools"')) {
         return true;
     }
 
     // Empty sender is treated as final output (API-fetched results, simple responses)
+    // sender 为空视为最终输出（API 拉取的结果、简单回复）
     if (!sender) return false;
 
     // If it's a direct output agent, it's not intermediate
+    // 属于直接输出 agent 的，不是中间结果
     if (directOutputAgents.includes(sender)) return false;
 
     // Everything else is intermediate (synthesis, reasoner-*, actor-*, etc.)
+    // 其余均为中间结果（synthesis、reasoner-*、actor-* 等）
     return true;
 }
 
@@ -1111,6 +1177,7 @@ export const RunConversation = memo(function RunConversation({ messages, agentTy
     const isIOS = useIsIOS();
 
     // Copy message content to clipboard
+    // 复制消息内容到剪贴板
     const handleCopyMessage = async (messageId: string, content: string) => {
         try {
             await navigator.clipboard.writeText(content);
@@ -1122,6 +1189,7 @@ export const RunConversation = memo(function RunConversation({ messages, agentTy
     };
 
     // Memoize filtered messages to prevent unnecessary re-filtering
+    // 记忆化过滤后的消息，避免重复过滤
     const displayedMessages = useMemo(
         () => messages.filter(msg => !isIntermediateMessage(msg)),
         [messages]
@@ -1131,6 +1199,7 @@ export const RunConversation = memo(function RunConversation({ messages, agentTy
         <div className={cn("space-y-2 p-3 sm:p-4", isIOS && "ios-content")}>
             {displayedMessages.map((message) => {
                 // Render status messages inline (human-readable progress updates)
+                // 内联渲染状态消息（人类可读的进度更新）
                 if (message.role === "status") {
                     return (
                         <div
@@ -1146,6 +1215,7 @@ export const RunConversation = memo(function RunConversation({ messages, agentTy
                 }
 
                 // Render screenshot messages with preview
+                // 渲染带预览的截图消息
                 if (message.isScreenshot && (message.metadata?.screenshot || message.metadata?.screenshotPath)) {
                     return (
                         <div
@@ -1177,6 +1247,7 @@ export const RunConversation = memo(function RunConversation({ messages, agentTy
                 }
 
                 // Render browser error messages with retry option
+                // 渲染带 retry 选项的浏览器错误消息
                 if (message.isBrowserError && message.isError) {
                     return (
                         <div
@@ -1204,6 +1275,7 @@ export const RunConversation = memo(function RunConversation({ messages, agentTy
                 }
 
                 // Render user and final assistant messages normally
+                // 正常渲染用户消息和最终助手消息
                 return (
                     <MessageItem
                         key={message.id}

@@ -7,6 +7,7 @@ import (
 
 // TestDomainAnalysisStatsDiscoveryFields tests that DiscoveryFailed and DiscoveryError
 // fields are properly serialized and accessible in DomainAnalysisStats.
+// 失败信息要能 JSON round-trip：前端与 DB 都依赖 discovery_failed / discovery_error 两个字段。
 func TestDomainAnalysisStatsDiscoveryFields(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -95,6 +96,7 @@ func TestDomainAnalysisStatsDiscoveryFields(t *testing.T) {
 				}
 
 				// Verify omitempty works correctly
+				// 零值必须被省略，否则旧记录反序列化后会凭空多出失败标记。
 				jsonStr := string(jsonBytes)
 				if !tt.expectFailed {
 					// When false, field should be omitted

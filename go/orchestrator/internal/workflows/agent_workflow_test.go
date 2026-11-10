@@ -207,6 +207,7 @@ func TestConvertAgentInputFromTask_MissingAgentID(t *testing.T) {
 // Note: Full integration tests for ConvertAgentInputFromTask require the agents.yaml config
 // to be available. These tests validate the helper functions and error handling.
 // For full E2E testing, see the integration test suite.
+// 完整链路依赖 agents.yaml，这里只覆盖 helper 与错误分支；E2E 见 integration 套件。
 
 func TestAgentWorkflowOutputToTaskResult_Success(t *testing.T) {
 	output := &AgentWorkflowOutput{

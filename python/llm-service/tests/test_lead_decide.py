@@ -1,4 +1,7 @@
-"""Tests for Lead Agent decision endpoint."""
+"""Tests for Lead Agent decision endpoint.
+
+Lead Agent 决策端点的测试。
+"""
 
 import json
 import pytest
@@ -352,6 +355,7 @@ class TestLeadEndpoint:
         await lead_decide(mock_request, body)
 
         # Verify generate_completion was called with MEDIUM tier
+        # 验证调用 generate_completion 时使用的是 MEDIUM tier
         call_kwargs = mock_providers.generate_completion.call_args
         from llm_service.providers.base import ModelTier
         assert call_kwargs.kwargs.get("tier") == ModelTier.MEDIUM
@@ -407,7 +411,10 @@ class TestLeadClosingCheckpoint:
 
     @pytest.mark.asyncio
     async def test_closing_checkpoint_uses_higher_max_tokens(self, mock_request, mock_providers):
-        """When event.type is closing_checkpoint, max_tokens should be 4096."""
+        """When event.type is closing_checkpoint, max_tokens should be 4096.
+
+        当 event.type 为 closing_checkpoint 时，max_tokens 应为 4096。
+        """
         mock_providers.generate_completion = AsyncMock(return_value=self._make_llm_response())
 
         from llm_service.api.lead import lead_decide
@@ -424,7 +431,10 @@ class TestLeadClosingCheckpoint:
 
     @pytest.mark.asyncio
     async def test_normal_event_uses_default_max_tokens(self, mock_request, mock_providers):
-        """Normal events use 4096 max_tokens; only closing_checkpoint uses 16000."""
+        """Normal events use 4096 max_tokens; only closing_checkpoint uses 16000.
+
+        普通 event 使用 4096 max_tokens；只有 closing_checkpoint 使用 16000。
+        """
         mock_providers.generate_completion = AsyncMock(return_value=self._make_llm_response())
 
         from llm_service.api.lead import lead_decide
@@ -457,7 +467,10 @@ class TestLeadStructuredOutput:
 
     @pytest.mark.asyncio
     async def test_no_assistant_prefill_in_messages(self, mock_request, mock_providers):
-        """Messages sent to LLM should NOT contain assistant prefill."""
+        """Messages sent to LLM should NOT contain assistant prefill.
+
+        发给 LLM 的 messages 不应包含 assistant prefill。
+        """
         from llm_service.api.lead import lead_decide, LEAD_DECISION_SCHEMA
 
         captured_kwargs = {}
@@ -487,7 +500,10 @@ class TestLeadStructuredOutput:
 
     @pytest.mark.asyncio
     async def test_output_config_passed_for_structured_output(self, mock_request, mock_providers):
-        """output_config should be passed to enable Anthropic structured output."""
+        """output_config should be passed to enable Anthropic structured output.
+
+        应传入 output_config 以启用 Anthropic structured output。
+        """
         from llm_service.api.lead import lead_decide, LEAD_DECISION_SCHEMA
 
         captured_kwargs = {}
@@ -514,7 +530,10 @@ class TestLeadStructuredOutput:
 
     @pytest.mark.asyncio
     async def test_structured_output_fallback_on_error(self, mock_request, mock_providers):
-        """When structured output fails (e.g. grammar timeout), should fallback to prompt-based."""
+        """When structured output fails (e.g. grammar timeout), should fallback to prompt-based.
+
+        当 structured output 失败（例如 grammar 编译 timeout）时，应回落到基于 prompt 的方式。
+        """
         from llm_service.api.lead import lead_decide
 
         call_count = 0
@@ -524,9 +543,11 @@ class TestLeadStructuredOutput:
             call_count += 1
             if call_count == 1:
                 # First call with output_config → simulate grammar timeout
+                # 第一次调用带 output_config → 模拟 grammar timeout
                 assert "output_config" in kwargs
                 raise Exception("Grammar compilation timed out")
             # Second call without output_config → prompt-based fallback
+            # 第二次调用不带 output_config → 基于 prompt 的回落
             assert "output_config" not in kwargs
             return {
                 "output_text": '{"decision_summary": "fallback worked", "actions": [{"type": "noop"}]}',
@@ -550,7 +571,10 @@ class TestLeadStructuredOutput:
 
     @pytest.mark.asyncio
     async def test_lead_max_tokens_always_4096(self, mock_request, mock_providers):
-        """All events should use 4096 max_tokens to prevent JSON truncation."""
+        """All events should use 4096 max_tokens to prevent JSON truncation.
+
+        所有 event 都应使用 4096 max_tokens，以避免 JSON 被截断。
+        """
         from llm_service.api.lead import lead_decide
 
         captured_kwargs = {}
@@ -682,7 +706,10 @@ class TestAutoLinkTaskIds:
     """Test _auto_link_task_ids: match spawn_agent to tasks by description."""
 
     def test_initial_plan_exact_match(self):
-        """revise_plan + spawn_agent in same response, identical descriptions."""
+        """revise_plan + spawn_agent in same response, identical descriptions.
+
+        同一 response 中同时有 revise_plan 与 spawn_agent，且描述完全一致。
+        """
         actions = [
             LeadAction(type="revise_plan", create=[
                 {"id": "T1", "description": "Research AWS pricing"},
@@ -697,7 +724,10 @@ class TestAutoLinkTaskIds:
         assert actions[2].task_id == "T2"
 
     def test_initial_plan_substring_match(self):
-        """spawn_agent has longer description that starts with task description."""
+        """spawn_agent has longer description that starts with task description.
+
+        spawn_agent 的 description 更长，且以 task description 开头。
+        """
         actions = [
             LeadAction(type="revise_plan", create=[
                 {"id": "T1", "description": "Research React performance"},
@@ -709,7 +739,10 @@ class TestAutoLinkTaskIds:
         assert actions[1].task_id == "T1"
 
     def test_word_overlap_match(self):
-        """Descriptions differ but share enough words to match."""
+        """Descriptions differ but share enough words to match.
+
+        描述不同，但共享足够多的词以完成匹配。
+        """
         actions = [
             LeadAction(type="revise_plan", create=[
                 {"id": "T1", "description": "Research PostgreSQL performance benchmarks"},
@@ -733,7 +766,10 @@ class TestAutoLinkTaskIds:
         assert actions[1].task_id == ""
 
     def test_mid_execution_from_task_list(self):
-        """Mid-execution spawn matched against pending tasks from body.task_list."""
+        """Mid-execution spawn matched against pending tasks from body.task_list.
+
+        执行中途的 spawn 按 body.task_list 中的待处理 task 进行匹配。
+        """
         actions = [
             LeadAction(type="spawn_agent", role="synthesis_writer",
                         task_description="Synthesize comprehensive comparison report"),
@@ -747,7 +783,10 @@ class TestAutoLinkTaskIds:
         assert actions[0].task_id == "T5"
 
     def test_already_has_task_id_not_overwritten(self):
-        """spawn_agent that already has task_id should not be touched."""
+        """spawn_agent that already has task_id should not be touched.
+
+        已带 task_id 的 spawn_agent 不应被改动。
+        """
         actions = [
             LeadAction(type="revise_plan", create=[
                 {"id": "T1", "description": "Research AWS"},
@@ -759,7 +798,10 @@ class TestAutoLinkTaskIds:
         assert actions[1].task_id == "T1"
 
     def test_no_double_claim(self):
-        """Each task_id can only be claimed by one spawn_agent."""
+        """Each task_id can only be claimed by one spawn_agent.
+
+        每个 task_id 只能被一个 spawn_agent 认领。
+        """
         actions = [
             LeadAction(type="revise_plan", create=[
                 {"id": "T1", "description": "Research React"},

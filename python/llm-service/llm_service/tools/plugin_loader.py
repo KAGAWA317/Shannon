@@ -1,6 +1,8 @@
 """
 Dynamic Plugin Loader for Shannon Tool System
 Supports hot reloading and external tool plugins
+Shannon tool 系统的动态插件加载器
+支持热重载和外部 tool 插件
 """
 
 import os
@@ -24,14 +26,17 @@ logger = logging.getLogger(__name__)
 class ToolPluginLoader:
     """
     Dynamic tool plugin loader with hot reloading support
+    支持热重载的动态 tool 插件加载器
     """
 
     def __init__(self, plugin_dirs: Optional[List[str]] = None):
         """
         Initialize plugin loader
+        初始化插件加载器
 
         Args:
             plugin_dirs: List of directories to search for plugins
+                用于搜索插件的目录列表
         """
         self.plugin_dirs = plugin_dirs or []
         self.loaded_plugins: Dict[str, LoadedPlugin] = {}
@@ -39,6 +44,7 @@ class ToolPluginLoader:
         self.registry = get_registry()
 
         # Add default plugin directories
+        # 添加默认插件目录
         default_dirs = [
             os.path.join(os.path.dirname(__file__), "builtin"),
             os.path.join(os.path.dirname(__file__), "community"),
@@ -53,9 +59,11 @@ class ToolPluginLoader:
     def discover_and_load_all(self) -> int:
         """
         Discover and load all tools from configured directories
+        从配置的目录中发现并加载所有 tool
 
         Returns:
             Number of tools loaded
+            已加载的 tool 数量
         """
         total_loaded = 0
 
@@ -74,17 +82,21 @@ class ToolPluginLoader:
     def _load_plugins_from_directory(self, directory: str) -> int:
         """
         Load all plugin files from a directory
+        从目录中加载所有插件文件
 
         Args:
             directory: Directory to scan for plugins
+            要扫描插件的目录
 
         Returns:
             Number of plugins loaded
+            已加载的插件数量
         """
         loaded_count = 0
         path = Path(directory)
 
         # Find all Python files
+        # 查找所有 Python 文件
         for py_file in path.rglob("*.py"):
             if py_file.name.startswith("_") or py_file.name == "setup.py":
                 continue
@@ -96,6 +108,7 @@ class ToolPluginLoader:
                 logger.error(f"Failed to load plugin {py_file}: {e}")
 
         # Find all .shannon-tool files (JSON tool definitions)
+        # 查找所有 .shannon-tool 文件（JSON tool 定义）
         for tool_file in path.rglob("*.shannon-tool"):
             try:
                 if self._load_json_tool(str(tool_file)):
@@ -108,14 +121,18 @@ class ToolPluginLoader:
     def _load_plugin_file(self, file_path: str) -> bool:
         """
         Load a single plugin file
+        加载单个插件文件
 
         Args:
             file_path: Path to the plugin file
+            插件文件路径
 
         Returns:
             True if successfully loaded
+            成功加载时返回 True
         """
         # Check if already loaded and unchanged
+        # 检查是否已加载且未变更
         file_hash = self._get_file_hash(file_path)
 
         if file_path in self.loaded_plugins:
@@ -125,10 +142,12 @@ class ToolPluginLoader:
                 return False
             else:
                 # File changed, reload it
+                # 文件已变更，重新加载
                 logger.info(f"Reloading changed plugin: {file_path}")
                 self._unload_plugin(file_path)
 
         # Load the module
+        # 加载模块
         try:
             spec = importlib.util.spec_from_file_location(
                 f"shannon_tool_plugin_{Path(file_path).stem}", file_path
@@ -140,6 +159,7 @@ class ToolPluginLoader:
                 spec.loader.exec_module(module)
 
                 # Find all Tool subclasses
+                # 查找所有 Tool 子类
                 tools_found = []
                 for name in dir(module):
                     obj = getattr(module, name)
@@ -149,6 +169,7 @@ class ToolPluginLoader:
                         and obj is not Tool
                     ):
                         # Register the tool
+                        # 注册 tool
                         try:
                             self.registry.register(obj, override=True)
                             tools_found.append(obj)
@@ -173,12 +194,15 @@ class ToolPluginLoader:
     def _load_json_tool(self, file_path: str) -> bool:
         """
         Load a tool defined in JSON format
+        加载以 JSON 格式定义的 tool
 
         Args:
             file_path: Path to the JSON tool definition
+            JSON tool 定义的路径
 
         Returns:
             True if successfully loaded
+            成功加载时返回 True
         """
         import json
 
@@ -187,6 +211,7 @@ class ToolPluginLoader:
                 tool_def = json.load(f)
 
             # Create a dynamic Tool class from JSON definition
+            # 根据 JSON 定义动态创建 Tool 类
             tool_class = self._create_tool_from_json(tool_def)
 
             if tool_class:
@@ -204,19 +229,24 @@ class ToolPluginLoader:
     def _create_tool_from_json(self, tool_def: dict) -> Optional[Type[Tool]]:
         """
         Create a Tool class from JSON definition
+        根据 JSON 定义创建 Tool 类
 
         Args:
             tool_def: Tool definition dictionary
+            tool 定义字典
 
         Returns:
             Dynamically created Tool class or None
+            动态创建的 Tool 类，失败时返回 None
         """
         from .base import ToolMetadata, ToolParameter, ToolParameterType, ToolResult
 
         # Extract tool information
+        # 提取 tool 信息
         name = tool_def.get("name", "unknown")
 
         # Create the tool class dynamically
+        # 动态创建 tool 类
         class JSONDefinedTool(Tool):
             def _get_metadata(self) -> ToolMetadata:
                 return ToolMetadata(
@@ -255,11 +285,14 @@ class ToolPluginLoader:
             async def _execute_impl(self, **kwargs) -> ToolResult:
                 # For JSON-defined tools, we need an execution strategy
                 # This could be a script, API call, or command
+                # JSON 定义的 tool 需要一种执行策略
+                # 可以是脚本、API 调用或命令
                 execution = tool_def.get("execution", {})
                 exec_type = execution.get("type", "script")
 
                 if exec_type == "script":
                     # Execute a script
+                    # 执行脚本
                     script_path = execution.get("script")
                     if script_path:
                         import subprocess
@@ -289,6 +322,7 @@ class ToolPluginLoader:
 
                 elif exec_type == "api":
                     # Make an API call
+                    # 发起 API 调用
                     import aiohttp
 
                     url = execution.get("url")
@@ -312,6 +346,7 @@ class ToolPluginLoader:
                             return ToolResult(success=False, output=None, error=str(e))
 
                 # Default: not implemented
+                # 默认：未实现
                 return ToolResult(
                     success=False,
                     output=None,
@@ -319,6 +354,7 @@ class ToolPluginLoader:
                 )
 
         # Set the class name
+        # 设置类名
         JSONDefinedTool.__name__ = f"{name.replace('-', '_').title()}Tool"
 
         return JSONDefinedTool
@@ -326,14 +362,17 @@ class ToolPluginLoader:
     def _unload_plugin(self, file_path: str):
         """
         Unload a plugin and its tools
+        卸载插件及其 tool
 
         Args:
             file_path: Path to the plugin file
+            插件文件路径
         """
         if file_path in self.loaded_plugins:
             plugin = self.loaded_plugins[file_path]
 
             # Unregister all tools from this plugin
+            # 注销此插件中的所有 tool
             for tool_class in plugin.tools:
                 try:
                     tool_instance = tool_class()
@@ -343,9 +382,11 @@ class ToolPluginLoader:
                     logger.error(f"Failed to unregister tool: {e}")
 
             # Remove from loaded plugins
+            # 从已加载插件中移除
             del self.loaded_plugins[file_path]
 
             # Remove module from sys.modules
+            # 从 sys.modules 中移除模块
             if plugin.module and hasattr(plugin.module, "__name__"):
                 module_name = plugin.module.__name__
                 if module_name in sys.modules:
@@ -354,12 +395,15 @@ class ToolPluginLoader:
     def _get_file_hash(self, file_path: str) -> str:
         """
         Get hash of file contents for change detection
+        获取文件内容哈希，用于变更检测
 
         Args:
             file_path: Path to file
+            文件路径
 
         Returns:
             SHA256 hash of file contents
+            文件内容的 SHA256 哈希
         """
         hasher = hashlib.sha256()
         try:
@@ -372,6 +416,7 @@ class ToolPluginLoader:
     def enable_hot_reload(self):
         """
         Enable hot reloading of plugins when files change
+        文件变更时启用插件热重载
         """
         if self.observer:
             return  # Already enabled
@@ -390,6 +435,7 @@ class ToolPluginLoader:
     def disable_hot_reload(self):
         """
         Disable hot reloading
+        禁用热重载
         """
         if self.observer:
             self.observer.stop()
@@ -400,25 +446,30 @@ class ToolPluginLoader:
     def add_plugin_directory(self, directory: str):
         """
         Add a new plugin directory and load its tools
+        添加新的插件目录并加载其中的 tool
 
         Args:
             directory: Directory path to add
+            要添加的目录路径
         """
         if directory not in self.plugin_dirs:
             self.plugin_dirs.append(directory)
 
             # Load plugins from new directory
+            # 从新目录加载插件
             loaded = self._load_plugins_from_directory(directory)
             logger.info(f"Added plugin directory {directory}, loaded {loaded} tools")
 
             # Add to file watcher if hot reload is enabled
+            # 若已启用热重载，则加入文件监视器
             if self.observer and self.observer.is_alive():
                 handler = PluginFileHandler(self)
                 self.observer.schedule(handler, directory, recursive=True)
 
 
 class LoadedPlugin:
-    """Information about a loaded plugin"""
+    """Information about a loaded plugin
+    已加载插件的信息"""
 
     def __init__(self, file_path: str, file_hash: str, module, tools: List[Type[Tool]]):
         self.file_path = file_path
@@ -428,7 +479,8 @@ class LoadedPlugin:
 
 
 class PluginFileHandler(FileSystemEventHandler):
-    """File system event handler for hot reloading"""
+    """File system event handler for hot reloading
+    用于热重载的文件系统 event 处理器"""
 
     def __init__(self, loader: ToolPluginLoader):
         self.loader = loader
@@ -441,10 +493,13 @@ class PluginFileHandler(FileSystemEventHandler):
             logger.info(f"Detected change in: {event.src_path}")
 
             # Reload the plugin asynchronously
+            # 异步重新加载插件
             asyncio.create_task(self._reload_plugin(event.src_path))
 
     async def _reload_plugin(self, file_path: str):
-        """Reload a plugin file"""
+        """Reload a plugin file
+        重新加载插件文件"""
+        # 短暂延迟，确保文件写入完成
         await asyncio.sleep(0.5)  # Small delay to ensure file write is complete
 
         if file_path.endswith(".py"):

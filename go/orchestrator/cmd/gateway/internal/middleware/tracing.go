@@ -60,6 +60,7 @@ func (tm *TracingMiddleware) Middleware(next http.Handler) http.Handler {
 // extractTraceID extracts trace ID from request headers
 func (tm *TracingMiddleware) extractTraceID(r *http.Request) string {
 	// Check traceparent header (W3C Trace Context)
+	// 检查 traceparent 头（W3C Trace Context）。
 	if traceparent := r.Header.Get("traceparent"); traceparent != "" {
 		parts := strings.Split(traceparent, "-")
 		if len(parts) >= 2 {
@@ -88,6 +89,7 @@ func (tm *TracingMiddleware) generateTraceID() string {
 // generateSpanID generates a new span ID
 func (tm *TracingMiddleware) generateSpanID() string {
 	// Use a shorter ID for spans
+	// span 使用更短的 ID。
 	id := uuid.New()
 	return strings.ReplaceAll(id.String()[:16], "-", "")
 }

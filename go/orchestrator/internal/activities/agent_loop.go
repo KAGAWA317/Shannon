@@ -16,6 +16,7 @@ import (
 )
 
 // WorkspaceSnippet is a truncated KV workspace entry for prompt injection.
+// WorkspaceSnippet 是从 workspace KV 条目截断而来，用于注入 prompt。
 type WorkspaceSnippet struct {
 	Author string `json:"author"`
 	Data   string `json:"data"`
@@ -23,6 +24,7 @@ type WorkspaceSnippet struct {
 }
 
 // TeamKnowledgeEntry records a URL fetched by any swarm agent for cross-agent dedup.
+// TeamKnowledgeEntry 记录任一 swarm agent 抓取过的 URL，用于跨 agent 去重。
 type TeamKnowledgeEntry struct {
 	URL       string `json:"url"`
 	Agent     string `json:"agent"`
@@ -31,6 +33,7 @@ type TeamKnowledgeEntry struct {
 }
 
 // TeamMemberInfo describes a teammate for prompt injection.
+// TeamMemberInfo 描述一名队友，供 prompt 注入使用。
 type TeamMemberInfo struct {
 	AgentID string `json:"agent_id"`
 	Task    string `json:"task"`
@@ -38,6 +41,7 @@ type TeamMemberInfo struct {
 }
 
 // AgentLoopStepInput is the input for a single reason-act iteration of an autonomous agent.
+// AgentLoopStepInput 是自主 agent 单次 reason-act 迭代的输入。
 type AgentLoopStepInput struct {
 	AgentID         string                 `json:"agent_id"`
 	WorkflowID      string                 `json:"workflow_id"`
@@ -65,6 +69,7 @@ type AgentLoopStepInput struct {
 }
 
 // AgentMailboxMsg is a message received from another agent's mailbox.
+// AgentMailboxMsg 是从其他 agent mailbox 收到的消息。
 type AgentMailboxMsg struct {
 	From    string                 `json:"from"`
 	Type    string                 `json:"type"`
@@ -72,6 +77,7 @@ type AgentMailboxMsg struct {
 }
 
 // AgentLoopTurn records a previous action in the agent's loop for context.
+// AgentLoopTurn 记录 agent 循环中的上一步动作，用于提供 context。
 type AgentLoopTurn struct {
 	Iteration       int         `json:"iteration"`
 	Action          string      `json:"action"`
@@ -82,6 +88,7 @@ type AgentLoopTurn struct {
 }
 
 // AgentLoopStepResult is the LLM's decision for one iteration.
+// AgentLoopStepResult 是 LLM 对单次迭代给出的决策。
 type AgentLoopStepResult struct {
 	Action          string `json:"action"`                     // "tool_call", "send_message", "publish_data", "request_help", "done"
 	DecisionSummary string `json:"decision_summary,omitempty"` // 1-3 sentence reasoning (D7: controlled, not unlimited chain-of-thought)
@@ -130,6 +137,7 @@ type AgentLoopStepResult struct {
 
 // AgentLoopStep calls the Python LLM service's /agent/loop endpoint
 // to get the next action for a persistent agent.
+// AgentLoopStep 调用 Python LLM 服务的 /agent/loop 接口，为常驻 agent 取下一步动作。
 func AgentLoopStep(ctx context.Context, in AgentLoopStepInput) (AgentLoopStepResult, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("AgentLoopStep called", "agent_id", in.AgentID, "iteration", in.Iteration, "task_len", len(in.Task))

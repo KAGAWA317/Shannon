@@ -46,6 +46,7 @@ func NewDaemonActivities(hub *daemon.Hub) *DaemonActivities {
 // DaemonDispatchActivity publishes a task to the Daemon Hub.
 // This is a fast activity (<1s) — it does not wait for the daemon response.
 // The workflow uses a Temporal signal (SignalDaemonReply) to receive the reply.
+// 这是快速 activity（<1s），不等待 daemon response；workflow 通过 SignalDaemonReply 信号接收回复。
 func (da *DaemonActivities) DaemonDispatchActivity(ctx context.Context, input DaemonDispatchInput) (DaemonDispatchResult, error) {
 	logger := activity.GetLogger(ctx)
 
@@ -73,6 +74,8 @@ func (da *DaemonActivities) DaemonDispatchActivity(ctx context.Context, input Da
 
 	// Publish to Redis stream — the gateway Hub subscribes and dispatches to local WS connections.
 	// This bridges the orchestrator process (no WS connections) and gateway process (has connections).
+	// 发布到 Redis stream：gateway 的 Hub 订阅后分发给本地 WS 连接，
+	// 从而打通 orchestrator 进程（无 WS 连接）与 gateway 进程（有连接）。
 	req := daemon.DispatchRequest{
 		TenantID: input.TenantID,
 		UserID:   input.UserID,

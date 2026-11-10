@@ -149,6 +149,7 @@ func TestBuildConversationHistory(t *testing.T) {
 			expectedLen: 2,
 			checkContent: func(history []map[string]string) bool {
 				// History for the first user message should use the enriched summary
+				// 第一条 user 消息的 history 应使用带附件摘要的版本。
 				return history[0]["content"] == "check this\n[Attached: image/png]" &&
 					history[1]["content"] == "I see an image"
 			},
@@ -235,6 +236,7 @@ func TestDeriveSessionID(t *testing.T) {
 	}
 
 	// Verify cross-user isolation when req.User is set
+	// 验证设置 req.User 时的跨用户隔离。
 	s1 := translator.deriveSessionID(&ChatCompletionRequest{User: "admin"}, "user-A")
 	s2 := translator.deriveSessionID(&ChatCompletionRequest{User: "admin"}, "user-B")
 	if s1 == s2 {
@@ -242,6 +244,7 @@ func TestDeriveSessionID(t *testing.T) {
 	}
 
 	// Verify different userIDs produce different hashes for same message
+	// 验证相同消息在不同 userID 下产生不同 hash。
 	var hashByUser = map[string]string{}
 
 	for _, tt := range tests {
@@ -265,6 +268,7 @@ func TestDeriveSessionID(t *testing.T) {
 	}
 
 	// Cross-user isolation: same message, different users → different sessions
+	// 跨用户隔离：相同消息、不同用户 → 不同 session。
 	if s1, ok1 := hashByUser["auth-user-1"]; ok1 {
 		if s2, ok2 := hashByUser["auth-user-2"]; ok2 {
 			if s1 == s2 {

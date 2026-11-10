@@ -37,6 +37,7 @@ def _heuristic_evaluate(body: EvaluationRequest) -> EvaluationResponse:
         )
 
     # If any agent failed hard or produced empty output, suggest replanning
+    # 只要有 agent 直接失败或输出为空，就建议重新规划
     failures = [
         r
         for r in body.results
@@ -51,6 +52,7 @@ def _heuristic_evaluate(body: EvaluationRequest) -> EvaluationResponse:
         )
 
     # Very short combined output -> likely poor quality
+    # 合并后输出过短，多半质量不佳
     total_chars = sum(len(r.response) for r in body.results)
     if total_chars < 200:
         return EvaluationResponse(
@@ -61,6 +63,7 @@ def _heuristic_evaluate(body: EvaluationRequest) -> EvaluationResponse:
         )
 
     # Default: no replanning needed
+    # 默认：无需重新规划
     return EvaluationResponse(should_replan=False, reason="Sufficient quality detected")
 
 
@@ -91,10 +94,12 @@ async def evaluate_results(
     providers = getattr(request.app.state, "providers", None)
 
     # If no providers configured, use heuristics
+    # 未配置 providers 时走启发式判断
     if not providers or not providers.is_configured():
         return _heuristic_evaluate(body)
 
     # Build model prompt with comprehensive quality criteria
+    # 用完整的质量评估标准构造模型 prompt
     sys = (
         "You are a research quality evaluator assessing the completeness and accuracy of research findings.\n\n"
         "# Evaluation Criteria:\n\n"
@@ -125,6 +130,7 @@ async def evaluate_results(
         "3. What sources need verification?\n"
     )
     # Summarize results compactly
+    # 紧凑地汇总各 agent 结果
     max_items = 6
     parts = []
     for i, r in enumerate(body.results[:max_items]):

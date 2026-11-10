@@ -6,18 +6,22 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Health check cache duration in seconds
+/// 健康检查 cache 时长，单位秒
 const HEALTH_CHECK_CACHE_SECS: u64 = 30;
 
 /// Default timeout for /execute calls (matches executor default)
+/// /execute 调用的默认 timeout（与执行器默认值一致）
 const EXECUTE_TIMEOUT_SECS: u64 = 300;
 
 /// Shared state for health check caching across clones
+/// 跨克隆共享的健康检查 cache 状态
 struct HealthCheckState {
     is_healthy: AtomicBool,
     last_check_epoch_secs: AtomicU64,
 }
 
 /// Global singleton client to preserve health cache across calls (P1 fix)
+/// 全局单例客户端，使健康 cache 可跨调用保留（P1 修复）
 static GLOBAL_CLIENT: Lazy<FirecrackerExecutorClient> =
     Lazy::new(|| FirecrackerExecutorClient::new_internal());
 
@@ -54,6 +58,7 @@ pub struct FirecrackerExecutorClient {
 
 impl FirecrackerExecutorClient {
     /// Get the global singleton client (preserves health cache)
+    /// 获取全局单例客户端（保留健康 cache）
     pub fn from_env() -> &'static Self {
         &GLOBAL_CLIENT
     }
@@ -77,7 +82,9 @@ impl FirecrackerExecutorClient {
     }
 
     /// Perform a health check against the Firecracker executor service.
+    /// 对 Firecracker 执行器服务做健康检查。
     /// Returns true if the service is healthy, false otherwise.
+    /// 服务健康返回 true，否则返回 false。
     pub async fn health_check(&self) -> Result<bool> {
         let url = format!("{}/health", self.base_url.trim_end_matches('/'));
         match self
@@ -103,12 +110,15 @@ impl FirecrackerExecutorClient {
     }
 
     /// Get the executor URL for logging
+    /// 获取执行器 URL 用于日志
     pub fn base_url(&self) -> &str {
         &self.base_url
     }
 
     /// Check if Firecracker executor is available, using cached result.
+    /// 检查 Firecracker 执行器是否可用，使用 cache 结果。
     /// The health check is performed at most once every HEALTH_CHECK_CACHE_SECS seconds.
+    /// 健康检查最多每 HEALTH_CHECK_CACHE_SECS 秒执行一次。
     pub async fn is_available(&self) -> bool {
         let now_secs = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -121,14 +131,17 @@ impl FirecrackerExecutorClient {
             .load(Ordering::Relaxed);
 
         // If cache is still valid, return cached result
+        // cache 仍有效时直接返回 cache 结果
         if now_secs.saturating_sub(last_check) < HEALTH_CHECK_CACHE_SECS {
             return self.health_state.is_healthy.load(Ordering::Relaxed);
         }
 
         // Perform fresh health check
+        // 执行一次新的健康检查
         let healthy = self.health_check().await.unwrap_or(false);
 
         // Update cache
+        // 更新 cache
         self.health_state
             .is_healthy
             .store(healthy, Ordering::Relaxed);
@@ -146,7 +159,9 @@ impl FirecrackerExecutorClient {
         let url = format!("{}/execute", self.base_url.trim_end_matches('/'));
 
         // P1 fix: Add timeout to /execute call
+        // P1 修复：为 /execute 调用添加 timeout
         // Use request-specified timeout or default, plus buffer for network
+        // 使用 request 指定的 timeout 或默认值，并加上网络缓冲
         let timeout_secs = req
             .timeout_seconds
             .map(|t| t as u64)
@@ -162,6 +177,7 @@ impl FirecrackerExecutorClient {
             .await?;
 
         // P1 fix: Propagate 503 status as error to trigger WASI fallback
+        // P1 修复：将 503 状态转为错误，以触发 WASI 回退
         if resp.status() == reqwest::StatusCode::SERVICE_UNAVAILABLE {
             let body = resp.text().await.unwrap_or_default();
             return Err(anyhow!("firecracker executor unavailable (503): {}", body));
@@ -181,6 +197,7 @@ impl FirecrackerExecutorClient {
     }
 
     /// Download a file from session workspace
+    /// 从 session 工作区下载文件
     pub async fn download_file(
         &self,
         session_id: &str,
@@ -218,6 +235,7 @@ impl FirecrackerExecutorClient {
     }
 
     /// List files in session workspace
+    /// 列出 session 工作区中的文件
     pub async fn list_files(
         &self,
         session_id: &str,

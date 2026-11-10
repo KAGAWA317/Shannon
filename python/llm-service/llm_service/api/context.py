@@ -29,9 +29,11 @@ async def compress_context(request: Request, body: CompressRequest) -> CompressR
         raise HTTPException(status_code=400, detail="messages required")
 
     # If no providers, fallback to heuristic: join and truncate
+    # 没有 providers 时退化为启发式：拼接后截断
     if not providers or not providers.is_configured():
         joined = "\n".join([m.content for m in body.messages[-10:]])
         # Very simple heuristic compression
+        # 极简的启发式压缩
         summary = joined[: min(len(joined), 1000)]
         if len(joined) > 1000:
             summary += "..."
@@ -40,11 +42,13 @@ async def compress_context(request: Request, body: CompressRequest) -> CompressR
         )
 
     # Build prompt for compact summary
+    # 构造用于生成精简摘要的 prompt
     sys = (
         "You compress long conversations into a concise, factual summary. "
         "Capture key decisions, entities, intents, and unresolved items."
     )
     # Use only the last N messages for cost, but summarize older context implicitly
+    # 为控制成本只取最后 N 条消息，更早的 context 靠摘要隐含覆盖
     recent = body.messages[-20:]
     user = "\n".join([f"{m.role}: {m.content}" for m in recent])
 

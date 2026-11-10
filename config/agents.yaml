@@ -1,10 +1,14 @@
 # Shannon Agent Definitions
+# Shannon Agent 定义
 # Define custom agents with specific tools, parameters, and behaviors.
+# 定义带有特定 tool、参数与行为的自定义 Agent。
 # See docs/extending-shannon.md for details.
+# 详情见 docs/extending-shannon.md。
 
 version: "1.0"
 
 # Agent definitions (add your custom agents here)
+# Agent 定义（在此添加自定义 Agent）
 agents: {}
 
 # Global settings

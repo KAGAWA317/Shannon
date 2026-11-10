@@ -1,4 +1,7 @@
-"""Example of browsing the skills catalog."""
+"""Example of browsing the skills catalog.
+
+示例：浏览技能（skills）目录。
+"""
 
 import os
 

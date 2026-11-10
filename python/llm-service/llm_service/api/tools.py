@@ -1,5 +1,6 @@
 """
 Tools API endpoints for Shannon platform
+Shannon 平台的 tools API endpoints
 """
 
 from fastapi import APIRouter, HTTPException, Request
@@ -33,6 +34,7 @@ from ..tools.builtin import (
 )
 
 # Browser automation tool (requires playwright service)
+# 浏览器自动化 tool（需要 playwright 服务）
 try:
     from ..tools.builtin import BrowserTool
     _HAS_BROWSER_TOOLS = True
@@ -43,12 +45,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tools", tags=["tools"])
 
 # Simple in-memory TTL cache for tool selection
+# 用于 tool 选择的简单内存 TTL cache
 _SELECT_CACHE: Dict[str, Dict[str, Any]] = {}
 _SELECT_TTL_SECONDS = 300  # 5 minutes
 
 
 class ToolExecuteRequest(BaseModel):
-    """Request to execute a tool"""
+    """Request to execute a tool
+
+    执行 tool 的 request。
+    """
 
     tool_name: str = Field(..., description="Name of the tool to execute")
     parameters: Dict[str, Any] = Field(..., description="Tool parameters")
@@ -66,7 +72,10 @@ class ToolExecuteRequest(BaseModel):
 
 
 class ToolExecuteResponse(BaseModel):
-    """Response from tool execution"""
+    """Response from tool execution
+
+    tool 执行 response。
+    """
 
     success: bool
     output: Any
@@ -77,7 +86,10 @@ class ToolExecuteResponse(BaseModel):
 
 
 class ToolSchemaResponse(BaseModel):
-    """Tool schema information"""
+    """Tool schema information
+
+    tool schema 信息。
+    """
 
     name: str
     description: str
@@ -85,7 +97,10 @@ class ToolSchemaResponse(BaseModel):
 
 
 class ToolSelectRequest(BaseModel):
-    """Request to select tools for a task"""
+    """Request to select tools for a task
+
+    为 task 选择 tools 的 request。
+    """
 
     task: str = Field(..., description="Natural language task")
     context: Optional[Dict[str, Any]] = Field(
@@ -170,6 +185,7 @@ class OpenAPIRegisterResponse(BaseModel):
     operations_registered: List[str] = Field(default_factory=list)
     message: Optional[str] = None
     # Echo back selected config values for verification
+    # 回显选中的 config 值以便校验
     rate_limit: Optional[int] = None
     timeout_seconds: Optional[float] = None
     max_response_bytes: Optional[int] = None
@@ -191,16 +207,25 @@ class OpenAPIValidateResponse(BaseModel):
 def _resolve_shannon_config_path() -> str:
     """Resolve config path with backward-compatible env fallbacks.
 
+    以向后兼容的 env fallback 解析 config 路径。
+
     Order:
     - SHANNON_CONFIG_PATH
     - CONFIG_PATH (legacy; may point to a directory or features.yaml)
     - /app/config/shannon.yaml (default)
+
+    顺序：
+    - SHANNON_CONFIG_PATH
+    - CONFIG_PATH（legacy；可能指向目录或 features.yaml）
+    - /app/config/shannon.yaml（默认）
     """
     for env_var in ("SHANNON_CONFIG_PATH", "CONFIG_PATH"):
         val = os.getenv(env_var)
         if val:
             # CONFIG_PATH may be set to a directory (e.g. /app/config);
             # auto-append shannon.yaml so callers get a file path.
+            # CONFIG_PATH 可能被设为目录（例如 /app/config）；
+            # 自动补上 shannon.yaml，让调用方拿到文件路径。
             if os.path.isdir(val):
                 return os.path.join(val, "shannon.yaml")
             return val
@@ -210,11 +235,18 @@ def _resolve_shannon_config_path() -> str:
 def _sanitize_session_context(ctx: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """Pass through only safe, expected keys to tools.
 
+    仅向 tools 透传安全且预期内的 key。
+
     Keeps: session_id, user_id, prompt_params, tool_parameters.
+    保留：session_id、user_id、prompt_params、tool_parameters。
 
     Note: allow_browser_evaluate is intentionally NOT in any allowlist.
     The browser evaluate action is disabled at both API paths (here and
     agent.py safe_keys). To enable it, add to both allowlists.
+
+    注意：allow_browser_evaluate 有意不在任何 allowlist 中。
+    browser evaluate 动作在两个 API 路径上都被禁用（此处与
+    agent.py 的 safe_keys）。如需启用，请同时加入两个 allowlist。
     """
     if not isinstance(ctx, dict):
         return None
@@ -223,8 +255,12 @@ def _sanitize_session_context(ctx: Optional[Dict[str, Any]]) -> Optional[Dict[st
 
 
 def _load_mcp_tools_from_config():
-    """Load MCP tool definitions from config file"""
+    """Load MCP tool definitions from config file
+
+    从 config 文件加载 MCP tool 定义。
+    """
     # Prefer SHANNON_CONFIG_PATH with a legacy fallback
+    # 优先使用 SHANNON_CONFIG_PATH，并保留 legacy fallback
     config_path = _resolve_shannon_config_path()
     if not os.path.exists(config_path):
         logger.debug(
@@ -244,6 +280,7 @@ def _load_mcp_tools_from_config():
                 continue
 
             # Expand env vars in headers
+            # 展开 headers 中的 env var
             headers = tool_config.get("headers", {})
             for key, value in headers.items():
                 if (
@@ -255,9 +292,11 @@ def _load_mcp_tools_from_config():
                     headers[key] = os.getenv(env_var, "")
 
             # Convert parameters to expected format
+            # 将 parameters 转成预期格式
             params = tool_config.get("parameters", [])
             if params and isinstance(params, list):
                 # Already in list format from YAML
+                # YAML 中已是 list 格式
                 pass
 
             tool_class = create_mcp_tool_class(
@@ -278,8 +317,12 @@ def _load_mcp_tools_from_config():
 
 
 def _load_openapi_tools_from_config():
-    """Load OpenAPI tool definitions from config file"""
+    """Load OpenAPI tool definitions from config file
+
+    从 config 文件加载 OpenAPI tool 定义。
+    """
     # Prefer SHANNON_CONFIG_PATH with a legacy fallback
+    # 优先使用 SHANNON_CONFIG_PATH，并保留 legacy fallback
     config_path = _resolve_shannon_config_path()
     logger.info(f"Loading OpenAPI tools from config: {config_path}")
 
@@ -321,10 +364,14 @@ def _load_openapi_tools_from_config():
 
 @router.on_event("startup")
 async def startup_event():
-    """Initialize and register built-in tools on startup"""
+    """Initialize and register built-in tools on startup
+
+    启动时初始化并注册内置 tools。
+    """
     registry = get_registry()
 
     # Register built-in tools
+    # 注册内置 tools
     tools_to_register = [
         WebSearchTool,
         WebFetchTool,
@@ -352,12 +399,15 @@ async def startup_event():
             logger.error(f"Failed to register {tool_class.__name__}: {e}")
 
     # Load MCP tools from config
+    # 从 config 加载 MCP tools
     _load_mcp_tools_from_config()
 
     # Load OpenAPI tools from config
+    # 从 config 加载 OpenAPI tools
     _load_openapi_tools_from_config()
 
     # Register browser automation tool if available
+    # 若可用，注册浏览器自动化 tool
     if _HAS_BROWSER_TOOLS:
         try:
             registry.register(BrowserTool)
@@ -376,19 +426,25 @@ async def list_tools(
     """
     List available tools
 
+    列出可用的 tools。
+
     Args:
         category: Filter by category (e.g., "search", "calculation", "file")
+            按 category 过滤（例如 "search"、"calculation"、"file"）
         exclude_dangerous: Whether to exclude dangerous tools
+            是否排除 dangerous tools
     """
     registry = get_registry()
 
     if category:
         # Filter by category
+        # 按 category 过滤
         tools = registry.list_tools_by_category(category)
     else:
         tools = registry.list_tools()
 
     # Apply danger filter if requested
+    # 如请求则应用 danger 过滤
     if exclude_dangerous:
         filtered = []
         for tool_name in tools:
@@ -402,7 +458,10 @@ async def list_tools(
 
 @router.get("/categories", response_model=List[str])
 async def list_categories() -> List[str]:
-    """List all tool categories"""
+    """List all tool categories
+
+    列出所有 tool categories。
+    """
     registry = get_registry()
     return registry.list_categories()
 
@@ -412,8 +471,11 @@ async def get_tool_schema(tool_name: str) -> ToolSchemaResponse:
     """
     Get schema for a specific tool
 
+    获取指定 tool 的 schema。
+
     Args:
         tool_name: Name of the tool
+            tool 名称
     """
     registry = get_registry()
     schema = registry.get_tool_schema(tool_name)
@@ -436,19 +498,25 @@ async def get_all_schemas(
     """
     Get schemas for all available tools
 
+    获取所有可用 tools 的 schema。
+
     Args:
         category: Filter by category
+            按 category 过滤
         exclude_dangerous: Whether to exclude dangerous tools
+            是否排除 dangerous tools
     """
     registry = get_registry()
 
     # Get filtered tool names
+    # 获取过滤后的 tool 名称
     if category:
         tool_names = registry.list_tools_by_category(category)
     else:
         tool_names = registry.list_tools()
 
     # Build schemas
+    # 构建 schemas
     schemas = []
     for tool_name in tool_names:
         tool = registry.get_tool(tool_name)
@@ -456,6 +524,7 @@ async def get_all_schemas(
             continue
 
         # Skip dangerous tools if requested
+        # 如请求则跳过 dangerous tools
         if exclude_dangerous and tool.metadata.dangerous:
             continue
 
@@ -477,10 +546,16 @@ async def register_mcp_tool(
 ) -> MCPRegisterResponse:
     """Register a remote MCP function as a local Tool.
 
+    将一个远端 MCP function 注册为本地 Tool。
+
     After registration, the tool is accessible via /tools/execute with the given name.
     If `parameters` is omitted, the tool accepts a single OBJECT parameter `args`.
+
+    注册后，该 tool 可通过 /tools/execute 以给定名称访问。
+    若省略 `parameters`，该 tool 只接受一个 OBJECT 参数 `args`。
     """
     # Admin token gate (optional): if MCP_REGISTER_TOKEN is set, require token
+    # Admin token 校验（可选）：若设置了 MCP_REGISTER_TOKEN，则要求 token
     admin_token = os.getenv("MCP_REGISTER_TOKEN", "").strip()
     if admin_token:
         auth = request.headers.get("Authorization", "")
@@ -493,6 +568,7 @@ async def register_mcp_tool(
     registry = get_registry()
 
     # Convert parameter defs (if provided) to plain dicts for tool class factory
+    # 将参数定义（若提供）转为普通 dict，供 tool class 工厂使用
     param_defs = None
     if req.parameters:
         param_defs = [p.dict() for p in req.parameters]
@@ -520,17 +596,22 @@ async def validate_openapi_spec(req: OpenAPIValidateRequest) -> OpenAPIValidateR
     """
     Validate an OpenAPI spec and preview operations without registering.
 
+    校验 OpenAPI spec 并预览 operations，不进行注册。
+
     Args:
         req: Validation request with spec URL or inline spec
+            携带 spec URL 或内联 spec 的校验 request
 
     Returns:
         Validation response with operations list and errors
+        包含 operations 列表与 errors 的校验 response
     """
     from ..tools.openapi_tool import _fetch_spec_from_url, OpenAPILoader
     from ..tools.openapi_parser import OpenAPIParseError
 
     try:
         # Get spec
+        # 获取 spec
         spec_url_for_loader = None
         if req.spec_url:
             spec = _fetch_spec_from_url(req.spec_url)
@@ -547,6 +628,7 @@ async def validate_openapi_spec(req: OpenAPIValidateRequest) -> OpenAPIValidateR
             )
 
         # Create temporary loader to validate
+        # 创建临时 loader 用于校验
         loader = OpenAPILoader(
             name="__validate__",
             spec=spec,
@@ -556,6 +638,7 @@ async def validate_openapi_spec(req: OpenAPIValidateRequest) -> OpenAPIValidateR
         )
 
         # Extract operations
+        # 提取 operations
         operations = []
         for op_data in loader.operations:
             operations.append(
@@ -592,20 +675,29 @@ async def register_openapi_tools(
     """
     Register OpenAPI spec as Shannon tools dynamically.
 
+    将 OpenAPI spec 动态注册为 Shannon tools。
+
     After registration, each operation is accessible via /tools/execute with its operationId.
     Requires admin token if MCP_REGISTER_TOKEN is set (same security model as MCP).
 
+    注册后，每个 operation 可通过 /tools/execute 以其 operationId 访问。
+    若设置了 MCP_REGISTER_TOKEN，则要求 admin token（与 MCP 相同的安全模型）。
+
     Args:
         req: Registration request with spec and configuration
+            携带 spec 与配置的注册 request
         request: FastAPI request for auth header access
+            用于访问 auth header 的 FastAPI request
 
     Returns:
         Registration response with list of registered operations
+        包含已注册 operations 列表的注册 response
     """
     from ..tools.openapi_tool import _fetch_spec_from_url, OpenAPILoader
     from ..tools.openapi_parser import OpenAPIParseError
 
     # Admin token gate (reuse MCP_REGISTER_TOKEN)
+    # Admin token 校验（复用 MCP_REGISTER_TOKEN）
     admin_token = os.getenv("MCP_REGISTER_TOKEN", "").strip()
     if admin_token:
         auth = request.headers.get("Authorization", "")
@@ -617,6 +709,7 @@ async def register_openapi_tools(
 
     try:
         # Get spec
+        # 获取 spec
         spec_url_for_loader = None
         if req.spec_url:
             spec = _fetch_spec_from_url(req.spec_url)
@@ -633,6 +726,7 @@ async def register_openapi_tools(
             )
 
         # Create loader
+        # 创建 loader
         loader = OpenAPILoader(
             name=req.name,
             spec=spec,
@@ -650,6 +744,7 @@ async def register_openapi_tools(
         )
 
         # Generate and register tools
+        # 生成并注册 tools
         tool_classes = loader.generate_tools()
         registry = get_registry()
 
@@ -658,6 +753,7 @@ async def register_openapi_tools(
             try:
                 registry.register(tool_class, override=True)
                 # Extract operation_id from class name
+                # 从 class name 中提取 operation_id
                 temp_instance = tool_class()
                 registered_ops.append(temp_instance.metadata.name)
             except Exception as e:
@@ -692,8 +788,11 @@ async def execute_tool(request: ToolExecuteRequest) -> ToolExecuteResponse:
     """
     Execute a tool with given parameters
 
+    使用给定 parameters 执行 tool。
+
     Args:
         request: Tool execution request
+            tool 执行 request
     """
     registry = get_registry()
     tool = registry.get_tool(request.tool_name)
@@ -706,6 +805,8 @@ async def execute_tool(request: ToolExecuteRequest) -> ToolExecuteResponse:
     try:
         # Unwrap parameters if they're nested under the tool name
         # This handles cases where orchestrator wraps all parameters under tool name key
+        # 若 parameters 嵌套在 tool name 之下则解包
+        # 用于处理 orchestrator 将所有 parameters 包在 tool name key 下的情况
         params = request.parameters
         if (
             len(params) == 1
@@ -713,6 +814,7 @@ async def execute_tool(request: ToolExecuteRequest) -> ToolExecuteResponse:
             and isinstance(params[request.tool_name], dict)
         ):
             # Unwrap the nested parameters
+            # 解包嵌套的 parameters
             params = params[request.tool_name]
             logger.info(
                 f"Unwrapped parameters from nested '{request.tool_name}' key",
@@ -721,6 +823,8 @@ async def execute_tool(request: ToolExecuteRequest) -> ToolExecuteResponse:
 
         # Execute the tool and return raw results
         # Pass session_context if provided for parameter injection
+        # 执行 tool 并返回原始结果
+        # 若提供了 session_context，则用于参数注入
         result = await tool.execute(
             session_context=_sanitize_session_context(request.session_context),
             **params,
@@ -758,8 +862,11 @@ async def batch_execute_tools(
     """
     Execute multiple tools in batch (sequentially for now)
 
+    批量执行多个 tools（目前为顺序执行）。
+
     Args:
         requests: List of tool execution requests
+            一组 tool 执行 request
     """
     results = []
 
@@ -769,6 +876,7 @@ async def batch_execute_tools(
             results.append(result)
         except HTTPException as e:
             # Add error result for missing tools
+            # 为缺失的 tools 追加 error 结果
             results.append(
                 ToolExecuteResponse(
                     success=False,
@@ -785,8 +893,11 @@ async def get_tool_metadata(tool_name: str) -> Dict[str, Any]:
     """
     Get detailed metadata for a tool
 
+    获取 tool 的详细 metadata。
+
     Args:
         tool_name: Name of the tool
+            tool 名称
     """
     registry = get_registry()
     metadata = registry.get_tool_metadata(tool_name)
@@ -814,11 +925,15 @@ async def get_tool_metadata(tool_name: str) -> Dict[str, Any]:
 async def select_tools(req: Request, body: ToolSelectRequest) -> ToolSelectResponse:
     """LLM-backed tool selection with safe fallback.
 
+    由 LLM 驱动的 tool 选择，带安全 fallback。
+
     Returns selected tool names and suggested calls.
+    返回选中的 tool 名称与建议的调用。
     """
     registry = get_registry()
 
     # Cache key ignores context to keep things simple and safe
+    # cache key 忽略 context，以保持简单与安全
     cache_key = f"{body.task}|{body.exclude_dangerous}|{body.max_tools}"
     import time
 
@@ -828,11 +943,13 @@ async def select_tools(req: Request, body: ToolSelectRequest) -> ToolSelectRespo
         data = cached.get("data", {})
         try:
             # Fast path: reconstruct Pydantic response
+            # 快速路径：重建 Pydantic response
             return ToolSelectResponse(**data)
         except Exception:
             pass
 
     # Gather available tools (respect danger filter)
+    # 收集可用 tools（遵循 danger 过滤）
     tool_names = registry.list_tools()
     filtered_tools: List[str] = []
     for name in tool_names:
@@ -844,14 +961,17 @@ async def select_tools(req: Request, body: ToolSelectRequest) -> ToolSelectRespo
         filtered_tools.append(name)
 
     # Early exit if none
+    # 若为空则提前返回
     if not filtered_tools or body.max_tools == 0:
         return ToolSelectResponse(selected_tools=[], calls=[], provider_used=None)
 
     # Try LLM-based selection when providers are configured
+    # 当 provider 已配置时，尝试基于 LLM 的选择
     providers = getattr(req.app.state, "providers", None)
     if providers and providers.is_configured():
         try:
             # Build concise tool descriptions to keep prompt small
+            # 构建精简的 tool 描述，保持 prompt 较小
             tools_summary = []
             for name in filtered_tools:
                 tool = registry.get_tool(name)
@@ -883,6 +1003,7 @@ async def select_tools(req: Request, body: ToolSelectRequest) -> ToolSelectRespo
             }
 
             # Ask a small model to return JSON; avoid provider-specific tool_call plumbing
+            # 让小模型返回 JSON；避免 provider 专属的 tool_call 链路
             wf_id = (
                 req.headers.get("X-Parent-Workflow-ID")
                 or req.headers.get("X-Workflow-ID")
@@ -911,6 +1032,7 @@ async def select_tools(req: Request, body: ToolSelectRequest) -> ToolSelectRespo
                 data = _json.loads(raw)
             except Exception:
                 # lenient fallback: try to find first {...}
+                # 宽松 fallback：尝试定位第一个 {...}
                 import re
 
                 m = re.search(r"\{[\s\S]*\}", raw)
@@ -937,6 +1059,7 @@ async def select_tools(req: Request, body: ToolSelectRequest) -> ToolSelectRespo
                     except Exception:
                         continue
                 # If calls empty but selected present, synthesize empty-arg calls
+                # 若 calls 为空但 selected 非空，则合成空参数调用
                 if not calls and selected:
                     calls = [ToolCall(tool_name=n, parameters={}) for n in selected]
                 resp = ToolSelectResponse(
@@ -950,6 +1073,7 @@ async def select_tools(req: Request, body: ToolSelectRequest) -> ToolSelectRespo
             logger.warning(f"Tool selection LLM fallback due to error: {e}")
 
     # Heuristic fallback: very small, safe defaults
+    # 启发式 fallback：非常小且安全的默认值
     selected: List[str] = []
     calls: List[ToolCall] = []
 
@@ -965,6 +1089,8 @@ async def select_tools(req: Request, body: ToolSelectRequest) -> ToolSelectRespo
 
     # No fallback pattern matching - trust the LLM's decision
     # If LLM providers aren't configured or fail, return empty selection
+    # 不做 fallback 模式匹配 —— 信任 LLM 的决定
+    # 若 LLM providers 未配置或失败，则返回空选择
 
     resp = ToolSelectResponse(selected_tools=selected, calls=calls, provider_used=None)
     _SELECT_CACHE[cache_key] = {"ts": now, "data": resp.dict()}

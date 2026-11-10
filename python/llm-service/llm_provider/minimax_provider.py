@@ -6,6 +6,14 @@ Key constraints:
   - Temperature must be in (0.0, 1.0] — values <= 0 are clamped to 0.01
   - M2.7 models may emit <think>...</think> blocks; these are stripped
   - API base URL: https://api.minimax.io/v1
+
+MiniMax LLM provider 实现
+
+MiniMax 提供 OpenAI 兼容的 chat completions API。
+关键约束：
+  - temperature 必须在 (0.0, 1.0] 内 —— <= 0 的值会被钳制为 0.01
+  - M2.7 model 可能输出 <think>...</think> block；这些会被移除
+  - API base URL：https://api.minimax.io/v1
 """
 
 from __future__ import annotations
@@ -28,14 +36,19 @@ from .base import (
 )
 
 # Regex to strip <think>...</think> blocks emitted by reasoning-capable models
+# 用于移除具备 reasoning 能力的 model 输出的 <think>...</think> block 的 regex
 _THINK_TAG_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 
 _MINIMAX_BASE_URL = "https://api.minimax.io/v1"
 _TEMP_MIN = 0.01  # MiniMax requires temperature > 0
+# MiniMax 要求 temperature > 0
 
 
 def _clamp_temperature(temp: Optional[float]) -> float:
-    """Ensure temperature is in (0.0, 1.0] as required by MiniMax."""
+    """Ensure temperature is in (0.0, 1.0] as required by MiniMax.
+
+    确保 temperature 在 MiniMax 要求的 (0.0, 1.0] 范围内。
+    """
     if temp is None:
         return 0.7
     if temp <= 0.0:
@@ -46,12 +59,18 @@ def _clamp_temperature(temp: Optional[float]) -> float:
 
 
 def _strip_think_tags(text: str) -> str:
-    """Remove <think>...</think> reasoning blocks from model output."""
+    """Remove <think>...</think> reasoning blocks from model output.
+
+    从 model 输出中移除 <think>...</think> reasoning block。
+    """
     return _THINK_TAG_RE.sub("", text).strip()
 
 
 class MiniMaxProvider(LLMProvider):
-    """MiniMax LLM provider using the OpenAI-compatible chat completions API."""
+    """MiniMax LLM provider using the OpenAI-compatible chat completions API.
+
+    使用 OpenAI 兼容 chat completions API 的 MiniMax LLM provider。
+    """
 
     def __init__(self, config: Dict[str, Any]):
         api_key = config.get("api_key") or os.getenv("MINIMAX_API_KEY")
@@ -71,6 +90,7 @@ class MiniMaxProvider(LLMProvider):
 
     # ------------------------------------------------------------------
     # Model initialisation
+    # 模型初始化
     # ------------------------------------------------------------------
 
     def _initialize_models(self) -> None:
@@ -79,7 +99,10 @@ class MiniMaxProvider(LLMProvider):
             self._add_default_models()
 
     def _add_default_models(self) -> None:
-        """Fallback catalog when models.yaml is not loaded."""
+        """Fallback catalog when models.yaml is not loaded.
+
+        models.yaml 未加载时的兜底 model 目录。
+        """
         defaults: Dict[str, Dict[str, Any]] = {
             "MiniMax-M3": {
                 "model_id": "MiniMax-M3",
@@ -112,6 +135,7 @@ class MiniMaxProvider(LLMProvider):
 
     # ------------------------------------------------------------------
     # Helpers
+    # 辅助方法
     # ------------------------------------------------------------------
 
     def count_tokens(self, messages: List[Dict[str, Any]], model: str) -> int:
@@ -125,6 +149,7 @@ class MiniMaxProvider(LLMProvider):
 
     # ------------------------------------------------------------------
     # Completion
+    # completion 调用
     # ------------------------------------------------------------------
 
     @retry(
@@ -160,6 +185,8 @@ class MiniMaxProvider(LLMProvider):
 
         # MiniMax does not support response_format with json_object; omit it.
         # (Sending an unsupported response_format causes a 400 error.)
+        # MiniMax 不支持 json_object 形式的 response_format；直接省略。
+        # （发送不支持的 response_format 会导致 400 错误。）
 
         if request.user:
             payload["user"] = request.user
@@ -220,6 +247,7 @@ class MiniMaxProvider(LLMProvider):
 
     # ------------------------------------------------------------------
     # Streaming
+    # streaming 调用
     # ------------------------------------------------------------------
 
     async def stream_complete(self, request: CompletionRequest) -> AsyncIterator[str]:
@@ -239,6 +267,7 @@ class MiniMaxProvider(LLMProvider):
             payload["max_tokens"] = request.max_tokens
 
         # Buffer to strip think-tags that may span multiple chunks
+        # 用于移除可能跨多个 chunk 的 think tag 的缓冲区
         buffer = ""
         in_think = False
 
@@ -250,6 +279,7 @@ class MiniMaxProvider(LLMProvider):
                     buffer += delta
 
                     # Flush safe (non-think) portions
+                    # 输出安全的（非 think）部分
                     while True:
                         if in_think:
                             end = buffer.find("</think>")
@@ -282,6 +312,7 @@ class MiniMaxProvider(LLMProvider):
                     }
 
             # Flush any remaining safe content
+            # 输出剩余的安全内容
             if buffer and not in_think:
                 yield buffer
 

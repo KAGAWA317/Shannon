@@ -7,6 +7,7 @@ import (
 
 var (
 	// Pattern execution counters
+	// 所有 pattern 指标都带 workflow_version label，用于新旧版本灰度对比。
 	PatternExecutions = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "shannon_pattern_executions_total",

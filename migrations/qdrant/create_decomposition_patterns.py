@@ -20,6 +20,7 @@ from qdrant_client.models import (
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 COLLECTION_NAME = "decomposition_patterns"
 VECTOR_SIZE = 1536  # OpenAI embedding size
+# OpenAI embedding 维度
 
 def create_decomposition_patterns_collection():
     """Create the decomposition_patterns collection with appropriate configuration."""
@@ -35,6 +36,7 @@ def create_decomposition_patterns_collection():
         print(f"Collection '{COLLECTION_NAME}' already exists")
 
         # Optionally recreate collection (uncomment if needed)
+        # 可选：重建 collection（需要时取消注释）
         # response = input("Do you want to recreate it? (y/N): ")
         # if response.lower() == 'y':
         #     print(f"Deleting existing collection '{COLLECTION_NAME}'...")
@@ -54,11 +56,13 @@ def create_decomposition_patterns_collection():
             distance=Distance.COSINE,
         ),
         # Optimize for search performance
+        # 针对搜索性能优化
         optimizers_config={
             "default_segment_number": 2,
             "indexing_threshold": 10000,
         },
         # Configure write-ahead log
+        # 配置 write-ahead log
         wal_config={
             "wal_capacity_mb": 32,
             "wal_segments_ahead": 0,
@@ -68,6 +72,7 @@ def create_decomposition_patterns_collection():
     print(f"Collection '{COLLECTION_NAME}' created successfully")
 
     # Create payload indexes for efficient filtering
+    # 创建 payload 索引以支持高效过滤
     print("Creating payload indexes...")
 
     # Index for session_id (exact match filtering)

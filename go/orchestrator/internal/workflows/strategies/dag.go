@@ -123,6 +123,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Validate DAG dependencies for cycles (prevents infinite waits)
+	// 校验 DAG 依赖是否有环，避免无限等待。
 	if len(decomp.Subtasks) > 1 {
 		subtaskInfos := make([]validation.SubtaskInfo, len(decomp.Subtasks))
 		for i, st := range decomp.Subtasks {
@@ -176,6 +177,8 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	// - Fallback to simple if decomposition returned zero subtasks (LLM/schema hiccup)
 	// - Otherwise, only treat as simple when no tools are needed AND it's trivial AND below threshold
 	//   A single tool-based subtask should use the pattern path, not the simple activity
+	// 分解返回零 subtask（LLM/schema 抖动）时退回 simple；
+	// 其余情况仅当无 tool、task 琐碎且低于阈值时才走 simple——单个依赖 tool 的 subtask 应走 pattern 路径。
 	simpleByShape := len(decomp.Subtasks) == 0 || (len(decomp.Subtasks) == 1 && !needsTools)
 	isSimple := len(decomp.Subtasks) == 0 || (decomp.ComplexityScore < config.SimpleThreshold && simpleByShape)
 
@@ -347,6 +350,8 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	// 1. BypassSingleResult (config-driven optimization)
 	// 2. Synthesis subtask detection (respects user intent)
 	// 3. Standard synthesis (default behavior)
+	// 合成决策优先级：① BypassSingleResult（配置驱动的优化）；② 检测到合成 subtask（尊重用户意图）；
+	// ③ 默认标准合成。
 
 	// Count successful results for bypass logic
 	successfulCount := 0
@@ -361,6 +366,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	if input.BypassSingleResult && successfulCount == 1 {
 		// Heuristic guard: if the single result likely needs synthesis (e.g., web_search JSON),
 		// do not bypass — proceed to standard LLM synthesis for a user‑ready answer.
+		// 启发式保护：若唯一结果很可能需要合成（例如 web_search 的 JSON），则不跳过，走标准 LLM 合成。
 		shouldBypass := true
 		// 1) If tools used include web_search, prefer synthesis for natural language output
 		if len(singleSuccessResult.ToolsUsed) > 0 {
@@ -744,6 +750,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			// Use cited report and rebuild Sources with correct Used inline/Additional labels
 			// The new report has [n] markers, so FormatReportWithCitations will correctly
 			// identify which citations were actually used inline
+			// 新报告含 [n] 标注，FormatReportWithCitations 才能正确识别哪些引用真正用在行内。
 			citationsList := ""
 			if v, ok := baseContext["available_citations"].(string); ok {
 				citationsList = v
@@ -1320,6 +1327,7 @@ func executeHybridPattern(
 
 	// Convert map results to slice in original task order (deterministic)
 	// Map iteration is non-deterministic in Go, so we must iterate by original task order
+	// Go 的 map 遍历顺序不确定，必须按原始 task 顺序转成切片。
 	var agentResults []activities.AgentExecutionResult
 	for _, task := range hybridTasks {
 		if taskResult, found := result.Results[task.ID]; found {

@@ -10,6 +10,7 @@ import (
 )
 
 // DimensionMismatchError is returned when embedding dimensions don't match collection dimensions
+// embedding 维度与集合维度不一致时返回 DimensionMismatchError
 type DimensionMismatchError struct {
 	Collection        string
 	ExpectedDimension int
@@ -23,6 +24,7 @@ func (e DimensionMismatchError) Error() string {
 }
 
 // ValidateEmbeddingDimensions checks if the embedding dimensions match the collection configuration
+// ValidateEmbeddingDimensions 检查 embedding 维度是否与集合配置一致
 func (c *Client) ValidateEmbeddingDimensions(ctx context.Context) error {
 	if c == nil || !c.cfg.Enabled {
 		return nil
@@ -62,6 +64,7 @@ func (c *Client) ValidateEmbeddingDimensions(ctx context.Context) error {
 }
 
 // CollectionInfo holds basic information about a Qdrant collection
+// CollectionInfo 保存 Qdrant 集合的基本信息
 type CollectionInfo struct {
 	Name        string
 	VectorSize  int
@@ -116,6 +119,7 @@ func (c *Client) getCollectionInfo(ctx context.Context, collection string) (*Col
 }
 
 // ValidateAndInitialize validates dimensions and initializes the client
+// ValidateAndInitialize 校验维度并初始化客户端
 func ValidateAndInitialize(cfg Config) error {
 	Initialize(cfg)
 

@@ -65,6 +65,7 @@ func (h *ApprovalHandler) SubmitDecision(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Use authenticated user as approved_by if not provided
+	// 未提供 approved_by 时，使用 authenticated 用户。
 	if req.ApprovedBy == "" {
 		req.ApprovedBy = userCtx.UserID.String()
 	}

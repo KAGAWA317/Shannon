@@ -93,6 +93,7 @@ class MemorySystemEvaluator:
 
         for name, text, expected_chunks in test_texts:
             # Simulate chunking (would call actual Shannon API)
+            # 模拟分块（真实场景会调用 Shannon API）
             chunks = self.simulate_chunking(text, max_tokens=2000, overlap=200)
             actual_chunks = len(chunks) if len(chunks) > 1 else 0
 
@@ -230,6 +231,7 @@ class MemorySystemEvaluator:
 
         # Check Qdrant for actual point count
         # In real test, would query Qdrant API
+        # 真实测试中会查询 Qdrant API
         total_points = write1_points  # Should not double
 
         metrics = {
@@ -252,9 +254,11 @@ class MemorySystemEvaluator:
         test_answer = "Large answer content " * 1000  # ~20KB
 
         # Old method: store full answer in each chunk
+        # 旧方案：每个分块都保存完整答案
         old_storage = self.calculate_old_storage(test_answer, chunks=5)
 
         # New method: store only chunk text
+        # 新方案：只保存分块文本
         new_storage = self.calculate_new_storage(test_answer, chunks=5)
 
         reduction = (1 - new_storage / old_storage) * 100 if old_storage > 0 else 0
@@ -336,6 +340,7 @@ class MemorySystemEvaluator:
         }
 
         # Good scalability if sub-linear
+        # 若呈亚线性增长则扩展性良好
         passed = metrics["read_scalability_factor"] < 2.0
 
         return TestResult(
@@ -552,6 +557,7 @@ async def main():
     print(f"\n📄 Report saved to memory_evaluation_report.json")
 
     # Return exit code based on pass rate
+    # 根据通过率返回退出码
     return 0 if report["summary"]["pass_rate"] >= 80 else 1
 
 

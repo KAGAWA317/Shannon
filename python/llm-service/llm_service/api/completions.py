@@ -36,13 +36,18 @@ class CompletionRequest(BaseModel):
 
 @router.post("/")
 async def generate_completion(request: Request, body: CompletionRequest):
-    """Generate a completion using the LLM service"""
+    """Generate a completion using the LLM service
+
+    使用 LLM 服务生成 completion。
+    """
     providers = request.app.state.providers
 
     # If no providers are configured, return a simple mock response to keep local dev flows working
+    # 若未配置任何 provider，则返回简单的 mock response，保证本地开发流程可用
     try:
         if not providers or not providers.is_configured():
             # Simple deterministic mock based on last user message
+            # 基于最后一条用户消息生成简单的确定性 mock
             user_text = ""
             for m in reversed(body.messages or []):
                 if m.get("role") == "user":
@@ -53,6 +58,7 @@ async def generate_completion(request: Request, body: CompletionRequest):
                 "No providers are configured, so this is a placeholder response."
             )
             # Minimal usage estimate
+            # 最小化的 usage 估算
             prompt_tokens = max(len(user_text.split()), 1)
             completion_tokens = max(len(reply.split()), 1)
             total_tokens = prompt_tokens + completion_tokens
@@ -71,6 +77,7 @@ async def generate_completion(request: Request, body: CompletionRequest):
             return result
     except Exception:
         # If provider check fails unexpectedly, fall through to normal path which will error gracefully
+        # 若 provider 检查意外失败，则落回正常路径，由后者优雅报错
         pass
 
     # Convert tier string to enum
@@ -84,6 +91,7 @@ async def generate_completion(request: Request, body: CompletionRequest):
             )
 
     # Defensive sanitization: strip malformed history entries that cause provider 400/500s
+    # 防御性清理：剔除会导致 provider 返回 400/500 的畸形历史条目
     original_count = len(body.messages)
     body.messages = sanitize_completion_messages(body.messages)
     if len(body.messages) != original_count:
@@ -133,12 +141,14 @@ async def generate_completion(request: Request, body: CompletionRequest):
             raise HTTPException(status_code=500, detail=str(e))
 
     # After timing context exits, record metrics with final duration
+    # 在计时 context 退出后，用最终 duration 记录 metrics
     usage = result.get("usage", {}) or {}
     prompt_tokens = usage.get("input_tokens", usage.get("prompt_tokens", 0))
     completion_tokens = usage.get("output_tokens", usage.get("completion_tokens", 0))
     cost = usage.get("cost_usd", usage.get("cost", 0.0))
 
     # Check if response was cached (manager sets this flag)
+    # 检查 response 是否命中 cache（由 manager 设置该标记）
     cache_hit = result.get("cached", False)
 
     metrics.record_llm_request(
@@ -156,7 +166,10 @@ async def generate_completion(request: Request, body: CompletionRequest):
 
 
 async def _stream_completion(request, body, providers, tier):
-    """SSE generator for streaming completions."""
+    """SSE generator for streaming completions.
+
+    用于 streaming completion 的 SSE 生成器。
+    """
     import time
 
     start_time = time.time()

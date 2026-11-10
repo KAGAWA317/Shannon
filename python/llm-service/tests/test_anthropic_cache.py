@@ -1,9 +1,13 @@
-"""Tests for Anthropic prompt cache behavior with multi-turn messages."""
+"""Tests for Anthropic prompt cache behavior with multi-turn messages.
+
+多轮消息场景下 Anthropic prompt cache 行为的测试。
+"""
 
 import os
 import pytest
 
 # Set dummy key before import
+# 在 import 之前设置 dummy key
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-for-unit-tests")
 
 from llm_provider.anthropic_provider import AnthropicProvider, CACHE_TTL_LONG
@@ -30,7 +34,10 @@ class TestMultiTurnCacheBreakpoints:
 
     def test_multi_turn_no_per_message_cache_control(self):
         """Rolling cache_control marker lands on the penultimate message's last block;
-        all other messages stay as plain strings."""
+        all other messages stay as plain strings.
+
+        滚动 cache_control 标记落在倒数第二条消息的最后一个 block 上；其余消息保持纯字符串。
+        """
         provider = self._make_provider()
         messages = [
             {"role": "system", "content": "You are helpful."},
@@ -46,10 +53,12 @@ class TestMultiTurnCacheBreakpoints:
         assert len(claude_msgs) == 5
 
         # Rolling cache_control lands on claude_msgs[-2]; all others stay plain strings.
+        # 滚动 cache_control 落在 claude_msgs[-2]；其余消息保持纯字符串。
         penultimate_idx = len(claude_msgs) - 2
         for i, msg in enumerate(claude_msgs):
             if i == penultimate_idx:
                 # Rolling marker target — content promoted to list with cache_control
+                # 滚动标记目标 —— content 提升为带 cache_control 的 list
                 assert isinstance(msg["content"], list), \
                     f"penultimate msg content should be list, got {type(msg['content'])}"
             else:
@@ -62,6 +71,11 @@ class TestMultiTurnCacheBreakpoints:
 
         Uses cache_source='tui' to land in the long-TTL bucket — under the
         source-routed policy, unlabeled requests fall back to 5m (fail cheap).
+
+        system 消息在 _build_api_request 中获得 cache_control。
+
+        用 cache_source='tui' 落到长 TTL 桶 —— 在按 source 路由的策略下，
+        未标注的 request 回落到 5m（失败代价更低）。
         """
         provider = self._make_provider()
         from llm_provider.base import CompletionRequest
@@ -103,6 +117,11 @@ class TestMultiTurnCacheBreakpoints:
 
         Regression: ShanClaw sends <!-- cache_break -->volatile... when StableContext
         is empty. Empty text block + cache_control causes Anthropic 400 error.
+
+        开头就是 cache_break 且没有 stable 内容时，不得产生空的 text block。
+
+        回归背景：StableContext 为空时，ShanClaw 会发送 <!-- cache_break -->volatile...。
+        空的 text block + cache_control 会触发 Anthropic 400 错误。
         """
         provider = self._make_provider()
         messages = [
@@ -112,11 +131,15 @@ class TestMultiTurnCacheBreakpoints:
         _, claude_msgs = provider._convert_messages_to_claude_format(messages)
         user_msg = claude_msgs[0]
         # Should fall back to plain string (no content blocks with empty text)
+        # 应回落到纯字符串（不产生 text 为空的 content block）
         assert isinstance(user_msg["content"], str)
         assert user_msg["content"] == "\n## Context\nVolatile data here"
 
     def test_whitespace_only_stable_prefix(self):
-        """Whitespace-only stable prefix treated as empty — no cache_control block."""
+        """Whitespace-only stable prefix treated as empty — no cache_control block.
+
+        仅含空白字符的 stable prefix 视为空 —— 不产生 cache_control block。
+        """
         provider = self._make_provider()
         messages = [
             {"role": "system", "content": "System."},
@@ -127,7 +150,10 @@ class TestMultiTurnCacheBreakpoints:
         assert isinstance(user_msg["content"], str)
 
     def test_nonempty_stable_prefix_preserved_raw(self):
-        """Non-empty stable prefix is sent as-is (not stripped) in content block."""
+        """Non-empty stable prefix is sent as-is (not stripped) in content block.
+
+        非空 stable prefix 按原样（不做 strip）写入 content block。
+        """
         provider = self._make_provider()
         messages = [
             {"role": "system", "content": "System."},
@@ -206,6 +232,12 @@ class TestVolatileTTL:
     System, tools, and stable user prefix all use 1h TTL.
     Anthropic prefix order: system → tools → messages.
     TTL monotonic non-increasing: system(1h) ≥ tools(1h) ≥ messages(1h) ✓
+
+    验证 volatile 拆分后的 TTL 行为。
+
+    system、tools 与 stable user prefix 都使用 1h TTL。
+    Anthropic 前缀顺序：system → tools → messages。
+    TTL 单调不增：system(1h) ≥ tools(1h) ≥ messages(1h) ✓
     """
 
     def _make_provider(self):
@@ -243,6 +275,7 @@ class TestToolSchemaFreeze:
         tools1 = provider._convert_functions_to_tools(functions)
 
         # Change descriptions (simulating drift)
+        # 修改 description（模拟漂移）
         functions_v2 = [
             {"name": "web_search", "description": "Search v2 CHANGED", "parameters": {"properties": {}, "required": []}},
             {"name": "calculator", "description": "Calc v2 CHANGED", "parameters": {"properties": {}, "required": []}},
@@ -250,6 +283,7 @@ class TestToolSchemaFreeze:
         tools2 = provider._convert_functions_to_tools(functions_v2)
 
         # Should return frozen v1 schemas, not v2
+        # 应返回冻结的 v1 schema，而不是 v2
         assert tools1[0]["description"] == tools2[0]["description"]
 
     def test_different_tool_set_rebuilds(self):
@@ -443,7 +477,10 @@ class TestCacheSourceObservability:
     """Verify cache_source plumbing for per-source observability metrics."""
 
     def test_cache_source_field_defaults_to_none(self):
-        """CompletionRequest.cache_source defaults to None (emits as 'unknown')."""
+        """CompletionRequest.cache_source defaults to None (emits as 'unknown').
+
+        CompletionRequest.cache_source 默认为 None（上报时记为 'unknown'）。
+        """
         from llm_provider.base import CompletionRequest
         req = CompletionRequest(messages=[{"role": "user", "content": "hi"}])
         assert req.cache_source is None
@@ -462,12 +499,17 @@ class TestCacheSourceObservability:
 
         Without this, cache_source from callers is silently dropped before reaching
         CompletionRequest and all metrics collapse to "unknown".
+
+        llm_service.providers.generate_completion 的两个 passthrough 集合都必须包含
+        cache_source。否则调用方传入的 cache_source 会在到达 CompletionRequest 之前
+        被静默丢弃，所有指标都塌缩成 "unknown"。
         """
         import inspect
         import llm_service.providers as providers_init
 
         src = inspect.getsource(providers_init)
         # There are two passthrough_fields blocks (one per code path); both must include it.
+        # 共有两个 passthrough_fields 块（每条代码路径一个）；两者都必须包含它。
         assert src.count("\"cache_source\"") >= 2, (
             "cache_source must appear in both passthrough_fields blocks"
         )
@@ -481,6 +523,7 @@ class TestStreamingCacheAccounting:
         from llm_provider import anthropic_provider as ap
 
         # Inline capture — we just verify the split math, not prometheus internals
+        # 内联捕获 —— 只验证拆分算术，不涉及 prometheus 内部实现
         splits = {}
         original = ap._record_cache_metrics
 
@@ -493,6 +536,7 @@ class TestStreamingCacheAccounting:
         monkey("anthropic", "claude-sonnet-4-6", "test", 500, 1200, 800)
         assert splits == {"read": 500, "write_5m": 400, "write_1h": 800}
         # Sanity: the real helper exists and is callable
+        # 合理性检查：真实的 helper 存在且可调用
         assert callable(original)
 
     def test_streaming_usage_dict_shape_parses_cache_fields(self):
@@ -500,8 +544,14 @@ class TestStreamingCacheAccounting:
 
         Regression: prior to this fix, streaming path used only getattr() and
         dict-shaped usage silently zeroed cache_read/creation/1h → underpriced cost.
+
+        来自 Anthropic 兼容 provider 的 dict 形状 usage 也能解析出 cache 字段。
+
+        回归背景：在此修复之前，streaming 路径只用 getattr()，dict 形状的 usage
+        会把 cache_read/creation/1h 静默清零 → 成本被低估。
         """
         # Simulate the extraction logic the streaming branch uses
+        # 模拟 streaming 分支使用的提取逻辑
         usage_dict = {
             "input_tokens": 1000,
             "output_tokens": 200,
@@ -510,6 +560,7 @@ class TestStreamingCacheAccounting:
             "cache_creation": {"ephemeral_1h_input_tokens": 800},
         }
         # Mimic the extraction contract
+        # 复刻提取契约
         assert isinstance(usage_dict, dict)
         cache_read = usage_dict.get("cache_read_input_tokens", 0) or 0
         cache_creation = usage_dict.get("cache_creation_input_tokens", 0) or 0
@@ -537,8 +588,10 @@ class TestRollingMessageBreakpoint:
         ]
         _, claude_msgs = provider._convert_messages_to_claude_format(messages)
         # Only one user message; no [-2] index exists beyond the sole message
+        # 只有一条 user 消息；除了这条消息之外不存在 [-2] 索引
         assert len(claude_msgs) == 1
         # User message retains cache_break split (existing behavior)
+        # user 消息保留 cache_break 拆分（既有行为）
         assert isinstance(claude_msgs[0]["content"], list)
         assert claude_msgs[0]["content"][0].get("cache_control") is not None
 
@@ -554,9 +607,11 @@ class TestRollingMessageBreakpoint:
         _, claude_msgs = provider._convert_messages_to_claude_format(messages)
         assert len(claude_msgs) == 3
         # Penultimate is the assistant reply
+        # 倒数第二条是 assistant 回复
         penultimate = claude_msgs[-2]
         assert penultimate["role"] == "assistant"
         # Its content must be promoted to a list with cache_control on the last block
+        # 其 content 必须提升为 list，并在最后一个 block 上带 cache_control
         assert isinstance(penultimate["content"], list), \
             f"expected list content, got {type(penultimate['content'])}"
         last_block = penultimate["content"][-1]
@@ -564,7 +619,11 @@ class TestRollingMessageBreakpoint:
 
     def test_rolling_marker_skips_when_already_marked(self):
         """If penultimate already has cache_control (e.g. user_1 with cache_break marker),
-        do not add another — respect the 4-breakpoint cap."""
+        do not add another — respect the 4-breakpoint cap.
+
+        若倒数第二条消息已带 cache_control（例如带 cache_break 标记的 user_1），
+        不再重复添加 —— 遵守 4 个断点的上限。
+        """
         provider = self._make_provider()
         messages = [
             {"role": "system", "content": "sys"},
@@ -576,6 +635,8 @@ class TestRollingMessageBreakpoint:
         penultimate = claude_msgs[-2]
         # Penultimate is user_1 with cache_break; already has cache_control on its stable block.
         # Rolling should NOT add another on the volatile block.
+        # 倒数第二条是带 cache_break 的 user_1；其 stable block 已有 cache_control。
+        # 滚动逻辑不应再给 volatile block 添加一个。
         assert isinstance(penultimate["content"], list)
         cc_count = sum(
             1 for b in penultimate["content"]
@@ -600,9 +661,13 @@ class TestRollingMessageBreakpoint:
         # Penultimate is whatever came just before the final user message.
         # The "tool" role gets converted into a user message with tool_result content;
         # the final user "follow up" is the last message, so penultimate = the tool_result user message.
+        # 倒数第二条就是最终 user 消息之前的那条。
+        # "tool" role 会被转换成带 tool_result content 的 user 消息；
+        # 最后的 user "follow up" 是最后一条，因此倒数第二条 = 带 tool_result 的 user 消息。
         penultimate = claude_msgs[-2]
         assert isinstance(penultimate["content"], list)
         # The rolling marker sits on the LAST block of penultimate, regardless of block type.
+        # 滚动标记落在倒数第二条消息的最后一个 block 上，与 block 类型无关。
         assert penultimate["content"][-1].get("cache_control") is not None
 
 
@@ -614,6 +679,13 @@ class TestPrevRollingPreservation:
     rolling block while the previous block becomes unreachable. Long-session
     bench (30-turn): CHR 86%->68%, CER 16.85x->2.35x. Preserving prev marker
     closes the gap.
+
+    验证上一轮滚动 cache_control 标记的跨轮保留。
+
+    理由：Anthropic 前缀 cache 只在显式设置 cache_control 的位置匹配。若不保留
+    prev marker，每一轮都会重写一个新的滚动 block，而上一轮 block 变得不可达。
+    长 session 基准（30 轮）：CHR 86%->68%，CER 16.85x->2.35x。保留 prev marker
+    可弥合这一差距。
     """
 
     def _make_provider(self):
@@ -625,9 +697,13 @@ class TestPrevRollingPreservation:
         return msgs
 
     def test_first_turn_no_prev_marker_preserved(self):
-        """First turn for a session: only [-2] gets rolling marker, no prev to preserve."""
+        """First turn for a session: only [-2] gets rolling marker, no prev to preserve.
+
+        session 的第一轮：只有 [-2] 获得滚动标记，没有需要保留的 prev。
+        """
         from llm_provider import anthropic_provider as ap
         ap._prev_rolling.clear()  # isolate test
+        # 隔离测试
         provider = self._make_provider()
         messages = [
             {"role": "user", "content": "first"},
@@ -636,19 +712,25 @@ class TestPrevRollingPreservation:
         ]
         msgs = self._convert_and_apply(provider, messages, "session-a")
         # Penultimate (assistant reply_1) marked
+        # 倒数第二条（assistant reply_1）被标记
         assert msgs[-2]["content"][-1].get("cache_control") is not None
         # First user message NOT marked (no cache_break, no preservation needed)
+        # 第一条 user 消息未被标记（无 cache_break，也无需保留）
         first_content = msgs[0]["content"]
         if isinstance(first_content, list):
             assert all(not b.get("cache_control") for b in first_content if isinstance(b, dict))
 
     def test_second_turn_preserves_prev_marker(self):
-        """Second turn for same session: prev rolling marker (now in middle) is preserved."""
+        """Second turn for same session: prev rolling marker (now in middle) is preserved.
+
+        同一 session 的第二轮：上一轮滚动标记（现在位于中间）被保留。
+        """
         from llm_provider import anthropic_provider as ap
         ap._prev_rolling.clear()
         provider = self._make_provider()
         sid = "session-b"
         # Turn 1: assistant reply_1 becomes the rolling target
+        # 第 1 轮：assistant reply_1 成为滚动目标
         turn1 = [
             {"role": "user", "content": "u1"},
             {"role": "assistant", "content": "reply_1"},
@@ -656,13 +738,17 @@ class TestPrevRollingPreservation:
         ]
         self._convert_and_apply(provider, turn1, sid)
         # Memo should now have session-b -> hash of (the marked assistant reply_1)
+        # 此时 memo 中应有 session-b -> （被标记的 assistant reply_1）的哈希
         assert sid in ap._prev_rolling
 
         # Turn 2: conversation grew; the OLD penultimate (reply_1) is now at idx 1.
         # New rolling target is now reply_2 at idx 3.
+        # 第 2 轮：对话变长；旧的倒数第二条（reply_1）现在位于 idx 1。
+        # 新的滚动目标是 idx 3 的 reply_2。
         turn2 = [
             {"role": "user", "content": "u1"},
             # reply_1 with the cache_control we set in turn 1 — must be preserved
+            # reply_1 带着第 1 轮设置的 cache_control —— 必须保留
             {"role": "assistant", "content": [
                 {"type": "text", "text": "reply_1", "cache_control": {"type": "ephemeral", "ttl": "1h"}},
             ]},
@@ -672,21 +758,30 @@ class TestPrevRollingPreservation:
         ]
         msgs = self._convert_and_apply(provider, turn2, sid)
         # New rolling target: reply_2 at idx 3
+        # 新的滚动目标：idx 3 的 reply_2
         assert msgs[3]["content"][-1].get("cache_control") is not None
         # Prev marker preserved at idx 1 (reply_1)
+        # prev 标记在 idx 1（reply_1）处被保留
         assert msgs[1]["content"][-1].get("cache_control") is not None
         # Memo updated to current target hash
+        # memo 已更新为当前目标的哈希
         assert ap._prev_rolling[sid] != ""
 
     def test_cache_break_user_stripped_when_prev_preserved(self):
         """When prev marker is preserved, user_1's cache_break cache_control is stripped
         to free a breakpoint slot. user_1's bytes remain readable as part of
-        prev_rolling's cached prefix — no info loss."""
+        prev_rolling's cached prefix — no info loss.
+
+        当 prev marker 被保留时，user_1 的 cache_break cache_control 会被移除，
+        以腾出一个断点名额。user_1 的字节仍作为 prev_rolling cache 前缀的一部分
+        可读 —— 没有信息损失。
+        """
         from llm_provider import anthropic_provider as ap
         ap._prev_rolling.clear()
         provider = self._make_provider()
         sid = "session-c"
         # Turn 1: establish a prev marker
+        # 第 1 轮：建立一个 prev 标记
         turn1 = [
             {"role": "user", "content": "stable_block<!-- cache_break -->volatile"},
             {"role": "assistant", "content": "reply_1"},
@@ -695,6 +790,7 @@ class TestPrevRollingPreservation:
         self._convert_and_apply(provider, turn1, sid)
 
         # Turn 2: same session, with the marked reply_1 still in messages
+        # 第 2 轮：同一 session，带标记的 reply_1 仍在 messages 中
         turn2 = [
             {"role": "user", "content": "stable_block<!-- cache_break -->volatile"},
             {"role": "assistant", "content": [
@@ -706,6 +802,7 @@ class TestPrevRollingPreservation:
         ]
         msgs = self._convert_and_apply(provider, turn2, sid)
         # user_1 (idx 0) cache_break cache_control should be stripped to make room
+        # user_1（idx 0）的 cache_break cache_control 应被移除以腾出空间
         first_content = msgs[0]["content"]
         if isinstance(first_content, list):
             for b in first_content:
@@ -713,12 +810,17 @@ class TestPrevRollingPreservation:
                     assert b.get("cache_control") is None, \
                         "user_1's cache_control should be stripped when prev marker is preserved"
         # prev_rolling marker (reply_1, idx 1) preserved
+        # prev_rolling 标记（reply_1，idx 1）被保留
         assert msgs[1]["content"][-1].get("cache_control") is not None
         # Current rolling marker (reply_2, idx 3) applied
+        # 当前滚动标记（reply_2，idx 3）已应用
         assert msgs[3]["content"][-1].get("cache_control") is not None
 
     def test_no_session_id_falls_back_to_basic_marker(self):
-        """Without session_id, no prev preservation; just basic rolling marker on [-2]."""
+        """Without session_id, no prev preservation; just basic rolling marker on [-2].
+
+        没有 session_id 时不做 prev 保留；只在 [-2] 上应用基础滚动标记。
+        """
         from llm_provider import anthropic_provider as ap
         before_size = len(ap._prev_rolling)
         provider = self._make_provider()
@@ -730,11 +832,16 @@ class TestPrevRollingPreservation:
         msgs = self._convert_and_apply(provider, messages, None)
         assert msgs[-2]["content"][-1].get("cache_control") is not None
         # Memo unchanged when session_id is None
+        # session_id 为 None 时 memo 不变
         assert len(ap._prev_rolling) == before_size
 
     def test_compaction_drops_prev_marker_gracefully(self):
         """If ShapeHistory removed the prev marker's message, fall back to basic
-        marker (no error, just degraded behavior on that single turn)."""
+        marker (no error, just degraded behavior on that single turn).
+
+        如果 ShapeHistory 删除了 prev marker 所在的消息，则回落到基础标记
+        （不报错，仅该轮行为降级）。
+        """
         from llm_provider import anthropic_provider as ap
         ap._prev_rolling.clear()
         provider = self._make_provider()
@@ -746,6 +853,7 @@ class TestPrevRollingPreservation:
         ]
         self._convert_and_apply(provider, turn1, sid)
         # Turn 2 simulates ShapeHistory dropping reply_1 entirely (e.g. compacted)
+        # 第 2 轮模拟 ShapeHistory 完全丢弃 reply_1（例如被压缩）
         turn2 = [
             {"role": "user", "content": "[summary of earlier conversation]"},
             {"role": "user", "content": "u3"},
@@ -754,6 +862,7 @@ class TestPrevRollingPreservation:
         ]
         msgs = self._convert_and_apply(provider, turn2, sid)
         # Prev marker not found -> fall back to basic marker on [-2] only
+        # 未找到 prev 标记 -> 只回落到 [-2] 上的基础标记
         assert msgs[-2]["content"][-1].get("cache_control") is not None
 
 
@@ -764,9 +873,13 @@ class TestUsageSplit:
         return AnthropicProvider(_MINIMAL_CONFIG)
 
     def test_non_stream_token_usage_captures_split(self):
-        """Non-stream usage.cache_creation.ephemeral_5m_input_tokens + 1h both land on TokenUsage."""
+        """Non-stream usage.cache_creation.ephemeral_5m_input_tokens + 1h both land on TokenUsage.
+
+        非 stream usage.cache_creation.ephemeral_5m_input_tokens 与 1h 两部分都写入 TokenUsage。
+        """
         from llm_provider.base import TokenUsage
         # Construct the fields that would flow from anthropic response dict/obj shape
+        # 构造从 anthropic response dict/obj 形状中流出的字段
         u = TokenUsage(
             input_tokens=100, output_tokens=50, total_tokens=150,
             estimated_cost=0.001,
@@ -776,9 +889,11 @@ class TestUsageSplit:
             cache_creation_1h_tokens=200,
         )
         # The new fields must be independently addressable
+        # 新增字段必须能被独立访问
         assert u.cache_creation_5m_tokens == 100
         assert u.cache_creation_1h_tokens == 200
         # Sum invariant (enforced in the provider extraction, sanity-checked here):
+        # 求和不变式（在 provider 提取处强制，这里只做合理性检查）：
         assert u.cache_creation_5m_tokens + u.cache_creation_1h_tokens == u.cache_creation_tokens
 
     def test_token_usage_add_merges_split(self):
@@ -807,6 +922,7 @@ class TestUsageSplit:
         assert out["cache_creation_5m_tokens"] == 100
         assert out["cache_creation_1h_tokens"] == 200
         # Legacy field must still be present
+        # 旧字段必须仍然存在
         assert out["cache_creation_tokens"] == 300
 
     def test_serialize_usage_none_returns_empty_dict(self):
@@ -833,6 +949,7 @@ class TestDeferLoadingPassthrough:
         normal = next(t for t in tools if t["name"] == "normal_tool")
         assert deferred.get("defer_loading") is True
         # Normal tool must NOT have defer_loading (omit, don't set False)
+        # 普通 tool 不应带 defer_loading（直接省略，而不是设为 False）
         assert "defer_loading" not in normal
 
     def test_defer_loading_false_omitted(self):
@@ -852,6 +969,7 @@ class TestDeferLoadingPassthrough:
         tools_a = provider._convert_functions_to_tools(functions_a)
         tools_b = provider._convert_functions_to_tools(functions_b)
         # Different defer state → different tools output (not a stale frozen copy)
+        # defer 状态不同 → tools 输出不同（而不是过期的冻结副本）
         assert tools_a[0].get("defer_loading") is True
         assert "defer_loading" not in tools_b[0]
 
@@ -890,6 +1008,9 @@ class TestAdvancedToolUseBetaHeader:
         # _build_api_request returns the kwargs for Anthropic SDK; header injection
         # is in complete()/stream_complete() via extra_headers. Verify by reading
         # the tools to confirm the trigger condition is reachable:
+        # _build_api_request 返回的是给 Anthropic SDK 的 kwargs；header 注入在
+        # complete()/stream_complete() 中通过 extra_headers 完成。这里读取 tools
+        # 来确认触发条件可达：
         assert any(t.get("defer_loading") for t in api_req["tools"])
 
     def test_beta_header_absent_when_no_deferred(self):
@@ -906,19 +1027,27 @@ class TestAdvancedToolUseBetaHeader:
         Behavioral test against _build_beta_header: with the env var set,
         even when any_deferred=True the returned header must omit the
         advanced-tool-use-2025-11-20 token.
+
+        SHANNON_NO_ADVANCED_TOOL_USE_BETA=1 会抑制 advanced-tool-use token。
+
+        针对 _build_beta_header 的行为测试：设置该环境变量后，即使
+        any_deferred=True，返回的 header 也必须省略 advanced-tool-use-2025-11-20 token。
         """
         from llm_provider.anthropic_provider import _build_beta_header
 
         # Escape hatch OFF → advanced-tool-use present when deferred set
+        # 应急开关关闭 → 存在 deferred tool 时出现 advanced-tool-use
         monkeypatch.delenv("SHANNON_NO_ADVANCED_TOOL_USE_BETA", raising=False)
         hdr_on = _build_beta_header(thinking=False, any_deferred=True)
         assert hdr_on == "advanced-tool-use-2025-11-20"
 
         # Escape hatch ON → token suppressed, helper returns None (no beta needed)
+        # 应急开关打开 → token 被抑制，helper 返回 None（无需 beta）
         monkeypatch.setenv("SHANNON_NO_ADVANCED_TOOL_USE_BETA", "1")
         assert _build_beta_header(thinking=False, any_deferred=True) is None
 
         # Thinking remains independent of the escape hatch
+        # thinking 不受该应急开关影响
         assert _build_beta_header(thinking=True, any_deferred=True) == \
             "interleaved-thinking-2025-05-14"
 
@@ -960,6 +1089,8 @@ class TestToolReferencePreserved:
         _, claude_msgs = provider._convert_messages_to_claude_format(messages)
         # Anthropic format: tool results live in a user-role message as tool_result blocks.
         # Find the message containing our tool_result
+        # Anthropic 格式：tool result 以 tool_result block 的形式放在 user role 消息中。
+        # 找到包含我们 tool_result 的那条消息
         found = None
         for m in claude_msgs:
             if m["role"] != "user" or not isinstance(m["content"], list):
@@ -999,4 +1130,5 @@ class TestToolReferencePreserved:
                     break
         assert found is not None
         # String content preserved as string (existing behavior)
+        # 字符串 content 保持为字符串（既有行为）
         assert found["content"] == "plain text result"

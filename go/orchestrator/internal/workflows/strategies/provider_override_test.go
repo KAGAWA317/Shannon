@@ -7,6 +7,7 @@ import (
 )
 
 // TestProviderOverridePrecedence ensures provider_override is read before provider/llm_provider
+// 优先级 provider_override > provider > llm_provider，与 DAG workflow 的读取顺序保持一致。
 func TestProviderOverridePrecedence(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -47,6 +48,7 @@ func TestProviderOverridePrecedence(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Extract provider override using same logic as DAG workflow
+			// 复制 DAG 的读取顺序做对照，避免两处逻辑漂移。
 			providerOverride := ""
 			if v, ok := tt.context["provider_override"].(string); ok && v != "" {
 				providerOverride = v

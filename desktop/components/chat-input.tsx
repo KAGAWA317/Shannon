@@ -93,6 +93,8 @@ export function ChatInput({
     
     // Use ref for composition state to avoid race conditions with state updates
     // This is more reliable than state for IME handling
+    // 输入法组合状态用 ref 保存，避免 state 更新带来的竞态
+    // 处理 IME 时比 state 更可靠
     const isComposingRef = useRef(false);
 
     // Update research strategy when prop changes (e.g., loading historical session)
@@ -135,6 +137,7 @@ export function ChatInput({
             let research_strategy: "deep" | "academic" | "quick" | "standard" | undefined;
 
             // Swarm mode: multi-agent persistent loop
+            // Swarm 模式：多 agent 的持久循环
             if (swarmMode) {
                 context.force_swarm = true;
             }
@@ -198,6 +201,7 @@ export function ChatInput({
             nativeEvent?.keyCode === 229;
 
         // When using IME (Chinese, Japanese, etc.), do not send on Enter while composing/choosing characters
+        // 使用输入法（中文、日文等）时，组合/选词过程中按 Enter 不发送消息
         if (isComposing) {
             return;
         }
@@ -421,6 +425,7 @@ export function ChatInput({
             )}
 
             {/* Review mode: Approve & Run bar — shown when LLM has produced an actionable plan (intent=approve) */}
+            {/* Review 模式：Approve & Run 操作条 — 当 LLM 产出可执行的 plan 时显示（intent=approve） */}
             {isReviewing && reviewIntent === "ready" && (
                 <div className="flex items-center justify-between px-3 py-2 rounded-lg border bg-violet-50 dark:bg-violet-950 border-violet-300 dark:border-violet-700">
                     <span className="text-sm text-violet-700 dark:text-violet-300">

@@ -25,6 +25,7 @@ type SignalHandler struct {
 
 	// Child workflow management - simple slice is safe because Temporal workflows
 	// are cooperatively scheduled (single goroutine, no true concurrency)
+	// 简单的 slice 即可：Temporal workflow 是协作式调度（单 goroutine，无真正并发）。
 	childWorkflowIDs []string
 }
 
@@ -197,6 +198,7 @@ func (h *SignalHandler) CheckPausePoint(ctx workflow.Context, checkpoint string)
 	if h.State.IsCancelled {
 		// Always emit WORKFLOW_CANCELLED - child workflows should emit this because
 		// parent can't know when child actually stops at a checkpoint
+		// 子 workflow 必须自己发 WORKFLOW_CANCELLED，因为父 workflow 无法知道子 workflow 究竟在哪个检查点停下。
 		_ = workflow.ExecuteActivity(h.EmitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: h.WorkflowID,
 			EventType:  activities.StreamEventWorkflowCancelled,
@@ -206,12 +208,14 @@ func (h *SignalHandler) CheckPausePoint(ctx workflow.Context, checkpoint string)
 			Payload:    map[string]interface{}{"checkpoint": checkpoint},
 		}).Get(ctx, nil)
 		// Return Temporal's CanceledError so workflow status is CANCELLED not FAILED
+		// 返回 Temporal 的 CanceledError，使 workflow 状态为 CANCELLED 而非 FAILED。
 		return temporal.NewCanceledError(fmt.Sprintf("workflow cancelled: %s", h.State.CancelReason))
 	}
 
 	if h.State.IsPaused {
 		// Always emit WORKFLOW_PAUSED - child workflows should emit this because
 		// parent can't know when child actually blocks at a checkpoint
+		// 子 workflow 必须自己发 WORKFLOW_PAUSED，因为父 workflow 无法知道子 workflow 究竟在哪个检查点阻塞。
 		_ = workflow.ExecuteActivity(h.EmitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: h.WorkflowID,
 			EventType:  activities.StreamEventWorkflowPaused,
@@ -222,6 +226,7 @@ func (h *SignalHandler) CheckPausePoint(ctx workflow.Context, checkpoint string)
 		}).Get(ctx, nil)
 
 		// Block until resumed or cancelled using Await (no polling, single history event)
+		// 用 Await 阻塞等待恢复或取消：无轮询，只产生一个历史 event。
 		_ = workflow.Await(ctx, func() bool {
 			return !h.State.IsPaused || h.State.IsCancelled
 		})
@@ -237,6 +242,7 @@ func (h *SignalHandler) CheckPausePoint(ctx workflow.Context, checkpoint string)
 				Payload:    map[string]interface{}{"checkpoint": checkpoint, "was_paused": true},
 			}).Get(ctx, nil)
 			// Return Temporal's CanceledError so workflow status is CANCELLED not FAILED
+			// 同上：返回 CanceledError，避免被记为 FAILED。
 			return temporal.NewCanceledError(fmt.Sprintf("workflow cancelled while paused: %s", h.State.CancelReason))
 		}
 	}
@@ -257,6 +263,7 @@ func (h *SignalHandler) IsPaused() bool {
 // EmitCancelledIfNeeded emits the workflow.cancelled SSE event if the workflow was cancelled.
 // Call this before returning from the workflow when not using CheckPausePoint.
 // This ensures the frontend receives the workflow.cancelled event even if no checkpoint was reached.
+// 未使用 CheckPausePoint 时，返回前调用此函数，确保前端即使没走到检查点也能收到 workflow.cancelled event。
 func (h *SignalHandler) EmitCancelledIfNeeded(ctx workflow.Context, reason string) {
 	if h.State == nil || !h.State.IsCancelled || h.SkipSSEEmit {
 		return

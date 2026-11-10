@@ -1,5 +1,6 @@
 """
 File Operation Tools - Safe file read/write/edit operations with session isolation
+文件操作 tool——带 session 隔离的安全文件读/写/编辑操作
 """
 
 import fnmatch
@@ -20,31 +21,39 @@ from .sandbox_client import is_sandbox_enabled, get_sandbox_client
 
 def _validate_session_id(session_id: str) -> str:
     """Validate session_id to prevent path traversal attacks.
+    校验 session_id 以防止路径穿越攻击。
 
     Args:
         session_id: Raw session ID from request
+            request 中的原始 session ID
 
     Returns:
         Sanitized session ID safe for use in paths
+        可安全用于路径的已清理 session ID
 
     Raises:
         ValueError: If session_id contains path traversal attempts or invalid characters
+        当 session_id 包含路径穿越尝试或非法字符时抛出 ValueError
     """
     if not session_id:
         return "default"
 
     # Limit length to prevent filesystem issues (check early)
+    # 限制长度以避免文件系统问题（尽早检查）
     if len(session_id) > 128:
         raise ValueError("Invalid session_id: too long (max 128 chars)")
 
     # SECURITY: Match Rust validation - ASCII alphanumeric + hyphen + underscore only
+    # 安全提示：与 Rust 侧校验保持一致——仅允许 ASCII 字母数字、连字符和下划线
     # This prevents path traversal, hidden files, shell metacharacters, and Unicode tricks
+    # 这可防止路径穿越、隐藏文件、shell 元字符以及 Unicode 花招
     if not all(c.isascii() and (c.isalnum() or c in "-_.") for c in session_id):
         raise ValueError(
             "Invalid session_id: must contain only ASCII alphanumeric, hyphen, or underscore"
         )
 
     # Block path traversal patterns (defense in depth)
+    # 拦截路径穿越模式（纵深防御）
     if ".." in session_id or session_id.startswith("."):
         raise ValueError("Invalid session_id: path traversal not allowed")
 
@@ -53,15 +62,19 @@ def _validate_session_id(session_id: str) -> str:
 
 def _validate_user_id(user_id: str) -> str:
     """Validate user_id to prevent path traversal attacks.
+    校验 user_id 以防止路径穿越攻击。
 
     Args:
         user_id: Raw user ID from request/session context.
+            request 或 session context 中的原始 user ID。
 
     Returns:
         Sanitized user ID safe for filesystem paths.
+        可安全用于文件系统路径的已清理 user ID。
 
     Raises:
         ValueError: If user_id contains traversal attempts or invalid characters.
+        当 user_id 包含穿越尝试或非法字符时抛出 ValueError。
     """
     if not isinstance(user_id, str) or not user_id:
         raise ValueError("Invalid user_id: empty")
@@ -82,15 +95,19 @@ def _validate_user_id(user_id: str) -> str:
 
 def _get_session_workspace(session_context: Optional[Dict] = None) -> Path:
     """Get or create session workspace directory.
+    获取或创建 session workspace 目录。
 
     Args:
         session_context: Optional session context containing session_id
+            可选的 session context，包含 session_id
 
     Returns:
         Path to session workspace directory (created if needed)
+        session workspace 目录的路径（必要时会创建）
 
     Raises:
         ValueError: If session_id is invalid
+        当 session_id 非法时抛出 ValueError
     """
     raw_session_id = (session_context or {}).get("session_id", "default")
     session_id = _validate_session_id(raw_session_id)
@@ -101,6 +118,7 @@ def _get_session_workspace(session_context: Optional[Dict] = None) -> Path:
     session_workspace = base_dir / session_id
 
     # Double-check the resolved path is within base_dir (defense in depth)
+    # 再次确认解析后的路径位于 base_dir 之内（纵深防御）
     session_workspace_resolved = session_workspace.resolve()
     if not str(session_workspace_resolved).startswith(str(base_dir)):
         raise ValueError(f"Invalid session_id: path escape attempt detected")
@@ -111,16 +129,20 @@ def _get_session_workspace(session_context: Optional[Dict] = None) -> Path:
 
 def _get_allowed_dirs(session_context: Optional[Dict] = None) -> List[Path]:
     """Get list of allowed directories for file operations.
+    获取文件操作允许的目录列表。
 
     Args:
         session_context: Optional session context containing session_id
+            可选的 session context，包含 session_id
 
     Returns:
         List of allowed base directories
+        允许的基础目录列表
     """
     allowed_dirs = [_get_session_workspace(session_context)]
 
     # Add user persistent memory directory if user_id is available
+    # 若存在 user_id 则加入用户持久化 memory 目录
     user_id = (session_context or {}).get("user_id", "")
     if user_id:
         validated_user_id = _validate_user_id(user_id)
@@ -129,19 +151,24 @@ def _get_allowed_dirs(session_context: Optional[Dict] = None) -> List[Path]:
         ).resolve()
         memory_dir = memory_base / validated_user_id / "memory"
         # Create memory dir on first access (Rust MemoryManager may not have run yet)
+        # 首次访问时创建 memory 目录（Rust 的 MemoryManager 可能尚未执行）
         memory_dir.mkdir(parents=True, exist_ok=True)
         allowed_dirs.append(memory_dir)
 
     # Add SHANNON_WORKSPACE if set
+    # 若设置了 SHANNON_WORKSPACE 则加入
     if workspace := os.getenv("SHANNON_WORKSPACE"):
         allowed_dirs.append(Path(workspace).resolve())
 
     # Dev-only: allow cwd when explicitly enabled
+    # 仅开发环境：显式启用时允许当前工作目录
     if os.getenv("SHANNON_DEV_ALLOW_CWD") in ("1", "true", "yes"):
         allowed_dirs.append(Path.cwd().resolve())
 
     # Legacy /tmp support - DISABLED by default for session isolation security
+    # 旧版 /tmp 支持——出于 session 隔离安全考虑默认关闭
     # Enable only if explicitly needed via SHANNON_ALLOW_GLOBAL_TMP=1
+    # 仅在确有需要时通过 SHANNON_ALLOW_GLOBAL_TMP=1 启用
     if os.getenv("SHANNON_ALLOW_GLOBAL_TMP") in ("1", "true", "yes"):
         allowed_dirs.append(Path("/tmp").resolve())
 
@@ -150,13 +177,17 @@ def _get_allowed_dirs(session_context: Optional[Dict] = None) -> List[Path]:
 
 def _is_allowed(target: Path, base: Path) -> bool:
     """Check if target path is within base directory.
+    检查目标路径是否位于基础目录之内。
 
     Args:
         target: Path to check (should be resolved)
+            待检查的路径（应已 resolve）
         base: Allowed base directory (should be resolved)
+            允许的基础目录（应已 resolve）
 
     Returns:
         True if target is within base, False otherwise
+        目标位于基础目录之内时返回 True，否则返回 False
     """
     try:
         target.relative_to(base)
@@ -168,6 +199,7 @@ def _is_allowed(target: Path, base: Path) -> bool:
 class FileReadTool(Tool):
     """
     Safe file reading tool with sandboxing support and session isolation
+    支持 sandbox 与 session 隔离的安全文件读取 tool
     """
 
     def _get_metadata(self) -> ToolMetadata:
@@ -236,11 +268,15 @@ class FileReadTool(Tool):
     ) -> ToolResult:
         """
         Read file contents safely with session isolation.
+        在 session 隔离下安全地读取文件内容。
 
         Args:
             session_context: Optional session context containing session_id
+                可选的 session context，包含 session_id
             observer: Optional callback for status updates (unused)
+                可选的状态更新回调（未使用）
             **kwargs: Tool parameters (path, encoding, max_size_mb)
+                tool 参数（path、encoding、max_size_mb）
         """
         file_path = kwargs["path"]
         encoding = kwargs.get("encoding", "utf-8")
@@ -249,6 +285,7 @@ class FileReadTool(Tool):
         limit = kwargs.get("limit", 0)
 
         # Proxy to WASI sandbox if enabled
+        # 若启用了 WASI sandbox 则代理过去
         if is_sandbox_enabled():
             session_id = (session_context or {}).get("session_id", "default")
             user_id = (session_context or {}).get("user_id", "")
@@ -270,6 +307,7 @@ class FileReadTool(Tool):
                     },
                 )
                 # Try to parse JSON/YAML like the Python implementation
+                # 与 Python 实现一致，尝试解析 JSON/YAML
                 if file_path.endswith(".json"):
                     try:
                         content = json.loads(content)
@@ -298,11 +336,14 @@ class FileReadTool(Tool):
                 return ToolResult(success=False, output=None, error=error)
 
         # Fall through to Python implementation if sandbox not enabled
+        # 若未启用 sandbox，则落到 Python 实现
         try:
             # Validate path
+            # 校验路径
             path = Path(file_path)
 
             # Resolve canonical path to avoid symlink escapes
+            # 解析规范路径以避免 symlink 逃逸
             try:
                 path_absolute = path.resolve(strict=True)
             except FileNotFoundError:
@@ -311,6 +352,7 @@ class FileReadTool(Tool):
                 )
 
             # Get allowed directories based on session context
+            # 基于 session context 获取允许的目录
             allowed_dirs = _get_allowed_dirs(session_context)
 
             if not any(_is_allowed(path_absolute, base) for base in allowed_dirs):
@@ -330,6 +372,7 @@ class FileReadTool(Tool):
                 )
 
             # Check if it's a file (not directory)
+            # 检查是否为文件（而非目录）
             if not path_absolute.is_file():
                 return ToolResult(
                     success=False, output=None, error=f"Path is not a file: {file_path}"
@@ -352,18 +395,21 @@ class FileReadTool(Tool):
             total_lines = content.count("\n") + (1 if content and not content.endswith("\n") else 0)
 
             # Apply offset/limit for line-range reads
+            # 对按行范围读取应用 offset/limit
             if offset > 0 or limit > 0:
                 lines = content.splitlines(keepends=True)
                 start = max(0, offset - 1)  # 1-based to 0-based
                 end = start + limit if limit > 0 else len(lines)
                 selected = lines[start:end]
                 # Format with line numbers
+                # 附加行号格式化
                 numbered = []
                 for i, line in enumerate(selected, start=start + 1):
                     numbered.append(f"{i:>6}\t{line.rstrip()}")
                 parsed_content = "\n".join(numbered)
             else:
                 # Full file read — detect and parse structured formats
+                # 完整读取文件——检测并解析结构化格式
                 parsed_content = content
                 if file_extension == ".json":
                     try:
@@ -417,6 +463,7 @@ class FileReadTool(Tool):
 class FileWriteTool(Tool):
     """
     Safe file writing tool with sandboxing support and session isolation
+    支持 sandbox 与 session 隔离的安全文件写入 tool
     """
 
     def _get_metadata(self) -> ToolMetadata:
@@ -427,12 +474,14 @@ class FileWriteTool(Tool):
             category="file",
             author="Shannon",
             requires_auth=True,  # Writing requires auth
+            # 写入操作需要 authentication
             rate_limit=50,
             timeout_seconds=10,
             memory_limit_mb=256,
             sandboxed=True,
             session_aware=True,
             dangerous=True,  # File writing is potentially dangerous
+            # 文件写入具有潜在危险
             cost_per_use=0.001,
         )
 
@@ -483,11 +532,15 @@ class FileWriteTool(Tool):
     ) -> ToolResult:
         """
         Write content to file safely with session isolation.
+        在 session 隔离下安全地将内容写入文件。
 
         Args:
             session_context: Optional session context containing session_id
+                可选的 session context，包含 session_id
             observer: Optional callback for status updates (unused)
+                可选的状态更新回调（未使用）
             **kwargs: Tool parameters (path, content, mode, encoding, create_dirs)
+                tool 参数（path、content、mode、encoding、create_dirs）
         """
         file_path = kwargs["path"]
         content = kwargs["content"]
@@ -496,6 +549,7 @@ class FileWriteTool(Tool):
         create_dirs = kwargs.get("create_dirs", True)
 
         # Proxy to WASI sandbox if enabled
+        # 若启用了 WASI sandbox 则代理过去
         if is_sandbox_enabled():
             session_id = (session_context or {}).get("session_id", "default")
             user_id = (session_context or {}).get("user_id", "")
@@ -544,13 +598,16 @@ class FileWriteTool(Tool):
                 return ToolResult(success=False, output=None, error=error)
 
         # Fall through to Python implementation if sandbox not enabled
+        # 若未启用 sandbox，则落到 Python 实现
         try:
             path = Path(file_path)
 
             # Canonicalize to avoid symlink escapes (don't use strict=True for writes)
+            # 规范化路径以避免 symlink 逃逸（写操作不要使用 strict=True）
             path_absolute = path.resolve()
 
             # Get allowed directories based on session context
+            # 基于 session context 获取允许的目录
             allowed_dirs = _get_allowed_dirs(session_context)
 
             if not any(_is_allowed(path_absolute, base) for base in allowed_dirs):
@@ -570,6 +627,7 @@ class FileWriteTool(Tool):
                 )
 
             # Create parent directories if requested
+            # 按请求创建父目录
             if create_dirs:
                 path.parent.mkdir(parents=True, exist_ok=True)
             elif not path.parent.exists():
@@ -580,13 +638,16 @@ class FileWriteTool(Tool):
                 )
 
             # Determine write mode
+            # 确定写入模式
             write_mode = "w" if mode == "overwrite" else "a"
 
             # Write file
+            # 写入文件
             async with aiofiles.open(path, mode=write_mode, encoding=encoding) as f:
                 await f.write(content)
 
             # Get file stats after writing
+            # 写入后获取文件状态
             stats = path.stat()
 
             session_id = (session_context or {}).get("session_id", "default")
@@ -620,6 +681,7 @@ class FileWriteTool(Tool):
 class FileListTool(Tool):
     """
     List files in a directory with session isolation
+    在 session 隔离下列出目录中的文件
     """
 
     def _get_metadata(self) -> ToolMetadata:
@@ -678,11 +740,15 @@ class FileListTool(Tool):
     ) -> ToolResult:
         """
         List files in directory with session isolation.
+        在 session 隔离下列出目录中的文件。
 
         Args:
             session_context: Optional session context containing session_id
+                可选的 session context，包含 session_id
             observer: Optional callback for status updates (unused)
+                可选的状态更新回调（未使用）
             **kwargs: Tool parameters (path, pattern, recursive, include_hidden)
+                tool 参数（path、pattern、recursive、include_hidden）
         """
         dir_path = kwargs["path"]
         pattern = kwargs.get("pattern", "*")
@@ -690,6 +756,7 @@ class FileListTool(Tool):
         include_hidden = kwargs.get("include_hidden", False)
 
         # Proxy to WASI sandbox if enabled
+        # 若启用了 WASI sandbox 则代理过去
         if is_sandbox_enabled():
             session_id = (session_context or {}).get("session_id", "default")
             user_id = (session_context or {}).get("user_id", "")
@@ -734,10 +801,12 @@ class FileListTool(Tool):
                 return ToolResult(success=False, output=None, error=error)
 
         # Fall through to Python implementation if sandbox not enabled
+        # 若未启用 sandbox，则落到 Python 实现
         try:
             path = Path(dir_path)
 
             # Resolve and validate path
+            # 解析并校验路径
             try:
                 path_absolute = path.resolve(strict=True)
             except FileNotFoundError:
@@ -746,6 +815,7 @@ class FileListTool(Tool):
                 )
 
             # Get allowed directories based on session context
+            # 基于 session context 获取允许的目录
             allowed_dirs = _get_allowed_dirs(session_context)
 
             if not any(_is_allowed(path_absolute, base) for base in allowed_dirs):
@@ -772,16 +842,19 @@ class FileListTool(Tool):
                 )
 
             # List files
+            # 列出文件
             files = []
 
             if recursive:
                 # Use rglob for recursive search
+                # 递归搜索使用 rglob
                 file_iter = path.rglob(pattern)
             else:
                 file_iter = path.glob(pattern)
 
             for file_path in file_iter:
                 # Skip hidden files if not requested
+                # 未要求时跳过隐藏文件
                 if not include_hidden and file_path.name.startswith("."):
                     continue
 
@@ -831,6 +904,7 @@ class FileListTool(Tool):
 
 
 # Binary file extensions to skip during content search
+# 内容搜索时需要跳过的二进制扩展名
 _BINARY_EXTENSIONS = frozenset({
     ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".svg", ".webp",
     ".mp3", ".mp4", ".wav", ".avi", ".mov", ".mkv", ".flac",
@@ -845,10 +919,13 @@ _BINARY_EXTENSIONS = frozenset({
 class FileSearchTool(Tool):
     """
     Search file contents in the workspace for a text query (grep equivalent).
+    在 workspace 中按文本查询搜索文件内容（等价于 grep）。
     Returns matching lines with file paths and line numbers.
+    返回匹配行及其文件路径与行号。
     """
 
     # Safety limits
+    # 安全限制
     _MAX_QUERY_LENGTH = 200
     _MAX_FILES_TO_SCAN = 1000
     _MAX_FILE_SIZE_BYTES = 500 * 1024  # 500KB
@@ -924,11 +1001,15 @@ class FileSearchTool(Tool):
     ) -> ToolResult:
         """
         Search file contents for a text query with session isolation.
+        在 session 隔离下按文本查询搜索文件内容。
 
         Args:
             session_context: Optional session context containing session_id
+                可选的 session context，包含 session_id
             observer: Optional callback for status updates (unused)
+                可选的状态更新回调（未使用）
             **kwargs: Tool parameters (query, path, max_results)
+                tool 参数（query、path、max_results）
         """
         query = kwargs.get("query", "")
         search_path = kwargs.get("path", ".")
@@ -938,6 +1019,7 @@ class FileSearchTool(Tool):
         context_lines = min(kwargs.get("context_lines", 0), self._MAX_CONTEXT_LINES)
 
         # Proxy to WASI sandbox if enabled
+        # 若启用了 WASI sandbox 则代理过去
         if is_sandbox_enabled():
             session_id = (session_context or {}).get("session_id", "default")
             client = get_sandbox_client()
@@ -958,6 +1040,7 @@ class FileSearchTool(Tool):
                 return ToolResult(success=False, output=None, error=error)
 
         # Validate query
+        # 校验查询
         if not query or not query.strip():
             return ToolResult(
                 success=False, output=None, error="Search query cannot be empty"
@@ -971,6 +1054,7 @@ class FileSearchTool(Tool):
             )
 
         # Compile regex or prepare substring matcher
+        # 编译正则或准备子串匹配器
         if use_regex:
             try:
                 pattern = re.compile(query, re.IGNORECASE)
@@ -987,15 +1071,18 @@ class FileSearchTool(Tool):
 
         try:
             # Resolve workspace directory
+            # 解析 workspace 目录
             workspace = _get_session_workspace(session_context)
 
             # Resolve search path relative to workspace
+            # 相对于 workspace 解析搜索路径
             if search_path in (".", "", None):
                 search_dir = workspace
             else:
                 search_dir = (workspace / search_path).resolve()
 
             # Verify search dir is within allowed directories
+            # 校验搜索目录位于允许的目录之内
             allowed_dirs = _get_allowed_dirs(session_context)
             if not any(_is_allowed(search_dir, base) for base in allowed_dirs):
                 session_id = (session_context or {}).get("session_id", "default")
@@ -1028,6 +1115,7 @@ class FileSearchTool(Tool):
                 )
 
             # Walk files and search contents
+            # 遍历文件并搜索内容
             matches = []
             files_scanned = 0
 
@@ -1039,23 +1127,28 @@ class FileSearchTool(Tool):
                     break
 
                 # Skip directories
+                # 跳过目录
                 if not file_path.is_file():
                     continue
 
                 # Skip hidden files/directories
+                # 跳过隐藏文件/目录
                 parts = file_path.relative_to(search_dir).parts
                 if any(part.startswith(".") for part in parts):
                     continue
 
                 # Skip binary files by extension
+                # 按扩展名跳过二进制文件
                 if file_path.suffix.lower() in _BINARY_EXTENSIONS:
                     continue
 
                 # Apply include glob filter on filename
+                # 按文件名应用 include glob 过滤
                 if include and not fnmatch.fnmatch(file_path.name, include):
                     continue
 
                 # Skip files that are too large
+                # 跳过过大的文件
                 try:
                     if file_path.stat().st_size > self._MAX_FILE_SIZE_BYTES:
                         continue
@@ -1065,12 +1158,14 @@ class FileSearchTool(Tool):
                 files_scanned += 1
 
                 # Read and search file contents
+                # 读取并搜索文件内容
                 try:
                     async with aiofiles.open(
                         file_path, mode="r", encoding="utf-8", errors="ignore"
                     ) as f:
                         if context_lines > 0:
                             # Read all lines for context support
+                            # 为支持 context 而读取全部行
                             all_lines = [
                                 l.rstrip("\n\r") async for l in f
                             ]
@@ -1120,6 +1215,7 @@ class FileSearchTool(Tool):
                                         break
                 except (UnicodeDecodeError, OSError, PermissionError):
                     # Skip files that can't be read as text
+                    # 跳过无法按文本读取的文件
                     continue
 
             session_id = (session_context or {}).get("session_id", "default")
@@ -1159,8 +1255,11 @@ class FileSearchTool(Tool):
 class FileEditTool(Tool):
     """
     Edit file contents by replacing exact text matches.
+    通过替换精确文本匹配来编辑文件内容。
     Supports insert (anchor + new text), delete (old_text → empty), and replace.
+    支持插入（anchor + 新文本）、删除（old_text → 空）以及替换。
     Uses string matching (not line numbers) for safe concurrent edits.
+    使用字符串匹配（而非行号）以保证并发编辑安全。
     """
 
     _MAX_OLD_TEXT_LENGTH = 10000
@@ -1246,6 +1345,7 @@ class FileEditTool(Tool):
             )
 
         # Proxy to WASI sandbox if enabled
+        # 若启用了 WASI sandbox 则代理过去
         if is_sandbox_enabled():
             session_id = (session_context or {}).get("session_id", "default")
             client = get_sandbox_client()
@@ -1267,6 +1367,7 @@ class FileEditTool(Tool):
             path = Path(file_path)
 
             # Resolve and validate path
+            # 解析并校验路径
             try:
                 path_absolute = path.resolve(strict=True)
             except FileNotFoundError:
@@ -1289,14 +1390,17 @@ class FileEditTool(Tool):
                 )
 
             # Read current content
+            # 读取当前内容
             async with aiofiles.open(path_absolute, mode="r", encoding="utf-8") as f:
                 content = await f.read()
 
             # Count occurrences
+            # 统计出现次数
             count = content.count(old_text)
 
             if count == 0:
                 # Provide context to help the agent fix the match
+                # 提供 context 以帮助 agent 修正匹配
                 snippet = old_text[:100].replace("\n", "\\n")
                 return ToolResult(
                     success=False, output=None,
@@ -1314,12 +1418,14 @@ class FileEditTool(Tool):
                 )
 
             # Perform replacement
+            # 执行替换
             if replace_all:
                 new_content = content.replace(old_text, new_text)
             else:
                 new_content = content.replace(old_text, new_text, 1)
 
             # Write back
+            # 写回文件
             async with aiofiles.open(path_absolute, mode="w", encoding="utf-8") as f:
                 await f.write(new_content)
 
@@ -1334,6 +1440,7 @@ class FileEditTool(Tool):
             )
 
             # Show a snippet around the edit for confirmation
+            # 展示编辑位置附近的片段以便确认
             edit_pos = new_content.find(new_text) if new_text else content.find(old_text)
             context_start = max(0, edit_pos - 50)
             context_end = min(len(new_content), edit_pos + len(new_text) + 50) if new_text else min(len(content), edit_pos + 50)
@@ -1363,8 +1470,11 @@ class FileEditTool(Tool):
 class FileDeleteTool(Tool):
     """
     Delete file(s) or empty directories from the session workspace.
+    从 session workspace 删除文件或空目录。
     Supports glob patterns for batch deletion. Cannot delete non-empty directories.
+    支持用 glob 模式批量删除。无法删除非空目录。
     Only operates within /workspace — /memory/ paths are rejected.
+    仅在 /workspace 内操作——/memory/ 路径会被拒绝。
     """
 
     def _get_metadata(self) -> ToolMetadata:
@@ -1422,6 +1532,7 @@ class FileDeleteTool(Tool):
         recursive = kwargs.get("recursive", False)
 
         # Proxy to WASI sandbox if enabled
+        # 若启用了 WASI sandbox 则代理过去
         if is_sandbox_enabled():
             session_id = (session_context or {}).get("session_id", "default")
             client = get_sandbox_client()
@@ -1466,7 +1577,9 @@ class FileDeleteTool(Tool):
                 return ToolResult(success=False, output=None, error=error)
 
         # Local filesystem fallback — workspace only (not memory)
+        # 本地文件系统兜底——仅限 workspace（不含 memory）
         # Explicit /memory/ guard — matches Rust hard-reject pattern (sandbox_service.rs:1223)
+        # 显式 /memory/ 防护——与 Rust 的硬拒绝模式一致（sandbox_service.rs:1223）
         if target_path.startswith("/memory/") or target_path.startswith("/memory") \
                 or target_path.startswith("memory/") or target_path == "memory":
             return ToolResult(
@@ -1479,6 +1592,7 @@ class FileDeleteTool(Tool):
 
             if pattern:
                 # Glob batch mode
+                # glob 批量模式
                 base_dir = (workspace / target_path).resolve()
                 if not _is_allowed(base_dir, workspace):
                     return ToolResult(
@@ -1499,9 +1613,11 @@ class FileDeleteTool(Tool):
                     matches = list(base_dir.glob(pattern))
 
                 # Filter to workspace-allowed paths only
+                # 仅保留 workspace 允许的路径
                 matches = [m for m in matches if _is_allowed(m.resolve(), workspace)]
 
                 # Sort by depth descending so files are deleted before parent dirs
+                # 按深度降序排序，确保先删文件再删父目录
                 matches.sort(key=lambda p: len(p.parts), reverse=True)
 
                 deleted_paths = []
@@ -1512,11 +1628,13 @@ class FileDeleteTool(Tool):
                             deleted_paths.append(str(match.relative_to(workspace)))
                         elif match.is_dir():
                             # Only delete empty directories
+                            # 仅删除空目录
                             try:
                                 match.rmdir()
                                 deleted_paths.append(str(match.relative_to(workspace)))
                             except OSError:
                                 pass  # Non-empty directory, skip
+                                # 非空目录，跳过
                     except OSError:
                         continue
 
@@ -1544,6 +1662,7 @@ class FileDeleteTool(Tool):
                 )
             else:
                 # Single target mode
+                # 单一目标模式
                 path = (workspace / target_path).resolve()
                 if not _is_allowed(path, workspace):
                     return ToolResult(
@@ -1554,6 +1673,7 @@ class FileDeleteTool(Tool):
 
                 if not path.exists():
                     # Idempotent: not-found is success
+                    # 幂等：未找到即视为成功
                     return ToolResult(
                         success=True,
                         output={"message": "Path does not exist (nothing to delete)", "deleted_paths": []},
@@ -1567,6 +1687,7 @@ class FileDeleteTool(Tool):
                 elif path.is_dir():
                     try:
                         path.rmdir()  # Only empty directories
+                        # 仅空目录
                     except OSError:
                         return ToolResult(
                             success=False,

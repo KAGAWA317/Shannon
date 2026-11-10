@@ -10,6 +10,7 @@ import (
 )
 
 // State represents the circuit breaker state
+// State 表示 circuit breaker 的状态
 type State int
 
 const (
@@ -37,6 +38,7 @@ var (
 )
 
 // Config holds circuit breaker configuration
+// Config 保存 circuit breaker 配置
 type Config struct {
 	MaxRequests      uint32        // Max requests in half-open state
 	Interval         time.Duration // Interval to clear request counter in closed state
@@ -68,6 +70,7 @@ type Counts struct {
 }
 
 // CircuitBreaker implements the circuit breaker pattern
+// CircuitBreaker 实现 circuit breaker 模式
 type CircuitBreaker struct {
 	name   string
 	config Config
@@ -94,6 +97,7 @@ func NewCircuitBreaker(name string, config Config, logger *zap.Logger) *CircuitB
 }
 
 // Execute executes the given function if the circuit breaker is closed or half-open
+// Execute 在 circuit breaker 为 closed 或 half-open 时执行给定函数
 func (cb *CircuitBreaker) Execute(ctx context.Context, fn func() error) error {
 	generation, err := cb.beforeRequest()
 	if err != nil {
@@ -127,6 +131,7 @@ func (cb *CircuitBreaker) Counts() Counts {
 }
 
 // beforeRequest checks if request can proceed
+// beforeRequest 检查 request 能否放行
 func (cb *CircuitBreaker) beforeRequest() (uint64, error) {
 	cb.mutex.Lock()
 	defer cb.mutex.Unlock()
@@ -145,6 +150,7 @@ func (cb *CircuitBreaker) beforeRequest() (uint64, error) {
 }
 
 // afterRequest updates the circuit breaker state after request completion
+// afterRequest 在 request 完成后更新 circuit breaker 状态
 func (cb *CircuitBreaker) afterRequest(before uint64, success bool) {
 	cb.mutex.Lock()
 	defer cb.mutex.Unlock()
@@ -163,6 +169,7 @@ func (cb *CircuitBreaker) afterRequest(before uint64, success bool) {
 }
 
 // currentState returns the current state, updating if necessary
+// currentState 返回当前状态，必要时先推进状态：closed 计数窗口过期则开新一代，open timeout 则转 half-open
 func (cb *CircuitBreaker) currentState(now time.Time) (State, uint64) {
 	switch cb.state {
 	case StateClosed:
@@ -178,6 +185,7 @@ func (cb *CircuitBreaker) currentState(now time.Time) (State, uint64) {
 }
 
 // onSuccess handles successful request
+// onSuccess 处理成功的 request
 func (cb *CircuitBreaker) onSuccess(state State, now time.Time) {
 	switch state {
 	case StateClosed:
@@ -193,6 +201,7 @@ func (cb *CircuitBreaker) onSuccess(state State, now time.Time) {
 }
 
 // onFailure handles failed request
+// onFailure 处理失败的 request
 func (cb *CircuitBreaker) onFailure(state State, now time.Time) {
 	switch state {
 	case StateClosed:
@@ -207,6 +216,7 @@ func (cb *CircuitBreaker) onFailure(state State, now time.Time) {
 }
 
 // setState transitions to a new state
+// setState 切换到新状态
 func (cb *CircuitBreaker) setState(state State, now time.Time) {
 	if cb.state == state {
 		return
@@ -229,6 +239,7 @@ func (cb *CircuitBreaker) setState(state State, now time.Time) {
 }
 
 // toNewGeneration resets counters and updates generation
+// toNewGeneration 重置计数器并推进 generation，使并发中的旧 request 结果被丢弃
 func (cb *CircuitBreaker) toNewGeneration(now time.Time) {
 	cb.generation++
 	cb.counts = Counts{}

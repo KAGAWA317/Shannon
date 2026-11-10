@@ -1,4 +1,7 @@
-"""Example showing list_tasks() and get_task_events()."""
+"""Example showing list_tasks() and get_task_events().
+
+示例：演示 list_tasks() 与 get_task_events()。
+"""
 
 import os
 from shannon import ShannonClient

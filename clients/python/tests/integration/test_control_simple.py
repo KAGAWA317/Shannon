@@ -2,11 +2,15 @@
 """
 Simple fast test for control signals with a quick task.
 
+用一个快速 task 做的 control signal 简单测试。
+
 NOTE: This is an integration test requiring a running Shannon stack.
 Skipped by default. To run:
     SHANNON_INTEGRATION_TESTS=1 pytest tests/integration/
     OR
     python tests/integration/test_control_simple.py
+
+需先启动 Shannon 全栈；默认跳过。
 """
 
 import os
@@ -17,6 +21,7 @@ import pytest
 from shannon import ShannonClient
 
 # Skip in pytest unless explicitly enabled
+# 除非显式开启，否则在 pytest 中跳过
 pytestmark = pytest.mark.skipif(
     not os.environ.get("SHANNON_INTEGRATION_TESTS"),
     reason="Integration tests require running Shannon stack. Set SHANNON_INTEGRATION_TESTS=1 to run."
@@ -24,7 +29,10 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_simple_control():
-    """Test pause/resume with a simple fast task."""
+    """Test pause/resume with a simple fast task.
+
+    用一个简单快速的 task 测试 pause/resume。
+    """
 
     client = ShannonClient(base_url="http://localhost:8080")
 
@@ -67,6 +75,7 @@ def test_simple_control():
     print("✓ Resume request sent")
 
     # Wait for completion
+    # 等待完成
     print("\n[6] Waiting for completion (30s timeout)...")
     try:
         final = client.wait(handle.task_id, timeout=30)
@@ -74,6 +83,7 @@ def test_simple_control():
         print(f"\nResult: {final.result}")
 
         # Verify metadata
+        # 校验 metadata
         print(f"\nMetadata:")
         print(f"  Model: {final.model_used}")
         print(f"  Provider: {final.provider}")
@@ -89,6 +99,7 @@ def test_simple_control():
     except Exception as e:
         print(f"✗ Failed: {e}")
         # Check final status
+        # 查看最终 status
         status = client.get_status(handle.task_id)
         print(f"Final status: {status.status}")
         return False

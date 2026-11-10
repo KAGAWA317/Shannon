@@ -271,6 +271,7 @@ func (h *AgentsHandler) sendError(w http.ResponseWriter, message string, code in
 
 // ValidateAgentInput validates input against the agent's InputSchema
 // Returns nil if valid, or an error describing validation failures
+// ValidateAgentInput 依据 agent 的 InputSchema 校验输入：合法返回 nil，否则返回描述校验失败原因的错误。
 func ValidateAgentInput(agent *activities.AgentDefinition, input map[string]interface{}) error {
 	if agent.InputSchema == nil {
 		return nil // No schema defined, allow any input
@@ -279,6 +280,7 @@ func ValidateAgentInput(agent *activities.AgentDefinition, input map[string]inte
 	var errors []string
 
 	// Check required fields (reject both missing and null values)
+	// 检查必填字段（缺失与显式 null 都拒绝）。
 	if required, ok := agent.InputSchema["required"].([]interface{}); ok {
 		for _, r := range required {
 			fieldName, ok := r.(string)
@@ -298,6 +300,7 @@ func ValidateAgentInput(agent *activities.AgentDefinition, input map[string]inte
 			propSchema, exists := properties[fieldName].(map[string]interface{})
 			if !exists {
 				// Field not in schema - reject unknown fields for security
+				// 字段不在 schema 中——出于安全考虑拒绝未知字段。
 				errors = append(errors, fmt.Sprintf("unknown field: %s (not defined in agent schema)", fieldName))
 				continue
 			}
@@ -325,6 +328,7 @@ func ValidateAgentInput(agent *activities.AgentDefinition, input map[string]inte
 }
 
 // validateFieldType checks if a value matches the expected JSON schema type
+// validateFieldType 判断值是否符合 JSON schema 声明的类型。
 func validateFieldType(fieldName string, value interface{}, expectedType string) error {
 	if value == nil {
 		return nil // nil is acceptable for any type (will be caught by required check)
@@ -340,6 +344,7 @@ func validateFieldType(fieldName string, value interface{}, expectedType string)
 		switch value.(type) {
 		case int, int32, int64, float64:
 			// JSON numbers come as float64, accept if whole number
+			// JSON 数字解析后是 float64，整数也接受。
 			if f, ok := value.(float64); ok {
 				valid = f == float64(int64(f))
 			} else {
@@ -368,6 +373,7 @@ func validateFieldType(fieldName string, value interface{}, expectedType string)
 }
 
 // isValueInEnum checks if a value is in the allowed enum values
+// isValueInEnum 判断值是否在允许的枚举内。
 func isValueInEnum(value interface{}, enumValues []interface{}) bool {
 	for _, ev := range enumValues {
 		if reflect.DeepEqual(value, ev) {

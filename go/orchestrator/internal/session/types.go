@@ -7,16 +7,20 @@ import (
 
 var (
 	// ErrSessionNotFound is returned when a session doesn't exist
+	// session 不存在时返回 ErrSessionNotFound
 	ErrSessionNotFound = errors.New("session not found")
 
 	// ErrSessionExpired is returned when a session has expired
+	// session 已过期时返回 ErrSessionExpired
 	ErrSessionExpired = errors.New("session expired")
 
 	// ErrInvalidSession is returned when session data is invalid
+	// session 数据非法时返回 ErrInvalidSession
 	ErrInvalidSession = errors.New("invalid session")
 )
 
 // Session represents a user session with context continuity
+// Session 表示具有 context 连续性的用户 session
 type Session struct {
 	ID        string                 `json:"id"`
 	UserID    string                 `json:"user_id"`
@@ -37,6 +41,7 @@ type Session struct {
 }
 
 // Message represents a message in the session history
+// Message 表示 session 历史中的一条消息
 type Message struct {
 	ID        string                 `json:"id"`
 	Role      string                 `json:"role"` // "user", "assistant", "system"
@@ -50,6 +55,7 @@ type Message struct {
 }
 
 // AgentState represents the state of a specific agent in the session
+// AgentState 表示 session 中某个 agent 的状态
 type AgentState struct {
 	AgentID    string                 `json:"agent_id"`
 	LastActive time.Time              `json:"last_active"`
@@ -60,11 +66,13 @@ type AgentState struct {
 }
 
 // IsExpired checks if the session has expired
+// IsExpired 判断 session 是否已过期
 func (s *Session) IsExpired() bool {
 	return time.Now().After(s.ExpiresAt)
 }
 
 // GetContextValue retrieves a value from the session context
+// GetContextValue 从 session context 中取值
 func (s *Session) GetContextValue(key string) (interface{}, bool) {
 	if s.Context == nil {
 		return nil, false
@@ -74,6 +82,7 @@ func (s *Session) GetContextValue(key string) (interface{}, bool) {
 }
 
 // SetContextValue sets a value in the session context
+// SetContextValue 在 session context 中设值
 func (s *Session) SetContextValue(key string, value interface{}) {
 	if s.Context == nil {
 		s.Context = make(map[string]interface{})
@@ -83,6 +92,7 @@ func (s *Session) SetContextValue(key string, value interface{}) {
 }
 
 // GetAgentState retrieves the state for a specific agent
+// GetAgentState 获取某个 agent 的状态
 func (s *Session) GetAgentState(agentID string) (*AgentState, bool) {
 	if s.AgentStates == nil {
 		return nil, false
@@ -92,6 +102,7 @@ func (s *Session) GetAgentState(agentID string) (*AgentState, bool) {
 }
 
 // SetAgentState sets the state for a specific agent
+// SetAgentState 设置某个 agent 的状态
 func (s *Session) SetAgentState(agentID string, state *AgentState) {
 	if s.AgentStates == nil {
 		s.AgentStates = make(map[string]*AgentState)
@@ -101,6 +112,7 @@ func (s *Session) SetAgentState(agentID string, state *AgentState) {
 }
 
 // GetRecentHistory returns the most recent messages from history
+// GetRecentHistory 返回历史中最近的消息
 func (s *Session) GetRecentHistory(count int) []Message {
 	if len(s.History) <= count {
 		return s.History
@@ -109,8 +121,10 @@ func (s *Session) GetRecentHistory(count int) []Message {
 }
 
 // GetHistorySummary returns a summary suitable for LLM context
+// GetHistorySummary 返回适合 LLM context 的摘要
 func (s *Session) GetHistorySummary(maxTokens int) string {
 	// Simple implementation - in production, use proper summarization
+	// 简单实现——生产环境应使用正规的摘要生成
 	summary := ""
 	currentTokens := 0
 
@@ -118,6 +132,7 @@ func (s *Session) GetHistorySummary(maxTokens int) string {
 	for i := len(s.History) - 1; i >= 0; i-- {
 		msg := s.History[i]
 		// Rough token estimate: 1 token per 4 characters
+		// 粗略的 token 估算：每 4 个字符 1 token
 		msgTokens := len(msg.Content) / 4
 
 		if currentTokens+msgTokens > maxTokens {
@@ -137,6 +152,7 @@ func formatMessage(msg Message) string {
 }
 
 // UpdateTokenUsage updates the token usage for the session
+// UpdateTokenUsage 更新 session 的 token 用量
 func (s *Session) UpdateTokenUsage(tokens int, cost float64) {
 	s.TotalTokensUsed += tokens
 	s.TotalCostUSD += cost

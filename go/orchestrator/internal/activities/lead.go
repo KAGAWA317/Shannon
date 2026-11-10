@@ -19,6 +19,7 @@ import (
 // ── Lead Decision Types ─────────────────────────────────────────────────────
 
 // LeadEvent describes what triggered the Lead to wake up.
+// LeadEvent 描述这次唤醒 Lead 的触发源。
 type LeadEvent struct {
 	Type             string                 `json:"type"` // "agent_completed", "agent_idle", "help_request", "checkpoint", "human_input"
 	AgentID          string                 `json:"agent_id"`
@@ -32,6 +33,7 @@ type LeadEvent struct {
 }
 
 // FileReadResult holds the content of a file read by Lead.
+// FileReadResult 保存 Lead 读取某个文件得到的內容。
 type FileReadResult struct {
 	Path      string `json:"path"`
 	Content   string `json:"content"`
@@ -47,6 +49,7 @@ type ToolResultEntry struct {
 }
 
 // LeadAgentState tracks an agent's current state for Lead decisions.
+// LeadAgentState 记录 agent 当前状态，供 Lead 做决策。
 type LeadAgentState struct {
 	AgentID        string   `json:"agent_id"`
 	Status         string   `json:"status"`          // "running", "idle", "completed"
@@ -58,6 +61,7 @@ type LeadAgentState struct {
 }
 
 // LeadBudget tracks global budget for the swarm.
+// LeadBudget 跟踪整个 swarm 的全局 budget。
 type LeadBudget struct {
 	TotalLLMCalls      int `json:"total_llm_calls"`
 	RemainingLLMCalls  int `json:"remaining_llm_calls"`
@@ -85,6 +89,7 @@ type LeadDecisionInput struct {
 }
 
 // LeadAction is a single action the Lead wants to take.
+// LeadAction 是 Lead 想执行的一条动作。
 type LeadAction struct {
 	Type            string                   `json:"type"` // assign_task, spawn_agent, send_message, broadcast, revise_plan, file_read, done
 	TaskID          string                   `json:"task_id,omitempty"`
@@ -119,6 +124,7 @@ type LeadDecisionResult struct {
 }
 
 // LeadDecision calls the Python LLM service's /lead/decide endpoint (D2: replay-safe).
+// LeadDecision 调用 Python LLM service 的 /lead/decide 接口（D2：replay 安全）。
 func LeadDecision(ctx context.Context, in LeadDecisionInput) (LeadDecisionResult, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("LeadDecision called", "workflow_id", in.WorkflowID, "event", in.Event.Type)
@@ -136,6 +142,8 @@ func LeadDecision(ctx context.Context, in LeadDecisionInput) (LeadDecisionResult
 
 	// Must be under the 150s Temporal StartToCloseTimeout to let Temporal
 	// detect the timeout and retry, rather than the HTTP client swallowing it.
+	// 必须小于 Temporal 的 150s StartToCloseTimeout，让 Temporal 能
+	// 感知到 timeout 并 retry，而不是被 HTTP client 自己吞掉。
 	timeoutSec := 120
 	if v := os.Getenv("LEAD_DECISION_TIMEOUT_SECONDS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
@@ -191,6 +199,7 @@ type ListWorkspaceFilesResult struct {
 }
 
 // ListWorkspaceFiles reads workspace file metadata for closing_checkpoint.
+// ListWorkspaceFiles 读取 workspace 文件 metadata，供 closing_checkpoint 使用。
 func ListWorkspaceFiles(ctx context.Context, in ListWorkspaceFilesInput) (ListWorkspaceFilesResult, error) {
 	if in.SessionID == "" {
 		return ListWorkspaceFilesResult{}, nil
@@ -225,6 +234,8 @@ type LeadToolResult struct {
 
 // LeadExecuteTool calls Python LLM-service POST /tools/execute directly.
 // Zero LLM cost — the tool registry executes without involving an LLM.
+// LeadExecuteTool 直接调用 Python LLM-service 的 POST /tools/execute。
+// 不产生 LLM 成本：完全由 tool registry 执行，不经过 LLM。
 func LeadExecuteTool(ctx context.Context, in LeadToolInput) (LeadToolResult, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("LeadExecuteTool called", "tool", in.Tool)
@@ -236,6 +247,7 @@ func LeadExecuteTool(ctx context.Context, in LeadToolInput) (LeadToolResult, err
 	url := fmt.Sprintf("%s/tools/execute", base)
 
 	// Build request body matching Python ToolExecuteRequest field names
+	// 构造 request body，字段名与 Python 侧 ToolExecuteRequest 对齐。
 	reqBody := map[string]interface{}{
 		"tool_name":  in.Tool,
 		"parameters": in.ToolParams,
@@ -259,6 +271,7 @@ func LeadExecuteTool(ctx context.Context, in LeadToolInput) (LeadToolResult, err
 	resp, err := client.Do(req)
 	if err != nil {
 		return LeadToolResult{Error: err.Error()}, nil // Return error in result, don't fail activity
+// 把错误放进返回值，不让 activity 失败。
 	}
 	defer resp.Body.Close()
 
@@ -278,6 +291,7 @@ func LeadExecuteTool(ctx context.Context, in LeadToolInput) (LeadToolResult, err
 	}
 
 	// Prefer formatted text; fall back to raw output
+	// 优先用格式化后的 text，缺失时回退到原始 output。
 	output := pyResp.Text
 	if output == "" {
 		if pyResp.Output != nil {

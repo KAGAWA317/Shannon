@@ -1,7 +1,9 @@
 # Shannon Platform - Feature Configuration
+# Shannon 平台 - 功能配置
 # GitHub: https://github.com/Kocoro-lab/Shannon
 
 # Execution modes configuration
+# 执行模式配置
 execution_modes:
   simple:
     enabled: true
@@ -81,6 +83,7 @@ workflows:
     auto_selection: true        # Allow automatic tool selection
 
   # Complexity thresholds for model tier selection
+  # 用于选择 model tier 的复杂度阈值
   complexity:
     simple_threshold: 0.3         # < 0.3 = small model tier
     medium_threshold: 0.5         # 0.3-0.5 = medium model tier, > 0.5 = large model tier
@@ -104,14 +107,17 @@ workflows:
   # Template configuration
   templates:
     # When true, if a template workflow fails at runtime, fall back to AI decomposition
+    # 为 true 时，若模板 workflow 在运行时失败，则回退到 AI 分解
     fallback_to_ai: false
 
   # P2P Coordination for task dependencies
+  # 用于 task 依赖的 P2P 协调
   p2p:
     enabled: false  # Set to true to enable P2P coordination between agents
     timeout_seconds: 600  # Maximum wait time for dependencies (10 minutes default)
 
   # Swarm Agent Architecture (persistent multi-turn agents with inter-agent messaging)
+  # Swarm Agent 架构（持久化的多轮 Agent，支持 Agent 间消息传递）
   swarm:
     enabled: true  # Set to true to enable swarm agent architecture
     max_agents: 10  # Maximum total agents (initial + dynamically spawned)
@@ -127,6 +133,7 @@ workflows:
     max_wall_clock_minutes: 30  # Hard wall-clock limit for entire swarm workflow
 
 # Citation V2 configuration (DEPRECATED - V2 abandoned, using optimized Legacy)
+# Citation V2 配置（已废弃 - V2 已放弃，改用优化后的 Legacy 方案）
 citation:
   v2_enabled: false             # V2 disabled - simplified to Legacy approach (PR #124)
   v2_strict_mode: false         # true = disable V1 supplement, use V2 only
@@ -137,6 +144,7 @@ citation:
   v2_base_topk: 5               # Base Top-K when adaptive is disabled
 
 # Enforcement defaults (applies to rate limiting and circuit breaking)
+# 执行约束默认值（适用于 rate limit 与 circuit breaker）
 enforcement:
   timeout_seconds: 90
   max_tokens: 32768
@@ -146,6 +154,8 @@ enforcement:
     # When false, disables provider-based rate control sleep in workflows.
     # This can reduce latency during development or when external rate limits
     # are enforced elsewhere (e.g., at the gateway or provider SDK level).
+    # 设为 false 时，禁用 workflow 中基于 provider 的速率控制等待。
+    # 这可在开发期间降低延迟，也适用于 rate limit 已在别处（如网关或 provider SDK 层）实施的情况。
     provider_rate_control_enabled: false  # Set to false to disable provider rate limiting delays
 
   circuit_breaker:
@@ -261,6 +271,7 @@ observability:
     readiness_path: /health/ready
 
 # Experimental features (disabled by default)
+# 实验性功能（默认关闭）
 experimental:
   web3_integration:
     enabled: false

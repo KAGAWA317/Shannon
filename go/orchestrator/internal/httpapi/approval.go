@@ -14,6 +14,7 @@ import (
 )
 
 // ApprovalHandler handles human approval decisions via HTTP and forwards them to Temporal as signals.
+// ApprovalHandler 通过 HTTP 处理人工审批决定，并作为 signal 转发给 Temporal。
 type ApprovalHandler struct {
 	temporal  client.Client
 	logger    *zap.Logger
@@ -26,11 +27,13 @@ func NewApprovalHandler(t client.Client, logger *zap.Logger, authToken string) *
 }
 
 // RegisterRoutes registers approval routes on the provided mux.
+// RegisterRoutes 在给定的 mux 上注册审批路由。
 func (h *ApprovalHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/approvals/decision", h.handleDecision)
 }
 
 // approvalDecisionRequest is the expected payload for approval decisions.
+// approvalDecisionRequest 是审批决定的预期载荷。
 type approvalDecisionRequest struct {
 	WorkflowID     string `json:"workflow_id"`
 	RunID          string `json:"run_id,omitempty"`
@@ -101,6 +104,7 @@ func (h *ApprovalHandler) handleDecision(w http.ResponseWriter, r *http.Request)
 }
 
 // StartApprovalServer starts a dedicated HTTP server for approval decisions.
+// StartApprovalServer 启动专用于审批决定的 HTTP 服务。
 func StartApprovalServer(port int, authToken string, t client.Client, logger *zap.Logger) *http.Server {
 	handler := NewApprovalHandler(t, logger, authToken)
 	mux := http.NewServeMux()

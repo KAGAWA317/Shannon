@@ -116,6 +116,7 @@ func TestAPIKeyInfo_JSONSerialization(t *testing.T) {
 	}
 
 	// Verify required fields are present
+	// 验证必需字段存在。
 	jsonStr := string(data)
 	requiredFields := []string{"id", "name", "key_prefix", "created_at", "is_active"}
 	for _, field := range requiredFields {
@@ -125,6 +126,7 @@ func TestAPIKeyInfo_JSONSerialization(t *testing.T) {
 	}
 
 	// Verify optional fields with nil are omitted
+	// 验证值为 nil 的可选字段被省略。
 	if strings.Contains(jsonStr, `"description"`) {
 		t.Error("nil description should be omitted")
 	}
@@ -245,6 +247,7 @@ func TestRegisterResponse_APIKeyField(t *testing.T) {
 	}
 
 	// Existing user - empty api_key (still present in JSON due to no omitempty)
+	// 已存在用户：api_key 为空（因未加 omitempty，JSON 中仍会出现该字段）。
 	respExisting := RegisterResponse{
 		UserID:      "user-123",
 		TenantID:    "tenant-456",

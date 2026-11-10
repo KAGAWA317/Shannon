@@ -8,6 +8,7 @@ import (
 )
 
 // EventLog represents a persisted streaming event row.
+// EventLog 表示一条持久化的 streaming event 记录。
 type EventLog struct {
 	ID         uuid.UUID `json:"id"`
 	WorkflowID string    `json:"workflow_id"`

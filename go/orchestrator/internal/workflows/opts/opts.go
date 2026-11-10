@@ -27,6 +27,8 @@ func WithTokenRecordOptions(ctx workflow.Context) workflow.Context {
 // RecordToolCostEntries records synthetic tool cost usage rows from agent metadata.
 // For non-budgeted ExecuteAgent paths, tool_cost_entries in the result metadata are
 // not persisted automatically. Call this after RecordTokenUsageActivity to capture them.
+// 非 budget 的 ExecuteAgent 路径不会自动持久化 metadata 中的 tool_cost_entries，
+// 需在 RecordTokenUsageActivity 之后调用本函数补记。
 func RecordToolCostEntries(
 	ctx workflow.Context,
 	result activities.AgentExecutionResult,

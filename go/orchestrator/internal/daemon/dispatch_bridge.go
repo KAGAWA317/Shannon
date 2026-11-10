@@ -17,6 +17,7 @@ const (
 )
 
 // DispatchRequest is published to Redis by the orchestrator and consumed by the gateway Hub.
+// DispatchRequest 由 orchestrator 发布到 Redis，由 gateway Hub 消费。
 type DispatchRequest struct {
 	TenantID string          `json:"tenant_id"`
 	UserID   string          `json:"user_id"`
@@ -27,6 +28,9 @@ type DispatchRequest struct {
 // PublishDispatch writes a dispatch request to the Redis stream.
 // Called by DaemonDispatchActivity in the orchestrator process.
 // The gateway Hub's SubscribeDispatches goroutine picks it up and dispatches to local WS connections.
+// PublishDispatch 把派发 request 写入 Redis stream。
+// 由 orchestrator 进程中的 DaemonDispatchActivity 调用。
+// gateway Hub 的 SubscribeDispatches goroutine 取出并派发给本地 WS 连接。
 func (h *Hub) PublishDispatch(ctx context.Context, req DispatchRequest) error {
 	data, err := json.Marshal(req)
 	if err != nil {
@@ -48,6 +52,8 @@ func (h *Hub) PublishDispatch(ctx context.Context, req DispatchRequest) error {
 // SubscribeDispatches reads dispatch requests from the Redis stream and dispatches
 // them to locally connected WebSocket daemons. Only the gateway process should call this.
 // Blocks until ctx is cancelled.
+// SubscribeDispatches 从 Redis stream 读取派发 request 并投递给本地已连接的 WebSocket daemon。
+// 只应由 gateway 进程调用。阻塞直到 ctx 被取消。
 func (h *Hub) SubscribeDispatches(ctx context.Context) {
 	rc := h.claims.rc
 
@@ -111,5 +117,6 @@ func (h *Hub) processDispatchMessage(ctx context.Context, rc redis.Cmdable, msg 
 	}
 
 	// ACK regardless — if no daemon is connected, retrying won't help
+	// 无论如何都 ACK——若无 daemon 连接，retry 也无济于事
 	rc.XAck(ctx, dispatchStreamKey, dispatchGroup, msg.ID)
 }

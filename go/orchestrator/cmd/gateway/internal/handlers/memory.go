@@ -33,6 +33,8 @@ func NewMemoryHandler(logger *zap.Logger) *MemoryHandler {
 // ListMemoryFiles handles GET /api/v1/memory/files
 // Lists files in the authenticated user's memory directory.
 // user_id is derived from the auth token — never from URL input.
+// ListMemoryFiles 处理 GET /api/v1/memory/files：列出 authenticated 用户 memory 目录下的文件；
+// user_id 只来自 auth token，绝不取自 URL 输入。
 func (h *MemoryHandler) ListMemoryFiles(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
@@ -44,6 +46,7 @@ func (h *MemoryHandler) ListMemoryFiles(w http.ResponseWriter, r *http.Request) 
 	userID := userCtx.UserID.String()
 
 	// Validate user_id for filesystem safety (UUID format is always safe, but defense in depth)
+	// 校验 user_id 以保证文件系统安全（UUID 格式本身安全，这里是纵深防御）。
 	if err := validateMemoryUserID(userID); err != nil {
 		h.logger.Error("Invalid user_id from auth context", zap.String("user_id", userID), zap.Error(err))
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
@@ -58,6 +61,7 @@ func (h *MemoryHandler) ListMemoryFiles(w http.ResponseWriter, r *http.Request) 
 	)
 
 	// Resolve and verify path stays within base
+	// 解析路径并确认没有逃出基目录。
 	absTarget, err := filepath.Abs(memoryDir)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
@@ -108,6 +112,7 @@ func (h *MemoryHandler) ListMemoryFiles(w http.ResponseWriter, r *http.Request) 
 
 // DownloadMemoryFile handles GET /api/v1/memory/files/{path...}
 // Downloads a file from the authenticated user's memory directory.
+// DownloadMemoryFile 处理 GET /api/v1/memory/files/{path...}：从 authenticated 用户的 memory 目录下载文件。
 func (h *MemoryHandler) DownloadMemoryFile(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
@@ -143,10 +148,12 @@ func (h *MemoryHandler) DownloadMemoryFile(w http.ResponseWriter, r *http.Reques
 	)
 
 	// Reuse the workspace download pattern (text vs binary, path escape checks)
+	// 复用 workspace 的下载逻辑（区分文本/二进制、路径逃逸检查）。
 	h.downloadFileFromDir(w, memoryDir, filePath)
 }
 
 // downloadFileFromDir reads a file from a directory with security checks.
+// downloadFileFromDir 在带安全检查的前提下从目录读取文件。
 func (h *MemoryHandler) downloadFileFromDir(w http.ResponseWriter, baseDir, filePath string) {
 	fullPath := filepath.Join(baseDir, filePath)
 
@@ -211,8 +218,10 @@ func (h *MemoryHandler) downloadFileFromDir(w http.ResponseWriter, baseDir, file
 }
 
 // validateMemoryUserID validates a user_id for filesystem path safety.
+// validateMemoryUserID 校验 user_id 可安全用于文件系统路径。
 func validateMemoryUserID(userID string) error {
 	// UUIDs from auth context are always safe (hex + hyphens),
 	// but validate defensively in case format changes.
+	// auth context 里的 UUID 本身安全（十六进制 + 连字符），仍做防御性校验以防格式变化。
 	return validateWorkspaceSessionID(userID)
 }

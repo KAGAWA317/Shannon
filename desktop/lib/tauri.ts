@@ -1,4 +1,5 @@
 // Tauri stub for OSS web-only mode (no desktop app)
+// OSS 纯 Web 模式下的 Tauri stub（无桌面端）
 
 export function isTauri(): boolean {
     return false;

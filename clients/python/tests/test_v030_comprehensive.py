@@ -116,6 +116,7 @@ class TestResearchWorkflow:
             print("  Strategy: quick (force_research=True)")
 
             # Research workflows can take longer
+            # Research workflow 耗时可能更长
             status = client.wait(handle.task_id, timeout=300)
 
             print(f"  Status: {status.status.value}")
@@ -277,6 +278,7 @@ class TestSSEStreaming:
 
             # Server may return related event types (thread.message.* are LLM output events)
             # The filter is a hint, not a strict requirement
+            # 过滤器只是提示，并非严格约束
             llm_related = ["LLM_OUTPUT", "WORKFLOW_COMPLETED", "LLM_PARTIAL",
                           "thread.message.completed", "thread.message.delta"]
 

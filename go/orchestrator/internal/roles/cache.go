@@ -14,6 +14,7 @@ import (
 )
 
 // presetPayload mirrors the llm-service /roles response schema.
+// presetPayload 对应 llm-service /roles 的 response schema。
 type presetPayload struct {
 	AllowedTools []string `json:"allowed_tools"`
 }
@@ -22,6 +23,8 @@ var (
 	roleAllowlist = map[string][]string{
 		// Fallback allowlist used when llm-service /roles is unavailable.
 		// Keep this aligned with python/llm-service/llm_service/roles/presets.py.
+		// llm-service /roles 不可用时使用的兜底白名单。
+		// 需与 python/llm-service/llm_service/roles/presets.py 保持一致。
 		"analysis":            {"web_search", "file_read"},
 		"research":            {"web_search", "web_fetch", "web_subpage_fetch", "web_crawl"},
 		"deep_research_agent": {"web_search", "web_fetch", "web_subpage_fetch", "web_crawl"},
@@ -40,6 +43,7 @@ var (
 )
 
 // ensureLoaded populates the allowlist from llm-service the first time it's requested.
+// ensureLoaded 在首次请求时从 llm-service 填充白名单。
 func ensureLoaded() {
 	roleAllowlistOnce.Do(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -53,6 +57,7 @@ func ensureLoaded() {
 }
 
 // fetchRoleAllowlist retrieves role metadata from llm-service.
+// fetchRoleAllowlist 从 llm-service 获取角色 metadata。
 func fetchRoleAllowlist(ctx context.Context) (map[string][]string, error) {
 	base := os.Getenv("LLM_SERVICE_URL")
 	if base == "" {
@@ -93,6 +98,7 @@ func fetchRoleAllowlist(ctx context.Context) (map[string][]string, error) {
 }
 
 // AllowedTools returns the tool allowlist for a given role (case-insensitive).
+// AllowedTools 返回指定角色（大小写不敏感）的 tool 白名单。
 func AllowedTools(role string) []string {
 	if role == "" {
 		return nil
@@ -109,6 +115,7 @@ func AllowedTools(role string) []string {
 }
 
 // All returns a copy of the current role allowlist map.
+// All 返回当前角色白名单 map 的副本。
 func All() map[string][]string {
 	ensureLoaded()
 	roleAllowlistMu.RLock()
@@ -122,6 +129,7 @@ func All() map[string][]string {
 }
 
 // Refresh forces a new fetch from llm-service and replaces the in-memory map.
+// Refresh 强制从 llm-service 重新获取并替换内存中的 map。
 func Refresh(ctx context.Context) error {
 	fetched, err := fetchRoleAllowlist(ctx)
 	if err != nil {

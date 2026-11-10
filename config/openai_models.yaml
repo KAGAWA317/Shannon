@@ -1,12 +1,16 @@
 # OpenAI-Compatible Model Registry
+# OpenAI 兼容的模型注册表
 # Maps OpenAI-style model names to Shannon workflow configurations
+# 将 OpenAI 风格的模型名映射到 Shannon workflow 配置
 #
 # Usage:
+# 用法：
 #   POST /v1/chat/completions
 #   {"model": "shannon-deep-research", "messages": [...]}
 
 models:
   # Deep Research - Iterative research with coverage optimization
+  # Deep Research - 带覆盖度优化的迭代式研究
   shannon-deep-research:
     workflow_mode: research
     context:
@@ -21,6 +25,7 @@ models:
       tokens_per_minute: 100000
 
   # Quick Research - Fast research for simple queries
+  # Quick Research - 面向简单查询的快速研究
   shannon-quick-research:
     workflow_mode: research
     context:
@@ -33,6 +38,7 @@ models:
       tokens_per_minute: 150000
 
   # Standard Research - Balanced depth and speed
+  # Standard Research - 深度与速度均衡
   shannon-standard-research:
     workflow_mode: research
     context:
@@ -45,6 +51,7 @@ models:
       tokens_per_minute: 120000
 
   # Academic Research - Citation-heavy scholarly research
+  # Academic Research - 引用密集的学术研究
   shannon-academic-research:
     workflow_mode: research
     context:
@@ -58,6 +65,7 @@ models:
       tokens_per_minute: 100000
 
   # Chat - General purpose chat completion
+  # Chat - 通用对话补全
   shannon-chat:
     workflow_mode: simple
     context: {}
@@ -68,6 +76,7 @@ models:
       tokens_per_minute: 200000
 
   # Complex - Multi-agent supervisor workflow
+  # Complex - 多 Agent supervisor workflow
   shannon-complex:
     workflow_mode: supervisor
     context: {}
@@ -83,15 +92,18 @@ default_model: shannon-chat
 # Global settings
 settings:
   # Maximum allowed max_tokens (hard limit)
+  # 允许的 max_tokens 上限（硬性限制）
   max_tokens_limit: 16384
 
   # Default temperature if not specified
   default_temperature: 0.7
 
   # Session TTL for multi-turn conversations (seconds)
+  # 多轮对话的 session TTL（秒）
   session_ttl: 86400  # 24 hours
 
   # Default rate limits (used if model doesn't specify)
+  # 默认 rate limit（在模型未单独指定时使用）
   default_rate_limit:
     requests_per_minute: 60
     tokens_per_minute: 200000

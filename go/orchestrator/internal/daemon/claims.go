@@ -15,6 +15,7 @@ var ErrClaimNotFound = errors.New("claim not found")
 const claimKeyPrefix = "shannon:daemon:claim:"
 
 // ClaimMetadata stored alongside each claim in Redis.
+// ClaimMetadata 与每个 claim 一起存储在 Redis 中。
 type ClaimMetadata struct {
 	ConnID        string `json:"conn_id"`
 	ChannelID     string `json:"channel_id,omitempty"`
@@ -38,6 +39,7 @@ func NewClaimManager(rc redis.Cmdable) *ClaimManager {
 }
 
 // SetClaimTTL configures the initial claim TTL and heartbeat extension duration.
+// SetClaimTTL 配置 claim 的初始 TTL 与心跳续期时长。
 func (cm *ClaimManager) SetClaimTTL(ttl time.Duration) {
 	if ttl > 0 {
 		cm.claimTTL = ttl
@@ -49,6 +51,7 @@ func claimKey(messageID string) string {
 }
 
 // TryClaim atomically claims a message. Returns true if this caller won.
+// TryClaim 原子地占用一条消息。若本次调用方胜出则返回 true。
 func (cm *ClaimManager) TryClaim(ctx context.Context, messageID string, meta ClaimMetadata) (bool, error) {
 	data, err := json.Marshal(meta)
 	if err != nil {
@@ -62,6 +65,7 @@ func (cm *ClaimManager) TryClaim(ctx context.Context, messageID string, meta Cla
 }
 
 // ExtendClaim extends the TTL on an existing claim (progress heartbeat).
+// ExtendClaim 延长已有 claim 的 TTL（进度心跳）。
 func (cm *ClaimManager) ExtendClaim(ctx context.Context, messageID string, ttl time.Duration) error {
 	return cm.rc.Expire(ctx, claimKey(messageID), ttl).Err()
 }
@@ -83,6 +87,7 @@ func (cm *ClaimManager) GetClaim(ctx context.Context, messageID string) (ClaimMe
 }
 
 // UpdateClaim updates the claim metadata in Redis without changing TTL.
+// UpdateClaim 更新 Redis 中的 claim metadata，不改变 TTL。
 func (cm *ClaimManager) UpdateClaim(ctx context.Context, messageID string, meta ClaimMetadata) error {
 	key := claimKey(messageID)
 	data, err := json.Marshal(meta)
@@ -97,11 +102,13 @@ func (cm *ClaimManager) UpdateClaim(ctx context.Context, messageID string, meta 
 }
 
 // ReleaseClaim deletes a claim (after reply or disconnect).
+// ReleaseClaim 删除 claim（回复后或断连后）。
 func (cm *ClaimManager) ReleaseClaim(ctx context.Context, messageID string) error {
 	return cm.rc.Del(ctx, claimKey(messageID)).Err()
 }
 
 // ReleaseAllForConn releases all claims held by a specific connection.
+// ReleaseAllForConn 释放某个连接持有的全部 claim。
 func (cm *ClaimManager) ReleaseAllForConn(ctx context.Context, connID string) ([]string, error) {
 	var released []string
 	iter := cm.rc.Scan(ctx, 0, claimKeyPrefix+"*", 100).Iterator()

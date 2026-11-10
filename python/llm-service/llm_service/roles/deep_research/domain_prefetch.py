@@ -1,7 +1,9 @@
 """Domain prefetch role preset.
+域名预抓取角色预设。
 
 Website content pre-fetching specialist for company research. Extracts
 key company information from official domains.
+公司研究中的网站内容预抓取专家。从官方域名中提取关键公司信息。
 """
 
 from typing import Dict

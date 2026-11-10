@@ -8,34 +8,44 @@ use std::time::Duration;
 use crate::error::{AgentError, AgentResult};
 
 /// Global configuration instance
+/// 全局配置实例
 static CONFIG: RwLock<Option<Config>> = RwLock::new(None);
 
 /// Agent configuration with resource limits and timeouts
+/// Agent 配置，包含资源限制与 timeout 设置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     /// WASI sandbox configuration
+    /// WASI sandbox 配置
     pub wasi: WasiConfig,
 
     /// Memory pool configuration
+    /// 内存池配置
     pub memory: MemoryConfig,
 
     /// Tool execution configuration
+    /// tool 执行配置
     pub tools: ToolConfig,
 
     /// LLM service configuration
+    /// LLM 服务配置
     pub llm: LlmConfig,
 
     /// FSM configuration
+    /// FSM 配置
     pub fsm: FsmConfig,
 
     /// Metrics configuration
+    /// 指标配置
     pub metrics: MetricsConfig,
 
     /// Request enforcement configuration
+    /// request 约束配置
     #[serde(default = "EnforcementConfig::default")]
     pub enforcement: EnforcementConfig,
 
     /// Python executor configuration
+    /// Python 执行器配置
     #[serde(default)]
     pub python_executor: PythonExecutorConfig,
 }
@@ -43,22 +53,27 @@ pub struct Config {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WasiConfig {
     /// Memory limit in bytes (default: 256MB)
+    /// 内存上限，单位字节（默认 256MB）
     #[serde(default = "default_wasi_memory")]
     pub memory_limit_bytes: usize,
 
     /// Execution timeout in seconds (default: 30s)
+    /// 执行 timeout，单位秒（默认 30s）
     #[serde(default = "default_wasi_timeout")]
     pub execution_timeout_secs: u64,
 
     /// Maximum fuel for WASM execution (default: 1 billion)
+    /// WASM 执行的 fuel 上限（默认 10 亿）
     #[serde(default = "default_wasi_fuel")]
     pub max_fuel: u64,
 
     /// Enable filesystem access (default: true)
+    /// 是否启用文件系统访问（默认 true）
     #[serde(default = "default_true")]
     pub enable_filesystem: bool,
 
     /// Allowed filesystem paths
+    /// 允许访问的文件系统路径
     #[serde(default = "default_wasi_paths")]
     pub allowed_paths: Vec<String>,
 }
@@ -74,18 +89,22 @@ pub enum ExecutorMode {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PythonExecutorConfig {
     /// Executor mode: wasi or firecracker
+    /// 执行器模式：wasi 或 firecracker
     #[serde(default)]
     pub mode: ExecutorMode,
 
     /// WASI-specific configuration (uses WasiConfig)
+    /// WASI 专属配置（复用 WasiConfig）
     #[serde(default)]
     pub wasi: WasiExecutorLimits,
 
     /// Firecracker-specific configuration
+    /// Firecracker 专属配置
     #[serde(default)]
     pub firecracker: FirecrackerExecutorConfig,
 
     /// Workspace limits
+    /// 工作区限制
     #[serde(default)]
     pub workspace: WorkspaceLimitsConfig,
 }
@@ -130,6 +149,7 @@ pub struct WorkspaceLimitsConfig {
 }
 
 // Default functions for Python executor config
+// Python 执行器配置的默认值函数
 fn default_wasi_executor_memory() -> usize {
     256
 }
@@ -206,22 +226,27 @@ impl Default for PythonExecutorConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryConfig {
     /// Total memory pool size in bytes (default: 1GB)
+    /// 内存池总大小，单位字节（默认 1GB）
     #[serde(default = "default_memory_pool_size")]
     pub pool_size_bytes: usize,
 
     /// Maximum allocation size in bytes (default: 100MB)
+    /// 单次分配上限，单位字节（默认 100MB）
     #[serde(default = "default_max_allocation")]
     pub max_allocation_bytes: usize,
 
     /// TTL for cache entries in seconds (default: 3600s)
+    /// cache 条目 TTL，单位秒（默认 3600s）
     #[serde(default = "default_memory_ttl")]
     pub cache_ttl_secs: u64,
 
     /// Enable memory pressure monitoring (default: true)
+    /// 是否启用内存压力监控（默认 true）
     #[serde(default = "default_true")]
     pub enable_pressure_monitoring: bool,
 
     /// Memory pressure threshold (0.0-1.0, default: 0.9)
+    /// 内存压力阈值（0.0-1.0，默认 0.9）
     #[serde(default = "default_pressure_threshold")]
     pub pressure_threshold: f64,
 }
@@ -229,18 +254,22 @@ pub struct MemoryConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolConfig {
     /// Default tool execution timeout in seconds (default: 60s)
+    /// tool 执行默认 timeout，单位秒（默认 60s）
     #[serde(default = "default_tool_timeout")]
     pub default_timeout_secs: u64,
 
     /// Maximum concurrent tool executions (default: 5)
+    /// tool 最大并发执行数（默认 5）
     #[serde(default = "default_max_concurrent")]
     pub max_concurrent_executions: usize,
 
     /// Enable tool result caching (default: true)
+    /// 是否启用 tool 结果 cache（默认 true）
     #[serde(default = "default_true")]
     pub enable_caching: bool,
 
     /// Cache TTL in seconds (default: 300s)
+    /// cache TTL，单位秒（默认 300s）
     #[serde(default = "default_tool_cache_ttl")]
     pub cache_ttl_secs: u64,
 }
@@ -248,18 +277,22 @@ pub struct ToolConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmConfig {
     /// LLM service base URL
+    /// LLM 服务基础 URL
     #[serde(default = "default_llm_url")]
     pub base_url: String,
 
     /// Request timeout in seconds (default: 30s)
+    /// request timeout，单位秒（默认 30s）
     #[serde(default = "default_llm_timeout")]
     pub request_timeout_secs: u64,
 
     /// Maximum retries on failure (default: 3)
+    /// 失败时的最大 retry 次数（默认 3）
     #[serde(default = "default_max_retries")]
     pub max_retries: u32,
 
     /// Retry delay in milliseconds (default: 1000ms)
+    /// retry 间隔，单位毫秒（默认 1000ms）
     #[serde(default = "default_retry_delay")]
     pub retry_delay_ms: u64,
 }
@@ -267,18 +300,22 @@ pub struct LlmConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FsmConfig {
     /// Maximum FSM iterations (default: 10)
+    /// FSM 最大迭代次数（默认 10）
     #[serde(default = "default_max_iterations")]
     pub max_iterations: u32,
 
     /// Time budget in milliseconds (default: 30000ms)
+    /// 时间 budget，单位毫秒（默认 30000ms）
     #[serde(default = "default_time_budget")]
     pub time_budget_ms: u64,
 
     /// Enable belief state persistence (default: false)
+    /// 是否持久化信念状态（默认 false）
     #[serde(default = "default_false")]
     pub persist_belief_state: bool,
 
     /// State transition timeout in seconds (default: 5s)
+    /// 状态转换 timeout，单位秒（默认 5s）
     #[serde(default = "default_transition_timeout")]
     pub transition_timeout_secs: u64,
 }
@@ -286,19 +323,23 @@ pub struct FsmConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetricsConfig {
     /// Metrics server port (default: 2113)
+    /// 指标服务端口（默认 2113）
     #[serde(default = "default_metrics_port")]
     pub port: u16,
 
     /// Enable detailed metrics (default: true)
+    /// 是否启用详细指标（默认 true）
     #[serde(default = "default_true")]
     pub enable_detailed: bool,
 
     /// Metrics collection interval in seconds (default: 10s)
+    /// 指标采集间隔，单位秒（默认 10s）
     #[serde(default = "default_metrics_interval")]
     pub collection_interval_secs: u64,
 }
 
 // Default value functions
+// 默认值函数
 fn default_wasi_memory() -> usize {
     256 * 1024 * 1024
 } // 256MB
@@ -310,8 +351,11 @@ fn default_wasi_fuel() -> u64 {
 }
 fn default_wasi_paths() -> Vec<String> {
     // NOTE: /tmp was removed from defaults to prevent cross-session data leaks.
+    // 注意：默认值中已移除 /tmp，防止跨 session 数据泄漏。
     // WASI can read all of /tmp including /tmp/shannon-sessions/<other-session>/.
+    // 否则 WASI 可读取整个 /tmp，包括 /tmp/shannon-sessions/<其他 session>/。
     // Session workspace is now mounted separately at /workspace with read-write access.
+    // session 工作区现在单独挂载到 /workspace，并具备读写权限。
     vec![]
 }
 fn default_memory_pool_size() -> usize {
@@ -384,6 +428,7 @@ pub struct EnforcementConfig {
     #[serde(default = "default_cb_min_requests")]
     pub circuit_breaker_min_requests: u32,
     // Optional Redis backend for distributed rate limiting
+    // 可选的 Redis 后端，用于分布式 rate limit
     #[serde(default)]
     pub rate_redis_url: Option<String>,
     #[serde(default = "default_rate_redis_prefix")]
@@ -481,23 +526,29 @@ impl Default for Config {
 
 impl Config {
     /// Load configuration from file or environment
+    /// 从文件或环境变量加载配置
     pub fn load() -> AgentResult<Self> {
         // Check for config file path in environment
+        // 检查环境变量中的配置文件路径
         if let Ok(config_path) = env::var("AGENT_CONFIG_PATH") {
             Self::from_file(&config_path)
         } else if Path::new("/app/config/agent.yaml").exists() {
             // Try default container path
+            // 尝试容器内默认路径
             Self::from_file("/app/config/agent.yaml")
         } else if Path::new("config/agent.yaml").exists() {
             // Try local path
+            // 尝试本地路径
             Self::from_file("config/agent.yaml")
         } else {
             // Use defaults with environment overrides
+            // 使用默认值并应用环境变量覆盖
             Ok(Self::from_env(Self::default()))
         }
     }
 
     /// Load configuration from a YAML file
+    /// 从 YAML 文件加载配置
     pub fn from_file(path: &str) -> AgentResult<Self> {
         let content = fs::read_to_string(path).map_err(|e| {
             AgentError::ConfigurationError(format!("Failed to read config file: {}", e))
@@ -508,16 +559,19 @@ impl Config {
         })?;
 
         // Apply environment overrides
+        // 应用环境变量覆盖
         config = Self::from_env(config);
 
         Ok(config)
     }
 
     /// Override configuration with environment variables
+    /// 用环境变量覆盖配置
     pub fn from_env(mut config: Config) -> Self {
         config = apply_feature_defaults(config);
 
         // WASI overrides
+        // WASI 覆盖项
         if let Ok(v) = env::var("WASI_MEMORY_LIMIT_MB") {
             if let Ok(mb) = v.parse::<usize>() {
                 config.wasi.memory_limit_bytes = mb * 1024 * 1024;
@@ -530,6 +584,7 @@ impl Config {
         }
 
         // Memory pool overrides
+        // 内存池覆盖项
         if let Ok(v) = env::var("MEMORY_POOL_SIZE_MB") {
             if let Ok(mb) = v.parse::<usize>() {
                 config.memory.pool_size_bytes = mb * 1024 * 1024;
@@ -537,6 +592,7 @@ impl Config {
         }
 
         // LLM service overrides
+        // LLM 服务覆盖项
         if let Ok(v) = env::var("LLM_SERVICE_URL") {
             config.llm.base_url = v;
         }
@@ -547,6 +603,7 @@ impl Config {
         }
 
         // Metrics overrides
+        // 指标覆盖项
         if let Ok(v) = env::var("METRICS_PORT") {
             if let Ok(port) = v.parse::<u16>() {
                 config.metrics.port = port;
@@ -554,6 +611,7 @@ impl Config {
         }
 
         // Enforcement overrides
+        // 约束相关覆盖项
         if let Ok(v) = env::var("ENFORCE_TIMEOUT_SECONDS") {
             if let Ok(secs) = v.parse::<u64>() {
                 config.enforcement.per_request_timeout_secs = secs;
@@ -601,6 +659,7 @@ impl Config {
         }
 
         // Python executor mode override
+        // Python 执行器模式覆盖项
         if let Ok(v) = env::var("PYTHON_EXECUTOR_MODE") {
             config.python_executor.mode = match v.to_lowercase().as_str() {
                 "firecracker" => ExecutorMode::Firecracker,
@@ -609,6 +668,7 @@ impl Config {
         }
 
         // Firecracker overrides
+        // Firecracker 覆盖项
         if let Ok(v) = env::var("FIRECRACKER_MEMORY_MB") {
             if let Ok(mb) = v.parse::<u32>() {
                 config.python_executor.firecracker.memory_mb = mb;
@@ -636,6 +696,7 @@ impl Config {
         }
 
         // Workspace overrides
+        // 工作区覆盖项
         if let Ok(v) = env::var("WORKSPACE_MAX_SIZE_MB") {
             if let Ok(mb) = v.parse::<u64>() {
                 config.python_executor.workspace.max_size_mb = mb;
@@ -646,6 +707,7 @@ impl Config {
     }
 
     /// Get the global configuration instance
+    /// 获取全局配置实例
     pub fn global() -> AgentResult<Config> {
         let guard = CONFIG
             .read()
@@ -660,6 +722,7 @@ impl Config {
     }
 
     /// Initialize the global configuration
+    /// 初始化全局配置
     pub fn initialize() -> AgentResult<Config> {
         let config = Self::load()?;
 
@@ -676,6 +739,7 @@ impl Config {
     }
 
     /// Update the global configuration
+    /// 更新全局配置
     #[allow(dead_code)]
     pub fn update(config: Config) -> AgentResult<()> {
         let mut guard = CONFIG
@@ -687,22 +751,26 @@ impl Config {
     }
 
     /// Get WASI sandbox timeout as Duration
+    /// 以 Duration 形式返回 WASI sandbox timeout
     pub fn wasi_timeout(&self) -> Duration {
         Duration::from_secs(self.wasi.execution_timeout_secs)
     }
 
     /// Get LLM request timeout as Duration
+    /// 以 Duration 形式返回 LLM request timeout
     pub fn llm_timeout(&self) -> Duration {
         Duration::from_secs(self.llm.request_timeout_secs)
     }
 
     /// Get memory cache TTL as Duration
+    /// 以 Duration 形式返回内存 cache TTL
     #[allow(dead_code)]
     pub fn memory_ttl(&self) -> Duration {
         Duration::from_secs(self.memory.cache_ttl_secs)
     }
 
     /// Get tool execution timeout as Duration
+    /// 以 Duration 形式返回 tool 执行 timeout
     #[allow(dead_code)]
     pub fn tool_timeout(&self) -> Duration {
         Duration::from_secs(self.tools.default_timeout_secs)
@@ -870,11 +938,13 @@ mod tests {
     #[serial]
     fn test_env_overrides() {
         // Clean up first to ensure no interference from other tests
+        // 先清理，避免受其他测试干扰
         env::remove_var("WASI_MEMORY_LIMIT_MB");
         env::remove_var("LLM_SERVICE_URL");
         env::remove_var("METRICS_PORT");
 
         // Set test values
+        // 设置测试值
         env::set_var("WASI_MEMORY_LIMIT_MB", "512");
         env::set_var("LLM_SERVICE_URL", "http://custom:9000");
         env::set_var("METRICS_PORT", "3000");
@@ -886,6 +956,7 @@ mod tests {
         assert_eq!(config.metrics.port, 3000);
 
         // Clean up
+        // 清理
         env::remove_var("WASI_MEMORY_LIMIT_MB");
         env::remove_var("LLM_SERVICE_URL");
         env::remove_var("METRICS_PORT");
@@ -905,6 +976,7 @@ mod tests {
     #[serial]
     fn test_global_config() {
         // Clear any existing environment variables that might interfere
+        // 清除可能造成干扰的已有环境变量
         env::remove_var("AGENT_CORE_METRICS_PORT");
         env::remove_var("METRICS_PORT");
         env::remove_var("AGENT_CONFIG_PATH");
@@ -913,6 +985,7 @@ mod tests {
         assert!(config.wasi.memory_limit_bytes > 0);
 
         // Update global config
+        // 更新全局配置
         let mut new_config = config.clone();
         new_config.metrics.port = 9999;
         Config::update(new_config.clone()).expect("Should update config");
@@ -920,8 +993,11 @@ mod tests {
         let updated = Config::global().expect("Should get updated config");
 
         // The global config should now have the updated value
+        // 此时全局配置应已更新为新值
         // Note: Config::global() uses the static CONFIG if it's already initialized,
+        // 注意：若静态 CONFIG 已初始化，Config::global() 会直接使用它，
         // so our update should be reflected
+        // 因此上面的更新应当可见
         assert_eq!(
             updated.metrics.port, 9999,
             "Updated config should have port 9999"

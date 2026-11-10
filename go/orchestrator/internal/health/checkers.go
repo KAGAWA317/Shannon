@@ -177,6 +177,7 @@ type AgentCoreHealthChecker struct {
 }
 
 // NewAgentCoreHealthChecker creates an Agent Core health checker
+// NewAgentCoreHealthChecker 创建 Agent Core 健康检查器
 func NewAgentCoreHealthChecker(client agentpb.AgentServiceClient, conn *grpc.ClientConn, logger *zap.Logger) *AgentCoreHealthChecker {
 	return &AgentCoreHealthChecker{
 		client:  client,
@@ -202,6 +203,7 @@ func (a *AgentCoreHealthChecker) Check(ctx context.Context) CheckResult {
 	connState := a.conn.GetState()
 
 	// Call Agent Core health check RPC (defined in internal/pb/agent)
+	// 调用 Agent Core 健康检查 RPC（定义在 internal/pb/agent）
 	_, err := a.client.HealthCheck(ctx, &agentpb.HealthCheckRequest{})
 
 	result.Duration = time.Since(startTime)
@@ -248,6 +250,7 @@ type LLMServiceHealthChecker struct {
 }
 
 // NewLLMServiceHealthChecker creates an LLM service health checker
+// NewLLMServiceHealthChecker 创建 LLM 服务健康检查器
 func NewLLMServiceHealthChecker(baseURL string, logger *zap.Logger) *LLMServiceHealthChecker {
 	return &LLMServiceHealthChecker{
 		baseURL: baseURL,
@@ -270,6 +273,8 @@ func (l *LLMServiceHealthChecker) Check(ctx context.Context) CheckResult {
 
 	// For now, implement a simple check
 	// In a real implementation, you'd make an HTTP call to the health endpoint
+	// 目前实现为简单检查
+	// 真实实现中应向健康端点发起 HTTP 调用
 	result.Duration = time.Since(startTime)
 	result.Status = StatusHealthy
 	result.Message = "LLM service assumed healthy (not implemented)"
@@ -284,6 +289,7 @@ func (l *LLMServiceHealthChecker) Check(ctx context.Context) CheckResult {
 }
 
 // CustomHealthChecker allows for custom health check logic
+// CustomHealthChecker 允许自定义健康检查逻辑
 type CustomHealthChecker struct {
 	name     string
 	critical bool

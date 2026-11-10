@@ -1,20 +1,30 @@
 """Role-specific prompt snippets for Swarm V2 agents.
+Swarm V2 agent 的角色专属 prompt 片段。
 
 These are Layer 2 of the 3-layer prompt architecture:
   Layer 1: AGENT_LOOP_SYSTEM_PROMPT (core protocol, same for all agents)
   Layer 2: SWARM_ROLE_PROMPTS[role] (role-specific methodology)
   Layer 3: Dynamic context (task description, team state, iteration context)
+这是三层 prompt 架构中的第 2 层：
+  第 1 层：AGENT_LOOP_SYSTEM_PROMPT（核心协议，所有 agent 相同）
+  第 2 层：SWARM_ROLE_PROMPTS[role]（角色专属方法论）
+  第 3 层：动态 context（task 描述、团队状态、迭代 context）
 
 Design decisions (from architecture review 2026-02-20):
 - "lead" role is NOT in SWARM_ROLE_PROMPTS (Lead has its own dedicated prompt)
 - Role prompts are methodology guidance, NOT full system prompts
 - get_swarm_role_catalog() returns roles available for Lead to assign
+设计决策（来自 2026-02-20 架构评审）：
+- "lead" 角色不在 SWARM_ROLE_PROMPTS 中（Lead 拥有自己专用的 prompt）
+- 角色 prompt 是方法论指导，不是完整的 system prompt
+- get_swarm_role_catalog() 返回可供 Lead 分派的角色
 """
 
 from typing import Dict
 
 
 # Role-specific methodology prompts (Layer 2 of 3-layer prompt architecture)
+# 角色专属方法论 prompt（三层 prompt 架构的第 2 层）
 SWARM_ROLE_PROMPTS: Dict[str, str] = {
     "researcher": (
         "You are a RESEARCH specialist in a multi-agent team.\n\n"
@@ -311,15 +321,21 @@ SWARM_ROLE_PROMPTS: Dict[str, str] = {
 
 def get_swarm_role_catalog() -> Dict[str, str]:
     """Return roles available for Lead to assign when spawning agents.
+    返回 Lead 派生 agent 时可分派的角色。
 
     Returns a dict of role_key -> description. These keys should correspond
     to roles that have presets in presets.py (via get_role_preset).
+    返回 role_key -> 描述的字典。这些键应对应 presets.py 中拥有 preset
+    的角色（通过 get_role_preset 获取）。
 
     The catalog is a superset of SWARM_ROLE_PROMPTS — it includes specialized
     roles from presets.py that don't need swarm-specific methodology prompts.
+    该目录是 SWARM_ROLE_PROMPTS 的超集 —— 包含 presets.py 中那些无需
+    swarm 专属方法论 prompt 的专用角色。
     """
     catalog: Dict[str, str] = {
         # Core roles (have swarm methodology prompts)
+        # 核心角色（拥有 swarm 方法论 prompt）
         "researcher": "Information gathering, market analysis, fact-finding",
         "coder": "Code implementation, scripting, debugging",
         "analyst": "Data analysis, statistics, comparisons, charts",
@@ -330,6 +346,7 @@ def get_swarm_role_catalog() -> Dict[str, str]:
         "generalist": "Flexible, any simple or mixed task",
         "synthesis_writer": "Synthesize all agent findings into a structured report",
         # Extended roles (use presets.py system_prompt directly)
+        # 扩展角色（直接使用 presets.py 的 system_prompt）
         "writer": "Technical writing, reports, documentation",
         "browser_use": "Web browser automation, page interaction",
         "deep_research_agent": "Extended multi-step deep research",

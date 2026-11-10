@@ -25,6 +25,7 @@ func TestReadWorkspaceFiles(t *testing.T) {
 		t.Fatalf("expected 3 files, got %d", len(materials))
 	}
 	// Should be sorted by path (data/ before findings/)
+	// 应按 path 排序（data/ 在 findings/ 之前）
 	if materials[0].Path != "data/comparison.csv" {
 		t.Errorf("expected first file data/comparison.csv, got %s", materials[0].Path)
 	}

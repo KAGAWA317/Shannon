@@ -13,6 +13,7 @@ import (
 )
 
 // minimal ExecuteAgent stub
+// stub 回显 query，保证不依赖真实 LLM 也能跑完 pattern 主流程。
 func execAgentStub(ctx context.Context, in activities.AgentExecutionInput) (activities.AgentExecutionResult, error) {
 	// Deterministic, fast stub
 	resp := in.Query
@@ -98,6 +99,7 @@ func TestChainOfThoughtExecutes(t *testing.T) {
 }
 
 // Optional sanity for semaphore limit: ensure activities overlap is bounded.
+// 用慢 stub 制造重叠窗口，验证 MaxConcurrency 真的限制了并发。
 func TestParallelRespectsMaxConcurrency(t *testing.T) {
 	suite := &testsuite.WorkflowTestSuite{}
 	env := suite.NewTestWorkflowEnvironment()

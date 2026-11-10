@@ -93,6 +93,7 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	// Limit request body size to accommodate multimodal payloads with inline
 	// base64 attachments (images, PDFs) while preventing abuse.
+	// 限制 request 体大小：既要容纳带内联 base64 附件（图片、PDF）的多模态 payload，也要防止滥用。
 	r.Body = http.MaxBytesReader(w, r.Body, attachments.MaxMultimodalBodyBytes)
 
 	// Parse request body
@@ -147,6 +148,7 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 	// Extract and store attachments from the last user message.
 	// Base64-encoded data is stored in Redis and replaced with lightweight
 	// references; URL-based attachments are passed through as-is.
+	// 提取并存储最后一条 user 消息中的附件：base64 数据存入 Redis 并替换为轻量引用；URL 附件原样透传。
 	attRefs, err := h.extractAndStoreAttachments(ctx, &req, sessionResult)
 	if err != nil {
 		metrics.RecordError(ErrorTypeInvalidRequest, ErrorCodeInvalidRequest)
@@ -164,6 +166,7 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	// Inject attachment references into the gRPC context so downstream
 	// services (orchestrator, LLM-service) can resolve them from Redis.
+	// 把附件引用写入 gRPC context，下游（orchestrator、LLM-service）可从 Redis 解析。
 	if len(attRefs) > 0 {
 		if translated.GRPCRequest.Context == nil {
 			ctxMap := map[string]interface{}{"attachments": attRefs}
@@ -262,6 +265,8 @@ func (h *Handler) handleStreamingResponse(ctx context.Context, w http.ResponseWr
 	// Use custom transport with connection timeouts but no request timeout.
 	// Deep research and other long-running workflows can stream beyond 10 minutes.
 	// The client request context controls cancellation when the caller disconnects.
+	// 发起 SSE request：使用自定义 transport，设置连接 timeout 但不设 request timeout；
+	// deep research 等长 task 可能持续 streaming 输出超过 10 分钟；调用方断连时由客户端 request 的 context 负责取消。
 	client := &http.Client{
 		Transport: &http.Transport{
 			DialContext: (&net.Dialer{
@@ -324,6 +329,7 @@ func (h *Handler) handleNonStreamingResponse(ctx context.Context, w http.Respons
 
 	// 35-minute timeout to support deep research and other long-running tasks.
 	// For very long tasks, consider using streaming or async polling instead.
+	// 35 分钟 timeout，用于支持 deep research 等长 task；更长的 task 应改用 streaming 或异步轮询。
 	timeout := time.After(35 * time.Minute)
 
 	for {
@@ -491,6 +497,8 @@ func (h *Handler) withGRPCMetadata(ctx context.Context, r *http.Request) context
 	// Forward auth headers.
 	// IMPORTANT: orchestrator gRPC auth checks Authorization as JWT first and does not fall back to API key,
 	// so we must map Bearer API keys to x-api-key metadata (not authorization).
+	// 透传 authentication 头。重要：orchestrator 的 gRPC authentication 先按 JWT 检查 Authorization，且不会回退到 API key，
+	// 因此 Bearer API key 必须映射到 x-api-key metadata（而不是 authorization）。
 	if apiKey := strings.TrimSpace(r.Header.Get("X-API-Key")); apiKey != "" {
 		md.Set("x-api-key", normalizeAPIKey(apiKey))
 	} else if authHeader := strings.TrimSpace(r.Header.Get("Authorization")); strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
@@ -563,6 +571,8 @@ func (h *Handler) sendError(w http.ResponseWriter, message, errType, code string
 // extractAndStoreAttachments finds the last user message in req.Messages,
 // stores any base64-encoded attachments in Redis, and returns lightweight
 // references. URL-based attachments are passed through as-is.
+// extractAndStoreAttachments 找到 req.Messages 中最后一条 user 消息，把其中的 base64 附件存入 Redis，
+// 并返回轻量引用；URL 附件原样透传。
 func (h *Handler) extractAndStoreAttachments(ctx context.Context, req *ChatCompletionRequest, session *SessionResult) ([]interface{}, error) {
 	// Find the last user message (same scan order as extractQuery).
 	for i := len(req.Messages) - 1; i >= 0; i-- {
@@ -605,6 +615,8 @@ func (h *Handler) extractAndStoreAttachments(ctx context.Context, req *ChatCompl
 
 // mustNewList creates a structpb.ListValue from a []interface{}, panicking on error.
 // This is safe because all values have already been sanitized by sanitizeValue.
+// mustNewList 由 []interface{} 构造 structpb.ListValue，出错即 panic；
+// 这是安全的，因为所有值都已由 sanitizeValue 清洗过。
 func mustNewList(items []interface{}) *structpb.ListValue {
 	list, err := structpb.NewList(items)
 	if err != nil {
@@ -641,6 +653,8 @@ type llmCompletionResponse struct {
 // Completions handles POST /v1/completions — thin authenticated proxy to the
 // Python LLM service. The CLI sends messages + tool schemas and gets
 // function_call responses back for local tool execution.
+// Completions 处理 POST /v1/completions——到 Python LLM service 的轻量 authentication 代理。
+// CLI 发送 messages 与 tool schema，拿回 function_call response，在本地执行 tool。
 func (h *Handler) Completions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -679,6 +693,7 @@ func (h *Handler) Completions(w http.ResponseWriter, r *http.Request) {
 
 	// Streaming requests need no timeout (client context handles cancellation).
 	// Non-streaming keeps the existing 120s timeout.
+	// streaming request 不设 timeout（由客户端 context 负责取消）；非 streaming 沿用原有的 120 秒 timeout。
 	var client *http.Client
 	if reqPeek.Stream {
 		client = &http.Client{}
@@ -704,6 +719,7 @@ func (h *Handler) Completions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Streaming: forward SSE from Python to client, capture usage from final event
+	// streaming：把 Python 的 SSE 转发给客户端，并从最后一个 event 中捕获用量。
 	if reqPeek.Stream {
 		h.handleCompletionsStream(ctx, w, resp, userCtx, requestID)
 		return
@@ -726,6 +742,8 @@ func (h *Handler) Completions(w http.ResponseWriter, r *http.Request) {
 		// Fire-and-forget usage recording. Cache-only calls (TotalTokens == 0
 		// but cache_read or cache_creation > 0) must still record so the
 		// quota cost shows up.
+		// 异步记录用量，发后不管。仅命中 cache 的调用（TotalTokens == 0 但 cache_read 或 cache_creation > 0）也必须记录，
+		// 否则配额成本会漏计。
 		go h.recordCompletionUsage(
 			userCtx.UserID, userCtx.TenantID, requestID,
 			llmResp.Provider, llmResp.Model, llmResp.Usage,
@@ -746,6 +764,7 @@ func (h *Handler) Completions(w http.ResponseWriter, r *http.Request) {
 
 // handleCompletionsStream forwards SSE from the Python LLM service to the client,
 // capturing usage from the final "done" event for quota recording.
+// handleCompletionsStream 把 Python LLM service 的 SSE 转发给客户端，并从最后的 "done" event 中取出用量用于配额记录。
 func (h *Handler) handleCompletionsStream(
 	ctx context.Context,
 	w http.ResponseWriter,
@@ -771,6 +790,8 @@ func (h *Handler) handleCompletionsStream(
 	// Track the second-to-last data line — the "done" event with usage.
 	// Python emits: data: {"type":"done",...} then data: [DONE].
 	// We need the done event, not the [DONE] sentinel.
+	// 跟踪倒数第二条 data 行——带用量的 "done" event。Python 会先发 data: {"type":"done",...} 再发 data: [DONE]，
+	// 需要的是 done event 而不是 [DONE] 哨兵。
 	var prevDataLine, lastDataLine string
 
 	for scanner.Scan() {
@@ -800,6 +821,7 @@ func (h *Handler) handleCompletionsStream(
 
 	// The done event is the second-to-last data line (before [DONE] sentinel).
 	// If lastDataLine is not [DONE], it IS the done event (stream ended early).
+	// done event 是倒数第二条 data 行（在 [DONE] 哨兵之前）；若 lastDataLine 不是 [DONE]，它就是 done event（stream 提前结束）。
 	usageLine := prevDataLine
 	if lastDataLine != "[DONE]" {
 		usageLine = lastDataLine
@@ -832,6 +854,7 @@ func (h *Handler) handleCompletionsStream(
 
 // recordCompletionUsage writes token usage to the DB and updates tenant quota
 // counters. Runs in a background goroutine — errors are logged, not propagated.
+// recordCompletionUsage 把 token 用量写入 DB 并更新 tenant 配额计数；在后台 goroutine 中执行，错误只记录不向上传播。
 func (h *Handler) recordCompletionUsage(
 	userID, tenantID uuid.UUID,
 	requestID, provider, model string,
@@ -844,6 +867,9 @@ func (h *Handler) recordCompletionUsage(
 	// matching public.users row, which would violate the token_usage FK.
 	// Use "auth-user:<uuid>" as external_id to avoid collisions with legacy external IDs.
 	// TODO: Long-term fix is to re-point token_usage FK to auth.users instead of public.users.
+	// 确保 public.users 行存在——auth.users 的 ID 未必有对应的 public.users 行，否则会违反 token_usage 的外键。
+	// 用 "auth-user:<uuid>" 作为 external_id，避免与历史 external ID 冲突。
+	// TODO：长期方案是把 token_usage 的外键改为指向 auth.users。
 	externalID := "auth-user:" + userID.String()
 	if _, err := h.db.ExecContext(ctx, `
 		INSERT INTO users (id, external_id, tenant_id, auth_user_id, created_at, updated_at)
@@ -859,6 +885,8 @@ func (h *Handler) recordCompletionUsage(
 	// Insert into token_usage (task_id=NULL for completions proxy).
 	// cache_aware_total_tokens parallels total_tokens but adds prompt-cache
 	// classes for accurate quota accounting (see migration 121).
+	// 写入 token_usage（completions 代理的 task_id 为 NULL）；cache_aware_total_tokens 与 total_tokens 平行，
+	// 但额外包含 prompt cache 各类别，用于准确计配额（见 migration 121）。
 	cacheAwareTotal := usage.InputTokens + usage.OutputTokens +
 		usage.CacheReadTokens + usage.CacheCreationTokens
 	_, err := h.db.ExecContext(ctx, `

@@ -20,6 +20,7 @@ import (
 const globalNotificationMaxLen = 10000
 
 // Event is a minimal streaming event used by SSE and future gRPC.
+// Event 是 SSE 与将来 gRPC 使用的最小 streaming event。
 type Event struct {
 	WorkflowID string                 `json:"workflow_id"`
 	Type       string                 `json:"type"`
@@ -32,6 +33,7 @@ type Event struct {
 }
 
 // subscription tracks a subscriber with its cancellation mechanism
+// subscription 记录一个订阅者及其取消机制
 type subscription struct {
 	cancel context.CancelFunc
 }
@@ -47,6 +49,14 @@ type subscription struct {
 // The reader owns the channel lifetime. Always call Unsubscribe() to clean up.
 //
 // Thread-safety: All methods are goroutine-safe.
+// Manager 基于 Redis Streams 为 workflow event 提供 pub/sub。
+// 生命周期：
+// 1. Subscribe() 创建 channel 并启动后台 reader goroutine
+// 2. reader 把 Redis stream event 转发到 channel
+// 3. Unsubscribe() 停止 reader 并关闭 channel
+// 重要：调用方不得自行关闭订阅 channel。
+// channel 的生命周期由 reader 持有。清理时务必调用 Unsubscribe()。
+// 线程安全：所有方法都是 goroutine 安全的。
 type Manager struct {
 	mu            sync.RWMutex
 	redis         *redis.Client
@@ -71,9 +81,11 @@ var (
 )
 
 // Get returns the global streaming manager, initializing it lazily.
+// Get 返回全局 streaming manager，惰性初始化。
 func Get() *Manager {
 	once.Do(func() {
 		// This will be properly initialized via InitializeRedis
+		// 后续会通过 InitializeRedis 正确初始化
 		defaultMgr = &Manager{
 			subscribers: make(map[string]map[chan Event]*subscription),
 			capacity:    defaultCapacity,
@@ -85,6 +97,7 @@ func Get() *Manager {
 }
 
 // InitializeRedis initializes the manager with a Redis client
+// InitializeRedis 用 Redis client 初始化管理器
 func InitializeRedis(redisClient *redis.Client, logger *zap.Logger) {
 	if defaultMgr == nil {
 		Get()
@@ -98,6 +111,7 @@ func InitializeRedis(redisClient *redis.Client, logger *zap.Logger) {
 }
 
 // InitializeEventStore sets the persistent store for events.
+// InitializeEventStore 设置 event 的持久化存储。
 func InitializeEventStore(store *db.Client, logger *zap.Logger) {
 	if defaultMgr == nil {
 		Get()
@@ -132,6 +146,7 @@ func InitializeEventStore(store *db.Client, logger *zap.Logger) {
 }
 
 // Configure sets default capacity for new/empty managers and rings.
+// Configure 为新/空管理器及 ring 设置默认容量。
 func Configure(capacity int) {
 	if capacity <= 0 {
 		return
@@ -145,25 +160,30 @@ func Configure(capacity int) {
 }
 
 // streamKey returns the Redis stream key for a workflow
+// streamKey 返回 workflow 对应的 Redis stream 键
 func (m *Manager) streamKey(workflowID string) string {
 	return fmt.Sprintf("shannon:workflow:events:%s", workflowID)
 }
 
 // seqKey returns the Redis key for sequence counter
+// seqKey 返回序列计数器的 Redis 键
 func (m *Manager) seqKey(workflowID string) string {
 	return fmt.Sprintf("shannon:workflow:events:%s:seq", workflowID)
 }
 
 // Subscribe adds a subscriber channel for a workflowID; caller must drain and call Unsubscribe.
+// Subscribe 为某个 workflowID 添加订阅 channel；调用方必须读空并调用 Unsubscribe。
 func (m *Manager) Subscribe(workflowID string, buffer int) chan Event {
 	return m.SubscribeFrom(workflowID, buffer, "0-0")
 }
 
 // SubscribeFrom adds a subscriber starting from a specific stream ID
+// SubscribeFrom 从指定 stream ID 开始添加订阅者
 func (m *Manager) SubscribeFrom(workflowID string, buffer int, startID string) chan Event {
 	ch := make(chan Event, buffer)
 
 	// Create context with cancellation for this subscription
+	// 为该订阅创建带取消的 context
 	ctx, cancel := context.WithCancel(context.Background())
 
 	m.mu.Lock()
@@ -176,6 +196,7 @@ func (m *Manager) SubscribeFrom(workflowID string, buffer int, startID string) c
 	m.mu.Unlock()
 
 	// Start Redis stream reader goroutine with specific start position
+	// 以指定起始位置启动 Redis stream reader goroutine
 	m.wg.Add(1)
 	go m.streamReaderFrom(ctx, workflowID, ch, startID)
 
@@ -183,12 +204,14 @@ func (m *Manager) SubscribeFrom(workflowID string, buffer int, startID string) c
 }
 
 // streamReaderFrom reads from Redis stream starting from specific ID with context support
+// streamReaderFrom 从指定 ID 开始读取 Redis stream，支持 context
 func (m *Manager) streamReaderFrom(ctx context.Context, workflowID string, ch chan Event, startID string) {
 	defer m.wg.Done()
 	defer close(ch) // Always close channel when reader exits
 
 	if m.redis == nil {
 		// In-memory mode: keep channel open until cancelled
+		// 内存模式：保持 channel 打开直到被取消
 		select {
 		case <-ctx.Done():
 		case <-m.shutdownCh:
@@ -229,6 +252,7 @@ func (m *Manager) streamReaderFrom(ctx context.Context, workflowID string, ch ch
 
 		if err == redis.Nil {
 			// Timeout, no new messages - reset retry delay
+			// timeout 且无新消息——重置 retry 延迟
 			retryDelay = time.Second
 			continue
 		}
@@ -300,6 +324,8 @@ func (m *Manager) streamReaderFrom(ctx context.Context, workflowID string, ch ch
 
 				// Best-effort DB persistence for events from external publishers (e.g., gateway).
 				// Events published via Publish() are already enqueued; the DB dedup index prevents duplicates.
+				// 对外部发布者（如 gateway）的 event 做尽力而为的 DB 持久化。
+				// 通过 Publish() 发布的 event 已入队；DB 去重索引可防止重复。
 				if shouldPersistEvent(event.Type) {
 					el := db.EventLog{
 						WorkflowID: event.WorkflowID,
@@ -317,6 +343,7 @@ func (m *Manager) streamReaderFrom(ctx context.Context, workflowID string, ch ch
 				}
 
 				// Send to channel (non-blocking to avoid deadlock)
+				// 发送到 channel（非阻塞，避免死锁）
 				select {
 				case ch <- event:
 					m.logger.Debug("Sent event to subscriber",
@@ -344,6 +371,7 @@ func (m *Manager) streamReaderFrom(ctx context.Context, workflowID string, ch ch
 }
 
 // min returns the minimum of two durations
+// min 返回两个时长中的较小者
 func min(a, b time.Duration) time.Duration {
 	if a < b {
 		return a
@@ -352,6 +380,7 @@ func min(a, b time.Duration) time.Duration {
 }
 
 // isCriticalEvent determines if an event type is critical and should not be dropped silently
+// isCriticalEvent 判断 event 类型是否关键、不应被静默丢弃
 func isCriticalEvent(eventType string) bool {
 	switch eventType {
 	case "WORKFLOW_FAILED",
@@ -367,6 +396,8 @@ func isCriticalEvent(eventType string) bool {
 
 // Unsubscribe removes the subscriber channel and cancels its reader goroutine.
 // The channel will be closed by the reader goroutine after cancellation.
+// Unsubscribe 移除订阅 channel 并取消其 reader goroutine。
+// channel 会在取消后由 reader goroutine 关闭。
 func (m *Manager) Unsubscribe(workflowID string, ch chan Event) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -374,6 +405,7 @@ func (m *Manager) Unsubscribe(workflowID string, ch chan Event) {
 	if subs, ok := m.subscribers[workflowID]; ok {
 		if sub, exists := subs[ch]; exists {
 			// Cancel the context to stop the reader goroutine
+			// 取消 context 以停止 reader goroutine
 			sub.cancel()
 			delete(subs, ch)
 
@@ -385,6 +417,7 @@ func (m *Manager) Unsubscribe(workflowID string, ch chan Event) {
 }
 
 // Publish sends an event to Redis stream and all local subscribers (for backward compatibility)
+// Publish 把 event 发送到 Redis stream 及所有本地订阅者（向后兼容）
 func (m *Manager) Publish(workflowID string, evt Event) {
 	if m.redis != nil {
 		ctx := context.Background()
@@ -437,11 +470,15 @@ func (m *Manager) Publish(workflowID string, evt Event) {
 
 		// Set TTL on stream key (24 hours)
 		// Use longer TTL for sequence counter to prevent resets
+		// 为 stream 键设置 TTL（24 小时）
+		// 序列计数器使用更长的 TTL，防止被重置
 		m.redis.Expire(ctx, streamKey, 24*time.Hour)
 		m.redis.Expire(ctx, m.seqKey(workflowID), 48*time.Hour)
 
 		// Publish to global notification stream for webhook delivery
 		// Only for terminal workflow events (completion/failure)
+		// 发布到全局通知 stream 以供 webhook 投递
+		// 仅限终结类 workflow event（完成/失败）
 		if isNotifiableEvent(evt.Type) {
 			globalKey := "shannon:notifications:global"
 			_, gErr := m.redis.XAdd(ctx, &redis.XAddArgs{
@@ -468,6 +505,8 @@ func (m *Manager) Publish(workflowID string, evt Event) {
 
 	// Persist to DB if configured (best-effort, non-blocking)
 	// Only persist important events, not streaming deltas
+	// 已配置时持久化到 DB（尽力而为、非阻塞）
+	// 仅持久化重要 event，不持久化 streaming 增量
 	if shouldPersistEvent(evt.Type) {
 		el := db.EventLog{
 			WorkflowID: evt.WorkflowID,
@@ -486,6 +525,8 @@ func (m *Manager) Publish(workflowID string, evt Event) {
 
 	// Only publish to local subscribers if Redis is nil (in-memory mode)
 	// When Redis is available, the streamReader will deliver events
+	// 仅在 Redis 为 nil（内存模式）时发布给本地订阅者
+	// 有 Redis 时由 streamReader 投递 event
 	if m.redis == nil {
 		m.mu.RLock()
 		defer m.mu.RUnlock()
@@ -504,6 +545,7 @@ func (m *Manager) Publish(workflowID string, evt Event) {
 }
 
 // Marshal returns JSON for event payloads in SSE or logs.
+// Marshal 返回 event 载荷的 JSON，用于 SSE 或日志。
 func (e Event) Marshal() []byte {
 	b, _ := json.Marshal(e)
 	return b
@@ -511,6 +553,8 @@ func (e Event) Marshal() []byte {
 
 // shouldPersistEvent determines if an event type should be persisted to PostgreSQL.
 // We only persist important events, not streaming deltas, to reduce DB write load.
+// shouldPersistEvent 判断 event 类型是否应持久化到 PostgreSQL。
+// 只持久化重要 event 而非 streaming 增量，以降低 DB 写入压力。
 func shouldPersistEvent(eventType string) bool {
 	switch eventType {
 	// ✅ Persist: Important workflow events
@@ -539,16 +583,19 @@ func shouldPersistEvent(eventType string) bool {
 		return false
 
 	// ✅ Persist AGENT_THINKING so timeline is consistent between live and history
+	// ✅ 持久化 AGENT_THINKING，使实时与历史时间线保持一致
 	case "AGENT_THINKING":
 		return true
 
 	// Default: persist unknown event types (safe default)
+	// 默认：持久化未知 event 类型（安全默认）
 	default:
 		return true
 	}
 }
 
 // isNotifiableEvent returns true for events that should trigger webhook notifications.
+// isNotifiableEvent 对应触发 webhook 通知的 event 返回 true。
 func isNotifiableEvent(eventType string) bool {
 	switch eventType {
 	case "WORKFLOW_COMPLETED", "WORKFLOW_FAILED":
@@ -559,12 +606,14 @@ func isNotifiableEvent(eventType string) bool {
 }
 
 // SanitizeBase64Image truncates large base64 image data in strings.
+// SanitizeBase64Image 截断字符串中较大的 base64 图片数据。
 func SanitizeBase64Image(s string) string {
 	if s == "" {
 		return s
 	}
 
 	// Common base64 image patterns from browser tools
+	// 浏览器 tool 产生的常见 base64 图片模式
 	patterns := []string{
 		`"screenshot": "data:image/`,
 		`"screenshot":"data:image/`,
@@ -583,6 +632,7 @@ func SanitizeBase64Image(s string) string {
 			}
 
 			// Find the start of the base64 data (after the pattern)
+			// 定位 base64 数据的起始位置（模式之后）
 			startIdx := idx + len(pattern)
 			if startIdx >= len(result) {
 				break
@@ -596,12 +646,15 @@ func SanitizeBase64Image(s string) string {
 
 			dataLen := endIdx
 			// Only truncate if the data is larger than a reasonable threshold (1KB)
+			// 仅当数据大于合理阈值（1KB）时才截断
 			if dataLen > 1024 {
 				// Replace the base64 data with a placeholder
+				// 用占位符替换 base64 数据
 				placeholder := "[BASE64_IMAGE_TRUNCATED]"
 				result = result[:startIdx] + placeholder + result[startIdx+endIdx:]
 			} else {
 				// Skip past this occurrence to prevent infinite loop
+				// 跳过本次出现的位置，防止死循环
 				break
 			}
 		}
@@ -618,6 +671,8 @@ func sanitizeEventMessage(s string) string {
 
 // sanitizeEventPayload sanitizes payload map for storage.
 // Truncates large base64 images in string values.
+// sanitizeEventPayload 清洗待存储的 payload map。
+// 截断字符串值中较大的 base64 图片。
 func sanitizeEventPayload(payload map[string]interface{}) map[string]interface{} {
 	if payload == nil {
 		return nil
@@ -633,6 +688,7 @@ func sanitizeEventPayload(payload map[string]interface{}) map[string]interface{}
 		switch val := v.(type) {
 		case string:
 			// Handle raw base64 values directly (common for browser action=screenshot payloads).
+			// 直接处理裸 base64 值（浏览器 action=screenshot 的载荷中很常见）。
 			if (key == "screenshot" || key == "popup_screenshot") && len(val) > 1024 {
 				return "[BASE64_IMAGE_TRUNCATED]"
 			}
@@ -659,28 +715,34 @@ func sanitizeEventPayload(payload map[string]interface{}) map[string]interface{}
 
 // sanitizePayloadForPersistence removes large data (e.g., base64 screenshots) from payloads
 // before persisting to Postgres. The full payload is still available via Redis/SSE for real-time UI.
+// sanitizePayloadForPersistence 在持久化到 Postgres 之前移除 payload 中的大块数据
+// （如 base64 截图）。完整 payload 仍可通过 Redis/SSE 供实时 UI 使用。
 func sanitizePayloadForPersistence(eventType string, payload map[string]interface{}) map[string]interface{} {
 	if payload == nil {
 		return nil
 	}
 
 	// Only TOOL_OBSERVATION with screenshot data needs sanitization
+	// 只有带截图数据的 TOOL_OBSERVATION 需要清洗
 	if eventType != "TOOL_OBSERVATION" {
 		return payload
 	}
 
 	// Check if this is a browser screenshot tool result
+	// 判断是否为浏览器截图 tool 的结果
 	tool, hasT := payload["tool"].(string)
 	output, hasO := payload["output"].(map[string]interface{})
 	if !hasT || !hasO || tool != "browser" {
 		return payload
 	}
 	// Only sanitize if output contains screenshot data
+	// 仅当输出包含截图数据时才清洗
 	if _, hasScreenshot := output["screenshot"]; !hasScreenshot {
 		return payload
 	}
 
 	// Deep copy payload and strip screenshot base64
+	// 深拷贝 payload 并去掉截图的 base64
 	sanitized := make(map[string]interface{})
 	for k, v := range payload {
 		if k == "output" {
@@ -703,6 +765,8 @@ func sanitizePayloadForPersistence(eventType string, payload map[string]interfac
 
 // enqueuePersistEvent enqueues an event for DB persistence without blocking and without panicking on shutdown.
 // The persistMu mutex ensures the closed check and send are atomic — no race with Shutdown.
+// enqueuePersistEvent 把 event 入队待持久化，不阻塞，且关闭时不会 panic。
+// persistMu 互斥锁保证关闭检查与发送的原子性——不会与 Shutdown 竞态。
 func (m *Manager) enqueuePersistEvent(event db.EventLog) {
 	m.persistMu.Lock()
 	defer m.persistMu.Unlock()
@@ -727,6 +791,7 @@ func (m *Manager) enqueuePersistEvent(event db.EventLog) {
 }
 
 // sanitizeUTF8 ensures invalid UTF-8 bytes are removed before persistence.
+// sanitizeUTF8 在持久化前确保移除非法的 UTF-8 字节。
 func sanitizeUTF8(s string) string {
 	if s == "" || utf8.ValidString(s) {
 		return s
@@ -737,6 +802,7 @@ func sanitizeUTF8(s string) string {
 		r, size := utf8.DecodeRuneInString(s)
 		if r == utf8.RuneError && size == 1 {
 			// Skip invalid byte; Postgres rejects malformed UTF-8.
+			// 跳过非法字节；Postgres 会拒绝格式错误的 UTF-8。
 			s = s[size:]
 			continue
 		}
@@ -747,6 +813,7 @@ func sanitizeUTF8(s string) string {
 }
 
 // persistWorker batches event logs and writes them asynchronously.
+// persistWorker 批量汇总 event 日志并异步写入。
 func (m *Manager) persistWorker() {
 	defer m.persistWg.Done()
 	batch := make([]db.EventLog, 0, m.batchSize)
@@ -757,6 +824,7 @@ func (m *Manager) persistWorker() {
 			return
 		}
 		// Write sequentially (simple, safe). Could be optimized to a batch insert if needed.
+		// 顺序写入（简单、安全）。确有需要可优化为批量插入。
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		for i := range batch {
 			if err := m.dbClient.SaveEventLog(ctx, &batch[i]); err != nil {
@@ -784,6 +852,7 @@ func (m *Manager) persistWorker() {
 }
 
 // ReplaySince returns events with Seq > since (from Redis stream)
+// ReplaySince 返回 Seq > since 的 event（来自 Redis stream）
 func (m *Manager) ReplaySince(workflowID string, since uint64) []Event {
 	if m.redis == nil {
 		return nil
@@ -848,6 +917,7 @@ func (m *Manager) ReplaySince(workflowID string, since uint64) []Event {
 }
 
 // ReplayFromStreamID returns events starting from a specific Redis stream ID
+// ReplayFromStreamID 返回从指定 Redis stream ID 开始的 event
 func (m *Manager) ReplayFromStreamID(workflowID string, streamID string) []Event {
 	if m.redis == nil {
 		return nil
@@ -857,6 +927,7 @@ func (m *Manager) ReplayFromStreamID(workflowID string, streamID string) []Event
 	streamKey := m.streamKey(workflowID)
 
 	// Read messages after the given stream ID
+	// 读取给定 stream ID 之后的消息
 	messages, err := m.redis.XRange(ctx, streamKey, "("+streamID, "+").Result()
 	if err != nil {
 		m.logger.Error("Failed to read replay from Redis stream",
@@ -908,6 +979,8 @@ func (m *Manager) ReplayFromStreamID(workflowID string, streamID string) []Event
 
 // HasEmittedCompletion checks if WORKFLOW_COMPLETED has been emitted for a workflow.
 // This is a hint for visibility races (stream may show completion slightly before Temporal does).
+// HasEmittedCompletion 检查某 workflow 是否已发出 WORKFLOW_COMPLETED。
+// 这是针对可见性竞态的提示（stream 可能比 Temporal 略早显示完成）。
 func (m *Manager) HasEmittedCompletion(ctx context.Context, workflowID string) bool {
 	if m.redis == nil {
 		return false
@@ -922,6 +995,7 @@ func (m *Manager) HasEmittedCompletion(ctx context.Context, workflowID string) b
 	streamKey := m.streamKey(workflowID)
 
 	// Only scan the tail of the stream to keep this cheap.
+	// 只扫描 stream 尾部，以保持开销很低。
 	const scanCount int64 = 10
 	messages, err := m.redis.XRevRangeN(checkCtx, streamKey, "+", "-", scanCount).Result()
 	if err != nil {
@@ -944,6 +1018,7 @@ func (m *Manager) HasEmittedCompletion(ctx context.Context, workflowID string) b
 }
 
 // GetLastStreamID returns the ID of the last message in the stream
+// GetLastStreamID 返回 stream 中最后一条消息的 ID
 func (m *Manager) GetLastStreamID(workflowID string) string {
 	if m.redis == nil {
 		return ""
@@ -953,6 +1028,7 @@ func (m *Manager) GetLastStreamID(workflowID string) string {
 	streamKey := m.streamKey(workflowID)
 
 	// Get only the last message efficiently with XRevRangeN
+	// 用 XRevRangeN 高效地只取最后一条消息
 	messages, err := m.redis.XRevRangeN(ctx, streamKey, "+", "-", 1).Result()
 	if err != nil || len(messages) == 0 {
 		return ""
@@ -963,6 +1039,8 @@ func (m *Manager) GetLastStreamID(workflowID string) string {
 
 // Shutdown gracefully shuts down the manager, stopping all stream readers and flushing persistence.
 // It waits for all goroutines to complete with the provided context timeout.
+// Shutdown 优雅关闭管理器，停止所有 stream reader 并刷出持久化队列。
+// 它按传入的 context timeout 等待所有 goroutine 结束。
 func (m *Manager) Shutdown(ctx context.Context) error {
 	m.logger.Info("Shutting down streaming manager")
 
@@ -981,6 +1059,7 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 	m.mu.Unlock()
 
 	// Wait for all stream readers to exit
+	// 等待所有 stream reader 退出
 	done := make(chan struct{})
 	go func() {
 		m.wg.Wait()
@@ -996,6 +1075,7 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 	}
 
 	// Close persistence channel and wait for flush
+	// 关闭持久化 channel 并等待刷出
 	if m.persistCh != nil {
 		m.persistMu.Lock()
 		if !m.persistClosed {
@@ -1025,22 +1105,28 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 }
 
 // Blob storage for large payloads (screenshots, etc.) that exceed Temporal limits
+// 用于超大载荷（截图等）的 blob 存储，这些载荷会超出 Temporal 限制
 
 const (
 	// blobKeyPrefix is the Redis key prefix for stored blobs
+	// blobKeyPrefix 是已存 blob 的 Redis 键前缀
 	blobKeyPrefix = "shannon:blob:"
 	// blobTTL is how long blobs are kept in Redis (7 days)
+	// blobTTL 是 blob 在 Redis 中的保留时长（7 天）
 	blobTTL = 7 * 24 * time.Hour
 )
 
 // StoreBlob stores a large blob in Redis and returns a reference key.
 // The blob is stored with a TTL and can be retrieved via GetBlob.
+// StoreBlob 把大块 blob 存入 Redis 并返回引用键。
+// blob 带 TTL 存储，可通过 GetBlob 取回。
 func (m *Manager) StoreBlob(ctx context.Context, workflowID, fieldName, data string) (string, error) {
 	if m.redis == nil {
 		return "", fmt.Errorf("redis not configured")
 	}
 
 	// Generate a unique key for this blob
+	// 为该 blob 生成唯一键
 	key := fmt.Sprintf("%s%s:%s", blobKeyPrefix, workflowID, fieldName)
 
 	err := m.redis.Set(ctx, key, data, blobTTL).Err()
@@ -1062,6 +1148,8 @@ func (m *Manager) StoreBlob(ctx context.Context, workflowID, fieldName, data str
 
 // GetBlob retrieves a blob from Redis by its key.
 // Returns empty string if not found or expired.
+// GetBlob 按 key 从 Redis 取回 blob。
+// 未找到或已过期时返回空字符串。
 func (m *Manager) GetBlob(ctx context.Context, key string) (string, error) {
 	if m.redis == nil {
 		return "", fmt.Errorf("redis not configured")
@@ -1083,6 +1171,8 @@ func (m *Manager) GetBlob(ctx context.Context, key string) (string, error) {
 
 // RefreshBlobTTL extends the TTL of a blob key.
 // Useful when a blob is still being accessed.
+// RefreshBlobTTL 延长 blob 键的 TTL。
+// 适用于 blob 仍被访问的场景。
 func (m *Manager) RefreshBlobTTL(ctx context.Context, key string) error {
 	if m.redis == nil {
 		return fmt.Errorf("redis not configured")

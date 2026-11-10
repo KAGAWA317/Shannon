@@ -16,6 +16,7 @@ nodes:
     tools_allowlist: []
 
   # Parallel DAG execution with internal dependencies
+  # 带内部依赖的并行 DAG 执行
   - id: parallel_analysis
     type: dag
     depends_on: [understand]
@@ -28,6 +29,7 @@ nodes:
           tools: [web_search]
 
         # Parallel tasks depending on data_collection
+        # 依赖 data_collection 的并行 task
         - id: quantitative_analysis
           query: "Perform statistical analysis on collected data"
           depends_on: [data_collection]
@@ -39,6 +41,7 @@ nodes:
           tools: []
 
         # Synthesis task depending on both analyses
+        # 依赖两项分析的综合 task
         - id: cross_validation
           query: "Cross-validate quantitative and qualitative findings"
           depends_on: [quantitative_analysis, qualitative_analysis]

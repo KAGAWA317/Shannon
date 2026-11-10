@@ -16,6 +16,7 @@ func TestGRPCWrapper_ErrorClassification(t *testing.T) {
 	ctx := context.Background()
 
 	// Test client errors don't trip circuit breaker
+	// 客户端错误（参数/权限类）不应触发 circuit breaker
 	clientErrors := []codes.Code{
 		codes.InvalidArgument,
 		codes.NotFound,
@@ -41,6 +42,7 @@ func TestGRPCWrapper_ErrorClassification(t *testing.T) {
 	}
 
 	// Test server errors DO trip circuit breaker
+	// 服务端错误（Unavailable/DeadlineExceeded 等）必须触发 circuit breaker
 	serverErrors := []codes.Code{
 		codes.Unavailable,
 		codes.DeadlineExceeded,

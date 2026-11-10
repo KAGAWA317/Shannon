@@ -1,6 +1,7 @@
 package patterns
 
 // Options provides common configuration for pattern execution
+// 各 pattern 共用的入参；BudgetAgentMax <= 0 表示不做 per-agent 限额。
 type Options struct {
 	BudgetAgentMax int                    // Per-agent token budget
 	SessionID      string                 // Session identifier
@@ -11,6 +12,7 @@ type Options struct {
 }
 
 // ReflectionConfig controls reflection behavior
+// MaxRetries 与 ConfidenceThreshold 共同决定何时停止反思：次数用完或分数达标即退出。
 type ReflectionConfig struct {
 	Enabled             bool     // Whether reflection is enabled
 	MaxRetries          int      // Maximum reflection iterations

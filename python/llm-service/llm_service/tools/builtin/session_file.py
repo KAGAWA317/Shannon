@@ -1,5 +1,6 @@
 """
 Session-aware file operations tool that tracks files created/modified in a session
+session-aware 的文件操作 tool，跟踪 session 中创建/修改的文件
 """
 
 import os
@@ -19,7 +20,9 @@ from llm_service.tools.base import (
 class SessionFileWriteTool(Tool):
     """
     Session-aware file write tool that tracks files created during a session.
+    session-aware 的文件写入 tool，跟踪 session 期间创建的文件。
     Useful for maintaining context about what files were created/modified in a conversation.
+    用于维护对话中创建/修改了哪些文件的 context。
     """
 
     def _get_metadata(self) -> ToolMetadata:
@@ -29,6 +32,7 @@ class SessionFileWriteTool(Tool):
             description="Write content to a file with session tracking",
             category="file",
             session_aware=True,  # This tool is session-aware
+            # 该 tool 是 session-aware 的
             sandboxed=True,
             rate_limit=100,
         )
@@ -62,6 +66,7 @@ class SessionFileWriteTool(Tool):
     ) -> ToolResult:
         """
         Write to a file and track it in session context.
+        写入文件并在 session context 中记录。
         """
         path = kwargs["path"]
         content = kwargs["content"]
@@ -69,20 +74,24 @@ class SessionFileWriteTool(Tool):
 
         try:
             # Create parent directories if they don't exist
+            # 若父目录不存在则创建
             file_path = Path(path)
             file_path.parent.mkdir(parents=True, exist_ok=True)
 
             # Write the file
+            # 写入文件
             async with aiofiles.open(path, mode) as f:
                 await f.write(content)
 
             # Track in session context if available
+            # 若存在 session context 则进行记录
             session_info = {}
             if session_context:
                 session_id = session_context.get("session_id", "unknown")
                 files_created = session_context.get("files_created", [])
 
                 # Add this file to the session's created files list
+                # 将该文件加入 session 的已创建文件列表
                 if path not in files_created:
                     files_created.append(path)
 
@@ -113,6 +122,7 @@ class SessionFileWriteTool(Tool):
 class SessionFileListTool(Tool):
     """
     List files created or modified during the current session.
+    列出当前 session 期间创建或修改的文件。
     """
 
     def _get_metadata(self) -> ToolMetadata:
@@ -142,6 +152,7 @@ class SessionFileListTool(Tool):
     ) -> ToolResult:
         """
         List files from session context.
+        从 session context 中列出文件。
         """
         filter_pattern = kwargs.get("filter_pattern", "*")
 
@@ -156,12 +167,14 @@ class SessionFileListTool(Tool):
             files_created = session_context.get("files_created", [])
 
             # Apply filter if provided
+            # 若提供了 filter 则应用
             if filter_pattern and filter_pattern != "*":
                 from fnmatch import fnmatch
 
                 files_created = [f for f in files_created if fnmatch(f, filter_pattern)]
 
             # Get file info for each file
+            # 获取每个文件的信息
             file_info = []
             for file_path in files_created:
                 if os.path.exists(file_path):

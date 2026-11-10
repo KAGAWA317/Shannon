@@ -111,6 +111,7 @@ func TestGetUsageReport_AggregatesRows(t *testing.T) {
 
 func TestRecordUsage_CostOverrideSkipsPricing(t *testing.T) {
 	// When CostOverride > 0, RecordUsage should use it instead of pricing calculation
+	// CostOverride > 0 时，RecordUsage 直接采用该成本，而不是按定价表计算
 	bm := NewBudgetManager(nil, zap.NewNop()) // nil db = skip persistence
 
 	// Set up a session budget so RecordUsage updates in-memory state
@@ -129,6 +130,7 @@ func TestRecordUsage_CostOverrideSkipsPricing(t *testing.T) {
 		Provider:     "shannon-scraper",
 		InputTokens:  0,
 		OutputTokens: 27000, // synthetic tokens that would price high without override
+		// 合成 token 数：若不用 override，按定价会算得很高
 		CostOverride: overrideCost,
 	}
 
@@ -144,6 +146,7 @@ func TestRecordUsage_CostOverrideSkipsPricing(t *testing.T) {
 
 func TestRecordUsage_NoCostOverrideFallsToPricing(t *testing.T) {
 	// When CostOverride is 0, RecordUsage should use pricing calculation as before
+	// CostOverride 为 0 时，RecordUsage 回落到按定价表计算
 	bm := NewBudgetManager(nil, zap.NewNop())
 
 	bm.SetSessionBudget("s1", &TokenBudget{
@@ -176,6 +179,7 @@ func TestRecordUsage_NoCostOverrideFallsToPricing(t *testing.T) {
 // CheckBudget reads sessionBudget.SessionTokensUsed; that counter must
 // be incremented by the cache-aware total so cache-heavy sessions
 // don't silently overrun their quota.
+// CheckBudget 读取 sessionBudget.SessionTokensUsed，因此该计数器必须按 cache-aware 总量累加，否则 cache 占比高的 session 会悄悄超出配额。
 func TestRecordUsage_BudgetCounterUsesCacheAware(t *testing.T) {
 	bm := NewBudgetManager(nil, zap.NewNop())
 	bm.SetSessionBudget("sess-budget", &TokenBudget{
@@ -236,6 +240,7 @@ func TestRecordUsage_CacheAwareTotalInvariant(t *testing.T) {
 		t.Errorf("TotalTokens = %d, want %d (input+output, OpenAI compat)", got, want)
 	}
 	// cache_aware_total_tokens adds cache classes
+	// cache_aware_total_tokens 额外计入 cache 读取与写入
 	if got, want := usage.CacheAwareTotalTokens, 850; got != want {
 		t.Errorf("CacheAwareTotalTokens = %d, want %d (input+output+cache_read+cache_creation)", got, want)
 	}
@@ -268,6 +273,7 @@ func TestRecordUsage_1hCacheCreationPricedCorrectly(t *testing.T) {
 	// 5m: 1000/1000 * 0.003 * 1.25 = 0.00375
 	// 1h: 2000/1000 * 0.003 * 2.0  = 0.012
 	// expected = 0.0105 + 0.00375 + 0.012 = 0.02625
+	// 按 claude-sonnet-4-5 定价：input 0.003/1K、output 0.015/1K；5m cache 写入按 1.25 倍、1h 按 2 倍计费，合计约 0.02625
 	if usage.CostUSD < 0.026 || usage.CostUSD > 0.027 {
 		t.Errorf("CostUSD = %f, want ~0.02625", usage.CostUSD)
 	}

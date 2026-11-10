@@ -65,6 +65,7 @@ type StandardInputGenerator struct{}
 
 func (g *StandardInputGenerator) Generate(requestID int) *PolicyInput {
 	// Keep values in small buckets to encourage cache hits
+	// 取值收敛到少量桶内，提高 cache 命中率
 	userIDs := []string{"wayland", "admin", "test_user", "user1", "user2", "user3"}
 	agentIDs := []string{"agent-core", "llm-agent", "test-agent"}
 	modes := []string{"simple", "standard", "complex"}
@@ -88,6 +89,7 @@ func (g *StandardInputGenerator) Name() string { return "standard" }
 func (g *StandardInputGenerator) Weight() int  { return 70 } // 70% of requests
 
 // High cardinality input generator (worst case for cache)
+// 高基数输入生成器：cache 最差场景
 type HighCardinalityInputGenerator struct{}
 
 func (g *HighCardinalityInputGenerator) Generate(requestID int) *PolicyInput {
@@ -108,6 +110,7 @@ func (g *HighCardinalityInputGenerator) Name() string { return "high_cardinality
 func (g *HighCardinalityInputGenerator) Weight() int  { return 20 } // 20% of requests
 
 // Suspicious pattern input generator (tests security rules)
+// 可疑 pattern 生成器：用于验证安全规则
 type SuspiciousInputGenerator struct{}
 
 func (g *SuspiciousInputGenerator) Generate(requestID int) *PolicyInput {
@@ -259,6 +262,7 @@ func runLoadTestScenario(t *testing.T, scenario LoadTestScenario) *LoadTestResul
 					wasCacheHit := cacheHitsAfter > cacheHitsBefore
 
 					// Update counters (protect with mutex to prevent race conditions)
+					// 更新计数器（加锁避免并发竞争）
 					counterMutex.Lock()
 					if wasCacheHit {
 						totalCacheHits++
@@ -507,6 +511,7 @@ func calculatePercentiles(latencies []time.Duration) (p50, p95, p99 time.Duratio
 	copy(sorted, latencies)
 
 	// Simple bubble sort for small arrays
+	// 数组规模小，直接用冒泡排序
 	for i := 0; i < len(sorted); i++ {
 		for j := 0; j < len(sorted)-1-i; j++ {
 			if sorted[j] > sorted[j+1] {

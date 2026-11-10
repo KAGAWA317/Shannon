@@ -3,6 +3,7 @@ use shannon_agent_core::grpc_server::{proto, AgentServiceImpl};
 use tonic::Request;
 
 // Check if Python service is available for integration tests
+// 检查 Python service 是否可用，用于集成测试
 async fn is_python_service_available() -> bool {
     let base =
         std::env::var("LLM_SERVICE_URL").unwrap_or_else(|_| "http://localhost:8000".to_string());
@@ -42,8 +43,11 @@ fn tool_call(tool: &str, expr: &str) -> prost_types::Value {
 #[tokio::test]
 async fn test_multi_tool_sequence_mixed_success() {
     // In restricted CI/sandbox environments, avoid any network or system
+    // 在受限的 CI/sandbox 环境中，避免任何 HTTP 客户端可能触发的网络
     // configuration access that some HTTP clients may perform. Only run
+    // 或系统配置访问。
     // this test when explicitly enabled.
+    // 仅在显式启用时运行该测试。
     if std::env::var("RUN_NETWORK_TESTS").unwrap_or_default() != "1" {
         eprintln!("Skipping: network-dependent test disabled (set RUN_NETWORK_TESTS=1 to enable)");
         return;
@@ -54,11 +58,13 @@ async fn test_multi_tool_sequence_mixed_success() {
     }
 
     // Set the LLM service URL for the test
+    // 为测试设置 LLM service URL
     std::env::set_var("LLM_SERVICE_URL", "http://localhost:8000");
 
     let svc = AgentServiceImpl::new().expect("failed to create AgentServiceImpl");
 
     // Build tool_calls: success (2+2), failure (1/0), success (5*3)
+    // 构造 tool_calls：成功（2+2）、失败（1/0）、成功（5*3）
     let tool_calls = prost_types::ListValue {
         values: vec![
             tool_call("calculator", "2 + 2"),
@@ -103,6 +109,7 @@ async fn test_multi_tool_sequence_mixed_success() {
     }
 
     // Order preserved and parameters round-trip
+    // 顺序保持不变且参数可往返
     assert_eq!(body.tool_calls.len(), 3, "should have 3 tool_calls");
     for (i, tc) in body.tool_calls.iter().enumerate() {
         assert_eq!(tc.name, "calculator");
@@ -121,14 +128,17 @@ async fn test_multi_tool_sequence_mixed_success() {
     }
 
     // Results and error handling
+    // 结果与错误处理
     assert_eq!(body.tool_results.len(), 3, "should have 3 tool_results");
     assert!(body.metrics.as_ref().map(|m| m.latency_ms).unwrap_or(0) >= 0);
 
     // Expect overall status error due to division by zero
+    // 因除零错误，整体状态应为 error
     assert_eq!(body.status, proto::common::StatusCode::Error as i32);
     assert!(!body.error_message.is_empty(), "should aggregate errors");
 
     // Check individual results semantics
+    // 检查各条结果的语义
     let r0 = &body.tool_results[0];
     assert_eq!(r0.status, proto::common::StatusCode::Ok as i32);
     let r1 = &body.tool_results[1];

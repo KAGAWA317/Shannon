@@ -3,6 +3,8 @@ package patterns
 // Budget thresholds (in tokens) for triggering degradation.
 // Updated for modern LLMs with 128K+ context windows (2025).
 // Previous thresholds were designed for GPT-3.5 era (4K-8K context).
+// 降级阈值（token）已按 2025 年 128K+ context 窗口的 model 调整；
+// 旧阈值是为 GPT-3.5 时代（4K-8K context）设计的。
 var defaultDegradeThresholds = map[PatternType]int{
 	PatternTreeOfThoughts: 8000, // Was 2000
 	PatternChainOfThought: 4000, // Was 1000

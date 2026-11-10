@@ -13,6 +13,7 @@ import (
 )
 
 // SynthesisTemplateData contains all variables available to synthesis templates.
+// SynthesisTemplateData 包含 synthesis templates 可用的全部变量。
 type SynthesisTemplateData struct {
 	Query                string
 	QueryLanguage        string
@@ -31,21 +32,25 @@ type SynthesisTemplateData struct {
 }
 
 // synthesisTemplateCache caches loaded templates for performance.
+// synthesisTemplateCache cache 已加载的 template 以提升性能。
 var (
 	synthesisTemplateCache = make(map[string]*template.Template)
 	synthesisTemplateMutex sync.RWMutex
 )
 
 // Default template directory - can be overridden via SYNTHESIS_TEMPLATES_DIR env var.
+// 默认 template 目录 —— 可通过 SYNTHESIS_TEMPLATES_DIR env var 覆盖。
 func getSynthesisTemplatesDir() string {
 	if dir := os.Getenv("SYNTHESIS_TEMPLATES_DIR"); dir != "" {
 		return dir
 	}
 	// Default path relative to working directory
+	// 相对于工作目录的默认路径
 	return "config/templates/synthesis"
 }
 
 // templateFuncs provides helper functions available in templates.
+// templateFuncs 提供 template 内可用的辅助函数。
 var templateFuncs = template.FuncMap{
 	"add": func(a, b int) int { return a + b },
 	"sub": func(a, b int) int { return a - b },
@@ -66,6 +71,8 @@ var templateFuncs = template.FuncMap{
 
 // SynthesisLogger is an interface for logging in synthesis templates.
 // It accepts both zap.Logger and Temporal workflow loggers.
+// SynthesisLogger 是 synthesis templates 中用于日志输出的 interface。
+// 同时接受 zap.Logger 与 Temporal workflow logger。
 type SynthesisLogger interface {
 	Info(msg string, fields ...interface{})
 	Warn(msg string, fields ...interface{})
@@ -82,6 +89,16 @@ type SynthesisLogger interface {
 // from Temporal ACTIVITY code (like SynthesizeResultsLLM), but must NOT be
 // called directly from WORKFLOW code as filesystem access breaks determinism
 // and would cause replay failures. The caching mitigates repeated disk reads.
+// LoadSynthesisTemplate 按名称加载 synthesis template。
+// 先查 cache，未命中时再从磁盘加载。
+// template 不存在时返回 nil（调用方应使用 fallback）。
+// 不需要日志时 logger 可为 nil。
+//
+// IMPORTANT: Temporal Determinism 警告
+// 该函数在 cache 未命中时会读文件系统。可以在 Temporal ACTIVITY 代码中安全调用
+// （例如 SynthesizeResultsLLM），但绝不能直接在 WORKFLOW 代码中调用，
+// 因为文件系统访问会破坏 determinism 并导致 replay 失败。
+// cache 可减少重复的磁盘读取。
 func LoadSynthesisTemplate(name string, logger *zap.Logger) *template.Template {
 	// Check cache first
 	synthesisTemplateMutex.RLock()
@@ -156,6 +173,9 @@ func LoadSynthesisTemplate(name string, logger *zap.Logger) *template.Template {
 // RenderSynthesisTemplate renders a synthesis template with the given data.
 // Returns rendered string and nil error on success.
 // Returns empty string and error if rendering fails.
+// RenderSynthesisTemplate 用给定 data 渲染 synthesis template。
+// 成功时返回渲染结果与 nil error。
+// 渲染失败时返回空字符串与 error。
 func RenderSynthesisTemplate(tmpl *template.Template, data SynthesisTemplateData) (string, error) {
 	if tmpl == nil {
 		return "", fmt.Errorf("template is nil")
@@ -173,6 +193,10 @@ func RenderSynthesisTemplate(tmpl *template.Template, data SynthesisTemplateData
 // Returns template name and whether it was explicitly specified.
 //
 // Selection priority:
+// SelectSynthesisTemplate 依据 context 决定使用哪个 template。
+// 返回 template 名称，以及它是否由调用方显式指定。
+//
+// 选择优先级：
 // 1. context["synthesis_template"] - explicit template name
 // 2. context["workflow_type"] == "research" -> research_comprehensive
 // 3. context["force_research"] == true -> research_comprehensive
@@ -235,6 +259,7 @@ func SelectSynthesisTemplate(context map[string]interface{}) (templateName strin
 }
 
 // ClearSynthesisTemplateCache clears the template cache (useful for testing or hot-reload).
+// ClearSynthesisTemplateCache 清空 template cache（便于 testing 或 hot-reload）。
 func ClearSynthesisTemplateCache() {
 	synthesisTemplateMutex.Lock()
 	synthesisTemplateCache = make(map[string]*template.Template)

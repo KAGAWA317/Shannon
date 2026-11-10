@@ -76,11 +76,13 @@ func TestReadWorkspaceFileSessionIDTraversal(t *testing.T) {
 	dir := t.TempDir()
 
 	// Create a file outside the target session workspace
+	// 在目标 session workspace 之外创建一个文件
 	outsideSession := filepath.Join(dir, "victim-session")
 	os.MkdirAll(outsideSession, 0o755)
 	os.WriteFile(filepath.Join(outsideSession, "secret.txt"), []byte("secret"), 0o644)
 
 	// A session ID containing path separators should be rejected outright.
+	// 包含 path 分隔符的 session ID 应被直接拒绝。
 	cases := []string{
 		"../victim-session",
 		"../../etc",
@@ -105,10 +107,12 @@ func TestReadWorkspaceFileSymlinkEscape(t *testing.T) {
 	os.MkdirAll(sessionDir, 0o755)
 
 	// Create a file outside the workspace that the symlink will point to
+	// 在 workspace 之外创建一个文件，作为 symlink 的指向目标
 	outsideFile := filepath.Join(dir, "secret.txt")
 	os.WriteFile(outsideFile, []byte("secret content"), 0o644)
 
 	// Create a symlink inside the workspace pointing outside
+	// 在 workspace 内创建一个指向外部的 symlink
 	symlinkPath := filepath.Join(sessionDir, "escape.txt")
 	os.Symlink(outsideFile, symlinkPath)
 
@@ -128,7 +132,9 @@ func TestReadWorkspaceFileWorkspacePrefix(t *testing.T) {
 	os.WriteFile(filepath.Join(sessionDir, "findings", "react.md"), []byte("# React Research"), 0o644)
 
 	// Lead often hallucinate "workspace/findings/react.md" instead of "findings/react.md"
+	// Lead 经常幻觉出 "workspace/findings/react.md" 而不是 "findings/react.md"
 	// because agent protocol teaches /workspace/ prefix for python_executor.
+	// 因为 agent protocol 教导 python_executor 使用 /workspace/ 前缀。
 	cases := []struct {
 		name string
 		path string
@@ -152,10 +158,14 @@ func TestReadWorkspaceFileWorkspacePrefix(t *testing.T) {
 
 func TestReadWorkspaceFileEmptyInputs(t *testing.T) {
 	// Test with empty sessionID — readFileContent doesn't validate this
+	// 用空 sessionID 测试——readFileContent 不校验这一点
 	// (the activity function does), so test that it handles gracefully.
+	// （由 activity 函数校验），因此这里测试它能否优雅处理。
 	result := readFileContent("", "test.txt", "/tmp", 4000)
 	// With empty sessionID, path resolves to /tmp//test.txt which shouldn't exist.
+	// sessionID 为空时，path 解析为 /tmp//test.txt，该文件不应存在。
 	// Must return an error or empty content — never panic.
+	// 必须返回错误或空内容——绝不能 panic。
 	assert.True(t, result.Error != "" || result.Content == "",
 		"Empty sessionID should produce an error or empty content, got: error=%q content=%q",
 		result.Error, result.Content)

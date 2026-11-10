@@ -82,6 +82,7 @@ func TestBodyFieldMirroring(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Simulate the field mirroring logic from agent.go
+			// 模拟 agent.go 中的字段镜像逻辑
 			pp := tt.initialParams
 
 			for key, val := range tt.body {
@@ -139,6 +140,7 @@ func TestPromptParamsTypeAssertion(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Simulate the type assertion from agent.go
+			// 模拟 agent.go 中的类型断言
 			pp, ok := tt.contextValue.(map[string]interface{})
 
 			if tt.shouldSucceed {
@@ -266,6 +268,7 @@ func TestSessionContextMerging(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Simulate context merging logic
+			// 模拟 context 合并逻辑
 			result := make(map[string]interface{})
 
 			// Copy initial context
@@ -274,6 +277,7 @@ func TestSessionContextMerging(t *testing.T) {
 			}
 
 			// Merge additional params (don't override)
+			// 合并 additional params（不覆盖已有值）
 			for k, v := range tt.additionalParams {
 				if _, exists := result[k]; !exists {
 					result[k] = v
@@ -286,7 +290,9 @@ func TestSessionContextMerging(t *testing.T) {
 }
 
 // Test helper for ExecuteAgentWithForcedTools would go here
+// ExecuteAgentWithForcedTools 的测试 helper 应放在此处
 // NOTE: Full integration test requires HTTP server mock
+// NOTE: 完整集成测试需要 HTTP server mock
 func TestExecuteAgentWithForcedToolsLogic(t *testing.T) {
 	t.Run("validates required fields", func(t *testing.T) {
 		// Test input validation logic
@@ -341,7 +347,9 @@ func TestExecuteAgentWithForcedToolsLogic(t *testing.T) {
 }
 
 // TestEnsureSessionContext tests the session_id and agent_id injection helper.
+// TestEnsureSessionContext 测试 session_id 与 agent_id 的注入 helper。
 // Covers edge cases: nil context, missing keys, nil values, empty strings, non-string types.
+// 覆盖边界情况：nil context、缺失 key、nil 值、空字符串、非字符串类型。
 func TestEnsureSessionContext(t *testing.T) {
 	tests := []struct {
 		name             string

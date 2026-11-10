@@ -46,6 +46,7 @@ func (h *IngestHandler) handleIngest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// Limit request body to 10MB to prevent DoS attacks
+	// 将 request body 限制为 10MB，防止 DoS 攻击
 	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
 	body, err := io.ReadAll(r.Body)
 	if err != nil || len(body) == 0 {

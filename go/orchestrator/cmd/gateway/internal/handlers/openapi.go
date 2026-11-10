@@ -25,6 +25,7 @@ func (h *OpenAPIHandler) ServeSpec(w http.ResponseWriter, r *http.Request) {
 }
 
 // generateOpenAPISpec creates the OpenAPI 3.0 specification
+// generateOpenAPISpec 构建 OpenAPI 3.0 规范。
 func generateOpenAPISpec() map[string]interface{} {
 	return map[string]interface{}{
 		"openapi": "3.0.0",

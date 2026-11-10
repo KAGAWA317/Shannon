@@ -22,13 +22,16 @@ from qdrant_client.models import (
 QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", 6333))
 QDRANT_URL = os.getenv("QDRANT_URL", None)  # Support URL format from Docker
+# 兼容 Docker 提供的 URL 形式
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", 1536))  # OpenAI ada-002 dimension
+# OpenAI ada-002 的向量维度
 
 def wait_for_qdrant(client, max_retries=30, delay=2):
     """Wait for Qdrant to be ready."""
     for i in range(max_retries):
         try:
             # Try to get collections list to check connectivity
+            # 获取 collection 列表以检查连通性
             client.get_collections()
             print("Qdrant is ready")
             return True
@@ -45,6 +48,7 @@ async def create_collections():
     """Create Qdrant collections for Shannon platform"""
     
     # Support both URL and host:port format
+    # 同时支持 URL 与 host:port 两种格式
     if QDRANT_URL:
         client = QdrantClient(url=QDRANT_URL)
     else:
@@ -68,6 +72,7 @@ async def create_collections():
         },
         {
             "name": "cases",  # Keep original name for compatibility
+            # 保留原名称以兼容旧数据
             "description": "Case-based learning memory",
             "vector_size": EMBEDDING_DIM,
             "distance": Distance.COSINE,
@@ -103,18 +108,24 @@ async def create_collections():
                 ),
                 optimizers_config=OptimizersConfigDiff(
                     indexing_threshold=20000,  # Start indexing after 20k points
+                    # 超过 2 万个点后开始建索引
                     memmap_threshold=50000,    # Use memmap after 50k points
+                    # 超过 5 万个点后使用 memmap
                 ),
                 hnsw_config=HnswConfigDiff(
                     m=16,  # Number of edges per node
+                    # 每个节点的边数
                     ef_construct=100,  # Size of dynamic candidate list
+                    # 动态候选列表的大小
                     full_scan_threshold=10000,  # Use full scan for small collections
+                    # 小规模 collection 走全量扫描
                 )
             )
             
             print(f"Created collection: {collection['name']}")
             
             # Create indexes on payload fields
+            # 为 payload 字段创建索引
             if collection["name"] == "task_embeddings":
                 # Core filtering indexes
                 client.create_payload_index(
@@ -138,6 +149,7 @@ async def create_collections():
                     field_schema="keyword"
                 )
                 # Chunking-specific indexes
+                # 分块相关索引
                 client.create_payload_index(
                     collection_name=collection["name"],
                     field_name="qa_id",
@@ -149,6 +161,7 @@ async def create_collections():
                     field_schema="bool"
                 )
                 # Temporal index for recent retrieval
+                # 用于近期检索的时间索引
                 client.create_payload_index(
                     collection_name=collection["name"],
                     field_name="timestamp",
@@ -230,6 +243,7 @@ async def seed_sample_data():
     client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
     
     # Sample embeddings (random for demonstration)
+    # 示例 embedding（随机生成，仅用于演示）
     import random
     sample_embedding = [random.random() for _ in range(EMBEDDING_DIM)]
     
@@ -259,5 +273,6 @@ if __name__ == "__main__":
     asyncio.run(create_collections())
     
     # Optionally seed sample data
+    # 可选：写入示例数据
     if os.getenv("SEED_DATA", "false").lower() == "true":
         asyncio.run(seed_sample_data())

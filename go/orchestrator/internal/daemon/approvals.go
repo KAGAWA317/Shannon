@@ -19,6 +19,7 @@ var ErrApprovalNotFound = errors.New("approval not found")
 var ErrApprovalAlreadyResolved = errors.New("approval already resolved")
 
 // PendingApproval represents an approval request broadcast to channels.
+// PendingApproval 表示广播到各渠道的审批 request。
 type PendingApproval struct {
 	RequestID   string            `json:"request_id"`
 	ConnID      string            `json:"conn_id"`
@@ -34,6 +35,8 @@ type PendingApproval struct {
 
 // ApprovalManager manages pending approval requests in Redis.
 // Stateless — safe for multi-instance Cloud deployments.
+// ApprovalManager 在 Redis 中管理待处理审批 request。
+// 无状态——多实例 Cloud 部署下安全。
 type ApprovalManager struct {
 	rc redis.Cmdable
 }
@@ -47,6 +50,7 @@ func approvalKey(requestID string) string {
 }
 
 // Store saves a pending approval with a 5-minute TTL.
+// Store 保存待处理审批，TTL 为 5 分钟。
 func (am *ApprovalManager) Store(ctx context.Context, approval PendingApproval) error {
 	data, err := json.Marshal(approval)
 	if err != nil {
@@ -56,6 +60,7 @@ func (am *ApprovalManager) Store(ctx context.Context, approval PendingApproval) 
 }
 
 // Get retrieves a pending approval without removing it.
+// Get 读取待处理审批但不删除。
 func (am *ApprovalManager) Get(ctx context.Context, requestID string) (PendingApproval, error) {
 	data, err := am.rc.Get(ctx, approvalKey(requestID)).Bytes()
 	if err != nil {
@@ -73,8 +78,11 @@ func (am *ApprovalManager) Get(ctx context.Context, requestID string) (PendingAp
 
 // Resolve atomically retrieves and deletes a pending approval.
 // Returns ErrApprovalNotFound if already resolved or expired (first-response-wins).
+// Resolve 原子地取出并删除待处理审批。
+// 若已处理或已过期则返回 ErrApprovalNotFound（先到先得）。
 func (am *ApprovalManager) Resolve(ctx context.Context, requestID string) (PendingApproval, error) {
 	// Lua script: atomic GET + DEL (first caller wins, subsequent get nil)
+	// Lua 脚本：原子 GET + DEL（第一个调用方胜出，后续得到 nil）
 	script := redis.NewScript(`
 		local data = redis.call("GET", KEYS[1])
 		if not data then return nil end
@@ -100,6 +108,7 @@ func (am *ApprovalManager) Resolve(ctx context.Context, requestID string) (Pendi
 }
 
 // UpdateChannelMsg adds a platform message ID to a pending approval (for later dismissal).
+// UpdateChannelMsg 为待处理审批补充平台消息 ID（便于后续撤回）。
 func (am *ApprovalManager) UpdateChannelMsg(ctx context.Context, requestID, channelID, platformMsgID string) error {
 	approval, err := am.Get(ctx, requestID)
 	if err != nil {
@@ -123,6 +132,7 @@ func (am *ApprovalManager) UpdateChannelMsg(ctx context.Context, requestID, chan
 }
 
 // CancelByConn removes all pending approvals for a specific connection (daemon disconnect cleanup).
+// CancelByConn 移除某个连接的全部待处理审批（daemon 断连清理）。
 func (am *ApprovalManager) CancelByConn(ctx context.Context, connID string) ([]string, error) {
 	var cancelled []string
 	iter := am.rc.Scan(ctx, 0, approvalKeyPrefix+"*", 100).Iterator()

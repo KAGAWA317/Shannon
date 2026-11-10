@@ -25,6 +25,7 @@ func DefaultChunkingConfig() ChunkingConfig {
 }
 
 // Chunk represents a text chunk with metadata
+// Chunk 表示带 metadata 的文本分块
 type Chunk struct {
 	QAID       string // UUID for the Q&A pair
 	Text       string // The chunk text
@@ -40,6 +41,7 @@ type Chunker struct {
 }
 
 // NewChunker creates a new chunker with the given configuration
+// NewChunker 按给定配置创建分块器
 func NewChunker(config ChunkingConfig) *Chunker {
 	if config.MaxTokens <= 0 {
 		config.MaxTokens = 1800
@@ -60,6 +62,8 @@ func NewChunker(config ChunkingConfig) *Chunker {
 
 // ChunkText splits text into overlapping chunks if needed
 // Returns nil if text fits within maxTokens (no chunking needed)
+// ChunkText 按需把文本切分为重叠分块
+// 文本未超过 maxTokens 时返回 nil（无需分块）
 func (c *Chunker) ChunkText(text string) []Chunk {
 	tokens := c.tokenize(text)
 
@@ -69,10 +73,12 @@ func (c *Chunker) ChunkText(text string) []Chunk {
 	}
 
 	// Generate a unique ID for this Q&A pair
+	// 为该 Q&A 对生成唯一 ID
 	qaID := uuid.New().String()
 	chunks := []Chunk{}
 
 	// Calculate step size (how many tokens to advance for each chunk)
+	// 计算步长（每个分块前进的 token 数）
 	step := c.maxTokens - c.overlapTokens
 	if step <= 0 {
 		step = c.maxTokens / 2 // Fallback to 50% overlap
@@ -106,16 +112,20 @@ func (c *Chunker) ChunkText(text string) []Chunk {
 }
 
 // CountTokens estimates the token count for a given text
+// CountTokens 估算给定文本的 token 数
 func (c *Chunker) CountTokens(text string) int {
 	return len(c.tokenize(text))
 }
 
 // tokenize splits text into tokens based on the tokenizer mode
+// tokenize 按 tokenizer 模式把文本切分为 token
 func (c *Chunker) tokenize(text string) []string {
 	switch c.tokenizerMode {
 	case "tiktoken":
 		// TODO: Implement proper tiktoken tokenization
 		// For now, fall back to simple
+		// TODO: 实现正规的 tiktoken 分词
+		// 当前回退到简单实现
 		return c.simpleTokenize(text)
 	default:
 		return c.simpleTokenize(text)
@@ -128,18 +138,25 @@ func (c *Chunker) detokenize(tokens []string) string {
 	case "tiktoken":
 		// TODO: Implement proper tiktoken detokenization
 		// For now, fall back to simple
+		// TODO: 实现正规的 tiktoken 反分词
+		// 当前回退到简单实现
 		return strings.Join(tokens, "")
 	default:
 		// For character-based tokens, join without spaces
+		// 基于字符的 token 直接拼接，不加空格
 		return strings.Join(tokens, "")
 	}
 }
 
 // simpleTokenize provides character-based tokenization
 // Approximation: ~1 token = 4 characters (standard GPT estimation)
+// simpleTokenize 提供基于字符的分词
+// 近似：约 1 token = 4 字符（GPT 的通用估算）
 func (c *Chunker) simpleTokenize(text string) []string {
 	// For simple tokenization, we estimate tokens based on characters
 	// Standard approximation: 1 token ≈ 4 characters
+	// 简单分词按字符估算 token
+	// 通用近似：1 token ≈ 4 字符
 	const charsPerToken = 4
 
 	tokens := []string{}
@@ -160,14 +177,18 @@ func (c *Chunker) simpleTokenize(text string) []string {
 
 // EstimateTokensForModel estimates tokens based on the model
 // This can be expanded to handle model-specific tokenization
+// EstimateTokensForModel 按模型估算 token 数
+// 可扩展以支持特定模型的分词
 func EstimateTokensForModel(text string, model string) int {
 	// Model-specific adjustments
 	switch {
 	case strings.Contains(model, "gpt-"):
 		// GPT models (gpt-5, gpt-4, etc.) tend to have similar tokenization
+		// GPT 系列模型（gpt-5、gpt-4 等）的分词方式相近
 		return len(strings.Fields(text)) * 13 / 10 // 1.3 tokens per word
 	case strings.Contains(model, "embedding"):
 		// Embedding models often have similar tokenization to GPT-3
+		// embedding 模型的分词方式通常与 GPT-3 相近
 		return len(strings.Fields(text)) * 13 / 10
 	default:
 		// Default estimation

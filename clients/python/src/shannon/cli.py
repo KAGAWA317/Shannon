@@ -134,6 +134,7 @@ def main():
         help="Event types to filter (comma-separated)",
     )
     # SSE is the only transport
+    # SSE 是唯一的传输方式
     stream_parser.add_argument("--traceparent", help="W3C traceparent header for distributed tracing")
 
     # Control state command
@@ -307,6 +308,7 @@ def main():
     try:
         if args.command == "submit":
             # Build context from strategy flags
+            # 根据 strategy 参数构建 context
             submit_ctx = {}
             if args.force_research:
                 submit_ctx["force_research"] = True

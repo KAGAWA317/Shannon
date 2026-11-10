@@ -18,6 +18,7 @@ import (
 )
 
 // MemoryIntegrationSuite tests the memory system with real services
+// MemoryIntegrationSuite 使用真实服务测试 memory 系统
 type MemoryIntegrationSuite struct {
 	suite.Suite
 	ctx       context.Context
@@ -32,16 +33,19 @@ func (s *MemoryIntegrationSuite) SetupSuite() {
 	s.tenantID = "test-tenant"
 
 	// Initialize services (assumes services are running)
+	// 初始化各 service（假设 service 已在运行）
 	s.initializeServices()
 }
 
 func (s *MemoryIntegrationSuite) SetupTest() {
 	// Fresh session for each test
+	// 每个测试使用全新的 session
 	s.sessionID = uuid.New().String()
 }
 
 func (s *MemoryIntegrationSuite) initializeServices() {
 	// Initialize embeddings service
+	// 初始化 embeddings service
 	embConfig := embeddings.Config{
 		BaseURL:      getEnvOrDefault("LLM_SERVICE_URL", "http://localhost:8000"),
 		DefaultModel: "text-embedding-3-small",
@@ -57,6 +61,7 @@ func (s *MemoryIntegrationSuite) initializeServices() {
 	embeddings.Initialize(embConfig, nil)
 
 	// Initialize vector DB
+	// 初始化 vector DB
 	vdbConfig := vectordb.Config{
 		Enabled:              true,
 		Host:                 getEnvOrDefault("QDRANT_HOST", "localhost"),
@@ -74,12 +79,15 @@ func (s *MemoryIntegrationSuite) initializeServices() {
 	vectordb.Initialize(vdbConfig)
 
 	// Session manager would be initialized here if needed
+	// 如有需要，session manager 可在此初始化
 	// For integration tests, we assume Redis is configured via environment
+	// 集成测试中假设 Redis 已通过环境变量配置好
 }
 
 // Test 1: Chunking Pipeline Integration
 func (s *MemoryIntegrationSuite) TestChunkingPipelineIntegration() {
 	// Create a long answer that should trigger chunking
+	// 构造一段足够长、应触发 chunking 的 answer
 	longAnswer := s.generateLongText(5000) // ~5000 tokens
 
 	input := RecordQueryInput{
@@ -95,6 +103,7 @@ func (s *MemoryIntegrationSuite) TestChunkingPipelineIntegration() {
 	}
 
 	// Record the Q&A pair
+	// 记录该 Q&A 对
 	result, err := RecordQuery(s.ctx, input)
 	s.Require().NoError(err)
 	s.T().Logf("RecordQuery result: Stored=%v, ChunksCreated=%d, Error=%s",
@@ -107,9 +116,11 @@ func (s *MemoryIntegrationSuite) TestChunkingPipelineIntegration() {
 	s.Assert().Equal(3, result.ChunksCreated, "Should create ~3 chunks for 5000 tokens")
 
 	// Wait a moment for indexing
+	// 稍等片刻，等待索引完成
 	time.Sleep(500 * time.Millisecond)
 
 	// Verify chunks can be retrieved
+	// 验证 chunk 可被检索到
 	fetchInput := FetchSemanticMemoryInput{
 		Query:     "distributed systems",
 		SessionID: s.sessionID,
@@ -124,6 +135,7 @@ func (s *MemoryIntegrationSuite) TestChunkingPipelineIntegration() {
 	s.Assert().NotEmpty(fetchResult.Items)
 
 	// Verify reconstruction accuracy
+	// 验证重建准确度
 	reconstructed := ""
 	for _, item := range fetchResult.Items {
 		if answer, ok := item["answer"].(string); ok {
@@ -134,7 +146,9 @@ func (s *MemoryIntegrationSuite) TestChunkingPipelineIntegration() {
 
 	s.Assert().NotEmpty(reconstructed, "Should reconstruct answer from chunks")
 	// Note: With overlap handling, exact reconstruction is challenging
+	// 注意：存在 overlap 处理时，精确重建比较困难
 	// 50% similarity indicates the chunks are being assembled in the right order
+	// 相似度达到 50% 说明各 chunk 的拼接顺序正确
 	similarity := s.calculateSimilarity(longAnswer, reconstructed)
 	s.T().Logf("Reconstruction similarity: %.2f%%", similarity*100)
 	s.Assert().Greater(similarity, 0.5, "Reconstruction should be >50% accurate")
@@ -143,6 +157,7 @@ func (s *MemoryIntegrationSuite) TestChunkingPipelineIntegration() {
 // Test 2: Batch Embedding Performance
 func (s *MemoryIntegrationSuite) TestBatchEmbeddingIntegration() {
 	// Create multiple chunks worth of data
+	// 构造相当于多个 chunk 的数据量
 	veryLongAnswer := s.generateLongText(10000) // Should create ~5 chunks
 
 	startTime := time.Now()
@@ -164,7 +179,9 @@ func (s *MemoryIntegrationSuite) TestBatchEmbeddingIntegration() {
 	s.Assert().GreaterOrEqual(result.ChunksCreated, 4, "Should create 4+ chunks")
 
 	// Batch embedding should be faster than sequential
+	// batch embedding 应快于逐条串行
 	// With 5 chunks, batch should take <2s, sequential would take >5s
+	// 5 个 chunk 时 batch 应低于 2s，串行则需 5s 以上
 	s.Assert().Less(duration, 3*time.Second,
 		"Batch embedding should complete quickly")
 }
@@ -172,6 +189,7 @@ func (s *MemoryIntegrationSuite) TestBatchEmbeddingIntegration() {
 // Test 3: MMR Diversity Integration
 func (s *MemoryIntegrationSuite) TestMMRDiversityIntegration() {
 	// Store multiple similar but different Q&A pairs
+	// 写入多组相似但不同的 Q&A 对
 	topics := []struct {
 		query  string
 		answer string
@@ -198,6 +216,7 @@ func (s *MemoryIntegrationSuite) TestMMRDiversityIntegration() {
 	}
 
 	// Test without MMR first
+	// 先测试关闭 MMR 的情况
 	fetchInput := FetchSemanticMemoryInput{
 		Query:     "Tell me about Kubernetes",
 		SessionID: s.sessionID,
@@ -211,6 +230,7 @@ func (s *MemoryIntegrationSuite) TestMMRDiversityIntegration() {
 	s.Assert().Len(resultWithoutMMR.Items, 3)
 
 	// Enable MMR
+	// 启用 MMR
 	vdb := vectordb.Get()
 	vdbConfig := vdb.GetConfig()
 	vdbConfig.MMREnabled = true
@@ -218,11 +238,13 @@ func (s *MemoryIntegrationSuite) TestMMRDiversityIntegration() {
 	vectordb.Initialize(vdbConfig)
 
 	// Test with MMR
+	// 测试开启 MMR 的情况
 	resultWithMMR, err := FetchSemanticMemoryChunked(s.ctx, fetchInput)
 	s.Require().NoError(err)
 	s.Assert().Len(resultWithMMR.Items, 3)
 
 	// Calculate diversity scores
+	// 计算 diversity 分数
 	diversityWithout := s.calculateDiversity(resultWithoutMMR.Items)
 	diversityWith := s.calculateDiversity(resultWithMMR.Items)
 
@@ -230,6 +252,7 @@ func (s *MemoryIntegrationSuite) TestMMRDiversityIntegration() {
 		"MMR should produce more diverse results")
 
 	// Disable MMR for other tests
+	// 为其余测试关闭 MMR
 	vdbConfig.MMREnabled = false
 	vectordb.Initialize(vdbConfig)
 }
@@ -248,21 +271,25 @@ func (s *MemoryIntegrationSuite) TestIdempotencyIntegration() {
 	}
 
 	// First write
+	// 第一次写入
 	result1, err := RecordQuery(s.ctx, input)
 	s.Require().NoError(err)
 	s.Assert().True(result1.Stored)
 	chunks1 := result1.ChunksCreated
 
 	// Second write (should be idempotent)
+	// 第二次写入（应保持幂等）
 	result2, err := RecordQuery(s.ctx, input)
 	s.Require().NoError(err)
 	s.Assert().True(result2.Stored)
 	chunks2 := result2.ChunksCreated
 
 	// Should create same number of chunks
+	// 应创建相同数量的 chunk
 	s.Assert().Equal(chunks1, chunks2)
 
 	// Retrieve and verify no duplicates
+	// 检索并确认没有重复
 	fetchInput := FetchSemanticMemoryInput{
 		Query:     "Test idempotency",
 		SessionID: s.sessionID,
@@ -274,6 +301,7 @@ func (s *MemoryIntegrationSuite) TestIdempotencyIntegration() {
 	s.Require().NoError(err)
 
 	// Should only have one Q&A pair despite writing twice
+	// 即便写入两次，也应只有一组 Q&A 对
 	uniqueQueries := make(map[string]bool)
 	for _, item := range fetchResult.Items {
 		if query, ok := item["query"].(string); ok {
@@ -286,6 +314,7 @@ func (s *MemoryIntegrationSuite) TestIdempotencyIntegration() {
 // Test 5: Chunk Reconstruction Accuracy
 func (s *MemoryIntegrationSuite) TestChunkReconstructionAccuracy() {
 	// Create text with specific markers
+	// 构造带特定 marker 的文本
 	markedText := `
 START_MARKER
 This is section one with important information that must be preserved.
@@ -298,6 +327,7 @@ Final section with conclusions and summary points.
 All markers should be preserved in the reconstruction.
 `
 	// Repeat to make it long enough to chunk
+	// 重复拼接，使其足够长以触发 chunking
 	longMarkedText := strings.Repeat(markedText, 10)
 
 	input := RecordQueryInput{
@@ -315,6 +345,7 @@ All markers should be preserved in the reconstruction.
 	s.Assert().Greater(result.ChunksCreated, 0)
 
 	// Retrieve and reconstruct
+	// 检索并重建
 	fetchInput := FetchSemanticMemoryInput{
 		Query:     "Test reconstruction with markers",
 		SessionID: s.sessionID,
@@ -328,6 +359,7 @@ All markers should be preserved in the reconstruction.
 	s.Assert().NotEmpty(fetchResult.Items)
 
 	// Check reconstruction
+	// 检查重建结果
 	reconstructed := ""
 	for _, item := range fetchResult.Items {
 		if answer, ok := item["answer"].(string); ok {
@@ -337,11 +369,13 @@ All markers should be preserved in the reconstruction.
 	}
 
 	// Verify all markers are present
+	// 验证所有 marker 都保留
 	s.Assert().Contains(reconstructed, "START_MARKER")
 	s.Assert().Contains(reconstructed, "MIDDLE_MARKER")
 	s.Assert().Contains(reconstructed, "END_MARKER")
 
 	// Verify order is preserved
+	// 验证顺序保持不变
 	startIdx := strings.Index(reconstructed, "START_MARKER")
 	middleIdx := strings.Index(reconstructed, "MIDDLE_MARKER")
 	endIdx := strings.Index(reconstructed, "END_MARKER")
@@ -356,6 +390,7 @@ func (s *MemoryIntegrationSuite) TestCrossSessionIsolation() {
 	session2 := uuid.New().String()
 
 	// Store in session 1
+	// 写入 session 1
 	input1 := RecordQueryInput{
 		SessionID: session1,
 		UserID:    s.userID,
@@ -368,6 +403,7 @@ func (s *MemoryIntegrationSuite) TestCrossSessionIsolation() {
 	s.Require().NoError(err)
 
 	// Store in session 2
+	// 写入 session 2
 	input2 := RecordQueryInput{
 		SessionID: session2,
 		UserID:    s.userID,
@@ -380,6 +416,7 @@ func (s *MemoryIntegrationSuite) TestCrossSessionIsolation() {
 	s.Require().NoError(err)
 
 	// Try to retrieve session 1 data from session 2
+	// 尝试在 session 2 中检索 session 1 的数据
 	fetchInput := FetchSemanticMemoryInput{
 		Query:     "Secret information",
 		SessionID: session2, // Using session 2
@@ -392,6 +429,7 @@ func (s *MemoryIntegrationSuite) TestCrossSessionIsolation() {
 	s.Require().NoError(err)
 
 	// Should not find session 1's secret information
+	// 不应检索到 session 1 的机密信息
 	for _, item := range fetchResult.Items {
 		if answer, ok := item["answer"].(string); ok {
 			s.Assert().NotContains(answer, "session 1",
@@ -429,6 +467,7 @@ func (s *MemoryIntegrationSuite) TestPerformanceUnderLoad() {
 	}
 
 	// Collect results
+	// 汇总结果
 	var totalDuration time.Duration
 	for i := 0; i < concurrency; i++ {
 		err := <-errors
@@ -445,6 +484,7 @@ func (s *MemoryIntegrationSuite) TestPerformanceUnderLoad() {
 // Test 8: Hierarchical Memory Integration
 func (s *MemoryIntegrationSuite) TestHierarchicalMemoryIntegration() {
 	// Store various Q&A pairs over time
+	// 随时间陆续写入多组 Q&A 对
 	for i := 0; i < 10; i++ {
 		input := RecordQueryInput{
 			SessionID: s.sessionID,
@@ -460,6 +500,7 @@ func (s *MemoryIntegrationSuite) TestHierarchicalMemoryIntegration() {
 	}
 
 	// Test hierarchical retrieval
+	// 测试分层检索
 	fetchInput := FetchHierarchicalMemoryInput{
 		Query:        "topic 1",
 		SessionID:    s.sessionID,
@@ -474,11 +515,13 @@ func (s *MemoryIntegrationSuite) TestHierarchicalMemoryIntegration() {
 	s.Require().NoError(err)
 
 	// Verify we got results from different sources
+	// 验证结果来自不同来源
 	s.Assert().Greater(result.Sources["recent"], 0)
 	s.Assert().Greater(result.Sources["semantic"], 0)
 	s.Assert().NotEmpty(result.Items)
 
 	// Verify diversity in results
+	// 验证结果的多样性
 	topicCounts := make(map[int]int)
 	for _, item := range result.Items {
 		if answer, ok := item["answer"].(string); ok {
@@ -491,6 +534,7 @@ func (s *MemoryIntegrationSuite) TestHierarchicalMemoryIntegration() {
 	}
 
 	// Should have results about topic 1 primarily
+	// 结果应主要以 topic 1 为主
 	s.Assert().Greater(topicCounts[1], 0, "Should find topic 1 results")
 }
 
@@ -498,6 +542,7 @@ func (s *MemoryIntegrationSuite) TestHierarchicalMemoryIntegration() {
 
 func (s *MemoryIntegrationSuite) generateLongText(tokens int) string {
 	// Approximate 1 token = 4 characters
+	// 近似认为 1 token = 4 个字符
 	chars := tokens * 4
 	base := "This is a test sentence that will be repeated many times to create long text. "
 	repeats := chars / len(base)
@@ -510,6 +555,7 @@ func (s *MemoryIntegrationSuite) calculateSimilarity(text1, text2 string) float6
 	}
 
 	// Simple character-based similarity
+	// 基于字符的简单相似度
 	minLen := len(text1)
 	if len(text2) < minLen {
 		minLen = len(text2)
@@ -543,6 +589,7 @@ func (s *MemoryIntegrationSuite) calculateDiversity(items []map[string]interface
 	}
 
 	// Calculate average pairwise difference
+	// 计算两两差异的平均值
 	totalDiff := 0.0
 	comparisons := 0
 
@@ -567,6 +614,7 @@ func (s *MemoryIntegrationSuite) stringDifference(s1, s2 string) float64 {
 	}
 
 	// Simple character-based difference
+	// 基于字符的简单差异度
 	maxLen := len(s1)
 	if len(s2) > maxLen {
 		maxLen = len(s2)
@@ -601,6 +649,7 @@ func getEnvOrDefault(key, defaultValue string) string {
 // Run the suite
 func TestMemoryIntegrationSuite(t *testing.T) {
 	// Skip if not in integration test mode
+	// 非 integration 测试模式时跳过
 	if os.Getenv("RUN_INTEGRATION_TESTS") != "true" {
 		t.Skip("Skipping integration tests. Set RUN_INTEGRATION_TESTS=true to run.")
 	}

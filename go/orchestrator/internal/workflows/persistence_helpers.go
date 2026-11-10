@@ -22,6 +22,7 @@ func persistAgentExecution(ctx workflow.Context, workflowID string, agentID stri
 
 	// Pre-generate agent execution ID using SideEffect for replay safety
 	// This allows correlating tool executions with their parent agent execution
+	// 用 SideEffect 预生成执行 ID，便于把 tool 执行关联到其所属的 agent 执行记录。
 	var agentExecutionID string
 	workflow.SideEffect(ctx, func(ctx workflow.Context) interface{} {
 		return uuid.New().String()

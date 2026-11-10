@@ -11,6 +11,7 @@ import (
 )
 
 // getGauge returns a single-sample gauge value by metric name; 0 if missing
+// getGauge 按指标名返回单次采样的 gauge 值；不存在时为 0
 func getGauge(name string) float64 {
 	mfs, _ := prometheus.DefaultGatherer.Gather()
 	for _, mf := range mfs {
@@ -26,6 +27,7 @@ func getGauge(name string) float64 {
 }
 
 // getCounter returns a counter value by metric name; 0 if missing
+// getCounter 按指标名返回 counter 值；不存在时为 0
 func getCounter(name string) float64 {
 	mfs, _ := prometheus.DefaultGatherer.Gather()
 	for _, mf := range mfs {
@@ -42,6 +44,7 @@ func getCounter(name string) float64 {
 
 func TestSessionCacheSizeGaugeUpdatesOnCreateAndDelete(t *testing.T) {
 	// Attempt to create a manager; skip test if Redis is unavailable
+	// 尝试创建管理器；Redis 不可用时跳过测试
 	mgr, err := NewManager("localhost:6379", zap.NewNop())
 	if err != nil {
 		t.Skipf("skipping: redis not available: %v", err)
@@ -57,6 +60,7 @@ func TestSessionCacheSizeGaugeUpdatesOnCreateAndDelete(t *testing.T) {
 	}
 
 	// Creation should increase local cache and gauge
+	// 创建后本地 cache 与 gauge 都应增加
 	afterCreate := getGauge("shannon_session_cache_size")
 	if afterCreate < base+1 {
 		t.Fatalf("expected cache size to increase, before=%v after=%v", base, afterCreate)

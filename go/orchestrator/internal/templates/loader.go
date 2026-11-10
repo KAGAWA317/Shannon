@@ -9,6 +9,7 @@ import (
 )
 
 // LoadTemplateFromFile reads a YAML template from disk.
+// LoadTemplateFromFile 从磁盘读取 YAML 模板。
 func LoadTemplateFromFile(path string) (*Template, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -23,6 +24,7 @@ func LoadTemplateFromFile(path string) (*Template, error) {
 }
 
 // LoadTemplate parses a template from the provided reader.
+// LoadTemplate 从给定的 reader 解析模板。
 func LoadTemplate(r io.Reader) (*Template, error) {
 	tpl, err := decodeTemplate(r)
 	if err != nil {

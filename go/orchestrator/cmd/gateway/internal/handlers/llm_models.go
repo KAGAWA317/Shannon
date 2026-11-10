@@ -66,6 +66,7 @@ func NewLLMModelsHandler(configPath string, logger *zap.Logger) *LLMModelsHandle
 }
 
 // loadModels reads and parses models.yaml, caching the result.
+// loadModels 读取并解析 models.yaml，并 cache 结果。
 func (h *LLMModelsHandler) loadModels() ([]llmModelEntry, error) {
 	h.once.Do(func() {
 		data, err := os.ReadFile(h.configPath)
@@ -81,6 +82,7 @@ func (h *LLMModelsHandler) loadModels() ([]llmModelEntry, error) {
 		}
 
 		// Build priority lookup from model_tiers: "provider:model" -> priority
+		// 从 model_tiers 构建优先级查找表："provider:model" -> priority。
 		tierPriority := map[string]int{}
 		for _, tier := range cfg.ModelTiers {
 			for _, p := range tier.Providers {
@@ -91,6 +93,8 @@ func (h *LLMModelsHandler) loadModels() ([]llmModelEntry, error) {
 
 		// Providers the Python LLM service actually supports (must mirror type_map in manager.py)
 		// Excludes: ollama (local-only, no server on EKS), meta (not implemented)
+		// Python LLM service 实际支持的 provider（必须与 manager.py 中的 type_map 保持一致）；
+		// 排除：ollama（仅本地，EKS 上没有服务）、meta（未实现）。
 		supportedProviders := map[string]bool{
 			"openai": true, "anthropic": true, "google": true, "groq": true,
 			"xai": true, "zai": true, "kimi": true, "minimax": true,
@@ -98,6 +102,7 @@ func (h *LLMModelsHandler) loadModels() ([]llmModelEntry, error) {
 		}
 
 		// Build entries from model_catalog (source of truth for callable models)
+		// 从 model_catalog 构建条目（可调用模型的权威来源）。
 		var models []llmModelEntry
 		if len(cfg.ModelCatalog) > 0 {
 			for providerName, providerModels := range cfg.ModelCatalog {
@@ -123,6 +128,7 @@ func (h *LLMModelsHandler) loadModels() ([]llmModelEntry, error) {
 			}
 		} else {
 			// Fallback: use model_tiers directly if no catalog
+			// 兜底：没有 catalog 时直接用 model_tiers。
 			for tierName, tier := range cfg.ModelTiers {
 				for _, p := range tier.Providers {
 					models = append(models, llmModelEntry{
@@ -136,6 +142,7 @@ func (h *LLMModelsHandler) loadModels() ([]llmModelEntry, error) {
 		}
 
 		// Stable sort: by tier (small < medium < large < unknown), then priority (lower first)
+		// 稳定排序：先按 tier（small < medium < large < unknown），再按 priority（小的在前）。
 		tierOrder := map[string]int{"small": 1, "medium": 2, "large": 3}
 		tierOrd := func(t string) int {
 			if v, ok := tierOrder[t]; ok {
@@ -149,6 +156,7 @@ func (h *LLMModelsHandler) loadModels() ([]llmModelEntry, error) {
 				return ti < tj
 			}
 			// Priority 0 means not in model_tiers — sort to end
+			// priority 为 0 表示不在 model_tiers 中，排到最后。
 			pi, pj := models[i].Priority, models[j].Priority
 			if pi == 0 {
 				pi = 9999

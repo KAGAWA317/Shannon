@@ -2,6 +2,10 @@
 Unit tests for model tier selection in LLM service.
 
 Tests ensure top-level query.model_tier is respected before defaulting to context/model-based tiers.
+
+LLM service 中 model tier 选择的单元测试。
+
+这些测试确保在回退到 context/model 维度的 tier 之前，优先尊重顶层 query.model_tier。
 """
 
 from __future__ import annotations  # PEP 604 `X | None` syntax on Python 3.9
@@ -10,7 +14,9 @@ from enum import Enum
 
 
 class ModelTier(Enum):
-    """Model tier enum for testing"""
+    """Model tier enum for testing
+    用于测试的 model tier 枚举
+    """
     SMALL = "small"
     MEDIUM = "medium"
     LARGE = "large"

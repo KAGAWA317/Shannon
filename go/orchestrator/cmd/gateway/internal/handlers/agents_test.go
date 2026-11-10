@@ -69,6 +69,7 @@ func TestValidateAgentInput_RequiredFields(t *testing.T) {
 				}
 				if tt.errMsg != "" && err.Error() != "input validation failed: "+tt.errMsg {
 					// Check if error contains expected message
+					// 检查 error 是否包含期望的消息。
 					if !contains(err.Error(), tt.errMsg) {
 						t.Errorf("ValidateAgentInput() error = %v, want to contain %v", err, tt.errMsg)
 					}
@@ -281,6 +282,7 @@ func TestValidateAgentInput_NilSchema(t *testing.T) {
 	}
 
 	// Should allow any input when no schema is defined
+	// 未定义 schema 时应允许任意输入。
 	err := ValidateAgentInput(agent, map[string]interface{}{
 		"any_field": "any_value",
 	})

@@ -117,6 +117,7 @@ func TestTruncateQuery_EdgeCases(t *testing.T) {
 			result := truncateQuery(tt.input, tt.maxLen)
 
 			// Should never panic or produce invalid UTF-8
+			// 不应 panic，也不应产生非法 UTF-8
 			runes := []rune(result)
 			if string(runes) != result {
 				t.Errorf("truncateQuery() produced invalid UTF-8")
@@ -131,8 +132,10 @@ func TestTruncateQuery_EdgeCases(t *testing.T) {
 }
 
 // TestTruncateQuery_NoByteSlicing verifies we never cut a multi-byte character
+// TestTruncateQuery_NoByteSlicing 验证我们绝不会截断多字节字符
 func TestTruncateQuery_NoByteSlicing(t *testing.T) {
 	// Chinese characters are 3 bytes each in UTF-8
+	// 中文字符在 UTF-8 中每个占 3 字节
 	input := "查" // 0xE6 0x9F 0xA5
 
 	// Try various maxLen values
@@ -140,6 +143,7 @@ func TestTruncateQuery_NoByteSlicing(t *testing.T) {
 		result := truncateQuery(input, maxLen)
 
 		// Convert to runes and back - if this differs from result, we have invalid UTF-8
+		// 转为 runes 再转回——若与 result 不同，说明存在非法 UTF-8
 		runes := []rune(result)
 		reconstructed := string(runes)
 

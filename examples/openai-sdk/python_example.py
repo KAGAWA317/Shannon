@@ -5,6 +5,8 @@ Shannon OpenAI-Compatible API - Python Example
 This example demonstrates how to use Shannon's research capabilities
 through the standard OpenAI Python SDK.
 
+本示例演示如何通过标准 OpenAI Python SDK 使用 Shannon 的研究能力。
+
 Requirements:
     pip install openai
 
@@ -17,12 +19,16 @@ import os
 from openai import OpenAI
 
 # Configuration
+# 配置
 API_KEY = os.getenv("SHANNON_API_KEY", "sk-shannon-your-api-key")
 BASE_URL = os.getenv("SHANNON_BASE_URL", "https://api.shannon.run/v1")
 
 
 def create_client():
-    """Create an OpenAI client configured for Shannon."""
+    """Create an OpenAI client configured for Shannon.
+
+    创建一个指向 Shannon 的 OpenAI client。
+    """
     return OpenAI(
         api_key=API_KEY,
         base_url=BASE_URL
@@ -30,7 +36,10 @@ def create_client():
 
 
 def list_models():
-    """List available Shannon models."""
+    """List available Shannon models.
+
+    列出可用的 Shannon 模型。
+    """
     client = create_client()
     models = client.models.list()
 
@@ -42,7 +51,10 @@ def list_models():
 
 
 def simple_chat():
-    """Simple non-streaming chat completion."""
+    """Simple non-streaming chat completion.
+
+    简单的非流式 chat completion。
+    """
     client = create_client()
 
     print("Simple Chat Example")
@@ -62,7 +74,10 @@ def simple_chat():
 
 
 def streaming_chat():
-    """Streaming chat completion."""
+    """Streaming chat completion.
+
+    流式 chat completion。
+    """
     client = create_client()
 
     print("Streaming Chat Example")
@@ -84,7 +99,10 @@ def streaming_chat():
 
 
 def deep_research():
-    """Deep research with iterative refinement."""
+    """Deep research with iterative refinement.
+
+    带迭代改进的深度研究。
+    """
     client = create_client()
 
     print("Deep Research Example")
@@ -108,19 +126,24 @@ def deep_research():
             print(chunk.choices[0].delta.content, end="", flush=True)
 
         # Final chunk may include usage
+        # 最后一个 chunk 可能带 usage
         if chunk.usage:
             print(f"\n\nTokens: prompt={chunk.usage.prompt_tokens}, completion={chunk.usage.completion_tokens}")
     print("\n")
 
 
 def multi_turn_conversation():
-    """Multi-turn conversation with session management."""
+    """Multi-turn conversation with session management.
+
+    带 session 管理的多轮对话。
+    """
     client = create_client()
 
     print("Multi-Turn Conversation Example")
     print("-" * 40)
 
     # First message
+    # 第一条消息
     messages = [
         {"role": "system", "content": "You are a helpful assistant that remembers context."},
         {"role": "user", "content": "My name is Alice and I'm learning Python."}
@@ -134,9 +157,11 @@ def multi_turn_conversation():
     print(f"Assistant: {response1.choices[0].message.content}\n")
 
     # Add assistant response to history
+    # 把 assistant 回复加入历史
     messages.append({"role": "assistant", "content": response1.choices[0].message.content})
 
     # Second message (tests context retention)
+    # 第二条消息（检验 context 保持）
     messages.append({"role": "user", "content": "What's my name and what am I learning?"})
 
     response2 = client.chat.completions.create(
@@ -155,6 +180,7 @@ def main():
 
     try:
         # List available models
+        # 列出可用模型
         list_models()
 
         # Simple chat
@@ -167,6 +193,7 @@ def main():
         multi_turn_conversation()
 
         # Uncomment for longer examples:
+        # 需要更长的示例时取消注释：
         # deep_research()
 
     except Exception as e:

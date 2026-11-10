@@ -1,7 +1,9 @@
 """Research refiner role preset.
+研究细化角色预设。
 
 Query expansion and research planning expert. Transforms vague queries
 into comprehensive, well-structured research plans.
+查询扩展与研究规划专家。将模糊查询转化为全面、结构良好的研究计划。
 """
 
 from typing import Dict

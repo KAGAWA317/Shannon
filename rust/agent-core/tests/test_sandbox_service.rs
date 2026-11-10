@@ -1,7 +1,10 @@
 //! Integration tests for SandboxService.
+//! SandboxService 的集成测试。
 //!
 //! Tests end-to-end file operations through the gRPC service,
+//! 端到端验证 gRPC service 中的文件操作、
 //! session isolation, quota enforcement, and safe command execution.
+//! session 隔离、quota 约束以及安全命令执行。
 
 use shannon_agent_core::sandbox_service::{
     proto::{sandbox_service_server::SandboxService, *},
@@ -11,11 +14,13 @@ use tempfile::TempDir;
 use tonic::Request;
 
 /// Helper to create a sandbox service for testing
+/// 创建用于测试的 sandbox service 的辅助函数
 fn create_test_service(temp: &TempDir) -> SandboxServiceImpl {
     SandboxServiceImpl::new(temp.path().to_path_buf())
 }
 
 /// Helper to create a sandbox service with custom config
+/// 创建带自定义配置的 sandbox service 的辅助函数
 fn create_test_service_with_config(temp: &TempDir, config: SandboxConfig) -> SandboxServiceImpl {
     SandboxServiceImpl::with_config(temp.path().to_path_buf(), config)
 }
@@ -29,6 +34,7 @@ mod file_operations {
         let service = create_test_service(&temp);
 
         // Write a file
+        // 写入文件
         let write_req = FileWriteRequest {
             session_id: "test-session".to_string(),
             path: "test.txt".to_string(),
@@ -44,6 +50,7 @@ mod file_operations {
         assert_eq!(write_inner.bytes_written, 20);
 
         // Read it back
+        // 再读回
         let read_req = FileReadRequest {
             session_id: "test-session".to_string(),
             path: "test.txt".to_string(),
@@ -63,6 +70,7 @@ mod file_operations {
         let service = create_test_service(&temp);
 
         // Initial write
+        // 首次写入
         let write_req1 = FileWriteRequest {
             session_id: "append-test".to_string(),
             path: "log.txt".to_string(),
@@ -75,6 +83,7 @@ mod file_operations {
         service.file_write(Request::new(write_req1)).await.unwrap();
 
         // Append
+        // 追加写入
         let write_req2 = FileWriteRequest {
             session_id: "append-test".to_string(),
             path: "log.txt".to_string(),
@@ -87,6 +96,7 @@ mod file_operations {
         service.file_write(Request::new(write_req2)).await.unwrap();
 
         // Read and verify
+        // 读取并校验
         let read_req = FileReadRequest {
             session_id: "append-test".to_string(),
             path: "log.txt".to_string(),
@@ -104,6 +114,7 @@ mod file_operations {
         let service = create_test_service(&temp);
 
         // Write to nested path with create_dirs=true
+        // 以 create_dirs=true 写入嵌套路径
         let write_req = FileWriteRequest {
             session_id: "nested-test".to_string(),
             path: "deep/nested/dir/file.txt".to_string(),
@@ -117,6 +128,7 @@ mod file_operations {
         assert!(resp.into_inner().success);
 
         // Verify file exists
+        // 确认文件存在
         let read_req = FileReadRequest {
             session_id: "nested-test".to_string(),
             path: "deep/nested/dir/file.txt".to_string(),
@@ -134,6 +146,7 @@ mod file_operations {
         let service = create_test_service(&temp);
 
         // Create some files
+        // 创建一些文件
         for name in &["a.txt", "b.py", "c.rs"] {
             let req = FileWriteRequest {
                 session_id: "list-test".to_string(),
@@ -148,6 +161,7 @@ mod file_operations {
         }
 
         // List all files
+        // 列出所有文件
         let list_req = FileListRequest {
             session_id: "list-test".to_string(),
             path: "".to_string(),
@@ -168,6 +182,7 @@ mod file_operations {
         let service = create_test_service(&temp);
 
         // Create mixed files
+        // 创建多种类型的文件
         for name in &["test1.txt", "test2.txt", "other.py", "readme.md"] {
             let req = FileWriteRequest {
                 session_id: "pattern-test".to_string(),
@@ -182,6 +197,7 @@ mod file_operations {
         }
 
         // List only .txt files
+        // 仅列出 .txt 文件
         let list_req = FileListRequest {
             session_id: "pattern-test".to_string(),
             path: "".to_string(),
@@ -206,6 +222,7 @@ mod session_isolation {
         let service = create_test_service(&temp);
 
         // Write to session A
+        // 写入 session A
         let req_a = FileWriteRequest {
             session_id: "session-a".to_string(),
             path: "secret.txt".to_string(),
@@ -218,6 +235,7 @@ mod session_isolation {
         service.file_write(Request::new(req_a)).await.unwrap();
 
         // Write to session B
+        // 写入 session B
         let req_b = FileWriteRequest {
             session_id: "session-b".to_string(),
             path: "secret.txt".to_string(),
@@ -230,6 +248,7 @@ mod session_isolation {
         service.file_write(Request::new(req_b)).await.unwrap();
 
         // Read from session A
+        // 从 session A 读取
         let read_a = FileReadRequest {
             session_id: "session-a".to_string(),
             path: "secret.txt".to_string(),
@@ -241,6 +260,7 @@ mod session_isolation {
         assert_eq!(resp_a.into_inner().content, "Session A secret");
 
         // Read from session B
+        // 从 session B 读取
         let read_b = FileReadRequest {
             session_id: "session-b".to_string(),
             path: "secret.txt".to_string(),
@@ -258,6 +278,7 @@ mod session_isolation {
         let service = create_test_service(&temp);
 
         // Create a file in session A
+        // 在 session A 中创建文件
         let req = FileWriteRequest {
             session_id: "session-a".to_string(),
             path: "data.txt".to_string(),
@@ -270,6 +291,7 @@ mod session_isolation {
         service.file_write(Request::new(req)).await.unwrap();
 
         // Try to read from session B using path traversal
+        // 尝试用路径穿越从 session B 读取
         let read_req = FileReadRequest {
             session_id: "session-b".to_string(),
             path: "../session-a/data.txt".to_string(),
@@ -280,6 +302,7 @@ mod session_isolation {
         let resp = service.file_read(Request::new(read_req)).await;
 
         // Should be blocked
+        // 应被拦截
         match resp {
             Ok(r) => {
                 let inner = r.into_inner();
@@ -299,6 +322,7 @@ mod session_isolation {
         let service = create_test_service(&temp);
 
         // Try to read an absolute path
+        // 尝试读取绝对路径
         let read_req = FileReadRequest {
             session_id: "test".to_string(),
             path: "/etc/passwd".to_string(),
@@ -309,6 +333,7 @@ mod session_isolation {
         let resp = service.file_read(Request::new(read_req)).await;
 
         // Should fail
+        // 应当失败
         match resp {
             Ok(r) => assert!(!r.into_inner().success),
             Err(_) => {} // Also acceptable
@@ -329,6 +354,7 @@ mod quota_enforcement {
         let service = create_test_service_with_config(&temp, config);
 
         // Try to write a large file
+        // 尝试写入大文件
         let req = FileWriteRequest {
             session_id: "quota-test".to_string(),
             path: "large.txt".to_string(),
@@ -341,6 +367,7 @@ mod quota_enforcement {
         let resp = service.file_write(Request::new(req)).await;
 
         // Should fail with ResourceExhausted
+        // 应以 ResourceExhausted 失败
         assert!(resp.is_err());
         assert_eq!(resp.unwrap_err().code(), tonic::Code::ResourceExhausted);
     }
@@ -355,6 +382,7 @@ mod quota_enforcement {
         let service = create_test_service_with_config(&temp, config);
 
         // Write within quota
+        // 在 quota 内写入
         let req = FileWriteRequest {
             session_id: "quota-ok".to_string(),
             path: "small.txt".to_string(),
@@ -380,20 +408,24 @@ mod e2e_integration {
         let manager = WorkspaceManager::new(temp.path().to_path_buf());
 
         // 1. Get workspace for a session (creates it)
+        // 1. 获取 session workspace（不存在则创建）
         let workspace = manager.get_workspace("test-session-001").unwrap();
         assert!(workspace.exists());
         assert!(workspace.is_dir());
 
         // 2. Write a file to workspace
+        // 2. 向 workspace 写入文件
         let file_path = workspace.join("data.txt");
         let content = "Hello from E2E test!";
         std::fs::write(&file_path, content).unwrap();
 
         // 3. Read file back and verify content
+        // 3. 读回文件并校验内容
         let read_content = std::fs::read_to_string(&file_path).unwrap();
         assert_eq!(read_content, content);
 
         // 4. List files and verify count
+        // 4. 列出文件并校验数量
         let entries: Vec<_> = std::fs::read_dir(&workspace)
             .unwrap()
             .filter_map(|e| e.ok())
@@ -402,12 +434,14 @@ mod e2e_integration {
         assert!(entries[0].file_name().to_str().unwrap() == "data.txt");
 
         // 5. Execute SafeCommand::parse("cat data.txt") and verify output
+        // 5. 执行 SafeCommand::parse("cat data.txt") 并校验输出
         let cmd = SafeCommand::parse("cat data.txt").unwrap();
         let output = cmd.execute(&workspace).unwrap();
         assert_eq!(output.exit_code, 0);
         assert_eq!(output.stdout, content);
 
         // 6. Cleanup
+        // 6. 清理
         manager.delete_workspace("test-session-001").unwrap();
         assert!(!workspace.exists());
     }
@@ -418,14 +452,17 @@ mod e2e_integration {
         let manager = WorkspaceManager::new(temp.path().to_path_buf());
 
         // 1. Create two sessions
+        // 1. 创建两个 session
         let workspace_a = manager.get_workspace("session-a").unwrap();
         let workspace_b = manager.get_workspace("session-b").unwrap();
 
         // 2. Write secret.txt to session_a
+        // 2. 向 session_a 写入 secret.txt
         let secret_content = "Top secret data for session A only!";
         std::fs::write(workspace_a.join("secret.txt"), secret_content).unwrap();
 
         // 3. Verify session_b cannot see the file
+        // 3. 确认 session_b 看不到该文件
         let secret_in_b = workspace_b.join("secret.txt");
         assert!(
             !secret_in_b.exists(),
@@ -433,6 +470,7 @@ mod e2e_integration {
         );
 
         // Verify listing session-b shows no files
+        // 确认列出 session-b 时为空
         let entries: Vec<_> = std::fs::read_dir(&workspace_b)
             .unwrap()
             .filter_map(|e| e.ok())
@@ -440,6 +478,7 @@ mod e2e_integration {
         assert_eq!(entries.len(), 0, "session-b workspace should be empty");
 
         // 4. Verify attempting to cat ../session-a/secret.txt fails
+        // 4. 确认 cat ../session-a/secret.txt 会失败
         let cmd = SafeCommand::parse("cat ../session-a/secret.txt").unwrap();
         let result = cmd.execute(&workspace_b);
         assert!(
@@ -448,6 +487,7 @@ mod e2e_integration {
         );
 
         // Also test that is_within_workspace correctly rejects cross-session paths
+        // 同时验证 is_within_workspace 能正确拒绝跨 session 路径
         let cross_session_path = workspace_b.join("../session-a/secret.txt");
         let within_b = manager.is_within_workspace("session-b", &cross_session_path);
         assert!(
@@ -456,6 +496,7 @@ mod e2e_integration {
         );
 
         // 5. Cleanup
+        // 5. 清理
         manager.delete_workspace("session-a").unwrap();
         manager.delete_workspace("session-b").unwrap();
         assert!(!workspace_a.exists());
@@ -472,6 +513,7 @@ mod safe_commands {
         let service = create_test_service(&temp);
 
         // Create files
+        // 创建文件
         let req = FileWriteRequest {
             session_id: "cmd-test".to_string(),
             path: "file1.txt".to_string(),
@@ -484,6 +526,7 @@ mod safe_commands {
         service.file_write(Request::new(req)).await.unwrap();
 
         // Execute ls
+        // 执行 ls
         let cmd_req = CommandRequest {
             session_id: "cmd-test".to_string(),
             command: "ls".to_string(),
@@ -505,6 +548,7 @@ mod safe_commands {
         let service = create_test_service(&temp);
 
         // Create file
+        // 创建文件
         let req = FileWriteRequest {
             session_id: "cat-test".to_string(),
             path: "data.txt".to_string(),
@@ -517,6 +561,7 @@ mod safe_commands {
         service.file_write(Request::new(req)).await.unwrap();
 
         // Execute cat
+        // 执行 cat
         let cmd_req = CommandRequest {
             session_id: "cat-test".to_string(),
             command: "cat data.txt".to_string(),
@@ -538,6 +583,7 @@ mod safe_commands {
         let service = create_test_service(&temp);
 
         // Get workspace first
+        // 先获取 workspace
         let _ = service
             .file_list(Request::new(FileListRequest {
                 session_id: "mkdir-test".to_string(),
@@ -547,6 +593,7 @@ mod safe_commands {
             .await;
 
         // Create directory
+        // 创建目录
         let cmd1 = CommandRequest {
             session_id: "mkdir-test".to_string(),
             command: "mkdir -p subdir/nested".to_string(),
@@ -556,6 +603,7 @@ mod safe_commands {
         service.execute_command(Request::new(cmd1)).await.unwrap();
 
         // Create file
+        // 创建文件
         let cmd2 = CommandRequest {
             session_id: "mkdir-test".to_string(),
             command: "touch subdir/nested/file.txt".to_string(),
@@ -565,6 +613,7 @@ mod safe_commands {
         service.execute_command(Request::new(cmd2)).await.unwrap();
 
         // Verify with ls
+        // 用 ls 验证
         let cmd3 = CommandRequest {
             session_id: "mkdir-test".to_string(),
             command: "ls subdir/nested".to_string(),
@@ -647,6 +696,7 @@ mod safe_commands {
         let service = create_test_service(&temp);
 
         // Create file with content
+        // 创建含内容的文件
         let req = FileWriteRequest {
             session_id: "grep-test".to_string(),
             path: "log.txt".to_string(),
@@ -659,6 +709,7 @@ mod safe_commands {
         service.file_write(Request::new(req)).await.unwrap();
 
         // Grep for ERROR
+        // 搜索 ERROR
         let cmd_req = CommandRequest {
             session_id: "grep-test".to_string(),
             command: "grep ERROR log.txt".to_string(),

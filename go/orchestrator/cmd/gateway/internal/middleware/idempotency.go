@@ -154,6 +154,7 @@ func (im *IdempotencyMiddleware) Middleware(next http.Handler) http.Handler {
 // generateCacheKey generates a unique cache key for the request
 func (im *IdempotencyMiddleware) generateCacheKey(r *http.Request, idempotencyKey string) string {
 	// Include user context in the key to prevent cross-user cache pollution
+	// 把用户信息纳入 key，避免不同用户之间 cache 串用。
 	userID := ""
 	if userCtx := r.Context().Value(auth.UserContextKey); userCtx != nil {
 		if uc, ok := userCtx.(*auth.UserContext); ok {

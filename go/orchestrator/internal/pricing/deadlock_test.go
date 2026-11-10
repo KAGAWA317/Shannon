@@ -7,6 +7,7 @@ import (
 )
 
 // TestNonDeadlock verifies that the double-checked locking pattern doesn't deadlock
+// TestNonDeadlock 验证双重检查锁模式不会死锁
 func TestNoDeadlock(t *testing.T) {
 	// Reset state
 	mu.Lock()
@@ -31,6 +32,7 @@ func TestNoDeadlock(t *testing.T) {
 }
 
 // TestConcurrentAccess verifies thread-safety of the double-checked locking
+// TestConcurrentAccess 验证双重检查锁的线程安全性
 func TestConcurrentAccess(t *testing.T) {
 	// Reset state
 	mu.Lock()
@@ -39,6 +41,7 @@ func TestConcurrentAccess(t *testing.T) {
 	mu.Unlock()
 
 	// Launch multiple goroutines to access get() concurrently
+	// 启动多个 goroutine 并发访问 get()
 	var wg sync.WaitGroup
 	numGoroutines := 100
 

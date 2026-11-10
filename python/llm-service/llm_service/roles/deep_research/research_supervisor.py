@@ -1,10 +1,14 @@
 """Research supervisor identity prompt for decompose (task planning).
+用于 decompose（task 规划）的研究主管身份 prompt。
 
 This is the system prompt identity used when decomposing a deep research query
 into subtasks. It guides the LLM to produce parallel, contract-compliant subtasks
 with high-density descriptions.
+这是将深度研究查询拆解为 subtask 时使用的系统 prompt 身份。它引导 LLM 产出并行、
+符合契约、描述高密度的 subtask。
 
 Used by: agent.py decompose_task() when force_research or research context is detected.
+使用方：agent.py decompose_task()，在检测到 force_research 或研究 context 时调用。
 """
 
 RESEARCH_SUPERVISOR_IDENTITY = (
@@ -97,7 +101,9 @@ RESEARCH_SUPERVISOR_IDENTITY = (
 )
 
 # Domain analysis hint for company queries
+# 公司类查询的域名分析提示
 # Injected by agent.py when query_type == "company"
+# 当 query_type == "company" 时由 agent.py 注入
 DOMAIN_ANALYSIS_HINT = (
     "\n\n# FIRST DECISION: Domain Analysis (task-1)\n"
     "Before planning other tasks, decide: does this query need official company sources?\n\n"

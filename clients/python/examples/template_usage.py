@@ -1,9 +1,13 @@
-"""Example of passing context with tasks and streaming events."""
+"""Example of passing context with tasks and streaming events.
+
+示例：为 task 传入 context 并流式接收 event。
+"""
 
 import os
 from shannon import ShannonClient, EventType
 
 # Initialize client
+# 初始化客户端
 client = ShannonClient(
     base_url="http://localhost:8080",
     api_key=os.getenv("SHANNON_API_KEY", ""),
@@ -15,6 +19,7 @@ print("=" * 60)
 print()
 
 # Example 1: Simple task
+# 示例 1：简单 task
 print("-" * 60)
 print("Example 1: Simple query")
 print("-" * 60)
@@ -23,6 +28,7 @@ print(f"✓ Task submitted: {handle1.task_id}")
 print(handle1.result(timeout=60))
 
 # Example 2: Task with additional context
+# 示例 2：带额外 context 的 task
 print("-" * 60)
 print("Example 2: Query with context")
 print("-" * 60)
@@ -38,6 +44,7 @@ handle2 = client.submit_task(
 print(f"✓ Task submitted: {handle2.task_id}")
 
 # Stream to see execution
+# 流式查看执行过程
 print("Streaming execution events...")
 for event in client.stream(
     handle2.workflow_id,

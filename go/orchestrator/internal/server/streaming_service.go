@@ -15,6 +15,7 @@ import (
 )
 
 // StreamingServiceServer implements the gRPC StreamingService backed by the in-process manager.
+// StreamingServiceServer 实现由进程内 manager 支撑的 gRPC StreamingService。
 type StreamingServiceServer struct {
 	pb.UnimplementedStreamingServiceServer
 	mgr     *streaming.Manager
@@ -27,6 +28,7 @@ func NewStreamingService(mgr *streaming.Manager, logger *zap.Logger) *StreamingS
 }
 
 // SetTemporalClient allows wiring the Temporal client after service construction.
+// SetTemporalClient 允许在服务构造后注入 Temporal client。
 func (s *StreamingServiceServer) SetTemporalClient(c client.Client) {
 	s.tclient = c
 }
@@ -48,10 +50,12 @@ func (s *StreamingServiceServer) StreamTaskExecution(req *pb.StreamRequest, srv 
 	firstEventSeen := false
 
 	// Replay based on stream ID or seq (prefer stream ID)
+	// 按 stream ID 或 seq 回放（优先 stream ID）
 	if req.GetLastStreamId() != "" {
 		// Resume from Redis stream ID
 		for _, ev := range s.mgr.ReplayFromStreamID(wf, req.GetLastStreamId()) {
 			// Mark that at least one event exists (even if filtered out)
+			// 标记至少存在一个 event（即使被过滤掉）
 			firstEventSeen = true
 			if len(typeFilter) > 0 {
 				if _, ok := typeFilter[ev.Type]; !ok {
@@ -69,6 +73,7 @@ func (s *StreamingServiceServer) StreamTaskExecution(req *pb.StreamRequest, srv 
 		// Backward compat: resume from numeric seq
 		for _, ev := range s.mgr.ReplaySince(wf, req.GetLastEventId()) {
 			// Mark that at least one event exists (even if filtered out)
+			// 标记至少存在一个 event（即使被过滤掉）
 			firstEventSeen = true
 			if len(typeFilter) > 0 {
 				if _, ok := typeFilter[ev.Type]; !ok {
@@ -97,6 +102,7 @@ func (s *StreamingServiceServer) StreamTaskExecution(req *pb.StreamRequest, srv 
 	defer s.mgr.Unsubscribe(wf, ch)
 
 	// First-event timeout for invalid/non-existent workflows
+	// 针对无效/不存在 workflow 的首 event timeout
 	firstEventTimer := time.NewTimer(30 * time.Second)
 	defer firstEventTimer.Stop()
 
@@ -119,9 +125,11 @@ func (s *StreamingServiceServer) StreamTaskExecution(req *pb.StreamRequest, srv 
 						return grpcstatus.Error(codes.NotFound, "workflow not found")
 					}
 					// Other errors (timeout, etc) also indicate invalid workflow
+					// 其它错误（timeout 等）同样说明 workflow 不存在
 					return grpcstatus.Error(codes.NotFound, "workflow not found or unavailable")
 				}
 				// Workflow exists but no events yet - reset timer and keep waiting
+				// workflow 存在但尚无 event——重置计时器并继续等待
 				firstEventTimer.Reset(30 * time.Second)
 			}
 		case ev, ok := <-ch:
@@ -131,9 +139,11 @@ func (s *StreamingServiceServer) StreamTaskExecution(req *pb.StreamRequest, srv 
 			}
 
 			// Check for WORKFLOW_COMPLETED before filtering to ensure stream closes
+			// 在过滤之前检查 WORKFLOW_COMPLETED，确保流能关闭
 			isCompleted := ev.Type == "WORKFLOW_COMPLETED"
 
 			// Any incoming event means the workflow exists; disable first-event detection
+			// 任何到达的 event 都说明 workflow 存在；关闭首 event 检测
 			if !firstEventSeen {
 				firstEventSeen = true
 			}
@@ -142,6 +152,7 @@ func (s *StreamingServiceServer) StreamTaskExecution(req *pb.StreamRequest, srv 
 			if len(typeFilter) > 0 {
 				if _, ok := typeFilter[ev.Type]; !ok {
 					// Skip sending this event, but still close on completion
+					// 跳过发送该 event，但仍在完成时关闭
 					if isCompleted {
 						return nil
 					}

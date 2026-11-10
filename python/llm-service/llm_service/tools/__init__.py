@@ -1,5 +1,6 @@
 """
 Shannon Tool System - Secure, isolated tool execution for agents
+Shannon tool 系统——为 agent 提供安全、隔离的 tool 执行
 """
 
 from .base import Tool, ToolResult, ToolParameter, ToolMetadata

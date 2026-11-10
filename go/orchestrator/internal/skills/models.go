@@ -3,6 +3,9 @@
 //
 // Skills are markdown files with YAML frontmatter that define reusable
 // system prompts, tool requirements, and execution constraints.
+// skills 包实现与 Anthropic Agent Skills 规范兼容的基于 markdown 的 skill 系统。
+// skill 是带 YAML frontmatter 的 markdown 文件，定义可复用的
+// system prompt、tool 需求与执行约束。
 package skills
 
 import (
@@ -11,6 +14,7 @@ import (
 )
 
 // Skill represents a parsed skill definition from a markdown file.
+// Skill 表示从 markdown 文件中解析出的 skill 定义。
 type Skill struct {
 	Name          string                 `yaml:"name"`
 	Version       string                 `yaml:"version"`
@@ -27,6 +31,7 @@ type Skill struct {
 }
 
 // SkillRegistry manages loaded skills with thread-safe access.
+// SkillRegistry 以线程安全方式管理已加载的 skill。
 type SkillRegistry struct {
 	mu         sync.RWMutex
 	skills     map[string]SkillEntry   // Key: "name@version" or "name" for latest
@@ -35,6 +40,7 @@ type SkillRegistry struct {
 }
 
 // SkillEntry wraps a skill with loading metadata.
+// SkillEntry 用加载 metadata 包装 skill。
 type SkillEntry struct {
 	Key         string
 	Skill       *Skill
@@ -44,6 +50,7 @@ type SkillEntry struct {
 }
 
 // SkillSummary is a lightweight representation for API responses.
+// SkillSummary 是用于 API response 的轻量表示。
 type SkillSummary struct {
 	Name          string   `json:"name"`
 	Version       string   `json:"version"`
@@ -55,6 +62,7 @@ type SkillSummary struct {
 }
 
 // SkillDetail includes full skill information for API responses.
+// SkillDetail 包含用于 API response 的完整 skill 信息。
 type SkillDetail struct {
 	Skill    *Skill                 `json:"skill"`
 	Metadata map[string]interface{} `json:"metadata"`

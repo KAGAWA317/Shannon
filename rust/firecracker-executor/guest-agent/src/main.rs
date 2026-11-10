@@ -1,9 +1,14 @@
 //! Guest agent for Firecracker microVMs.
+//! Firecracker microVM 的 guest agent。
 //!
 //! Listens on vsock port 5005 for JSON requests to execute Python code.
+//! 监听 vsock 端口 5005，接收 JSON request 以执行 Python 代码。
 //! Protocol:
+//! 协议：
 //! - Host sends: {"code": "...", "stdin": null, "timeout_seconds": 30}
+//! - 宿主发送：{"code": "...", "stdin": null, "timeout_seconds": 30}
 //! - Guest responds: {"success": true, "stdout": "...", "stderr": "...", "exit_code": 0, "error": null}
+//! - guest response：{"success": true, "stdout": "...", "stderr": "...", "exit_code": 0, "error": null}
 
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -63,6 +68,7 @@ fn execute_python(req: &GuestRequest) -> GuestResponse {
     };
 
     // Try multiple Python paths - in minimal init environments PATH may not be set
+    // 尝试多个 Python 路径——精简 init 环境中可能未设置 PATH
     let python_paths = [
         "/usr/local/bin/python3",
         "/usr/bin/python3",
@@ -90,6 +96,7 @@ fn execute_python(req: &GuestRequest) -> GuestResponse {
     };
 
     // Write stdin if provided
+    // 若提供 stdin 则写入
     if let Some(ref input) = req.stdin {
         if let Some(ref mut stdin) = child.stdin.take() {
             if let Err(e) = stdin.write_all(input.as_bytes()) {
@@ -99,7 +106,9 @@ fn execute_python(req: &GuestRequest) -> GuestResponse {
     }
 
     // P1 fix: Drain stdout/stderr in separate threads to prevent deadlock
+    // P1 修复：用独立线程排空 stdout/stderr，防止输出超过管道缓冲区
     // when output exceeds pipe buffer size (~64KB on Linux)
+    // 大小（Linux 上约 64KB）时发生死锁
     let stdout_handle = child.stdout.take();
     let stderr_handle = child.stderr.take();
 
@@ -123,10 +132,12 @@ fn execute_python(req: &GuestRequest) -> GuestResponse {
     let start = std::time::Instant::now();
 
     // Wait for process with timeout
+    // 带 timeout 等待进程结束
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
                 // Process finished - collect output from threads
+                // 进程已结束——从线程收集输出
                 let stdout = stdout_thread.join().unwrap_or_default();
                 let stderr = stderr_thread.join().unwrap_or_default();
                 let exit_code = status.code().unwrap_or(-1);
@@ -135,10 +146,12 @@ fn execute_python(req: &GuestRequest) -> GuestResponse {
             Ok(None) => {
                 if start.elapsed() >= timeout_duration {
                     // Timeout - kill process
+                    // timeout——杀掉进程
                     let _ = child.kill();
                     let _ = child.wait(); // Reap zombie
 
                     // Collect whatever output we have
+                    // 收集已有输出
                     let stdout = stdout_thread.join().unwrap_or_default();
                     let stderr = stderr_thread.join().unwrap_or_default();
 
@@ -205,7 +218,9 @@ fn handle_connection(stream: vsock::VsockStream) {
     let resp = execute_python(&req);
 
     // Sync /workspace to ensure writes are flushed to ext4 block device
+    // 将 /workspace 同步落盘，确保写入在 VM 终止前
     // before the VM is terminated. Without this, buffered writes may be lost.
+    // 刷入 ext4 块设备；否则缓冲写入可能丢失。
     let _ = Command::new("sync").output();
 
     if let Err(e) = serde_json::to_writer(&mut writer, &resp) {
@@ -229,6 +244,7 @@ fn main() {
     let shutdown = Arc::new(AtomicBool::new(false));
 
     // Setup SIGTERM handler for graceful shutdown
+    // 设置 SIGTERM 处理器，实现优雅关闭
     {
         let shutdown = shutdown.clone();
         if let Err(e) = ctrlc_handler(move || {
@@ -248,6 +264,7 @@ fn main() {
     };
 
     // Set non-blocking for graceful shutdown checks
+    // 设置为非阻塞，便于检查关闭标志
     if let Err(e) = listener.set_nonblocking(true) {
         eprintln!("warning: failed to set non-blocking: {}", e);
     }
@@ -258,6 +275,7 @@ fn main() {
         match listener.accept() {
             Ok((stream, _addr)) => {
                 // Set blocking for actual I/O
+                // 实际 I/O 时设为阻塞
                 let _ = stream.set_nonblocking(false);
                 handle_connection(stream);
             }

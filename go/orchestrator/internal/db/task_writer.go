@@ -65,6 +65,7 @@ func buildTaskMetricsPayload(task *TaskExecution) JSONB {
 }
 
 // SaveTaskExecution saves or updates a task execution record (idempotent by workflow_id)
+// SaveTaskExecution 保存或更新 task 执行记录（按 workflow_id 幂等）
 func (c *Client) SaveTaskExecution(ctx context.Context, task *TaskExecution) error {
 	if task.ID == uuid.Nil {
 		task.ID = uuid.New()
@@ -74,6 +75,7 @@ func (c *Client) SaveTaskExecution(ctx context.Context, task *TaskExecution) err
 	}
 
 	// Insert or update canonical record in task_executions
+	// 在 task_executions 中插入或更新规范记录
 	var userID interface{}
 	if task.UserID != nil {
 		userID = task.UserID
@@ -90,18 +92,22 @@ func (c *Client) SaveTaskExecution(ctx context.Context, task *TaskExecution) err
 
 	// Deep copy metadata via JSON round-trip to avoid "concurrent map iteration and map write" panic
 	// The original task.Metadata may be modified by other goroutines
+	// 通过 JSON 往返深拷贝 metadata，避免 "concurrent map iteration and map write" panic
+	// 原 task.Metadata 可能被其它 goroutine 修改
 	metadata := task.Metadata.SafeClone()
 	if metadata == nil {
 		metadata = JSONB{}
 	}
 
 	// Default trigger_type to 'api' if not specified
+	// 未指定时 trigger_type 默认为 'api'
 	triggerType := task.TriggerType
 	if triggerType == "" {
 		triggerType = "api"
 	}
 
 	// Deep copy response via JSON round-trip (same safety as metadata)
+	// 通过 JSON 往返深拷贝 response（与 metadata 同样的安全考虑）
 	response := task.Response.SafeClone()
 
 	teQuery := `
@@ -183,6 +189,7 @@ func (c *Client) SaveTaskExecution(ctx context.Context, task *TaskExecution) err
 }
 
 // BatchSaveTaskExecutions saves multiple task executions in a single transaction
+// BatchSaveTaskExecutions 在单个事务中保存多条 task 执行记录
 func (c *Client) BatchSaveTaskExecutions(ctx context.Context, tasks []*TaskExecution) error {
 	if len(tasks) == 0 {
 		return nil
@@ -277,6 +284,7 @@ func (c *Client) BatchSaveTaskExecutions(ctx context.Context, tasks []*TaskExecu
 			}
 
 			// Default trigger_type to 'api' if not specified
+			// 未指定时 trigger_type 默认为 'api'
 			triggerType := task.TriggerType
 			if triggerType == "" {
 				triggerType = "api"
@@ -489,6 +497,8 @@ func (c *Client) BatchSaveToolExecutions(ctx context.Context, tools []*ToolExecu
 
 // CreateSession creates a new session in the database (tenant-aware)
 // If sessionContext is nil, a minimal default context will be used
+// CreateSession 在数据库中创建 session（租户感知）
+// sessionContext 为 nil 时使用最小的默认 context
 func (c *Client) CreateSession(ctx context.Context, sessionID string, userID string, tenantID string, sessionContext map[string]interface{}) error {
 	// Parse tenant ID once for reuse
 	var tid *uuid.UUID
@@ -499,6 +509,7 @@ func (c *Client) CreateSession(ctx context.Context, sessionID string, userID str
 	}
 
 	// Parse user ID - if not a valid UUID, we'll need to look it up or create a user
+	// 解析 user ID——若不是合法 UUID，需要查找或创建用户
 	var uid *uuid.UUID
 	if userID != "" {
 		parsed, err := uuid.Parse(userID)
@@ -516,6 +527,7 @@ func (c *Client) CreateSession(ctx context.Context, sessionID string, userID str
 			}
 		} else {
 			// User ID is not a UUID, try to find or create user by external_id
+			// user ID 不是 UUID，尝试按 external_id 查找或创建用户
 			userUUID := uuid.New()
 			if err := c.db.QueryRowContext(ctx,
 				"INSERT INTO users (id, external_id, tenant_id, created_at, updated_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (external_id) DO UPDATE SET tenant_id = COALESCE(users.tenant_id, EXCLUDED.tenant_id), updated_at = GREATEST(users.updated_at, EXCLUDED.updated_at) RETURNING id",
@@ -540,9 +552,11 @@ func (c *Client) CreateSession(ctx context.Context, sessionID string, userID str
     `
 
 	// Support non-UUID external session IDs by mapping them to an internal UUID
+	// 支持非 UUID 的外部 session ID：映射为内部 UUID
 	var sessionUUID uuid.UUID
 
 	// Use provided context or create a minimal default
+	// 使用提供的 context，或创建最小的默认 context
 	var contextMap map[string]interface{}
 	if sessionContext != nil && len(sessionContext) > 0 {
 		contextMap = make(map[string]interface{})
@@ -557,6 +571,7 @@ func (c *Client) CreateSession(ctx context.Context, sessionID string, userID str
 		sessionUUID = parsed
 	} else {
 		// Generate an internal UUID and store external_id in context for lookup
+		// 生成内部 UUID，并把 external_id 存入 context 供查找
 		sessionUUID = uuid.New()
 		contextMap["external_id"] = sessionID
 	}
@@ -643,6 +658,7 @@ func (c *Client) SaveAuditLog(ctx context.Context, audit *AuditLog) error {
 }
 
 // GetTaskExecution retrieves a task execution by workflow ID
+// GetTaskExecution 按 workflow ID 获取 task 执行记录
 func (c *Client) GetTaskExecution(ctx context.Context, workflowID string) (*TaskExecution, error) {
 	var task TaskExecution
 
@@ -676,6 +692,7 @@ func (c *Client) GetTaskExecution(ctx context.Context, workflowID string) (*Task
 }
 
 // UpdateTaskStatus updates the status of a task execution
+// UpdateTaskStatus 更新 task 执行记录的状态
 func (c *Client) UpdateTaskStatus(ctx context.Context, workflowID string, status string) error {
 	_, err := c.db.ExecContext(ctx,
 		`UPDATE task_executions SET status = $1, updated_at = NOW() WHERE workflow_id = $2`,

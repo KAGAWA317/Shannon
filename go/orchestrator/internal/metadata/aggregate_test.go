@@ -37,6 +37,7 @@ func TestAggregateAgentMetadata_SingleAgent_WithSplitTokens(t *testing.T) {
 	assert.Equal(t, 300, meta["total_tokens"], "should sum input+output tokens")
 
 	// Single agent now includes agent_usages for consistency (deprecated in favor of model_breakdown)
+	// 单 agent 时也会附带 agent_usages 以保持一致（已由 model_breakdown 取代）
 	agentUsages, hasAgentUsages := meta["agent_usages"].([]map[string]interface{})
 	assert.True(t, hasAgentUsages, "should have agent_usages array")
 	assert.Equal(t, 1, len(agentUsages), "should have single agent usage entry")
@@ -52,6 +53,7 @@ func TestAggregateAgentMetadata_SingleAgent_WithTotalTokens(t *testing.T) {
 			InputTokens:  0,
 			OutputTokens: 0,
 			TokensUsed:   500, // Use total tokens when split not available
+			// 拆分数据不可用时使用总 token
 		},
 	}
 
@@ -67,6 +69,7 @@ func TestAggregateAgentMetadata_SingleAgent_WithTotalTokens(t *testing.T) {
 
 func TestAggregateAgentMetadata_EmptyModel_UsesDetection(t *testing.T) {
 	// Test that empty model uses provider detection
+	// 测试空模型时使用 provider 探测
 	results := []activities.AgentExecutionResult{
 		{
 			Success:      true,
@@ -81,6 +84,7 @@ func TestAggregateAgentMetadata_EmptyModel_UsesDetection(t *testing.T) {
 	meta := AggregateAgentMetadata(results, 0)
 
 	// Empty model means no model/provider in metadata
+	// 模型为空意味着 metadata 中不含模型/provider
 	_, hasModel := meta["model_used"]
 	assert.False(t, hasModel, "empty model should not set model_used")
 
@@ -151,6 +155,7 @@ func TestAggregateAgentMetadata_ZeroTokens(t *testing.T) {
 
 func TestAggregateAgentMetadata_MixedData(t *testing.T) {
 	// Test realistic scenario with mixed data quality
+	// 测试数据质量混杂的真实场景
 	results := []activities.AgentExecutionResult{
 		{
 			Success:      true,
@@ -189,14 +194,17 @@ func TestAggregateAgentMetadata_MixedData(t *testing.T) {
 	assert.Equal(t, "gpt-5-mini-2025-08-07", meta["model_used"], "should pick most frequent model")
 	assert.Equal(t, "openai", meta["provider"])
 	// Total: 1000+2000 (agent1) + 100+200 (agent3) + 100 (synthesis) = 3400
+	// 合计：1000+2000（agent1）+ 100+200（agent3）+ 100（synthesis）= 3400
 	assert.Equal(t, 3400, meta["total_tokens"], "should sum all tokens including synthesis")
 
 	// Should have agent_usages for multiple successful agents
+	// 多个成功 agent 时应带有 agent_usages
 	agentUsages, ok := meta["agent_usages"].([]map[string]interface{})
 	assert.True(t, ok, "should have agent_usages array")
 	assert.Equal(t, 4, len(agentUsages), "should have all four successful agents")
 
 	// Verify each successful agent has correct structure
+	// 校验每个成功 agent 的结构正确
 	for _, usage := range agentUsages {
 		assert.NotEmpty(t, usage["agent_id"], "all entries should have agent_id")
 		assert.Contains(t, usage, "cost_usd", "all entries should have cost_usd")
@@ -205,6 +213,7 @@ func TestAggregateAgentMetadata_MixedData(t *testing.T) {
 
 func TestAggregateAgentMetadata_ProviderDetection(t *testing.T) {
 	// Test provider detection when agents don't provide it
+	// 测试 agent 未提供 provider 时的探测逻辑
 	results := []activities.AgentExecutionResult{
 		{
 			Success:      true,
@@ -249,9 +258,11 @@ func TestAggregateAgentMetadata_FailedAgents(t *testing.T) {
 	meta := AggregateAgentMetadata(results, 0)
 
 	// Failed agent tokens should still be counted in totals
+	// 失败 agent 的 token 仍应计入总数
 	assert.Equal(t, 1300, meta["total_tokens"], "should include failed agent tokens in total")
 
 	// agent_usages includes only successful agents (now includes even single agent for consistency)
+	// agent_usages 只包含成功的 agent（为保持一致，现在单个 agent 也会包含）
 	agentUsages, hasAgentUsages := meta["agent_usages"].([]map[string]interface{})
 	assert.True(t, hasAgentUsages, "should have agent_usages array")
 	assert.Equal(t, 1, len(agentUsages), "should have single successful agent entry")

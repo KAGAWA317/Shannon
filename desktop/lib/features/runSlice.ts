@@ -135,6 +135,8 @@ const initialState: RunState = {
 // Helper to create inline status messages from events
 // These are SHORT human-readable status messages that appear as pills in conversation
 // Per backend guidance: LLM content (LLM_OUTPUT, AGENT_CHUNK, thread.message.*) goes to Agent Trace, not pills
+// 这些是对话中以 pill 形式显示的简短、人类可读的状态消息。
+// 按后端约定：LLM 内容（LLM_OUTPUT、AGENT_CHUNK、thread.message.*）进入 Agent Trace，而不是 pill。
 const STATUS_EVENT_TYPES = new Set([
     "WORKFLOW_STARTED",   // "Starting task"
     "PROGRESS",           // "Understanding your request", "Created a plan with N steps", "Reasoning step X of Y"
@@ -215,6 +217,7 @@ const runSlice = createSlice({
 
             // Deduplicate control events in the events array (for timeline display)
             // But still process state changes for all control events
+            // 对 events 数组中的控制类 event 去重（用于时间线展示），但仍会为所有控制类 event 处理状态变更。
             const controlEventTypes = ["workflow.pausing", "workflow.paused", "workflow.resumed", "workflow.cancelling", "workflow.cancelled"];
             const isControlEvent = controlEventTypes.includes(event.type);
             let skipEventPush = false;
@@ -234,6 +237,8 @@ const runSlice = createSlice({
 
                 // Dev-only: Limit events array to prevent HMR WebSocket payload overflow
                 // This doesn't affect production (no HMR) but prevents dev server crashes
+                // 仅开发环境：限制 events 数组长度，避免 HMR WebSocket 负载溢出。
+                // 生产环境不受影响（没有 HMR），但可防止开发服务器崩溃。
                 if (process.env.NODE_ENV === "development" && state.events.length > 200) {
                     state.events = state.events.slice(-150); // Keep last 150 events
                 }
@@ -242,6 +247,9 @@ const runSlice = createSlice({
             // Historical events are loaded from the session events API on page refresh.
             // We keep them in `state.events` for the timeline, but avoid generating conversation messages
             // (those are reconstructed from turns in the page).
+            // 页面刷新时会从 session event API 加载历史 event。
+            // 它们保留在 state.events 中供时间线使用，但不会生成对话消息
+            // （对话消息由页面中的 turns 重建）。
             if (isHistorical) {
                 // Preserve session title from historical title_generator events.
                 if (event.type === "thread.message.completed" && event.agent_id === "title_generator") {
@@ -300,6 +308,8 @@ const runSlice = createSlice({
 
             // Add inline status messages for informative events
             // Skip for historical events (loaded from API on page reload) - status pills are only for live streaming
+            // 为信息类 event 添加内联状态消息。
+            // 历史 event（页面刷新时从 API 加载）跳过——状态 pill 仅用于实时流式输出。
             if (STATUS_EVENT_TYPES.has(event.type) && !isHistorical) {
                 const eventWithMessage = event as { message?: string };
                 const msg = eventWithMessage.message?.trim();
@@ -310,6 +320,8 @@ const runSlice = createSlice({
                     }
                     // For AGENT_THINKING, only show short status messages (not LLM reasoning content)
                     // Skip any message that's too long for a status pill (max 150 chars)
+                    // 对于 AGENT_THINKING，只显示简短状态消息（不显示 LLM 推理内容）。
+                    // 跳过超出状态 pill 长度上限（150 字符）的消息。
                     else if ((event.type === "AGENT_THINKING" && !isShortStatusMessage(msg)) || msg.length > 150) {
                         // Skip long messages
                     }
@@ -321,8 +333,11 @@ const runSlice = createSlice({
 
             // Update status based on event type
             // Priority: STREAM_END/done > WORKFLOW_COMPLETED (main workflow only)
+            // 根据 event 类型更新状态。
+            // 优先级：STREAM_END/done > WORKFLOW_COMPLETED（仅主 workflow）。
             if (event.type === "done" || event.type === "STREAM_END") {
                 // STREAM_END or done is the authoritative "stream finished" marker
+                // STREAM_END 或 done 是权威的“流已结束”标记。
                 if (state.status !== "failed") {
                     state.status = "completed";
                     // Clear any timeout/error banner since stream completed successfully
@@ -331,6 +346,8 @@ const runSlice = createSlice({
 
                 // Check if we have any assistant messages for THIS task
                 // (must scope by workflow_id — prior turns always have assistant messages in multi-turn)
+                // 检查本 task 是否已有 assistant 消息
+                // （必须按 workflow_id 限定——多轮对话中之前的轮次总会留下 assistant 消息）。
                 const hasAssistantMessage = state.messages.some(m =>
                     m.role === "assistant" && !m.isStreaming && m.taskId === event.workflow_id
                 );
@@ -341,6 +358,8 @@ const runSlice = createSlice({
                 } else {
                     // No assistant message yet - replace generating placeholder with "Finalizing..."
                     // to show that we're fetching the final result from the API
+                    // 还没有 assistant 消息——把生成中的占位消息替换为 “Finalizing...”，
+                    // 表示正在从 API 获取最终结果。
                     const generatingMsgIndex = state.messages.findIndex((m: any) =>
                         m.role === "assistant" && m.isGenerating && m.taskId === event.workflow_id
                     );
@@ -359,11 +378,16 @@ const runSlice = createSlice({
             } else if (event.type === "WORKFLOW_COMPLETED") {
                 // WORKFLOW_COMPLETED is treated as completion for the main workflow
                 // Sub-workflows also emit WORKFLOW_COMPLETED but are ignored via workflow_id check
+                // WORKFLOW_COMPLETED 视为主 workflow 的完成。
+                // 子 workflow 也会发出 WORKFLOW_COMPLETED，但会通过 workflow_id 检查忽略。
                 const isMainWorkflow = event.workflow_id === state.mainWorkflowId;
 
                 // For historical data (mainWorkflowId is null), only accept WORKFLOW_COMPLETED
                 // if the message indicates it's the main workflow completion ("All done")
                 // This prevents sub-agent completions from incorrectly marking the task as complete
+                // 对于历史数据（mainWorkflowId 为 null），仅当消息表明是主 workflow 完成
+                // （“All done”）时才接受 WORKFLOW_COMPLETED。
+                // 这可防止子代理的完成 event 错误地把 task 标记为完成。
                 const workflowEvent = event as { message?: string };
                 const isMainWorkflowMessage = workflowEvent.message === "All done" ||
                     workflowEvent.message?.includes("workflow completed");
@@ -379,6 +403,8 @@ const runSlice = createSlice({
 
                     // Check if we have any assistant messages for this workflow
                     // Exclude interim progress messages (swarm lead) — they'll be cleaned up separately
+                    // 检查该 workflow 是否已有 assistant 消息。
+                    // 排除中间进度消息（swarm lead）——它们会单独清理。
                     const hasAssistantMessage = state.messages.some(m =>
                         m.role === "assistant" && !m.isStreaming && !(m.metadata as any)?.interim && m.taskId === event.workflow_id
                     );
@@ -415,6 +441,8 @@ const runSlice = createSlice({
             } else if (event.type === "workflow.pausing") {
                 // Pause request received, workflow will pause at next checkpoint
                 // Skip if already paused (control-state already set the correct status)
+                // 收到暂停 request，workflow 将在下一个检查点暂停。
+                // 若已处于暂停状态则跳过（control-state 已设置正确状态）。
                 if (state.isPaused) return;
                 addStatusMessage((event as any).message || "Pausing at next checkpoint...", "workflow.pausing");
             } else if (event.type === "workflow.paused") {
@@ -491,9 +519,12 @@ const runSlice = createSlice({
 
             // Handle TOOL_INVOKED - browser tool execution started
             // This is the actual event from backend (not TOOL_STARTED)
+            // 处理 TOOL_INVOKED——浏览器 tool 开始执行。
+            // 这是后端的实际 event（不是 TOOL_STARTED）。
             if (event.type === "TOOL_INVOKED") {
                 const toolEvent = event as any;
                 // Extract tool name - backend sends flat or nested under payload
+                // 提取 tool 名——后端可能平铺发送，也可能嵌套在 payload 下。
                 const toolName = toolEvent.payload?.tool || toolEvent.tool ||
                     (toolEvent.message?.match(/^(\w+):/)?.[1]) ||
                     "browser_action";
@@ -518,9 +549,12 @@ const runSlice = createSlice({
 
             // Handle TOOL_OBSERVATION - browser tool result received
             // This contains the actual result (screenshot, extracted data, errors)
+            // 处理 TOOL_OBSERVATION——收到浏览器 tool 结果。
+            // 其中包含实际结果（截图、提取的数据、错误）。
             if (event.type === "TOOL_OBSERVATION") {
                 const toolEvent = event as any;
                 // Backend sends data flat (tool, success, output) or nested under payload
+                // 后端会平铺发送数据（tool、success、output），或嵌套在 payload 下。
                 const obs = toolEvent.payload || toolEvent;
                 const toolName = obs.tool || state.currentTool || "browser_action";
 
@@ -628,6 +662,8 @@ const runSlice = createSlice({
             // ── Swarm state tracking ──────────────────────────────────────
             // Auto-initialize swarm state when swarm events arrive (fixes race
             // condition where TASKLIST_UPDATED replays before setSwarmMode)
+            // Swarm 状态跟踪。
+            // 收到 swarm event 时自动初始化 swarm 状态（修复 TASKLIST_UPDATED 在 setSwarmMode 之前重放导致的竞态条件）。
             if (!state.swarm && (event.type === "TASKLIST_UPDATED" || event.type === "TEAM_RECRUITED")) {
                 state.swarm = { tasks: [], agentRegistry: {}, nextColorIndex: 0, leadStatus: "" };
                 state.swarmMode = true;
@@ -675,6 +711,9 @@ const runSlice = createSlice({
             // The user's agent selection (via dropdown) is authoritative. Session loading already
             // restores historical agent selection when loading a session. Auto-updating here would
             // override the user's explicit choice when they switch modes for follow-up messages.
+            // 注意：我们有意不根据 WORKFLOW_STARTED event 自动更新 selectedAgent。
+            // 用户通过下拉框选择的 agent 才是权威来源。加载 session 时已经会恢复历史 agent 选择。
+            // 若在此自动更新，会在用户为后续消息切换模式时覆盖其显式选择。
 
             // Add timeline metadata for better display
             if (event.type === "WORKFLOW_STARTED" ||
@@ -691,6 +730,9 @@ const runSlice = createSlice({
             // Helper to identify intermediate sub-agent outputs that should only appear in timeline/agent trace
             // Per backend guidance: Don't show synthesis messages during streaming - wait for WORKFLOW_COMPLETED
             // The authoritative final answer is fetched via API after completion (fetchFinalOutput)
+            // 用于识别只应出现在时间线/Agent Trace 中的中间子代理输出。
+            // 按后端约定：流式过程中不显示 synthesis 消息——等待 WORKFLOW_COMPLETED。
+            // 权威最终答案在完成后通过 API 获取（fetchFinalOutput）。
             const isIntermediateSubAgent = (agentId: string | undefined): boolean => {
                 // Empty agent_id is treated as final output (simple responses from non-research tasks)
                 if (!agentId) return false;
@@ -725,6 +767,8 @@ const runSlice = createSlice({
 
             // Skip intermediate sub-agent outputs (timeline only, not conversation)
             // Exception: title_generator completed events need to pass through to set sessionTitle
+            // 跳过中间子代理输出（仅时间线，不进入对话）。
+            // 例外：title_generator 的 completed event 需要透传，以设置 sessionTitle。
             if ((event.type === "thread.message.delta" || event.type === "thread.message.completed" || event.type === "LLM_OUTPUT")
                 && isIntermediateSubAgent(event.agent_id)
                 && !(event.type === "thread.message.completed" && event.agent_id === "title_generator")) {
@@ -757,6 +801,8 @@ const runSlice = createSlice({
 
                 // Find the last streaming assistant message (NOT the generating placeholder - keep that visible)
                 // We search from the end because it should be recent
+                // 查找最后一条流式 assistant 消息（不是生成中的占位消息——占位消息保持可见）。
+                // 从末尾向前搜索，因为它通常是最近的。
                 let streamingMsgIndex = -1;
 
                 for (let i = state.messages.length - 1; i >= 0; i--) {
@@ -770,11 +816,17 @@ const runSlice = createSlice({
                 // seq identifies the specific SSE event (unique per delta)
                 // For message ID: use stream_id to identify which message to append to
                 // For delta dedup: use seq (CRITICAL: stream_id is per-message, not per-delta!)
+                // stream_id 标识消息/流（同一条消息的所有 delta 中保持不变）。
+                // seq 标识具体的 SSE event（每个 delta 唯一）。
+                // 消息 ID：用 stream_id 判断追加到哪条消息。
+                // delta 去重：用 seq（关键：stream_id 是每条消息的，不是每个 delta 的！）。
                 const streamId = deltaEvent.stream_id || `msg-${Date.now()}`;
                 const uniqueId = `stream-${event.workflow_id}-${streamId}`;
 
                 // Delta dedup: only check the target streaming message's processed list (O(m) not O(n*m))
                 // _processedDeltas only exists on the streaming message, not all messages
+                // delta 去重：只检查目标流式消息自己的已处理列表（O(m) 而非 O(n*m)）。
+                // _processedDeltas 只存在于流式消息上，不是所有消息都有。
                 const processedSet = streamingMsgIndex !== -1
                     ? new Set(state.messages[streamingMsgIndex]._processedDeltas || [])
                     : new Set<number>();
@@ -808,6 +860,9 @@ const runSlice = createSlice({
                         // Track processed delta seqs to prevent duplicate append on replay
                         // Only track if we have a seq (CRITICAL: use seq, not stream_id!)
                         // Cap to last 100 entries to prevent unbounded memory growth
+                        // 记录已处理的 delta seq，防止重放时重复追加。
+                        // 仅在存在 seq 时记录（关键：用 seq，不要用 stream_id！）。
+                        // 上限 100 条，避免内存无限增长。
                         _processedDeltas: updatedProcessed,
                     };
                 } else {
@@ -974,6 +1029,8 @@ const runSlice = createSlice({
 
                         // Cross-path dedup: LLM_OUTPUT uses different ID format ({agentId}-...)
                         // Check if same content already exists for this task
+                        // 跨路径去重：LLM_OUTPUT 使用不同的 ID 格式（{agentId}-...）。
+                        // 检查该 task 是否已存在相同内容。
                         const hasEquivalentFromLLM = state.messages.some((m: any) =>
                             m.taskId === event.workflow_id &&
                             m.role === "assistant" &&
@@ -1019,6 +1076,9 @@ const runSlice = createSlice({
                 // Per backend guidance: synthesis outputs during streaming are intermediate
                 // The final answer is fetched via API after WORKFLOW_COMPLETED
                 // Only show simple-agent outputs directly (non-research tasks)
+                // 按后端约定：流式过程中的 synthesis 输出属于中间结果。
+                // 最终答案在 WORKFLOW_COMPLETED 后通过 API 获取。
+                // 仅直接显示 simple-agent 的输出（非研究类 task）。
                 const isSynthesisAgent = ["synthesis", "streaming_synthesis"].includes(event.agent_id || "");
                 const isFinalOutput = event.agent_id === "final_output";
 
@@ -1028,6 +1088,10 @@ const runSlice = createSlice({
                 // Content is in event.message (not payload.text)
                 // Note: payload.tokens_used is NOT stored here to avoid double-counting
                 // Full metadata (citations, costs, usage) comes from API call after completion
+                // 处理 final_output event——后端给出的权威最终答案。
+                // 内容在 event.message 中（不是 payload.text）。
+                // 注意：此处不存储 payload.tokens_used，以免重复计数。
+                // 完整 metadata（引用、成本、用量）来自完成后的 API 调用。
                 if (isFinalOutput) {
                     const finalContent = llmEvent.message || "";
                     if (finalContent) {
@@ -1075,6 +1139,7 @@ const runSlice = createSlice({
                 }
 
                 // Handle interim_reply from swarm lead — replace in-place, not accumulate
+                // 处理 swarm lead 的 interim_reply——原地替换，而不是累积。
                 if (llmEvent.payload?.interim === true) {
                     const interimContent = llmEvent.message || "";
                     if (interimContent) {
@@ -1110,6 +1175,9 @@ const runSlice = createSlice({
                     // Generate stable ID for deduplication on SSE replay
                     // Use seq if available, otherwise use a composite ID based on content to prevent duplicates
                     // We use agent_id + workflow_id + (seq OR content hash) for a robust unique identifier
+                    // 为 SSE 重放去重生成稳定 ID。
+                    // 优先使用 seq，否则基于内容生成复合 ID 以防止重复。
+                    // 使用 agent_id + workflow_id + (seq 或内容哈希) 作为稳健的唯一标识。
                     const contentIdentifier = content.length > 100 
                         ? `${content.slice(0, 50)}${content.slice(-50)}`.replace(/\s/g, '')
                         : content.replace(/\s/g, '');
@@ -1164,6 +1232,9 @@ const runSlice = createSlice({
                 // If no assistant message and the event has a message/result, add it
                 // Note: WORKFLOW_COMPLETED usually just has "All done", not the actual result
                 // We should ONLY add substantive content, not status messages
+                // 如果没有 assistant 消息且 event 带有 message/result，则添加它。
+                // 注意：WORKFLOW_COMPLETED 通常只有 “All done”，不含实际结果。
+                // 只应添加实质性内容，而不是状态消息。
                 if (!hasAssistantMessage && workflowEvent.message && workflowEvent.message !== "All done") {
                     // Filter out diagnostic/system/status messages that shouldn't appear as conversation content
                     // The actual result will be fetched via fetchFinalOutput from task.result
@@ -1251,6 +1322,8 @@ const runSlice = createSlice({
             } else if (event.type === "REVIEW_USER_FEEDBACK") {
                 // User feedback during HITL review — handled by page.tsx handlers for live,
                 // and by turn loading for historical. Skip here to avoid duplicates.
+                // HITL 评审期间的用户反馈——实时场景由 page.tsx 的处理函数负责，
+                // 历史场景由 turn 加载负责。此处跳过以避免重复。
                 console.log("[Redux] REVIEW_USER_FEEDBACK - skipping (handled by page.tsx)");
             } else if (event.type === "RESEARCH_PLAN_UPDATED") {
                 // Updated research plan from feedback — handled by page.tsx handlers for live,
@@ -1291,6 +1364,7 @@ const runSlice = createSlice({
             // Keep selectedAgent, autoApprove and other preferences persistent across sessions
         },
         // Full reset including user preferences - use on logout/user switch to prevent data leakage
+        // 完整重置（包括用户偏好）——在登出/切换用户时使用，防止数据泄漏。
         resetRunFull: (state) => {
             state.events = [];
             state.messages = [];

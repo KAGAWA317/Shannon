@@ -32,6 +32,7 @@ def test_tool_usage():
     status = client.get_status(handle.task_id)
 
     # Check if result contains evidence of tool usage or computation
+    # 检查结果中是否有 tool 调用或计算的痕迹
     result_ok = status.result and len(status.result) > 0
     has_answer = status.result and ("55" in status.result or "fibonacci" in status.result.lower())
 
@@ -78,6 +79,7 @@ def test_streaming_mode():
     status = client.get_status(handle.task_id)
 
     # Stream is nice to have, but final result is what matters
+    # streaming event 属于加分项，最终结果才是关键
     result_ok = status.result and len(status.result) > 50
     stream_ok = chunks_received > 0
 
@@ -90,6 +92,7 @@ def test_streaming_mode():
     print(f"Result preview: {status.result[:150] if status.result else 'EMPTY'}...")
 
     # Pass if final result exists, even without stream events
+    # 只要有最终结果即算通过，即使没有 streaming event
     return result_ok
 
 def test_openai_compatible_provider():
@@ -137,6 +140,7 @@ def test_provider_content_normalization():
     print("=" * 70)
 
     # Use GPT-5 nano to test content parts normalization
+    # 用 GPT-5 nano 验证 content parts 归一化
     handle = client.submit_task(
         "Explain in 2-3 sentences what machine learning is.",
         model_override="gpt-5-nano-2025-08-07",
@@ -148,6 +152,7 @@ def test_provider_content_normalization():
     status = client.get_status(handle.task_id)
 
     # The fix ensures non-empty results even for longer responses
+    # 该修复确保较长 response 也能返回非空结果
     content_ok = status.result and len(status.result) > 100
     print(f"✅ Status: {status.status}" if status.status == "COMPLETED" else f"❌ Status: {status.status}")
     print(f"✅ Result length: {len(status.result) if status.result else 0}" if content_ok else f"❌ Empty result (content parts bug)")

@@ -12,6 +12,10 @@ import (
 // It is a legacy helper used to build per-task metadata.
 // NOTE: agent_usages emitted here is best-effort and deprecated for external consumption.
 // For complete, authoritative usage and cost breakdowns, use model_breakdown from the token_usage table.
+// AggregateAgentMetadata 从 agent 结果中提取模型、provider 与 token 信息。
+// 它是用于构建按 task metadata 的旧辅助函数。
+// NOTE: 此处产出的 agent_usages 为尽力而为，且已不推荐对外使用。
+// 完整的权威用量与成本明细请使用 token_usage 表的 model_breakdown。
 func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synthesisTokens int) map[string]interface{} {
 	meta := make(map[string]interface{})
 
@@ -20,8 +24,10 @@ func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synt
 	}
 
 	// Find the primary model (from first successful agent or most used model)
+	// 确定主模型（取首个成功 agent 或使用次数最多的模型）
 	var primaryModel string
 	// Track providers reported by agents (prefer real provider over detection)
+	// 记录各 agent 上报的 provider（优先真实 provider 而非探测结果）
 	providerCounts := make(map[string]int)
 	totalInputTokens := 0
 	totalOutputTokens := 0
@@ -93,6 +99,7 @@ func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synt
 	}
 
 	// Use the most frequently used model if available
+	// 若有则使用出现次数最多的模型
 	maxCount := 0
 	for model, count := range modelCounts {
 		if count > maxCount {
@@ -106,6 +113,7 @@ func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synt
 		meta["model"] = primaryModel
 		meta["model_used"] = primaryModel
 		// Prefer the most frequent non-empty provider from agent results; fallback to detection
+		// 优先采用 agent 结果中出现最多的非空 provider；否则回退到探测
 		topProvider := ""
 		maxProv := 0
 		for prov, c := range providerCounts {
@@ -131,6 +139,8 @@ func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synt
 
 	// Add token breakdown
 	// Prefer split tokens when available, fallback to TokensUsed sum
+	// 添加 token 明细
+	// 有拆分数据时优先使用，否则回退到 TokensUsed 之和
 	if totalInputTokens > 0 || totalOutputTokens > 0 {
 		meta["input_tokens"] = totalInputTokens
 		meta["output_tokens"] = totalOutputTokens
@@ -139,10 +149,15 @@ func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synt
 		// cache_aware_total_tokens parallels total_tokens but adds prompt-cache
 		// classes for quota accounting (see migration 121). Synthesis tokens
 		// have no cache component so they only appear in the input+output sum.
+		// cache_aware_total_tokens 与 total_tokens 并列，但额外计入 prompt cache
+		// 类别用于配额统计（见迁移 121）。synthesis token 无 cache 部分，
+		// 因此只出现在 input+output 之和中。
 		meta["cache_aware_total_tokens"] = totalTokens + totalCacheRead + totalCacheCreation
 	} else if totalTokensUsed > 0 {
 		// Fallback: use TokensUsed when splits unavailable
 		// Estimate 60/40 split for input/output
+		// 回退：拆分数据不可用时使用 TokensUsed
+		// 按 60/40 估算 input/output
 		totalTokens := totalTokensUsed + synthesisTokens
 		meta["input_tokens"] = int(float64(totalTokensUsed) * 0.6)
 		meta["output_tokens"] = int(float64(totalTokensUsed) * 0.4)
@@ -151,9 +166,12 @@ func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synt
 	}
 
     // Do not set cost_usd here; server or workflow computes accurately from pricing
+    // 此处不设置 cost_usd；由 server 或 workflow 按定价精确计算
 
 	// Include per-agent usage details when present.
 	// NOTE: agent_usages is deprecated; consumers should prefer model_breakdown.
+	// 存在时附带每个 agent 的用量明细。
+	// NOTE: agent_usages 已废弃；消费方应优先使用 model_breakdown。
 	if len(agentUsages) > 0 {
 		meta["agent_usages"] = agentUsages
 	}
@@ -162,6 +180,7 @@ func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synt
 	if totalToolsInvoked > 0 {
 		meta["tools_invoked"] = totalToolsInvoked
 		// Also include list of unique tools used (sorted for deterministic output)
+		// 同时附带所用 tool 的去重列表（排序以保证输出确定性）
 		tools := make([]string, 0, len(toolNames))
 		for tool := range toolNames {
 			tools = append(tools, tool)

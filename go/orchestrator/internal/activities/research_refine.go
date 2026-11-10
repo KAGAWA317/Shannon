@@ -60,13 +60,16 @@ type RefineResearchQueryResult struct {
 	TargetLanguages    []string            `json:"target_languages,omitempty"`    // Languages to search (e.g., ["en", "zh", "ja"])
 	LocalizedNames       map[string][]string `json:"localized_names,omitempty"`       // Entity names in local languages
 	PrefetchSubpageLimit int                 `json:"prefetch_subpage_limit,omitempty"` // Recommended subpages per domain (5-20, default 15)
+	// 每个 domain 建议抓取的子页数（5-20，默认 15）。
 
 	// HITL: User intent from confirmed_plan (populated only when confirmed_plan exists)
+	// HITL：来自 confirmed_plan 的用户意图，仅在 confirmed_plan 存在时填充。
 	PriorityFocus   []string    `json:"priority_focus,omitempty"`   // Areas user wants deep research
 	SecondaryFocus  []string    `json:"secondary_focus,omitempty"`  // Areas for adequate coverage
 	SkipAreas       []string    `json:"skip_areas,omitempty"`       // Areas user explicitly excluded
 	UserIntent      *UserIntent `json:"user_intent,omitempty"`      // Structured user intent
 	HITLParseFailed bool        `json:"hitl_parse_failed,omitempty"` // True if HITL plan parsing failed (degraded mode)
+	// HITL plan 解析失败（降级模式）时为 true。
 }
 
 // UserIntent captures the user's research purpose and preferences
@@ -78,10 +81,12 @@ type UserIntent struct {
 
 // RefineResearchQuery expands vague queries into structured research plans
 // This is called before decomposition in ResearchWorkflow to clarify scope.
+// 把模糊 query 扩展为结构化 research plan；在 ResearchWorkflow 中先于 decomposition 调用，用于厘清研究范围。
 func (a *Activities) RefineResearchQuery(ctx context.Context, in RefineResearchQueryInput) (*RefineResearchQueryResult, error) {
 	logger := activity.GetLogger(ctx)
 
 	// HITL mode: if confirmed_plan exists, parse it into structured output
+	// HITL 模式：若存在 confirmed_plan，直接解析为结构化输出，跳过常规 refinement。
 	if confirmedPlan, ok := in.Context["confirmed_plan"].(string); ok && confirmedPlan != "" {
 		logger.Info("RefineResearchQuery: HITL mode - parsing confirmed_plan",
 			"plan_length", len(confirmedPlan),
@@ -270,18 +275,21 @@ Constraints:
 - Provide disambiguation terms to avoid entity mix-ups.`, in.Query)
 
 	// Prepare request body. Role should be passed via context, not top-level.
+	// role 必须经 context 传入，不能放在顶层字段。
 	ctxMap := in.Context
 	if ctxMap == nil {
 		ctxMap = map[string]any{}
 	}
 	ctxMap["role"] = "research_refiner"
 	// Request JSON-structured output when provider supports it; non-supporting providers will ignore
+	// request JSON 结构化输出：支持该能力的 provider 生效，不支持的会直接忽略。
 	ctxMap["response_format"] = map[string]any{"type": "json_object"}
 
 	reqBody := map[string]any{
 		"query":      refinementPrompt,
 		"context":    ctxMap,
 		"max_tokens": 8192, // Refinement produces structured JSON output; 4096 default can truncate
+		// refinement 输出结构化 JSON，默认 4096 会截断，故加大到 8192。
 	}
 
 	body, err := json.Marshal(reqBody)
@@ -291,6 +299,7 @@ Constraints:
 	}
 
 	// HTTP client with workflow interceptor for tracing
+	// 带 workflow interceptor 的 HTTP client，用于 tracing。
 	client := &http.Client{
 		Timeout:   300 * time.Second,
 		Transport: interceptors.NewWorkflowHTTPRoundTripper(nil),
@@ -300,11 +309,13 @@ Constraints:
 
 	// Retry logic for transient failures (immediate retries, no backoff to avoid workflow non-determinism)
 	// Note: Backoff delays should be handled at workflow level via RetryPolicy instead
+	// 瞬时失败立即 retry、不做 backoff，避免 workflow 非确定性；backoff 交由 workflow 层的 RetryPolicy 处理。
 	maxRetries := 3
 	var resp *http.Response
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		// Create request for each attempt (body needs to be reset)
+		// 每次 attempt 都重建 request（body 需重置）。
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 		if err != nil {
 			ometrics.RefinementErrors.Inc()
@@ -348,6 +359,7 @@ Constraints:
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			// Client error (4xx) - don't retry
+			// 4xx 客户端错误不 retry。
 			resp.Body.Close()
 			ometrics.RefinementErrors.Inc()
 			return nil, fmt.Errorf("LLM service returned status %d", resp.StatusCode)
@@ -374,6 +386,7 @@ Constraints:
 	}
 
 	// Parse JSON from response (strip markdown fences if present)
+	// 解析 response 中的 JSON，存在 markdown 代码围栏时先剥离。
 	responseText := llmResp.Response
 	responseText = strings.TrimSpace(responseText)
 	if strings.HasPrefix(responseText, "```json") {
@@ -405,10 +418,12 @@ Constraints:
 		LocalizationNeeded bool                `json:"localization_needed"`
 		TargetLanguages    []string            `json:"target_languages"`
 		// Use interface{} to flexibly handle both map[string]string and map[string][]string
+		// 用 interface{} 兼容 map[string]string 与 map[string][]string 两种返回形态。
 		LocalizedNames interface{} `json:"localized_names"`
 	}
 	if err := json.Unmarshal([]byte(responseText), &refinedData); err != nil {
 		// If JSON parsing fails, fallback to using original query
+		// JSON 解析失败则降级为原始 query，保证 workflow 不中断。
 		a.logger.Warn("Failed to parse refinement JSON, using original query",
 			zap.Error(err),
 			zap.String("response", llmResp.Response),
@@ -439,6 +454,7 @@ Constraints:
 
 	// Convert LocalizedNames from interface{} to map[string][]string
 	// LLM may return either map[string]string or map[string][]string
+	// LLM 可能返回 map[string]string 或 map[string][]string，统一归一化为 map[string][]string。
 	localizedNames := make(map[string][]string)
 	if refinedData.LocalizedNames != nil {
 		if rawMap, ok := refinedData.LocalizedNames.(map[string]interface{}); ok {
@@ -483,6 +499,7 @@ Constraints:
 	}
 
 	// Tiny fallback: if canonical_name is empty, derive from the first exact_queries entry (strip quotes)
+	// 兜底：canonical_name 为空时取首个 exact_queries，并去掉外层引号。
 	if result.CanonicalName == "" && len(result.ExactQueries) > 0 {
 		candidate := result.ExactQueries[0]
 		// Remove surrounding quotes if present (e.g., "\"Acme Analytics\"")
@@ -506,6 +523,7 @@ Constraints:
 }
 
 // removeURLs strips URLs/domains to reduce false English detections when the query contains links.
+// 去掉 URL/domain，避免 query 中的链接导致语言检测误判为英文。
 func removeURLs(text string) string {
 	cleaned := urlRegex.ReplaceAllString(text, "")
 	cleaned = wwwRegex.ReplaceAllString(cleaned, "")
@@ -514,6 +532,7 @@ func removeURLs(text string) string {
 }
 
 // detectLanguage performs simple heuristic language detection based on character ranges
+// 基于字符区间做简单的启发式语言检测。
 func detectLanguage(query string) string {
 	if query == "" {
 		return "English"
@@ -521,6 +540,7 @@ func detectLanguage(query string) string {
 
 	cleanedQuery := removeURLs(query)
 	// If URL/domain stripping leaves any text, prefer it even if it's short (e.g. "总结https://...").
+	// 剥离 URL 后仍有文本就用它，即使很短（如 "总结https://..."）。
 	if strings.TrimSpace(cleanedQuery) != "" {
 		query = cleanedQuery
 	}
@@ -559,6 +579,7 @@ func detectLanguage(query string) string {
 		for _, r := range query {
 			if r >= 0x4E00 && r <= 0x9FFF {
 				hanzi++ // Pure CJK ideographs (shared by Chinese/Japanese)
+				// 纯 CJK 表意字符（中文/日文共用）。
 			}
 			if r >= 0x3040 && r <= 0x309F {
 				hiragana++
@@ -576,8 +597,10 @@ func detectLanguage(query string) string {
 		japaneseKana := hiragana + katakana
 		if japaneseKana > 0 {
 			// Compare hanzi vs kana ratio: Chinese text may contain Japanese company names
+			// 比较 hanzi 与 kana 比例：中文文本里可能夹着日文公司名。
 			if hanzi > japaneseKana*2 {
 				return "Chinese" // Hanzi dominant, likely Chinese with Japanese terms
+				// hanzi 占优，判定为中文（夹带日文术语）。
 			}
 			return "Japanese"
 		}
@@ -607,6 +630,7 @@ func detectLanguage(query string) string {
 	}
 
 	// Default to English for Latin scripts (most common for research queries)
+	// Latin 字符默认按英文处理（research query 中最常见）。
 	return "English"
 }
 
@@ -646,6 +670,7 @@ func validateLanguageDetection(query string, detectedLang string, logger log.Log
 			"detected", detectedLang,
 		)
 		return 0.3 // Low confidence for unusual input
+		// 输入异常时给低置信度。
 	}
 
 	// Calculate confidence based on character distribution
@@ -692,12 +717,14 @@ func validateLanguageDetection(query string, detectedLang string, logger log.Log
 		}
 	default:
 		confidence = 0.5 // Medium confidence for unknown language
+		// 未知语言给中等置信度。
 		logger.Warn("Language detection: unknown language detected",
 			"detected", detectedLang,
 		)
 	}
 
 	// Warn if too many "other" characters (numbers, punctuation, special chars)
+	// "other" 字符（数字、标点、特殊符号）占比过高时告警并降权。
 	if total > 0 && float64(other)/float64(total+other) > 0.5 {
 		logger.Warn("Language detection: high proportion of non-linguistic characters",
 			"other_percent", float64(other)/float64(total+other),
@@ -709,6 +736,7 @@ func validateLanguageDetection(query string, detectedLang string, logger log.Log
 }
 
 // refineWithHITL parses a confirmed_plan from HITL review into structured output
+// 把 HITL review 通过的 confirmed_plan 解析为结构化输出。
 func (a *Activities) refineWithHITL(ctx context.Context, in RefineResearchQueryInput, confirmedPlan string) (*RefineResearchQueryResult, error) {
 	logger := activity.GetLogger(ctx)
 
@@ -861,6 +889,7 @@ Return ONLY a JSON object:
 	}
 
 	// Extract JSON from response (may have markdown fences)
+	// 从 response 中截取 JSON，容忍 markdown 代码围栏。
 	jsonStr := llmResp.Response
 	if start := strings.Index(jsonStr, "{"); start != -1 {
 		if end := strings.LastIndex(jsonStr, "}"); end != -1 {
@@ -888,6 +917,7 @@ Return ONLY a JSON object:
 			"response", truncateStr(llmResp.Response, 200),
 		)
 		// Degraded mode: use original query with empty HITL fields, mark as failed
+		// 降级模式：退回原始 query，HITL 字段留空并标记解析失败。
 		result.RefinedQuery = in.Query
 		result.Rationale = "HITL parsing failed, using original query (degraded mode)"
 		result.HITLParseFailed = true
@@ -911,6 +941,7 @@ Return ONLY a JSON object:
 	result.ResearchDimensions = parsed.ResearchDimensions
 
 	// Generate research_dimensions from priority/secondary if not provided
+	// 未提供 research_dimensions 时，用 priority/secondary focus 兜底生成。
 	if len(result.ResearchDimensions) == 0 && (len(result.PriorityFocus) > 0 || len(result.SecondaryFocus) > 0) {
 		for _, area := range result.PriorityFocus {
 			result.ResearchDimensions = append(result.ResearchDimensions, ResearchDimension{

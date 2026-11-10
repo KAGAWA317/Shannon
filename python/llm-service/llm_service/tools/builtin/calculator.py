@@ -1,5 +1,6 @@
 """
 Calculator Tool - Safe mathematical expression evaluation
+Calculator tool——安全的数学表达式求值
 """
 
 import ast
@@ -14,6 +15,7 @@ from ...config import Settings
 
 
 # Safe operators for expression evaluation
+# 用于表达式求值的安全运算符
 SAFE_OPERATORS = {
     ast.Add: operator.add,
     ast.Sub: operator.sub,
@@ -27,6 +29,7 @@ SAFE_OPERATORS = {
 }
 
 # Safe math functions
+# 安全的数学函数
 SAFE_FUNCTIONS = {
     "abs": abs,
     "round": round,
@@ -52,7 +55,9 @@ SAFE_FUNCTIONS = {
 class CalculatorTool(Tool):
     """
     Safe calculator that can evaluate mathematical expressions.
+    可对数学表达式求值的安全计算器。
     Uses AST parsing to ensure safety - no arbitrary code execution.
+    使用 AST 解析保证安全——不会执行任意代码。
     """
 
     def __init__(self):
@@ -68,6 +73,7 @@ class CalculatorTool(Tool):
             author="Shannon",
             requires_auth=False,
             rate_limit=self.settings.calculator_rate_limit,  # Configurable via CALCULATOR_RATE_LIMIT env var
+            # 可通过 CALCULATOR_RATE_LIMIT 环境变量配置
             timeout_seconds=5,
             memory_limit_mb=64,
             sandboxed=True,
@@ -99,15 +105,18 @@ class CalculatorTool(Tool):
     ) -> ToolResult:
         """
         Safely evaluate mathematical expression
+        安全地对数学表达式求值
         """
         expression = kwargs["expression"]
         precision = kwargs.get("precision", 6)
 
         try:
             # Parse and evaluate the expression safely
+            # 安全地解析并求值表达式
             result = self._safe_eval(expression)
 
             # Format the result based on precision
+            # 按 precision 格式化结果
             if isinstance(result, float):
                 if precision == 0:
                     result = int(round(result))
@@ -138,21 +147,27 @@ class CalculatorTool(Tool):
     def _safe_eval(self, expression: str) -> Any:
         """
         Safely evaluate a mathematical expression using AST parsing.
+        使用 AST 解析安全地对数学表达式求值。
         Only allows mathematical operations, no arbitrary code execution.
+        仅允许数学运算，不执行任意代码。
         """
         # Parse the expression into an AST
+        # 将表达式解析为 AST
         try:
             node = ast.parse(expression, mode="eval")
         except SyntaxError as e:
             raise ValueError(f"Invalid expression syntax: {e}")
 
         # Evaluate the AST safely
+        # 安全地求值 AST
         return self._eval_node(node.body)
 
     def _eval_node(self, node: ast.AST) -> Any:
         """
         Recursively evaluate an AST node.
+        递归求值 AST 节点。
         Only allows safe operations.
+        仅允许安全操作。
         """
         if isinstance(node, ast.Constant):  # Python 3.8+
             return node.value
@@ -160,17 +175,21 @@ class CalculatorTool(Tool):
             return node.n
         elif isinstance(node, ast.Name):
             # Allow only safe constants and functions
+            # 仅允许安全的常量和函数
             if node.id in SAFE_FUNCTIONS:
                 value = SAFE_FUNCTIONS[node.id]
                 # If it's a constant (like pi or e), return the value directly
+                # 若是常量（如 pi 或 e），直接返回其值
                 if not callable(value):
                     return value
                 # If it's a function, return it for later calling
+                # 若是函数，则返回供后续调用
                 return value
             else:
                 raise ValueError(f"Unknown variable or function: {node.id}")
         elif isinstance(node, ast.BinOp):
             # Binary operations like +, -, *, /
+            # 二元运算，如 +、-、*、/
             if type(node.op) not in SAFE_OPERATORS:
                 raise ValueError(f"Unsafe operator: {type(node.op).__name__}")
             left = self._eval_node(node.left)
@@ -178,12 +197,14 @@ class CalculatorTool(Tool):
             return SAFE_OPERATORS[type(node.op)](left, right)
         elif isinstance(node, ast.UnaryOp):
             # Unary operations like -, +
+            # 一元运算，如 -、+
             if type(node.op) not in SAFE_OPERATORS:
                 raise ValueError(f"Unsafe unary operator: {type(node.op).__name__}")
             operand = self._eval_node(node.operand)
             return SAFE_OPERATORS[type(node.op)](operand)
         elif isinstance(node, ast.Call):
             # Function calls
+            # 函数调用
             if isinstance(node.func, ast.Name):
                 func_name = node.func.id
                 if func_name not in SAFE_FUNCTIONS:
@@ -195,9 +216,11 @@ class CalculatorTool(Tool):
                 raise ValueError("Complex function calls not allowed")
         elif isinstance(node, ast.List):
             # Lists for functions like sum(), min(), max()
+            # 供 sum()、min()、max() 等函数使用的列表
             return [self._eval_node(elem) for elem in node.elts]
         elif isinstance(node, ast.Tuple):
             # Tuples
+            # 元组
             return tuple(self._eval_node(elem) for elem in node.elts)
         else:
             raise ValueError(f"Unsafe node type: {type(node).__name__}")
@@ -206,6 +229,7 @@ class CalculatorTool(Tool):
 class StatisticalCalculatorTool(Tool):
     """
     Advanced statistical calculations
+    高级统计计算
     """
 
     def _get_metadata(self) -> ToolMetadata:
@@ -256,6 +280,7 @@ class StatisticalCalculatorTool(Tool):
     ) -> ToolResult:
         """
         Perform statistical calculation
+        执行统计计算
         """
         import statistics
 
@@ -267,6 +292,7 @@ class StatisticalCalculatorTool(Tool):
 
         try:
             # Ensure all values are numeric
+            # 确保所有值均为数值
             numeric_data = [float(x) for x in data]
 
             result = None

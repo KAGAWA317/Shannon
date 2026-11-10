@@ -10,6 +10,7 @@ import (
 )
 
 // Test that CheckTokenBudgetWithBackpressure returns appropriate delay value without blocking
+// 验证 CheckTokenBudgetWithBackpressure 在不阻塞的情况下返回合适的 delay 值
 func TestCheckTokenBudgetWithBackpressure_ReturnsDelayValue(t *testing.T) {
 	mgr := budget.NewBudgetManager(nil, zap.NewNop())
 	acts := NewBudgetActivitiesWithManager(mgr, zap.NewNop())
@@ -18,6 +19,7 @@ func TestCheckTokenBudgetWithBackpressure_ReturnsDelayValue(t *testing.T) {
 	sessionID := "s-delay"
 
 	// Configure session budget so a modest estimate crosses 80%
+	// 配置 session budget，使适度的估算值越过 80%
 	mgr.SetSessionBudget(sessionID, &budget.TokenBudget{
 		TaskBudget:        1000,
 		SessionBudget:     1000,
@@ -26,6 +28,7 @@ func TestCheckTokenBudgetWithBackpressure_ReturnsDelayValue(t *testing.T) {
 	})
 
 	// This request projects usage to exactly 80% (800/1000)
+	// 该 request 的预计使用率恰好为 80%（800/1000）
 	in := BudgetCheckInput{
 		UserID:          userID,
 		SessionID:       sessionID,
@@ -45,13 +48,17 @@ func TestCheckTokenBudgetWithBackpressure_ReturnsDelayValue(t *testing.T) {
 	}
 
 	// Activity should NOT block - it returns immediately with delay value for workflow to handle
+	// Activity 不应阻塞——立即返回 delay 值，由 workflow 处理等待
 	// This ensures Temporal workers are not blocked
+	// 这样可确保 Temporal worker 不被阻塞
 	if elapsed > 50*time.Millisecond {
 		t.Fatalf("activity should return immediately without blocking, but took %v", elapsed)
 	}
 
 	// Verify delay value is correct for 80% usage
+	// 验证 80% 使用率下 delay 值正确
 	// Based on calculateBackpressureDelay: 80-85% returns 50ms
+	// 依据 calculateBackpressureDelay：80-85% 返回 50ms
 	expectedDelay := 50 // milliseconds
 	if res.BackpressureDelay != expectedDelay {
 		t.Fatalf("expected delay = %dms for 80%% usage, got %dms", expectedDelay, res.BackpressureDelay)
@@ -59,7 +66,9 @@ func TestCheckTokenBudgetWithBackpressure_ReturnsDelayValue(t *testing.T) {
 }
 
 // Pure cache hits (zero input/output but cache_read or cache_creation > 0)
+// 纯 cache 命中（input/output 为零，但 cache_read 或 cache_creation > 0）
 // must be recorded so quota accounting can bill prompt-cache cost.
+// 也必须记录，以便 quota 计费能计入 prompt-cache 成本。
 func TestShouldRecordUsage_PureCacheHitNotSkipped(t *testing.T) {
 	cases := []struct {
 		name                                      string
@@ -91,6 +100,7 @@ func TestShouldRecordUsage_PureCacheHitNotSkipped(t *testing.T) {
 }
 
 // Test that circuit breaker in open state blocks requests via activity
+// 验证 circuit breaker 处于 open 状态时会通过 activity 拦截 request
 func TestCheckTokenBudgetWithCircuitBreaker_OpenBlocks(t *testing.T) {
 	mgr := budget.NewBudgetManager(nil, zap.NewNop())
 	acts := NewBudgetActivitiesWithManager(mgr, zap.NewNop())

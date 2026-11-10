@@ -4,6 +4,9 @@ Unit tests for the LiteLLM gateway provider.
 Unit tests run without external dependencies by mocking ``litellm.acompletion``.
 Live integration tests live in a separate scratch script and are not part of
 the suite.
+
+单元测试通过 mock ``litellm.acompletion`` 运行，不依赖外部服务；
+真实联调用例放在单独的脚本里，不属于本测试套件。
 """
 
 from __future__ import annotations
@@ -27,7 +30,11 @@ from llm_provider.litellm_provider import LiteLLMProvider
 
 
 def _make_provider(extra_config: Dict[str, Any] | None = None) -> LiteLLMProvider:
-    """Build a LiteLLMProvider with a minimal valid config."""
+    """Build a LiteLLMProvider with a minimal valid config.
+
+    最小可用配置：两个模型分别覆盖 large / small 两个 tier，
+    并带上价格字段以便校验成本估算。
+    """
     config: Dict[str, Any] = {
         "name": "litellm",
         "models": {
@@ -60,7 +67,10 @@ def _completion_response(
     completion_tokens: int = 5,
     tool_calls: List[Dict[str, str]] | None = None,
 ) -> SimpleNamespace:
-    """Build a mock OpenAI-shaped response from ``litellm.acompletion``."""
+    """Build a mock OpenAI-shaped response from ``litellm.acompletion``.
+
+    伪造 litellm 返回的 OpenAI 结构（choices / usage / message），供 complete() 消费。
+    """
 
     usage = SimpleNamespace(
         prompt_tokens=prompt_tokens,
@@ -110,7 +120,11 @@ def _stream_chunk(
     finish_reason: str | None = None,
     usage: Dict[str, Any] | None = None,
 ) -> SimpleNamespace:
-    """Build one streaming chunk. ``usage`` may include cache fields nested as needed."""
+    """Build one streaming chunk. ``usage`` may include cache fields nested as needed.
+
+    构造单个 stream delta；没有任何内容且没有 finish_reason 时不出 choices，
+    用来模拟只带 usage 的收尾 chunk。
+    """
     delta = SimpleNamespace(
         content=content,
         reasoning_content=reasoning,
@@ -204,6 +218,7 @@ class TestLiteLLMInitialization(unittest.TestCase):
         self.assertEqual(provider.default_kwargs.get("num_retries"), 3)
         self.assertEqual(provider.default_kwargs.get("timeout"), 120)
         # default still preserved
+        # 用户自定义 kwargs 只做增量合并，默认值仍要保留
         self.assertIs(provider.default_kwargs.get("drop_params"), True)
 
     def test_missing_models_raises(self):
@@ -252,6 +267,7 @@ class TestRequestKwargs(unittest.TestCase):
 
     def test_zero_temperature_forwarded(self):
         # Edge case — must not fall through `if request.temperature:` truthy gate.
+        # 边界情况：0.0 是合法温度，不能被 `if request.temperature:` 判假而丢掉
         provider = _make_provider()
         request = CompletionRequest(
             messages=[{"role": "user", "content": "hi"}],
@@ -401,7 +417,11 @@ class TestStreamComplete(unittest.TestCase):
 
     def test_openai_style_separate_usage_chunk(self):
         """Azure / OpenAI with stream_options=include_usage emits a trailing
-        usage-only chunk. We yield content text, then a single usage dict."""
+        usage-only chunk. We yield content text, then a single usage dict.
+
+        Azure / OpenAI 开启 stream_options=include_usage 时，会在 stream 末尾追加一个
+        只带 usage 的 chunk；这里先吐文本，最后再吐一个 usage dict。
+        """
         provider = _make_provider()
         request = CompletionRequest(
             messages=[{"role": "user", "content": "count"}],
@@ -422,6 +442,7 @@ class TestStreamComplete(unittest.TestCase):
             request,
         )
         # 3 text deltas + 1 usage dict
+        # 3 个文本 delta，加 1 个 usage dict
         text_items = [x for x in items if isinstance(x, str)]
         usage_items = [x for x in items if isinstance(x, dict)]
         self.assertEqual(text_items, ["1", ", 2", ", 3"])
@@ -429,7 +450,10 @@ class TestStreamComplete(unittest.TestCase):
         self.assertEqual(usage_items[0]["usage"]["total_tokens"], 8)
 
     def test_anthropic_style_inline_usage(self):
-        """Anthropic via LiteLLM attaches usage on the last content chunk."""
+        """Anthropic via LiteLLM attaches usage on the last content chunk.
+
+        Anthropic 经 LiteLLM 会把 usage 挂在最后一个带内容的 chunk 上，
+        所以不能假设 usage 一定单独成块。"""
         provider = _make_provider()
         request = CompletionRequest(
             messages=[{"role": "user", "content": "count"}],
@@ -456,6 +480,7 @@ class TestStreamComplete(unittest.TestCase):
         usage_items = [x for x in items if isinstance(x, dict)]
         self.assertEqual(text_items, ["1", ", 2", ", 3"])
         # Exactly one usage dict — no duplicate
+        # usage 只能上报一次，不能重复累加
         self.assertEqual(len(usage_items), 1)
         self.assertEqual(usage_items[0]["usage"]["input_tokens"], 5)
         self.assertEqual(usage_items[0]["usage"]["output_tokens"], 3)
@@ -525,10 +550,15 @@ class TestCountTokens(unittest.TestCase):
 # The first round of this provider missed six correctness behaviors that
 # openai_provider / anthropic_provider already had. The tests below pin the
 # fixes so we don't regress.
+# 第一版 provider 漏掉了 6 个 openai_provider / anthropic_provider 早已具备的
+# 正确性行为；下面这些用例把修复点钉住，防止回退。
 
 
 class TestAliasResolution(unittest.TestCase):
-    """Fix #6: cost lookup must use the configured alias, not the model_id."""
+    """Fix #6: cost lookup must use the configured alias, not the model_id.
+
+    成本查询必须用配置里的 alias：价格表按 alias 索引，直接用 model_id 查不到价格，
+    算出来就是 0。"""
 
     def test_resolve_alias_returns_alias_when_model_id_matches(self):
         provider = LiteLLMProvider(
@@ -555,7 +585,9 @@ class TestAliasResolution(unittest.TestCase):
         self.assertEqual(provider._resolve_alias(unknown), unknown)
 
     def test_complete_uses_alias_for_cost(self):
-        """Cost must be non-zero when only an alias maps to the runtime model_id."""
+        """Cost must be non-zero when only an alias maps to the runtime model_id.
+
+        只有 alias 能对上运行时 model_id 时，成本仍必须非零。"""
         provider = LiteLLMProvider(
             {
                 "name": "litellm",
@@ -588,11 +620,14 @@ class TestAliasResolution(unittest.TestCase):
 
         out = asyncio.run(run())
         # 1k input @ $0.003/1k + 500 output @ $0.015/1k = $0.0105
+        # 1000 输入 token × $0.003/1k + 500 输出 token × $0.015/1k
         self.assertGreater(out.usage.estimated_cost, 0.0)
 
 
 class TestTimeoutForwarding(unittest.TestCase):
-    """Fix #4: ModelConfig.timeout must reach litellm.acompletion."""
+    """Fix #4: ModelConfig.timeout must reach litellm.acompletion.
+
+    timeout 要一路透传到 litellm.acompletion，否则长 request 不受配置控制。"""
 
     def test_default_timeout_is_60(self):
         provider = _make_provider()
@@ -614,7 +649,10 @@ class TestTimeoutForwarding(unittest.TestCase):
 
 class TestContentExtraction(unittest.TestCase):
     """Fix #5: thinking-model responses where content is empty must surface
-    via reasoning_content / output / thinking fallbacks."""
+    via reasoning_content / output / thinking fallbacks.
+
+    thinking 模型可能把正文放在 reasoning_content 里、content 为空，
+    必须按 reasoning_content / output / thinking 依次兜底，不能返回空串。"""
 
     def test_falls_back_to_reasoning_content_when_content_empty(self):
         provider = _make_provider()
@@ -672,7 +710,10 @@ class TestContentExtraction(unittest.TestCase):
 
 class TestCacheTokenParsing(unittest.TestCase):
     """Fix #3: parse Anthropic cache_creation per-TTL fields plus OpenAI
-    prompt_tokens_details.cached_tokens fallback."""
+    prompt_tokens_details.cached_tokens fallback.
+
+    cache token 解析：Anthropic 走 cache_creation 的 5m / 1h 分档字段，
+    OpenAI 走 prompt_tokens_details.cached_tokens 兜底。"""
 
     def test_anthropic_cache_creation_5m_and_1h(self):
         from llm_provider.litellm_provider import _cache_tokens
@@ -747,7 +788,10 @@ class TestCacheTokenParsing(unittest.TestCase):
 
 
 class TestStreamingToolCalls(unittest.TestCase):
-    """Fix #1 + #2: streaming tool_calls accumulation and final meta payload."""
+    """Fix #1 + #2: streaming tool_calls accumulation and final meta payload.
+
+    streaming 场景的两件事：tool_calls 的分片 delta 要拼回完整调用，
+    最后还要吐一个带齐 cost / cache / finish_reason 的 meta payload。"""
 
     def _run_stream(self, provider, request, chunks):
         async def go():
@@ -786,6 +830,7 @@ class TestStreamingToolCalls(unittest.TestCase):
         self.assertIsNotNone(meta)
         self.assertEqual(meta["function_call"]["name"], "get_weather")
         # Arguments reassembled from the two fragments.
+        # 参数由两个 delta 片段拼接成完整 JSON
         self.assertEqual(meta["function_call"]["arguments"], '{"city":"Tokyo"}')
         self.assertEqual(meta["function_calls"][0]["id"], "call_abc")
 

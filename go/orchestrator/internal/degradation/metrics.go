@@ -7,6 +7,7 @@ import (
 
 var (
 	// degradationEventsTotal tracks degradation events
+	// degradationEventsTotal 统计 degradation event 数量
 	degradationEventsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "shannon_degradation_events_total",
@@ -16,6 +17,7 @@ var (
 	)
 
 	// currentDegradationLevel tracks current system degradation level
+	// currentDegradationLevel 记录当前系统的 degradation 级别
 	currentDegradationLevel = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "shannon_degradation_level",
@@ -24,6 +26,7 @@ var (
 	)
 
 	// dependencyHealthStatus tracks individual dependency health
+	// dependencyHealthStatus 记录各依赖项的健康状态
 	dependencyHealthStatus = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "shannon_dependency_health",
@@ -33,6 +36,7 @@ var (
 	)
 
 	// fallbackBehaviorExecuted tracks when fallback behaviors are triggered
+	// fallbackBehaviorExecuted 统计 fallback 行为被触发的次数
 	fallbackBehaviorExecuted = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "shannon_fallback_behavior_total",
@@ -42,6 +46,7 @@ var (
 	)
 
 	// modeDowngradeEvents tracks when workflow modes are downgraded
+	// modeDowngradeEvents 统计 workflow mode 被降级的次数
 	modeDowngradeEvents = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "shannon_mode_downgrade_total",
@@ -51,6 +56,7 @@ var (
 	)
 
 	// partialResultsReturned tracks when partial results are returned instead of failures
+	// partialResultsReturned 统计以 partial results 代替失败返回的次数
 	partialResultsReturned = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "shannon_partial_results_total",
@@ -70,6 +76,7 @@ func RecordDependencyHealth(dependency string, healthy bool) {
 }
 
 // RecordCircuitBreakerHealth updates dependency health based on circuit breaker state
+// RecordCircuitBreakerHealth 依据 circuit breaker 状态更新依赖健康度（open 记为不健康）
 func RecordCircuitBreakerHealth(dependency string, isOpen bool) {
 	value := 1.0
 	if isOpen {

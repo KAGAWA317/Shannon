@@ -52,6 +52,8 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	// - Per-task retry limits (3 max) prevent infinite loops
 	// - Failure threshold (50%+1) provides intelligent abort criteria
 	// - See docs/timeout-retry-strategy.md for full details
+	// timeout 策略：不设整体 workflow timeout（复杂 task 可能跑数小时甚至数天）；
+	// 用单个 task retry 上限（3 次）防止死循环，用失败阈值（50%+1）作为中止判据。
 
 	// Determine workflow ID for event streaming
 	// Use parent workflow ID if this is a child workflow, otherwise use own ID
@@ -477,6 +479,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 
 	// Build a set of topics actually produced by this plan to avoid waiting
 	// on dependencies that will never be satisfied.
+	// 先算出本计划实际会产出的 topic 集合，避免等待永远不会被满足的依赖。
 	producesSet := make(map[string]struct{})
 	for _, s := range decomp.Subtasks {
 		for _, t := range s.Produces {
@@ -555,6 +558,8 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 		// Go bool can't distinguish "unset" from "false", so we can't safely opt-out
 		// based on NeedsAttachments. Cost optimization happens at the Swarm layer
 		// (Lead's skip_attachments) where the LLM explicitly opts out per-agent.
+		// 所有 subtask agent 默认收到附件：Go 的 bool 无法区分"未设置"与 false，
+		// 因此不能安全地按 NeedsAttachments 关闭；成本优化放在 Swarm 层（Lead 的 skip_attachments）由 LLM 显式选择。
 		if workflow.GetVersion(ctx, "roles_v1", workflow.DefaultVersion, 1) != workflow.DefaultVersion {
 			// Preserve incoming role by default; allow LLM-specified agent_types to override
 			baseRole := "generalist"
@@ -644,6 +649,8 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 
 		// P2P Coordination: wait on declared Consumes topics before starting this subtask
 		// Only enabled if P2PCoordinationEnabled is true in config and decomposition has valid Produces/Consumes
+		// P2P 协调：启动 subtask 前先等待其声明的 Consumes topic；
+		// 仅当配置开启 P2PCoordinationEnabled 且分解结果含合法 Produces/Consumes 时生效。
 		var p2pConfig activities.WorkflowConfig
 		if err := workflow.ExecuteActivity(ctx, activities.GetWorkflowConfig).Get(ctx, &p2pConfig); err != nil {
 			logger.Warn("Failed to load P2P config, skipping coordination", "error", err)
@@ -728,6 +735,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 					sel := workflow.NewSelector(ctx)
 					sel.AddReceive(ch, func(c workflow.ReceiveChannel, more bool) {})
 					// Exponential backoff to reduce polling frequency
+					// 用 topic channel + 指数退避定时器做 selector 等待，降低轮询频率。
 					timer := workflow.NewTimer(ctx, backoff)
 					sel.AddFuture(timer, func(f workflow.Future) {})
 					sel.Select(ctx)
@@ -1166,6 +1174,8 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	// Check if the decomposition included a synthesis/summarization subtask
 	// This commonly happens when users request specific output formats (e.g., "summarize in Chinese")
 	// Following SOTA patterns: if decomposition includes synthesis, use that instead of duplicating
+	// 分解结果中常含"总结/合成"subtask（用户要求特定输出格式时尤甚）；
+	// 按 SOTA 做法：已有合成 subtask 就直接用其结果，不再重复合成。
 	hasSynthesisSubtask := false
 	var synthesisTaskIdx int
 
@@ -1224,6 +1234,8 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 		// - No citations exist (citations require re-synthesis for inline formatting)
 		// - The response is substantial (not a placeholder)
 		// - Tokens were consumed (LLM actually ran)
+		// 仅当无引用（引用需重新合成才能生成行内标注）、response 足够充实（非占位符）、
+		// 且确实消耗了 token（LLM 真的跑过）时，才直接采用合成 subtask 的结果。
 		synthesisResult := childResults[synthesisTaskIdx]
 		const minSynthesisResponseLen = 100
 
@@ -1340,6 +1352,8 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 			// Use cited report and rebuild Sources with correct Used inline/Additional labels
 			// The new report has [n] markers, so FormatReportWithCitations will correctly
 			// identify which citations were actually used inline
+			// 用带引用的报告重建 Sources 段：新报告含 [n] 标注，
+			// FormatReportWithCitations 才能正确区分"行内引用"与"附加来源"。
 			citationsList := ""
 			if v, ok := ctxForSynth["available_citations"].(string); ok {
 				citationsList = v
@@ -1483,6 +1497,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	}
 
 	// Memory extraction is swarm-only — removed from SupervisorWorkflow.
+	// 用户记忆抽取仅在 swarm 中执行，SupervisorWorkflow 已移除该步骤。
 
 	// Check pause/cancel before completion
 	if err := controlHandler.CheckPausePoint(ctx, "pre_completion"); err != nil {

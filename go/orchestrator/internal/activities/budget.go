@@ -283,6 +283,10 @@ func detectProviderFromModel(model string) string {
 //  4. the call read or wrote prompt cache (whose cost must still be billed
 //     even if input+output happen to be zero — the failure mode we're
 //     guarding against here is the cache leak).
+// 判断是否落一条 token_usage 记录，满足任一条件即记录：
+// 1) 消耗了 input/output token；2) 调用方要求零 token 审计（record_zero_token）；
+// 3) 有 tool 成本需要归集；4) 读写过 prompt cache——即使 input+output 为 0 也必须计费，
+// 这里防的失败模式正是 cache 成本漏记。
 func shouldRecordUsage(inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens int, recordZeroToken, hasToolCosts bool) bool {
 	if (inputTokens + outputTokens) > 0 {
 		return true
@@ -408,6 +412,8 @@ func (b *BudgetActivities) ExecuteAgentWithBudget(ctx context.Context, input Bud
 	// Treat empty output with no tokens/tools as a failure and skip recording unless explicitly requested
 	// Check for tool cost entries before early exits — these must be recorded
 	// even if the LLM call produced zero tokens (e.g., provider error).
+	// 无输出且无 token、无 tool 调用时视为失败并跳过记录，除非显式要求；
+	// 但先检查 tool_cost_entries——即使 LLM 调用产生零 token（如 provider 报错），tool 成本也必须记录。
 	hasToolCosts := result.Metadata != nil &&
 		func() bool { _, ok := result.Metadata["tool_cost_entries"].([]interface{}); return ok }()
 
@@ -430,6 +436,8 @@ func (b *BudgetActivities) ExecuteAgentWithBudget(ctx context.Context, input Bud
 	// audit flag, no tool costs, AND no prompt-cache activity. Pure cache hits
 	// (cache_read>0 or cache_creation>0 with zero input/output) must still be
 	// recorded for accurate quota accounting.
+	// 仅在确实无事发生时跳过记录：input/output 为零、无审计标记、无 tool 成本，且无 prompt cache activity；
+	// 纯 cache 命中（cache_read 或 cache_creation > 0 而 input/output 为 0）仍需记录，以保证配额计量准确。
 	if !shouldRecordUsage(inputTokens, outputTokens, result.CacheReadTokens, result.CacheCreationTokens, recordZeroToken, hasToolCosts) {
 		b.logger.Warn("Skipping token usage record: zero tokens, no cache, no tool costs, no audit flag",
 			zap.String("agent_id", input.AgentInput.AgentID),
@@ -463,6 +471,9 @@ func (b *BudgetActivities) ExecuteAgentWithBudget(ctx context.Context, input Bud
 	//   - gRPC path (executeAgentCore): from ExecuteTaskResponse.metadata proto field
 	// Note: streaming path (runStreaming) does not carry metadata, but agents with
 	// tools always use the unary path (useStreaming=false when tools are present).
+	// 记录 metadata 中的外部 tool 成本。两条路径都会填充 metadata：
+	// HTTP 路径（ExecuteAgentWithForcedTools）来自 Python agent response，gRPC 路径来自 ExecuteTaskResponse.metadata；
+	// streaming 路径不携带 metadata，但有 tool 时总走 unary（useStreaming=false）。
 	if result.Metadata != nil {
 		if rawEntries, ok := result.Metadata["tool_cost_entries"].([]interface{}); ok {
 			for i, raw := range rawEntries {

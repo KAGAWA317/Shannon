@@ -211,6 +211,7 @@ func (ds *DefaultStrategy) GetFallbackBehavior(operation string) FallbackBehavio
 
 	default:
 		// Conservative default - proceed with warnings
+		// 保守的默认行为：继续执行并附带警告
 		return BehaviorProceed
 	}
 }

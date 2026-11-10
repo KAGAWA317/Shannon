@@ -1,4 +1,6 @@
-"""Tests for role-aware agent protocol generation."""
+"""Tests for role-aware agent protocol generation.
+角色感知 agent 协议生成的测试。
+"""
 
 import pytest
 from llm_service.roles.swarm.agent_protocol import get_work_protocol, COMMON_PROTOCOL_BASE
@@ -55,7 +57,9 @@ class TestGetWorkProtocol:
         assert "web_fetch" in cr_proto
 
     def test_financial_analyst_uses_analyst_protocol(self):
-        """financial_analyst must use ANALYST protocol (compute pipeline), not RESEARCH."""
+        """financial_analyst must use ANALYST protocol (compute pipeline), not RESEARCH.
+        financial_analyst 必须使用 ANALYST 协议（计算流水线），而不是 RESEARCH。
+        """
         protocol = get_work_protocol("financial_analyst")
         assert "python_executor" in protocol, \
             "financial_analyst must have python_executor in its protocol (analyst pipeline)"
@@ -63,48 +67,65 @@ class TestGetWorkProtocol:
             "financial_analyst must have analyst compute pipeline, not research search pipeline"
 
     def test_writer_has_explicit_mapping(self):
-        """writer role should have an explicit mapping in _ROLE_PROTOCOL_MAP, not fall through."""
+        """writer role should have an explicit mapping in _ROLE_PROTOCOL_MAP, not fall through.
+        writer 角色应在 _ROLE_PROTOCOL_MAP 中有显式映射，而不是走回退逻辑。
+        """
         from llm_service.roles.swarm.agent_protocol import _ROLE_PROTOCOL_MAP
         assert "writer" in _ROLE_PROTOCOL_MAP, "writer must be explicitly mapped, not a fallback"
 
     def test_writer_gets_general_work_protocol(self):
-        """writer role should get the general work protocol (includes writing workflow)."""
+        """writer role should get the general work protocol (includes writing workflow).
+        writer 角色应获得通用 work protocol（包含写作 workflow）。
+        """
         protocol = get_work_protocol("writer")
         assert "Adaptive approach" in protocol
 
 
 class TestPythonExecutorProtocol:
-    """Tests for python_executor execution model and path rules in agent protocol."""
+    """Tests for python_executor execution model and path rules in agent protocol.
+    agent 协议中 python_executor 执行模型与路径规则的测试。
+    """
 
     def test_python_executor_isolation_warning(self):
-        """Agent protocol must warn that each python_executor call is isolated."""
+        """Agent protocol must warn that each python_executor call is isolated.
+        agent 协议必须提示每次 python_executor 调用都是隔离的。
+        """
         protocol = get_work_protocol("analyst")
         assert "ISOLATED" in protocol or "isolated" in protocol, \
             "Protocol must warn that python_executor calls are isolated (no shared state)"
 
     def test_python_executor_no_custom_imports(self):
-        """Agent protocol must forbid importing custom modules."""
+        """Agent protocol must forbid importing custom modules.
+        agent 协议必须禁止导入自定义模块。
+        """
         protocol = get_work_protocol("analyst")
         assert "NEVER import custom modules" in protocol, \
             "Protocol must explicitly forbid custom module imports in python_executor"
 
     def test_python_executor_workspace_prefix(self):
-        """Agent protocol must require /workspace/ prefix for file I/O in python_executor."""
+        """Agent protocol must require /workspace/ prefix for file I/O in python_executor.
+        agent 协议必须要求 python_executor 中的文件 I/O 使用 /workspace/ 前缀。
+        """
         protocol = get_work_protocol("analyst")
         assert "/workspace/" in protocol, \
             "Protocol must specify /workspace/ prefix for python_executor file I/O"
 
     def test_module_not_found_error_recovery(self):
-        """Error recovery must cover ModuleNotFoundError."""
+        """Error recovery must cover ModuleNotFoundError.
+        错误恢复必须覆盖 ModuleNotFoundError。
+        """
         protocol = get_work_protocol("researcher")
         assert "ModuleNotFoundError" in protocol, \
             "Error recovery must address ModuleNotFoundError (inline-only stdlib)"
 
     def test_wasi_stack_overflow_recovery(self):
         """Error recovery must cover WASI stack overflow from recursive code.
+        错误恢复必须覆盖递归代码导致的 WASI 栈溢出。
 
         Root cause: WASI sandbox has much lower stack limit than normal Python.
         Agent tried recursive quicksort 15 times without knowing to switch to iterative.
+        根本原因：WASI sandbox 的栈上限远低于普通 Python。
+        agent 曾连续 15 次尝试递归快排，却不知道要改用迭代实现。
         """
         protocol = get_work_protocol("analyst")
         assert "recursion" in protocol.lower() or "recursive" in protocol.lower(), \
@@ -113,7 +134,9 @@ class TestPythonExecutorProtocol:
             "Protocol must suggest iterative alternative when recursion fails"
 
     def test_analyst_output_standard(self):
-        """Analyst protocol must require both CSV data and MD summary."""
+        """Analyst protocol must require both CSV data and MD summary.
+        analyst 协议必须同时要求 CSV 数据与 MD 摘要。
+        """
         protocol = get_work_protocol("analyst")
         assert "CSV" in protocol or "csv" in protocol, \
             "Analyst protocol must mention CSV output requirement"
@@ -126,9 +149,16 @@ class TestPythonExecutorProtocol:
         Root cause: LLM follows the nearest instruction. If os.makedirs is only in
         FILE RULES (100+ lines away), LLM skips it when writing python_executor code
         from the analyst OUTPUT STANDARD section.
+
+        analyst 的 OUTPUT STANDARD 必须把 os.makedirs 内联在 CSV 保存指令旁。
+
+        根本原因：LLM 会遵循距离最近的指令。如果 os.makedirs 只出现在
+        FILE RULES 中（相隔 100+ 行），当 LLM 依据 analyst 的 OUTPUT STANDARD
+        段落编写 python_executor 代码时会跳过它。
         """
         protocol = get_work_protocol("analyst")
         # os.makedirs must appear IN the output standard section, not just in FILE RULES
+        # os.makedirs 必须出现在 output standard 段落内，而不只是在 FILE RULES 中
         output_std_start = protocol.find("OUTPUT STANDARD")
         assert output_std_start > 0, "OUTPUT STANDARD section must exist"
         output_std_section = protocol[output_std_start:output_std_start + 500]
@@ -136,14 +166,18 @@ class TestPythonExecutorProtocol:
             "os.makedirs must be inlined in OUTPUT STANDARD, not just FILE RULES"
 
     def test_financial_analyst_has_output_standard(self):
-        """financial_analyst must also have the analyst output standard."""
+        """financial_analyst must also have the analyst output standard.
+        financial_analyst 也必须具备 analyst 的输出标准。
+        """
         protocol = get_work_protocol("financial_analyst")
         assert "Both files are REQUIRED" in protocol, \
             "financial_analyst must inherit analyst output standard"
 
 
 class TestGeneralistRolePrompt:
-    """Test that generalist role has actual guidance."""
+    """Test that generalist role has actual guidance.
+    验证 generalist 角色确实带有实际指导内容。
+    """
 
     def test_generalist_prompt_not_empty(self):
         from llm_service.roles.swarm.role_prompts import SWARM_ROLE_PROMPTS

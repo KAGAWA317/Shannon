@@ -17,6 +17,7 @@ import (
 )
 
 // Client is a minimal Qdrant HTTP client
+// Client 是最简的 Qdrant HTTP 客户端
 type Client struct {
 	cfg   Config
 	http  *http.Client
@@ -86,6 +87,7 @@ type qdrantSearchResponse struct {
 }
 
 // qdrantQueryResponse for the /points/query endpoint which has nested structure
+// qdrantQueryResponse 对应 /points/query 端点的嵌套结构
 type qdrantQueryResponse struct {
 	Result struct {
 		Points []qdrantPoint `json:"points"`
@@ -104,6 +106,7 @@ func (c *Client) search(ctx context.Context, collection string, vec []float32, l
 	defer span.End()
 
 	// Prefer modern /points/query; on failure, fallback to /points/search for compatibility
+	// 优先使用较新的 /points/query；失败时回退到 /points/search 以保持兼容
 	var thr *float64
 	if threshold > 0 {
 		thr = &threshold
@@ -159,6 +162,7 @@ func (c *Client) search(ctx context.Context, collection string, vec []float32, l
 		return qr.Result, nil
 	}
 	// Try to decode as query response first (nested structure)
+	// 先尝试按 query response 解析（嵌套结构）
 	var qr qdrantQueryResponse
 	if err := json.NewDecoder(resp.Body).Decode(&qr); err != nil {
 		ometrics.RecordVectorSearchMetrics(collection, "error", time.Since(start).Seconds())
@@ -169,6 +173,7 @@ func (c *Client) search(ctx context.Context, collection string, vec []float32, l
 }
 
 // Upsert inserts or updates one or more points into a collection
+// Upsert 向集合中插入或更新一个或多个 point
 func (c *Client) Upsert(ctx context.Context, collection string, points []UpsertItem) (*UpsertResponse, error) {
 	if c == nil || !c.cfg.Enabled {
 		return nil, fmt.Errorf("vectordb: upsert called while disabled")
@@ -205,6 +210,7 @@ func (c *Client) Upsert(ctx context.Context, collection string, points []UpsertI
 }
 
 // UpsertTaskEmbedding helper for inserting a query/answer embedding into TaskEmbeddings collection
+// UpsertTaskEmbedding 把查询/答案的 embedding 写入 TaskEmbeddings 集合的辅助函数
 func (c *Client) UpsertTaskEmbedding(ctx context.Context, vec []float32, payload map[string]interface{}) (*UpsertResponse, error) {
 	p := UpsertItem{
 		ID:      uuid.New().String(),
@@ -216,6 +222,8 @@ func (c *Client) UpsertTaskEmbedding(ctx context.Context, vec []float32, payload
 
 // UpsertSummaryEmbedding inserts a summary into the configured summaries collection
 // Falls back to TaskEmbeddings if Summaries collection is not configured.
+// UpsertSummaryEmbedding 把摘要写入配置的 summaries 集合
+// 未配置 Summaries 集合时回退到 TaskEmbeddings。
 func (c *Client) UpsertSummaryEmbedding(ctx context.Context, vec []float32, payload map[string]interface{}) (*UpsertResponse, error) {
 	collection := c.cfg.Summaries
 	if collection == "" {
@@ -231,12 +239,15 @@ func (c *Client) UpsertSummaryEmbedding(ctx context.Context, vec []float32, payl
 
 // GetSessionContextSemanticByEmbedding performs semantic search filtered by session ID
 // This method accepts a pre-computed embedding to keep the vectordb layer independent of embeddings service
+// GetSessionContextSemanticByEmbedding 按 session ID 过滤做语义检索
+// 该方法接收预先算好的 embedding，使 vectordb 层不依赖 embeddings 服务
 func (c *Client) GetSessionContextSemanticByEmbedding(ctx context.Context, embedding []float32, sessionID string, tenantID string, limit int, threshold float64) ([]ContextItem, error) {
 	if c == nil || !c.cfg.Enabled {
 		return nil, nil
 	}
 
 	// Build Qdrant-compliant filter with "must" clauses
+	// 构建符合 Qdrant 规范的 "must" 条件过滤器
 	mustClauses := []map[string]interface{}{
 		{
 			"key": "session_id",
@@ -247,6 +258,7 @@ func (c *Client) GetSessionContextSemanticByEmbedding(ctx context.Context, embed
 	}
 
 	// Add tenant filter if provided (for future multi-tenancy)
+	// 提供了 tenant 时加上租户过滤（为将来多租户预留）
 	if tenantID != "" {
 		mustClauses = append(mustClauses, map[string]interface{}{
 			"key": "tenant_id",
@@ -262,6 +274,7 @@ func (c *Client) GetSessionContextSemanticByEmbedding(ctx context.Context, embed
 	}
 
 	// Use provided limit or fall back to config
+	// 使用传入的 limit，否则回退到配置值
 	topK := limit
 	if topK <= 0 {
 		topK = c.cfg.TopK
@@ -277,11 +290,13 @@ func (c *Client) GetSessionContextSemanticByEmbedding(ctx context.Context, embed
 	items := make([]ContextItem, 0, len(points))
 	for _, point := range points {
 		// Add point ID to payload for deduplication
+		// 把 point ID 加入 payload 以便去重
 		payload := point.Payload
 		if payload == nil {
 			payload = make(map[string]interface{})
 		}
 		// Include Qdrant point ID for strong deduplication
+		// 带上 Qdrant point ID 以实现强去重
 		if point.ID != nil {
 			payload["_point_id"] = fmt.Sprintf("%v", point.ID)
 		}
@@ -304,12 +319,14 @@ func (c *Client) GetSessionContextSemanticByEmbedding(ctx context.Context, embed
 }
 
 // SearchSummaries performs semantic search in the summaries collection
+// SearchSummaries 在 summaries 集合中做语义检索
 func (c *Client) SearchSummaries(ctx context.Context, embedding []float32, sessionID string, tenantID string, limit int, threshold float64) ([]ContextItem, error) {
 	if c == nil || !c.cfg.Enabled || c.cfg.Summaries == "" {
 		return nil, nil
 	}
 
 	// Build Qdrant-compliant filter with "must" clauses
+	// 构建符合 Qdrant 规范的 "must" 条件过滤器
 	mustClauses := []map[string]interface{}{
 		{
 			"key": "session_id",
@@ -335,6 +352,7 @@ func (c *Client) SearchSummaries(ctx context.Context, embedding []float32, sessi
 	}
 
 	// Use provided limit or fall back to config
+	// 使用传入的 limit，否则回退到配置值
 	topK := limit
 	if topK <= 0 {
 		topK = 3 // Default to 3 summaries
@@ -350,11 +368,13 @@ func (c *Client) SearchSummaries(ctx context.Context, embedding []float32, sessi
 	items := make([]ContextItem, 0, len(points))
 	for _, point := range points {
 		// Add point ID to payload for deduplication
+		// 把 point ID 加入 payload 以便去重
 		payload := point.Payload
 		if payload == nil {
 			payload = make(map[string]interface{})
 		}
 		// Include Qdrant point ID for strong deduplication
+		// 带上 Qdrant point ID 以实现强去重
 		if point.ID != nil {
 			payload["_point_id"] = fmt.Sprintf("%v", point.ID)
 		}
@@ -377,12 +397,14 @@ func (c *Client) SearchSummaries(ctx context.Context, embedding []float32, sessi
 }
 
 // SearchDecompositionPatterns performs semantic search in the decomposition_patterns collection filtered by session
+// SearchDecompositionPatterns 在 decomposition_patterns 集合中按 session 做语义检索
 func (c *Client) SearchDecompositionPatterns(ctx context.Context, embedding []float32, sessionID string, tenantID string, limit int, threshold float64) ([]ContextItem, error) {
 	if c == nil || !c.cfg.Enabled {
 		return nil, nil
 	}
 
 	// Build Qdrant filter for session (and optional tenant)
+	// 构建按 session（及可选 tenant）的 Qdrant 过滤器
 	mustClauses := []map[string]interface{}{
 		{
 			"key": "session_id",
@@ -409,6 +431,7 @@ func (c *Client) SearchDecompositionPatterns(ctx context.Context, embedding []fl
 	}
 
 	// Hardcode collection name for now to keep API simple
+	// 暂时写死集合名，以保持 API 简单
 	const collection = "decomposition_patterns"
 	points, err := c.search(ctx, collection, embedding, topK, threshold, filter)
 	if err != nil {

@@ -176,6 +176,7 @@ func (prm *PartialResultsManager) shouldConsiderSuccessful(successCount, totalCo
 		return successRatio >= 0.4
 	default:
 		// Default: need at least 50% success
+		// 默认：成功率至少 50% 才算成功
 		return successRatio >= 0.5
 	}
 }
@@ -284,6 +285,7 @@ func (prm *PartialResultsManager) ShouldReturnPartialResults(
 		return successRatio >= 0.25, nil
 	case LevelSevere:
 		// Severe degradation: return partial if we have any success at all
+		// 严重降级：只要有任意成功就返回 partial result
 		return successCount > 0, nil
 	default:
 		return false, nil

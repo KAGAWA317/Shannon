@@ -59,6 +59,7 @@ func main() {
 	defer logger.Sync()
 
 	// Load feature defaults (non-fatal if missing) and resolve workflow runtime knobs
+	// 加载 feature 默认值（缺失不致命），并解析 workflow 运行时开关。
 	workflowRuntime := cfg.ResolveWorkflowRuntime(nil)
 	if featuresCfg, err := cfg.Load(); err != nil {
 		logger.Warn("Failed to load feature configuration", zap.Error(err))
@@ -118,9 +119,11 @@ func main() {
 	// Bring up Health manager and HTTP endpoints early so they respond
 	// even if later components (Temporal worker, etc.) are still starting.
 	// ------------------------------------------------------------------
+	// 尽早启动 Health manager 与 HTTP 端点，这样即使后续组件（Temporal worker 等）仍在启动，它们也能 response。
 	hm := health.NewManager(logger)
 	healthPort := getEnvOrDefaultInt("HEALTH_PORT", 8081)
 	// Shared HTTP mux for admin endpoints (health, approvals, metrics if desired)
+	// admin 端点共用的 HTTP mux（health、approvals，必要时还有 metrics）。
 	httpMux := http.NewServeMux()
 	// Register health endpoints on shared mux
 	healthHandler := health.NewHTTPHandler(hm, logger)
@@ -175,10 +178,12 @@ func main() {
 		dbChecker := health.NewDatabaseHealthChecker(dbClient.GetDB(), dbClient.Wrapper(), logger)
 		_ = hm.RegisterChecker(dbChecker)
 		// Initialize persistent event store for streaming logs
+		// 初始化用于 streaming 日志的持久化 event 存储。
 		streaming.InitializeEventStore(dbClient, logger)
 	}
 
 	// Start configuration manager (hot-reload) - ASYNC to prevent deadlock
+	// 启动配置管理器（热加载）——异步启动，避免死锁。
 	var shannonCfgMgr *cfg.ShannonConfigManager
 	cfgReady := make(chan struct{})
 	go func() {
@@ -190,6 +195,7 @@ func main() {
 		}
 
 		// Use context with timeout to prevent deadlock
+		// 使用带 timeout 的 context，防止死锁。
 		configCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 
@@ -232,6 +238,7 @@ func main() {
 				// Initialize embedding service and vectordb from Shannon config
 				{
 					// Embeddings - prefer new Embeddings config, fall back to Vector config
+					// Embeddings：优先使用新的 Embeddings 配置，缺失时回退到旧的 Vector 配置。
 					var ecfg embeddings.Config
 
 					// Check if new Embeddings section exists
@@ -285,8 +292,10 @@ func main() {
 					}
 					embeddings.Initialize(ecfg, cache)
 					// Vector DB - auto-enable if configuration is present
+					// Vector DB：配置存在时自动启用。
 					vectorEnabled := shCfg.Vector.Enabled
 					// If vector section is configured with host/port, assume enabled
+					// Vector 段配置了 host/port 时，视为启用。
 					if !vectorEnabled && (shCfg.Vector.Host == "qdrant" || shCfg.Vector.Port == 6333) && shCfg.Vector.TaskEmbeddings != "" {
 						vectorEnabled = true
 						logger.Info("Vector DB auto-enabled due to configuration presence")
@@ -313,6 +322,7 @@ func main() {
 							logger.Warn("Vector DB initialization with validation failed",
 								zap.Error(err))
 							// Fall back to initialization without validation
+							// 回退到不做校验的初始化。
 							vectordb.Initialize(vcfg)
 						}
 					} else {
@@ -389,6 +399,7 @@ func main() {
 			}
 		}
 		// Environment overrides take highest precedence
+		// 环境变量覆盖优先级最高。
 		if v := os.Getenv("WORKFLOW_SYNTH_BYPASS_SINGLE"); v != "" {
 			bypass = cfg.ParseBool(v)
 		}
@@ -396,18 +407,21 @@ func main() {
 	})
 
 	// Start gRPC server early (independent of Temporal readiness) and expose services
+	// 尽早启动 gRPC server（不依赖 Temporal 就绪）并暴露服务。
 	lis, err := net.Listen("tcp", ":50052")
 	if err != nil {
 		logger.Fatal("Failed to listen", zap.Error(err))
 	}
 
 	// Initialize authentication middleware (prefer waiting briefly for config)
+	// 初始化 authentication middleware（尽量短暂等待配置）。
 	var authMiddleware *authpkg.Middleware
 	var authService *authpkg.Service
 	var jwtManager *authpkg.JWTManager
 	var shCfgForAuth *cfg.ShannonConfig
 
 	// Wait for config to be ready (shannonCfgMgr is set in the goroutine)
+	// 等待配置就绪（shannonCfgMgr 在 goroutine 中赋值）。
 	select {
 	case <-cfgReady:
 		// Config is ready, shannonCfgMgr should be set
@@ -423,6 +437,8 @@ func main() {
 		dbx := sqlx.NewDb(dbClient.GetDB(), "postgres")
 		// CRITICAL: Use JWT_SECRET env var if set (must match gateway's JWT_SECRET)
 		// This ensures gateway-signed JWTs can be validated by orchestrator
+		// 关键：若设置了 JWT_SECRET 环境变量则必须使用它（需与 gateway 的 JWT_SECRET 一致），
+		// 这样才能校验 gateway 签发的 JWT。
 		jwtSecret := shCfgForAuth.Auth.JWTSecret
 		if envSecret := os.Getenv("JWT_SECRET"); envSecret != "" {
 			jwtSecret = envSecret
@@ -494,6 +510,7 @@ func main() {
 			}
 
 			// Update endpoints and port from config (only if not already set via env var)
+			// 从配置更新端点和端口（仅在未通过环境变量设置时）。
 			if shCfg.Health.Port > 0 {
 				healthPort = shCfg.Health.Port
 			} else if shCfg.Service.HealthPort > 0 {
@@ -565,10 +582,12 @@ func main() {
 	}
 
 	// Redis v9 client for daemon hub (hoisted for use by Temporal registry)
+	// 供 daemon hub 使用的 Redis v9 客户端（提升到外层，供 Temporal registry 复用）。
 	var v9Client *redisv9.Client
 
 	// Register remaining health checkers now that dependencies are available
 	// Redis checker from session manager
+	// 依赖就绪后注册其余健康检查器：Redis 检查器（来自 session manager）。
 	if orchestratorService != nil && orchestratorService.SessionManager() != nil {
 		if rw := orchestratorService.SessionManager().RedisWrapper(); rw != nil {
 			rc := health.NewRedisHealthChecker(rw.GetClient(), rw, logger)
@@ -602,8 +621,10 @@ func main() {
 	}
 
 	// Agent Core checker (best-effort)
+	// Agent Core 健康检查（尽力而为）。
 	if agentAddr != "" {
 		// Use dns:/// prefix for proper gRPC name resolution
+		// 使用 dns:/// 前缀，让 gRPC 正确解析服务名。
 		target := agentAddr
 		if !strings.Contains(target, "://") {
 			target = "dns:///" + target
@@ -665,6 +686,7 @@ func main() {
 		}
 		orchestratorService.SetTemporalClient(tClient)
 		// Wire Temporal client to streaming services for first-event validation
+		// 把 Temporal client 接到 streaming 服务，用于首个 event 的校验。
 		streamingSvc.SetTemporalClient(tClient)
 		streamingHandler.SetTemporalClient(tClient)
 
@@ -683,6 +705,7 @@ func main() {
 		)
 
 		// Run orphan detection on startup to clean up stale schedule records
+		// 启动时执行孤儿检测，清理残留的 schedule 记录。
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -698,12 +721,14 @@ func main() {
 		}()
 
 		// After Temporal client is ready, start Approvals HTTP API if configured
+		// Temporal client 就绪后，按配置启动 Approvals HTTP API。
 		approvalsToken := getEnvOrDefault("APPROVALS_AUTH_TOKEN", "")
 		// Register approvals endpoint on the shared admin mux (same port as health)
 		httpapi.NewApprovalHandler(tClient, logger, approvalsToken).RegisterRoutes(httpMux)
 		logger.Info("Approvals API registered on admin HTTP server", zap.Int("port", healthPort), zap.String("path", "/approvals/decision"))
 
 		// Register daemon reply signal endpoint (gateway calls this to signal scheduled workflows)
+		// 注册 daemon 回复 signal 端点（gateway 通过它唤醒定时 task 对应的 workflow）。
 		httpapi.NewDaemonSignalHandler(tClient, logger, approvalsToken).RegisterRoutes(httpMux)
 		logger.Info("Daemon signal API registered on admin HTTP server", zap.Int("port", healthPort), zap.String("path", "/daemon/signal"))
 
@@ -732,6 +757,7 @@ func main() {
 					registryConfig.DefaultTaskBudget = shCfg.Session.TokenBudgetPerTask
 				}
 				// Optional: set a session budget heuristic
+				// 可选：设置 session budget 的启发式规则。
 				if shCfg.Session.TokenBudgetPerTask > 0 {
 					registryConfig.DefaultSessionBudget = shCfg.Session.TokenBudgetPerTask * 4
 				}

@@ -31,6 +31,7 @@ func NewHTTPWrapper(client *http.Client, name, service string, logger *zap.Logge
 
 // Do executes an HTTP request through the circuit breaker. 5xx responses are treated as failures
 // for breaker purposes; 4xx do not trip the breaker.
+// 5xx 视为失败并计入 breaker；4xx 不会触发 circuit breaker。
 func (hw *HTTPWrapper) Do(req *http.Request) (*http.Response, error) {
 	var resp *http.Response
 	err := hw.cb.Execute(req.Context(), func() error {
@@ -54,6 +55,7 @@ func (hw *HTTPWrapper) Do(req *http.Request) (*http.Response, error) {
 
 	// If breaker failed due to 5xx classification, still return the underlying response to caller
 	// If err is httpStatusError, we already have a valid resp; return it with nil error
+	// 因 5xx 判定而失败时，仍把底层 response 返回给调用方：此时 resp 有效，错误置 nil。
 	if _, ok := err.(*httpStatusError); ok {
 		return resp, nil
 	}

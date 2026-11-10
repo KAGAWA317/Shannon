@@ -5,10 +5,12 @@ fn test_tool_registry_initialization() {
     let registry = ToolRegistry::new();
 
     // Should have default tools registered
+    // 应已注册默认 tool
     let all_tools = registry.list_all_tools();
     assert!(all_tools.len() >= 3, "Should have at least 3 default tools");
 
     // Check for specific default tools
+    // 检查特定的默认 tool
     let tool_ids: Vec<String> = all_tools.iter().map(|t| t.id.clone()).collect();
     assert!(tool_ids.contains(&"calculator".to_string()));
     assert!(tool_ids.contains(&"web_search".to_string()));
@@ -20,6 +22,7 @@ fn test_tool_discovery_by_query() {
     let registry = ToolRegistry::new();
 
     // Search for calculator
+    // 搜索 calculator
     let request = ToolDiscoveryRequest {
         query: Some("calc".to_string()),
         categories: None,
@@ -38,6 +41,7 @@ fn test_tool_discovery_by_category() {
     let registry = ToolRegistry::new();
 
     // Search by category
+    // 按类别搜索
     let request = ToolDiscoveryRequest {
         query: None,
         categories: Some(vec!["search".to_string()]),
@@ -56,6 +60,7 @@ fn test_exclude_dangerous_tools() {
     let registry = ToolRegistry::new();
 
     // Get all tools including dangerous ones
+    // 获取所有 tool，包括危险 tool
     let request_all = ToolDiscoveryRequest {
         query: None,
         categories: None,
@@ -72,6 +77,7 @@ fn test_exclude_dangerous_tools() {
     );
 
     // Exclude dangerous tools
+    // 排除危险 tool
     let request_safe = ToolDiscoveryRequest {
         query: None,
         categories: None,
@@ -93,6 +99,7 @@ fn test_tool_registration() {
     let registry = ToolRegistry::new();
 
     // Register a new tool
+    // 注册新 tool
     let custom_tool = ToolCapability {
         id: "custom_tool".to_string(),
         name: "Custom Tool".to_string(),
@@ -114,6 +121,7 @@ fn test_tool_registration() {
     registry.register_tool(custom_tool.clone());
 
     // Verify it was registered
+    // 确认已注册
     let retrieved = registry.get_tool("custom_tool");
     assert!(retrieved.is_some());
     assert_eq!(retrieved.unwrap().name, "Custom Tool");
@@ -124,6 +132,7 @@ fn test_max_results_limit() {
     let registry = ToolRegistry::new();
 
     // Get all tools with limit
+    // 带上限获取所有 tool
     let request = ToolDiscoveryRequest {
         query: None,
         categories: None,

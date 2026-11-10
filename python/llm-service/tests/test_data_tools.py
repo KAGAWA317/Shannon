@@ -1,5 +1,6 @@
 """
 Test suite for data processing tools: diff_files and json_query.
+数据处理 tool diff_files 与 json_query 的测试。
 """
 
 import asyncio
@@ -18,25 +19,33 @@ from llm_service.tools.builtin.data_tools import (
 
 # ---------------------------------------------------------------------------
 # Helpers
+# 辅助函数
 # ---------------------------------------------------------------------------
 
 def _run(coro):
-    """Run an async function synchronously for testing."""
+    """Run an async function synchronously for testing.
+    同步运行 async 函数，供测试使用。
+    """
     return asyncio.get_event_loop().run_until_complete(coro)
 
 
 def _make_session(tmp_path):
-    """Create a session context pointing to tmp_path as workspace."""
+    """Create a session context pointing to tmp_path as workspace.
+    构造一个把 tmp_path 当作 workspace 的 session context。
+    """
     return {"session_id": "test-session"}
 
 
 def _env_patch(tmp_path):
-    """Return a patch dict that points workspaces at tmp_path."""
+    """Return a patch dict that points workspaces at tmp_path.
+    返回一个把 workspace 指向 tmp_path 的 patch dict。
+    """
     return {"SHANNON_SESSION_WORKSPACES_DIR": str(tmp_path)}
 
 
 # ---------------------------------------------------------------------------
 # _json_extract unit tests (pure function, no I/O)
+# _json_extract 单元测试（纯函数，无 I/O）
 # ---------------------------------------------------------------------------
 
 class TestJsonExtract:
@@ -74,7 +83,9 @@ class TestJsonExtract:
         assert _json_extract(42, "", 100) == [42]
 
     def test_no_leading_dot(self):
-        """Expression without leading dot should still work."""
+        """Expression without leading dot should still work.
+        表达式不带前导点也应能正常工作。
+        """
         data = {"name": "test"}
         assert _json_extract(data, "name", 100) == ["test"]
 
@@ -186,6 +197,7 @@ class TestDiffFilesTool:
             (ws / "a.txt").write_text("line1\nline2\n")
 
             # Create a file outside the workspace and a symlink inside pointing to it
+            # 在 workspace 之外创建一个文件，并在 workspace 内建一个指向它的软链接
             outside = tmp_path / "outside.txt"
             outside.write_text("secret\n")
             (ws / "link.txt").symlink_to(outside)
@@ -215,6 +227,7 @@ class TestDiffFilesTool:
 
             assert result.success
             # With 0 context lines, output should be minimal
+            # context_lines 为 0 时，输出应尽量精简
             lines = [l for l in result.output.split("\n") if l.startswith("@@")]
             assert len(lines) == 1
 

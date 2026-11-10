@@ -4,6 +4,12 @@ Provides a thin wrapper around the xAI (Grok) REST API which is intentionally
 OpenAI-compatible. We keep the logic simple and reuse the OpenAI chat
 completions surface while accounting for a few xAI-specific quirks (reasoning
 models ignoring certain parameters, etc.).
+
+xAI provider 实现。
+
+对有意保持 OpenAI 兼容的 xAI（Grok）REST API 做一层薄封装。逻辑保持简单，
+复用 OpenAI chat completions 接口，同时处理若干 xAI 特有的怪癖
+（reasoning model 忽略某些参数等）。
 """
 
 from __future__ import annotations
@@ -26,7 +32,10 @@ from .base import (
 
 
 class XAIProvider(LLMProvider):
-    """xAI provider using the OpenAI-compatible chat completions API."""
+    """xAI provider using the OpenAI-compatible chat completions API.
+
+    使用 OpenAI 兼容 chat completions API 的 xAI provider。
+    """
 
     def __init__(self, config: Dict[str, Any]):
         api_key = config.get("api_key") or os.getenv("XAI_API_KEY")
@@ -39,6 +48,7 @@ class XAIProvider(LLMProvider):
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
         self.base_url = base_url
         # Prefer Responses API when set in config or env (XAI_PREFER_RESPONSES=true)
+        # 当 config 或环境变量设置时优先 Responses API（XAI_PREFER_RESPONSES=true）
         try:
             prefer = config.get("prefer_responses")
         except Exception:
@@ -47,6 +57,7 @@ class XAIProvider(LLMProvider):
         self.prefer_responses = bool(prefer) if isinstance(prefer, bool) else prefer_env
 
         # Preserve original config but ensure a provider name for downstream logs
+        # 保留原始 config，但确保 provider 名称存在，供下游日志使用
         effective_config = dict(config)
         effective_config.setdefault("name", "xai")
 
@@ -58,7 +69,10 @@ class XAIProvider(LLMProvider):
             self._add_default_models()
 
     def _add_default_models(self) -> None:
-        """Populate a minimal catalog if models were not provided via config."""
+        """Populate a minimal catalog if models were not provided via config.
+
+        未通过 config 提供 model 时，填充一个最小目录。
+        """
 
         defaults: Dict[str, Dict[str, Any]] = {
             "grok-4-1-fast-non-reasoning": {
@@ -101,7 +115,10 @@ class XAIProvider(LLMProvider):
         return bool(getattr(caps, "supports_reasoning", False))
 
     def _sanitize_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Remove tool_calls and non-string content that xAI API rejects."""
+        """Remove tool_calls and non-string content that xAI API rejects.
+
+        移除 xAI API 会拒绝的 tool_calls 与非字符串 content。
+        """
         sanitized = []
         allowed_roles = {"system", "user", "assistant"}
         for msg in messages:
@@ -109,17 +126,21 @@ class XAIProvider(LLMProvider):
             if role not in allowed_roles:
                 continue
             # xAI Chat API tolerates system, but to maximize compatibility, map system→user with prefix
+            # xAI Chat API 可以容忍 system，但为最大化兼容性，将 system 映射为 user 并加前缀
             mapped_role = "user" if role == "system" else role
             clean_msg = {"role": mapped_role}
 
             # Ensure content is a string - xAI rejects non-string content
+            # 确保 content 为字符串 —— xAI 拒绝非字符串 content
             content = msg.get("content")
             if content is None:
                 continue  # Skip messages with no content
+                # 跳过没有 content 的消息
             elif isinstance(content, str):
                 clean_msg["content"] = content
             elif isinstance(content, list):
                 # Flatten multi-part content to text; degrade attachments to descriptions
+                # 把多段 content 压平为文本；附件降级为描述
                 text_parts = []
                 for part in content:
                     if isinstance(part, dict) and part.get("type") == "shannon_attachment":
@@ -136,12 +157,16 @@ class XAIProvider(LLMProvider):
 
             # xAI rejects messages with tool_calls, function_call, name fields
             # Don't copy these fields over
+            # xAI 拒绝带 tool_calls、function_call、name 字段的消息
+            # 不要复制这些字段
 
             # Drop empty assistant turns that some providers reject
+            # 丢弃部分 provider 会拒绝的空 assistant 轮次
             if mapped_role == "assistant" and not clean_msg.get("content"):
                 continue
             if role == "system":
                 # Prefix system content for clarity after role mapping
+                # 角色映射后给 system 内容加前缀，便于辨识
                 clean_msg["content"] = f"System: {clean_msg['content']}" if clean_msg.get("content") else "System:"
             sanitized.append(clean_msg)
         return sanitized
@@ -156,6 +181,7 @@ class XAIProvider(LLMProvider):
         supports_reasoning = self._supports_reasoning(model_alias)
 
         # Prefer Responses API for reasoning models or when forced via config/env
+        # reasoning model 或 config/env 强制时优先 Responses API
         if supports_reasoning or self.prefer_responses:
             import logging
             logging.getLogger(__name__).info(
@@ -164,6 +190,7 @@ class XAIProvider(LLMProvider):
             return await self._complete_responses_api(request, model_id, model_alias)
 
         # Sanitize messages to remove tool calls and non-string content
+        # 清理消息，移除 tool call 与非字符串 content
         clean_messages = self._sanitize_messages(request.messages)
 
         payload: Dict[str, Any] = {
@@ -177,6 +204,7 @@ class XAIProvider(LLMProvider):
             payload["max_tokens"] = request.max_tokens
 
         # xAI uses tools format (OpenAI-compatible), not functions
+        # xAI 使用 tools 格式（OpenAI 兼容），而非 functions
         if request.functions and model_config.supports_functions:
             # Convert functions to tools format (idempotent if already tools)
             tools: List[Dict[str, Any]] = []
@@ -189,6 +217,7 @@ class XAIProvider(LLMProvider):
                 payload["tools"] = tools
 
             # Convert function_call to tool_choice if provided
+            # 若提供 function_call 则转为 tool_choice
             if request.function_call:
                 if isinstance(request.function_call, str):
                     if request.function_call == "auto":
@@ -202,8 +231,11 @@ class XAIProvider(LLMProvider):
 
         # xAI does not support response_format, user, or seed - omit entirely
         # These fields cause 400 Bad Request
+        # xAI 不支持 response_format、user、seed —— 全部省略
+        # 这些字段会触发 400 Bad Request
 
         # Only send penalty/stop params for non-reasoning models AND only if non-default
+        # 仅对非 reasoning model 发送 penalty/stop 参数，且仅当非默认值
         if not supports_reasoning:
             if request.frequency_penalty != 0.0:
                 payload["frequency_penalty"] = request.frequency_penalty
@@ -219,10 +251,12 @@ class XAIProvider(LLMProvider):
             response = await self.client.chat.completions.create(**payload)
         except Exception as exc:
             # Attempt Responses API fallback before failing
+            # 失败前先尝试回退到 Responses API
             try:
                 return await self._complete_responses_api(request, model_id, model_alias)
             except Exception as resp_exc:
                 # Log the full payload and error details for debugging, then raise original
+                # 记录完整 payload 与错误细节以便调试，然后抛出原始错误
                 import json
                 import logging
                 logger = logging.getLogger(__name__)
@@ -233,6 +267,7 @@ class XAIProvider(LLMProvider):
                 except Exception:
                     logger.error("xAI Chat API error; failed to serialize payload for logs")
                 # Try to extract response body if it's an HTTP error
+                # 若是 HTTP 错误，尝试提取 response body
                 error_detail = str(exc)
                 if hasattr(exc, 'response'):
                     try:
@@ -262,6 +297,7 @@ class XAIProvider(LLMProvider):
                     getattr(usage, "total_tokens", prompt_tokens + completion_tokens)
                 )
                 # xAI prompt caching: cached_tokens nested under prompt_tokens_details
+                # xAI prompt cache：cached_tokens 嵌在 prompt_tokens_details 下
                 details = getattr(usage, "prompt_tokens_details", None)
                 if details is not None:
                     cached_tokens = int(getattr(details, "cached_tokens", 0) or 0)
@@ -324,12 +360,16 @@ class XAIProvider(LLMProvider):
     async def _complete_responses_api(
         self, request: CompletionRequest, model_id: str, model_alias: str
     ) -> CompletionResponse:
-        """Call xAI Responses API and normalize to CompletionResponse."""
+        """Call xAI Responses API and normalize to CompletionResponse.
+
+        调用 xAI Responses API 并归一化为 CompletionResponse。
+        """
         import time
 
         start = time.time()
 
         # Map sanitized messages to Responses input blocks
+        # 将清理后的消息映射为 Responses 的 input block
         inputs: List[Dict[str, Any]] = []
         for msg in self._sanitize_messages(request.messages):
             role = msg.get("role", "user")
@@ -346,6 +386,7 @@ class XAIProvider(LLMProvider):
             params["temperature"] = request.temperature
 
         # Convert functions to Responses API tools shape
+        # 将 functions 转换为 Responses API 的 tools 形状
         if request.functions and self.models.get(model_alias, None) and self.models[model_alias].supports_functions:
             tools: List[Dict[str, Any]] = []
             for fn in request.functions:
@@ -380,6 +421,7 @@ class XAIProvider(LLMProvider):
             raise Exception(f"xAI Responses API error ({self.base_url}): {exc}")
 
         # Extract content and usage
+        # 提取内容与用量
         try:
             raw = response.model_dump()
         except Exception:
@@ -415,6 +457,7 @@ class XAIProvider(LLMProvider):
             output_tokens = int(usage.get("output_tokens", 0))
             total_tokens = int(usage.get("total_tokens", input_tokens + output_tokens))
             # xAI Responses API: cached_tokens nested under input_tokens_details
+            # xAI Responses API：cached_tokens 嵌在 input_tokens_details 下
             details = usage.get("input_tokens_details") or {}
             if isinstance(details, dict):
                 cached_tokens = int(details.get("cached_tokens", 0) or 0)
@@ -455,8 +498,10 @@ class XAIProvider(LLMProvider):
         supports_reasoning = self._supports_reasoning(model_alias)
 
         # Prefer Responses API streaming for reasoning models or when forced
+        # reasoning model 或被强制时优先 Responses API streaming
         if supports_reasoning or getattr(self, "prefer_responses", False):
             # Map sanitized messages to Responses input blocks
+            # 将清理后的消息映射为 Responses 的 input block
             inputs: List[Dict[str, Any]] = []
             for msg in self._sanitize_messages(request.messages):
                 role = msg.get("role", "user")
@@ -473,6 +518,7 @@ class XAIProvider(LLMProvider):
                 params["temperature"] = request.temperature
 
             # Convert functions → tools for Responses
+            # 为 Responses 将 functions 转换为 tools
             if request.functions and model_config.supports_functions:
                 tools: List[Dict[str, Any]] = []
                 for fn in request.functions:
@@ -512,6 +558,7 @@ class XAIProvider(LLMProvider):
                 )
 
         # Sanitize messages to remove tool calls and non-string content
+        # 清理消息，移除 tool call 与非字符串 content
         clean_messages = self._sanitize_messages(request.messages)
 
         payload: Dict[str, Any] = {
@@ -521,12 +568,15 @@ class XAIProvider(LLMProvider):
             "stream": True,
             # Note: xAI does NOT support stream_options parameter (returns 400 error)
             # xAI includes usage data in streaming chunks by default
+            # 注意：xAI 不支持 stream_options 参数（会返回 400 错误）
+            # xAI 默认在 streaming chunk 中包含 usage 数据
         }
 
         if request.max_tokens:
             payload["max_tokens"] = request.max_tokens
 
         # xAI uses tools format (OpenAI-compatible), not functions
+        # xAI 使用 tools 格式（OpenAI 兼容），而非 functions
         if request.functions and model_config.supports_functions:
             # Convert functions to tools format (idempotent if already tools)
             tools: List[Dict[str, Any]] = []
@@ -539,6 +589,7 @@ class XAIProvider(LLMProvider):
                 payload["tools"] = tools
 
             # Convert function_call to tool_choice if provided
+            # 若提供 function_call 则转为 tool_choice
             if request.function_call:
                 if isinstance(request.function_call, str):
                     if request.function_call == "auto":
@@ -551,8 +602,10 @@ class XAIProvider(LLMProvider):
                     payload["tool_choice"] = {"type": "function", "function": request.function_call}
 
         # xAI does not support response_format, user, or seed - omit entirely
+        # xAI 不支持 response_format、user、seed —— 全部省略
 
         # Only send stop for non-reasoning models if provided
+        # 仅对非 reasoning model 在提供时发送 stop
         if not supports_reasoning and request.stop:
             payload["stop"] = (
                 [request.stop] if isinstance(request.stop, str) else request.stop
@@ -562,12 +615,14 @@ class XAIProvider(LLMProvider):
             stream = await self.client.chat.completions.create(**payload)
             async for chunk in stream:
                 # Yield text content if present
+                # 有文本内容时产出
                 if chunk.choices and len(chunk.choices) > 0:
                     delta = chunk.choices[0].delta
                     if delta and getattr(delta, "content", None):
                         yield delta.content
 
                 # Check for usage in the chunk (usually the last one)
+                # 检查 chunk 中的 usage（通常是最后一个）
                 if chunk.usage:
                     yield {
                         "usage": {

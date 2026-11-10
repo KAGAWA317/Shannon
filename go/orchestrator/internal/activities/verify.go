@@ -14,6 +14,7 @@ import (
 )
 
 // VerifyClaimsActivity verifies claims in synthesis against citations
+// VerifyClaimsActivity 依据 citations 校验 synthesis 中的 claims
 func (a *Activities) VerifyClaimsActivity(ctx context.Context, input VerifyClaimsInput) (VerificationResult, error) {
 	logger := a.logger.With(
 		zap.String("activity", "VerifyClaims"),
@@ -22,10 +23,12 @@ func (a *Activities) VerifyClaimsActivity(ctx context.Context, input VerifyClaim
 	logger.Info("Starting claim verification")
 
 	// Prepare request payload (V2 format with three-category classification)
+	// 构造 request payload（V2 格式，采用三分类判定）
 	payload := map[string]interface{}{
 		"answer":    input.Answer,
 		"citations": input.Citations,
 		"use_v2":    true, // Request V2 format with BM25 retrieval and three-category output
+		// request V2 格式，包含 BM25 检索与三分类输出
 	}
 
 	payloadBytes, err := json.Marshal(payload)
@@ -80,9 +83,11 @@ func (a *Activities) VerifyClaimsActivity(ctx context.Context, input VerifyClaim
 
 // ============================================================================
 // Citation V2: VerifyBatch Activity (2 LLM calls: extract + batch)
+// Citation V2：VerifyBatch Activity（2 次 LLM 调用：extract + batch）
 // ============================================================================
 
 // CitationWithIDInput is a citation with a pre-assigned sequential ID for batch verification
+// CitationWithIDInput 是带有预分配顺序 ID 的 citation，用于 batch 校验
 type CitationWithIDInput struct {
 	ID               int     `json:"id"`
 	URL              string  `json:"url"`
@@ -94,6 +99,7 @@ type CitationWithIDInput struct {
 }
 
 // VerifyBatchInput is the input for the VerifyBatch activity
+// VerifyBatchInput 是 VerifyBatch activity 的输入
 type VerifyBatchInput struct {
 	Answer           string                `json:"answer"`
 	Citations        []CitationWithIDInput `json:"citations"`
@@ -101,6 +107,7 @@ type VerifyBatchInput struct {
 }
 
 // VerifyBatchResult is the result of the VerifyBatch activity
+// VerifyBatchResult 是 VerifyBatch activity 的结果
 type VerifyBatchResult struct {
 	Claims            []ClaimMappingInput `json:"claims"`
 	TotalClaims       int                 `json:"total_claims"`
@@ -111,6 +118,8 @@ type VerifyBatchResult struct {
 
 // VerifyBatch calls the /verify_batch endpoint for Citation V2 Deep Research workflow.
 // This endpoint uses 2 LLM calls (extract claims + batch verify) instead of O(claims) calls.
+// VerifyBatch 为 Citation V2 Deep Research workflow 调用 /verify_batch 端点。
+// 该端点只用 2 次 LLM 调用（extract claims + batch verify），而非 O(claims) 次调用。
 func (a *Activities) VerifyBatch(ctx context.Context, input VerifyBatchInput) (VerifyBatchResult, error) {
 	logger := a.logger.With(
 		zap.String("activity", "VerifyBatch"),

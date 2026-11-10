@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Regression test for Rust/Go changes - verify existing features still work"""
+"""Regression test for Rust/Go changes - verify existing features still work
+
+针对 Rust/Go 改动的回归测试：确认既有功能仍然正常。
+"""
 
 import sys
 import os
 
 # Add Shannon SDK to path (relative to this test file)
+# 把 Shannon SDK 加入 path（相对本测试文件）
 sdk_path = os.path.join(os.path.dirname(__file__), '../../clients/python/src')
 sys.path.insert(0, os.path.abspath(sdk_path))
 
@@ -15,7 +19,10 @@ from datetime import datetime
 client = ShannonClient(base_url="http://localhost:8080")
 
 def test_simple_query():
-    """Test 1: Simple math query"""
+    """Test 1: Simple math query
+
+    测试 1：简单数学查询
+    """
     print("=" * 70)
     print("Test 1: Simple Math Query (small tier)")
     print("=" * 70)
@@ -37,7 +44,10 @@ def test_simple_query():
     return result_ok
 
 def test_complex_query():
-    """Test 2: Complex query with longer response"""
+    """Test 2: Complex query with longer response
+
+    测试 2：需要更长回答的复杂查询
+    """
     print("\n" + "=" * 70)
     print("Test 2: Complex Query with Long Response")
     print("=" * 70)
@@ -60,7 +70,10 @@ def test_complex_query():
     return result_ok
 
 def test_session_continuity():
-    """Test 3: Session continuity with multiple turns"""
+    """Test 3: Session continuity with multiple turns
+
+    测试 3：多轮对话的 session 连续性
+    """
     print("\n" + "=" * 70)
     print("Test 3: Session Continuity (3 turns)")
     print("=" * 70)
@@ -69,6 +82,7 @@ def test_session_continuity():
     print(f"Session ID: {session_id}")
 
     # Turn 1
+    # 第一轮
     print("\nTurn 1:")
     h1 = client.submit_task(
         "My favorite color is blue.",
@@ -81,6 +95,7 @@ def test_session_continuity():
     print(f"  Result: {s1.result[:80] if s1.result else 'EMPTY'}...")
 
     # Turn 2 - should reference previous context
+    # 第二轮：应当引用前文 context
     print("\nTurn 2:")
     h2 = client.submit_task(
         "What color did I just tell you about?",
@@ -93,10 +108,12 @@ def test_session_continuity():
     print(f"  Result: {s2.result[:80] if s2.result else 'EMPTY'}...")
 
     # Check if context was maintained
+    # 检查 context 是否保持
     context_ok = s2.result and "blue" in s2.result.lower()
     print(f"\n✅ Context maintained (mentions 'blue')" if context_ok else f"❌ Context NOT maintained (result: {s2.result[:100] if s2.result else 'NONE'}...)")
 
     # Get session history
+    # 读取 session 历史
     try:
         history = client.get_session_history(session_id)
         print(f"✅ Session history: {len(history)} turns" if len(history) >= 2 else f"❌ Session history: {len(history)} turns")
@@ -106,7 +123,10 @@ def test_session_continuity():
         return False
 
 def test_model_tiers():
-    """Test 4: Different model tiers"""
+    """Test 4: Different model tiers
+
+    测试 4：不同的 model tier
+    """
     print("\n" + "=" * 70)
     print("Test 4: Model Tier Selection")
     print("=" * 70)
@@ -130,13 +150,17 @@ def test_model_tiers():
     return all(results)
 
 def test_error_handling():
-    """Test 5: Error handling (invalid session lookup)"""
+    """Test 5: Error handling (invalid session lookup)
+
+    测试 5：错误处理（查询不存在的 session）
+    """
     print("\n" + "=" * 70)
     print("Test 5: Error Handling")
     print("=" * 70)
 
     try:
         # Try to get non-existent session
+        # 尝试读取不存在的 session
         client.get_session("non-existent-session-id-12345")
         print("❌ Should have raised an error for non-existent session")
         return False
@@ -145,6 +169,7 @@ def test_error_handling():
         return True
 
 # Run all tests
+# 依次运行全部测试
 print("\n" + "=" * 70)
 print("REGRESSION TEST SUITE - Post Rust/Go Changes")
 print("=" * 70)
@@ -158,6 +183,7 @@ results = {
 }
 
 # Summary
+# 汇总
 print("\n" + "=" * 70)
 print("TEST SUMMARY")
 print("=" * 70)

@@ -145,11 +145,13 @@ func TestRoundTripParseRender(t *testing.T) {
 
 	t.Run("zero-timestamp entries no duplication", func(t *testing.T) {
 		// Entries with zero UpdatedAt should not accumulate <!-- updated:0001-01-01T00:00:00Z --> lines
+		// UpdatedAt 为零值的条目不应累积 <!-- updated:0001-01-01T00:00:00Z --> 行
 		entries := []memoryEntry{
 			{Path: "old.md", Summary: "Legacy entry"},
 			{Path: "new.md", Summary: "Recent entry", UpdatedAt: time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC)},
 		}
 		// Simulate multiple render→parse cycles
+		// 模拟多轮 render→parse 循环
 		rendered := renderMemoryIndex("# User Memory\n", entries)
 		for i := 0; i < 5; i++ {
 			_, parsed := parseMemoryIndex(rendered)
@@ -255,6 +257,7 @@ func TestUpdateMemoryIndex(t *testing.T) {
 		}
 
 		// Oldest entries (000-004) should be evicted
+		// 最旧的条目（000-004）应被淘汰
 		if strings.Contains(content, "entry-000.md") {
 			t.Fatal("oldest entry should have been evicted")
 		}
@@ -269,12 +272,14 @@ func TestUpdateMemoryIndex(t *testing.T) {
 		dir := t.TempDir()
 
 		// Fill to exactly the cap
+		// 填充到恰好达到上限
 		for i := 0; i < maxMemoryIndexEntries; i++ {
 			name := "file-" + fmt.Sprintf("%d", i) + ".md"
 			_ = updateMemoryIndex(dir, name, "Summary "+fmt.Sprintf("%d", i))
 		}
 
 		// Update the first entry — should not evict anything
+		// 更新第一个条目——不应淘汰任何条目
 		_ = updateMemoryIndex(dir, "file-0.md", "Updated summary")
 
 		data, _ := os.ReadFile(filepath.Join(dir, "MEMORY.md"))
@@ -291,10 +296,12 @@ func TestUpdateMemoryIndex(t *testing.T) {
 	t.Run("handles legacy entries without timestamps", func(t *testing.T) {
 		dir := t.TempDir()
 		// Write a legacy-format MEMORY.md (no timestamps)
+		// 写入 legacy 格式的 MEMORY.md（无时间戳）
 		legacy := "# User Memory\n\n## old-note.md\nOld note without timestamp\n\n## another.md\nAnother old note\n"
 		os.WriteFile(filepath.Join(dir, "MEMORY.md"), []byte(legacy), 0644)
 
 		// Add a new entry — should not crash, legacy entries get zero time
+		// 新增条目——不应崩溃，legacy 条目的时间取零值
 		err := updateMemoryIndex(dir, "new.md", "New entry")
 		if err != nil {
 			t.Fatal(err)
@@ -315,6 +322,7 @@ func TestUpdateMemoryIndex(t *testing.T) {
 		dir := t.TempDir()
 
 		// Seed with a legacy entry (no timestamp → zero time → oldest)
+		// 预置一个 legacy 条目（无时间戳 → 零值时间 → 视为最旧）
 		legacy := "# User Memory\n\n## legacy.md\nLegacy entry\n"
 		os.WriteFile(filepath.Join(dir, "MEMORY.md"), []byte(legacy), 0644)
 
@@ -328,6 +336,7 @@ func TestUpdateMemoryIndex(t *testing.T) {
 		content := string(data)
 
 		// Legacy entry (zero time) should be evicted first
+		// legacy 条目（零值时间）应最先被淘汰
 		if strings.Contains(content, "## legacy.md") {
 			t.Fatal("legacy entry should have been evicted (oldest due to zero time)")
 		}
@@ -442,6 +451,7 @@ func TestMemoryExtractActivityWritesTriples(t *testing.T) {
 	}
 
 	// Second extraction (same file path — tests dedup + append)
+	// 第二次提取（相同文件 path——测试去重与追加）
 	val2, err := env.ExecuteActivity(ExtractMemoryActivity, input)
 	if err != nil {
 		t.Fatalf("second extract failed: %v", err)

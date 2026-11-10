@@ -4,19 +4,25 @@ from pydantic import Field, field_validator
 
 
 class Settings(BaseSettings):
-    """Application settings"""
+    """Application settings
+
+    应用配置。
+    """
 
     # Service configuration
+    # 服务配置
     debug: bool = Field(default=False, env="DEBUG")
     service_name: str = Field(default="shannon-llm-service", env="SERVICE_NAME")
 
     # Redis configuration
+    # Redis 配置
     redis_host: str = Field(default="redis", env="REDIS_HOST")
     redis_port: int = Field(default=6379, env="REDIS_PORT")
     redis_password: Optional[str] = Field(default=None, env="REDIS_PASSWORD")
     redis_ttl_seconds: int = Field(default=3600, env="REDIS_TTL_SECONDS")
 
     # PostgreSQL configuration
+    # PostgreSQL 配置
     postgres_host: str = Field(default="postgres", env="POSTGRES_HOST")
     postgres_port: int = Field(default=5432, env="POSTGRES_PORT")
     postgres_db: str = Field(default="shannon", env="POSTGRES_DB")
@@ -24,6 +30,7 @@ class Settings(BaseSettings):
     postgres_password: str = Field(default="shannon", env="POSTGRES_PASSWORD")
 
     # LLM Provider API keys (optional, can be configured at runtime)
+    # LLM provider 的 API key（可选，可在运行时配置）
     openai_api_key: Optional[str] = Field(default=None, env="OPENAI_API_KEY")
     anthropic_api_key: Optional[str] = Field(default=None, env="ANTHROPIC_API_KEY")
     google_api_key: Optional[str] = Field(default=None, env="GOOGLE_API_KEY")
@@ -34,27 +41,33 @@ class Settings(BaseSettings):
     aws_region: str = Field(default="us-east-1", env="AWS_REGION")
 
     # Model configuration
+    # 模型配置
     default_model_tier: str = Field(default="small", env="DEFAULT_MODEL_TIER")
     max_tokens: int = Field(default=2000, env="MAX_TOKENS")
     temperature: float = Field(default=0.7, env="TEMPERATURE")
     # Dedicated models for workflow stages (optional overrides)
     # If set, these take precedence over tier-based selection
+    # 为 workflow 各阶段指定专用模型（可选覆盖）
+    # 若设置，将优先于基于 tier 的选择
     complexity_model_id: Optional[str] = Field(default=None, env="COMPLEXITY_MODEL_ID")
     decomposition_model_id: Optional[str] = Field(
         default=None, env="DECOMPOSITION_MODEL_ID"
     )
 
     # Cache configuration
+    # cache 配置
     enable_cache: bool = Field(default=True, env="ENABLE_CACHE")
     cache_similarity_threshold: float = Field(
         default=0.95, env="CACHE_SIMILARITY_THRESHOLD"
     )
 
     # Rate limiting
+    # rate limit 配置
     rate_limit_requests: int = Field(default=100, env="RATE_LIMIT_REQUESTS")
     rate_limit_window: int = Field(default=60, env="RATE_LIMIT_WINDOW")
 
     # Tool-specific rate limits (per minute)
+    # 各 tool 专属的 rate limit（每分钟）
     web_search_rate_limit: int = Field(default=60, env="WEB_SEARCH_RATE_LIMIT")
     calculator_rate_limit: int = Field(default=1000, env="CALCULATOR_RATE_LIMIT")
     python_executor_rate_limit: int = Field(
@@ -62,10 +75,12 @@ class Settings(BaseSettings):
     )
 
     # Token budget management
+    # token budget 管理
     max_tokens_per_request: int = Field(default=4000, env="MAX_TOKENS_PER_REQUEST")
     max_cost_per_request: float = Field(default=0.10, env="MAX_COST_PER_REQUEST")
 
     # Event emission to orchestrator
+    # 向 orchestrator 上报 event
     enable_llm_events: bool = Field(default=True, env="ENABLE_LLM_EVENTS")
     enable_llm_partials: bool = Field(default=True, env="ENABLE_LLM_PARTIALS")
     partial_chunk_chars: int = Field(default=512, env="PARTIAL_CHUNK_CHARS")
@@ -81,19 +96,28 @@ class Settings(BaseSettings):
     @field_validator('debug', 'enable_cache', 'enable_llm_events', 'enable_llm_partials', mode='before')
     @classmethod
     def strip_bool_strings(cls, v):
-        """Strip whitespace from boolean string values before parsing"""
+        """Strip whitespace from boolean string values before parsing
+
+        解析前去除布尔字符串值的首尾空白。
+        """
         if isinstance(v, str):
             return v.strip()
         return v
 
     @property
     def database_url(self) -> str:
-        """Get PostgreSQL database URL"""
+        """Get PostgreSQL database URL
+
+        获取 PostgreSQL 数据库 URL。
+        """
         return f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
 
     @property
     def redis_url(self) -> str:
-        """Get Redis URL"""
+        """Get Redis URL
+
+        获取 Redis URL。
+        """
         if self.redis_password:
             return f"redis://:{self.redis_password}@{self.redis_host}:{self.redis_port}"
         return f"redis://{self.redis_host}:{self.redis_port}"

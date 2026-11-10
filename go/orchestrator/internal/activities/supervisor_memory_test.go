@@ -153,7 +153,9 @@ func TestRecordDecomposition(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				// RecordDecomposition is fire-and-forget, may return nil even if services unavailable
+				// RecordDecomposition 是 fire-and-forget，即使服务不可用也可能返回 nil
 				// So we just check it doesn't panic
+				// 因此这里只检查它不会 panic
 				assert.True(t, err == nil || err != nil) // Always passes, just ensures no panic
 			}
 		})
@@ -275,6 +277,7 @@ func TestDecompositionAdvisor_SelectOptimalStrategy(t *testing.T) {
 	advisor := NewDecompositionAdvisor(memory)
 
 	// Test multiple calls to ensure strategy selection works
+	// 多次调用以验证 strategy 选择逻辑有效
 	strategies := make(map[string]int)
 	for i := 0; i < 100; i++ {
 		rand.Seed(time.Now().UnixNano() + int64(i))
@@ -283,6 +286,7 @@ func TestDecompositionAdvisor_SelectOptimalStrategy(t *testing.T) {
 	}
 
 	// Should mostly select "parallel" due to speed preference
+	// 由于偏好速度，应主要选择 "parallel"
 	assert.Greater(t, strategies["parallel"], strategies["sequential"])
 }
 

@@ -420,6 +420,9 @@ func executeCognitiveTemplateNode(ctx workflow.Context, rt *templateRuntime, nod
 // For example, if parallel_by="tickers" and context["tickers"]=["NVDA","AAPL"],
 // it generates one task per ticker using the prompt_template from metadata.
 // All context fields are available for substitution using {field_name} syntax.
+// 按 parallel_by 从 context 数组展开 HybridTask：例如 parallel_by="tickers"、
+// context["tickers"]=["NVDA","AAPL"] 时，用 metadata 中的 prompt_template 为每个 ticker 生成一个 task；
+// 所有 context 字段都可用 {field_name} 语法替换。
 func expandParallelByTasks(nodeContext map[string]interface{}, metadata map[string]interface{}, parallelBy string) []execution.HybridTask {
 	if nodeContext == nil || parallelBy == "" {
 		return nil
@@ -457,6 +460,7 @@ func expandParallelByTasks(nodeContext map[string]interface{}, metadata map[stri
 
 	// Only compute replacements for placeholders that actually exist in the template
 	// Skip template_results to avoid non-determinism and payload bloat
+	// 只为模板中真实存在的占位符计算替换值；跳过 template_results，避免非确定性与载荷膨胀。
 	keys := contextKeys(nodeContext)
 	relevantKeys := make([]string, 0, len(keys))
 	for _, key := range keys {
@@ -687,6 +691,7 @@ func determineNodeQuery(defaultQuery string, metadata map[string]interface{}, no
 
 	// Substitute {node_results} placeholders with actual outputs
 	// e.g., {fetch_news_results} -> output from fetch_news node
+	// 把 {node_results} 占位符替换为实际输出，例如 {fetch_news_results} → fetch_news 节点的输出。
 	nodeIDs := make([]string, 0, len(nodeOutputs))
 	for nodeID := range nodeOutputs {
 		nodeIDs = append(nodeIDs, nodeID)
@@ -699,6 +704,7 @@ func determineNodeQuery(defaultQuery string, metadata map[string]interface{}, no
 	}
 
 	// Substitute context field placeholders using sorted keys for determinism
+	// 按排序后的 key 替换 context 占位符，保证确定性。
 	keys := contextKeys(nodeContext)
 	for _, key := range keys {
 		placeholder := fmt.Sprintf("{%s}", key)

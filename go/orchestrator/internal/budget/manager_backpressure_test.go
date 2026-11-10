@@ -14,6 +14,7 @@ import (
 )
 
 // TestEnhancedBudgetManager tests the enhanced budget manager with backpressure
+// TestEnhancedBudgetManager 验证带 backpressure 的增强版 budget manager
 func TestEnhancedBudgetManager(t *testing.T) {
 	// Create in-memory database for testing
 	db, err := sql.Open("sqlite3", ":memory:")
@@ -42,6 +43,7 @@ func TestEnhancedBudgetManager(t *testing.T) {
 		})
 
 		// First request at 70% - should not trigger backpressure
+		// 第一个 request 用掉 70%，不应触发 backpressure
 		result, err := manager.CheckBudgetWithBackpressure(ctx, userID, sessionID, "task-1", 700)
 		if err != nil {
 			t.Fatalf("CheckBudget failed: %v", err)
@@ -63,12 +65,14 @@ func TestEnhancedBudgetManager(t *testing.T) {
 		})
 
 		// Next request at 80% (700 used + 100 new = 800/1000) should trigger backpressure
+		// 下一个 request 到 80%（已用 700 + 新增 100 = 800/1000），应触发 backpressure
 		result, err = manager.CheckBudgetWithBackpressure(ctx, userID, sessionID, "task-2", 100)
 		if err != nil {
 			t.Fatalf("CheckBudget failed: %v", err)
 		}
 
 		// At exactly 80%, backpressure should be active
+		// 恰好 80% 时 backpressure 应已生效
 		if !result.BackpressureActive {
 			// Get current usage for debugging
 			manager.mu.RLock()
@@ -91,6 +95,7 @@ func TestEnhancedBudgetManager(t *testing.T) {
 		})
 
 		// Request that would exceed budget (800 used + 300 new = 1100/1000) should be blocked
+		// 会超出 budget 的 request（已用 800 + 新增 300 = 1100/1000）应被拦截
 		result, err = manager.CheckBudgetWithBackpressure(ctx, userID, sessionID, "task-3", 300)
 		if err != nil {
 			t.Fatalf("CheckBudget failed: %v", err)
@@ -114,6 +119,7 @@ func TestEnhancedBudgetManager(t *testing.T) {
 		})
 
 		// Pre-seed usage close to backpressure threshold so some requests trigger delay
+		// 先把用量预置到 backpressure 阈值附近，让部分 request 触发延迟
 		manager.RecordUsage(ctx, &BudgetTokenUsage{
 			UserID:       userID,
 			SessionID:    sessionID,
@@ -171,6 +177,7 @@ func TestEnhancedBudgetManager(t *testing.T) {
 		}
 
 		// Should have activated backpressure for some requests (20 * 600 = 12000 > 10000 * 0.8)
+		// 应有 request 触发 backpressure（20 * 600 = 12000 > 10000 * 0.8）
 		if backpressureCount == 0 {
 			t.Error("Backpressure was not activated in concurrent scenario")
 		}
@@ -220,6 +227,7 @@ func TestEnhancedBudgetManager(t *testing.T) {
 	t.Run("BudgetPressureAlwaysLowAfterDailyRemoval", func(t *testing.T) {
 		userID := "test-user-4"
 		// Daily/monthly tracking removed; GetBudgetPressure should always be "low"
+		// 日/月统计已移除，GetBudgetPressure 应恒为 "low"
 		for _, used := range []int{0, 2500, 5000, 7500, 9000} {
 			_ = used // usage no longer affects GetBudgetPressure
 			pressure := manager.GetBudgetPressure(userID)
@@ -256,6 +264,7 @@ func TestEnhancedBudgetManager(t *testing.T) {
 }
 
 // TestBudgetManagerCircuitBreaker tests circuit breaker functionality
+// TestBudgetManagerCircuitBreaker 验证 circuit breaker 相关功能
 func TestBudgetManagerCircuitBreaker(t *testing.T) {
 	db, _ := sql.Open("sqlite3", ":memory:")
 	defer db.Close()
@@ -275,6 +284,7 @@ func TestBudgetManagerCircuitBreaker(t *testing.T) {
 	})
 
 	// Simulate failures to trip the breaker
+	// 制造失败以打到 open
 	for i := 0; i < 3; i++ {
 		manager.RecordFailure(userID)
 	}
@@ -392,6 +402,7 @@ func TestBudgetAllocationStrategies(t *testing.T) {
 		manager.ReallocateBudgetsByUsage(ctx, sessions)
 
 		// Session 1 should get more budget due to high usage
+		// session-1 用量更高，重新分配后应拿到更多 budget
 		budget1 := manager.GetSessionAllocation("session-1")
 		budget2 := manager.GetSessionAllocation("session-2")
 

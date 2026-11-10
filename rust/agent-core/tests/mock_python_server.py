@@ -80,6 +80,7 @@ def execute_tool():
         expression = parameters.get('expression', '0')
         try:
             # Simple evaluation (unsafe in production!)
+            # 简单求值（生产环境不安全！）
             result = eval(expression.replace('^', '**'))
             return jsonify({
                 "success": True,
@@ -128,6 +129,7 @@ def execute_tool():
 
 @app.route('/analyze_task', methods=['POST'])
 @app.route('/complexity/analyze_task', methods=['POST'])  # Support both paths
+# 同时兼容两个路径
 def analyze_task():
     """Analyze task complexity"""
     data = request.json

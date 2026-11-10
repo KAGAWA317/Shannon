@@ -16,6 +16,7 @@ import (
 )
 
 // StreamingHandler serves SSE endpoints for workflow events.
+// StreamingHandler 提供 workflow event 的 SSE 端点。
 type StreamingHandler struct {
 	mgr     *streaming.Manager
 	logger  *zap.Logger
@@ -27,11 +28,13 @@ func NewStreamingHandler(mgr *streaming.Manager, logger *zap.Logger) *StreamingH
 }
 
 // SetTemporalClient allows wiring the Temporal client after handler construction.
+// SetTemporalClient 允许在构造 handler 之后再注入 Temporal client。
 func (h *StreamingHandler) SetTemporalClient(c client.Client) {
 	h.tclient = c
 }
 
 // RegisterRoutes registers SSE routes on the provided mux.
+// RegisterRoutes 在给定的 mux 上注册 SSE 路由。
 func (h *StreamingHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/stream/sse", h.handleSSE)
 	mux.HandleFunc("/blob/", h.handleBlobFetch)
@@ -40,6 +43,8 @@ func (h *StreamingHandler) RegisterRoutes(mux *http.ServeMux) {
 
 // handleBlobFetch retrieves a blob from Redis by its key.
 // GET /blob/{key} - returns the raw base64 data
+// handleBlobFetch 按 key 从 Redis 取出 blob。
+// GET /blob/{key} —— 返回原始 base64 数据
 func (h *StreamingHandler) handleBlobFetch(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
@@ -47,6 +52,7 @@ func (h *StreamingHandler) handleBlobFetch(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Extract key from path: /blob/shannon:blob:workflow-id:field
+	// 从路径中提取 key：/blob/shannon:blob:workflow-id:field
 	key := strings.TrimPrefix(r.URL.Path, "/blob/")
 	if key == "" {
 		http.Error(w, `{"error":"blob key required"}`, http.StatusBadRequest)
@@ -54,6 +60,7 @@ func (h *StreamingHandler) handleBlobFetch(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Validate key format for security (must start with shannon:blob:)
+	// 校验 key 格式以保证安全（必须以 shannon:blob: 开头）
 	if !strings.HasPrefix(key, "shannon:blob:") {
 		http.Error(w, `{"error":"invalid blob key format"}`, http.StatusBadRequest)
 		return
@@ -73,6 +80,7 @@ func (h *StreamingHandler) handleBlobFetch(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Refresh TTL since the blob is being accessed
+	// blob 正被访问，刷新其 TTL
 	_ = h.mgr.RefreshBlobTTL(ctx, key)
 
 	// Return the raw base64 data
@@ -82,6 +90,8 @@ func (h *StreamingHandler) handleBlobFetch(w http.ResponseWriter, r *http.Reques
 }
 
 // handleSSE streams events for a workflow via Server-Sent Events.
+// GET /stream/sse?workflow_id=<id>
+// handleSSE 通过 Server-Sent Events 推送某个 workflow 的 event。
 // GET /stream/sse?workflow_id=<id>
 func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 	wf := r.URL.Query().Get("workflow_id")
@@ -101,6 +111,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse Last-Event-ID for resume support
+	// 解析 Last-Event-ID 以支持断点续传
 	var lastSeq uint64
 	var lastStreamID string
 	lastEventID := r.Header.Get("Last-Event-ID")
@@ -110,6 +121,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 
 	if lastEventID != "" {
 		// Check if it's a Redis stream ID (contains "-")
+		// 判断是否为 Redis stream ID（含 "-"）
 		if strings.Contains(lastEventID, "-") {
 			lastStreamID = lastEventID
 			h.logger.Debug("Resume from Redis stream ID",
@@ -243,19 +255,23 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send an initial comment to establish the stream
+	// 先发送一条注释以建立 stream
 	fmt.Fprintf(w, ": connected to workflow %s\n\n", wf)
 	flusher.Flush()
 
 	// Track last stream ID for event deduplication
+	// 记录最后一个 stream ID 用于 event 去重
 	var lastSentStreamID string
 	firstEventSeen := false
 
 	// Replay missed events based on resume point
+	// 按续传点回放遗漏的 event
 	if lastStreamID != "" {
 		// Resume from Redis stream ID
 		events := h.mgr.ReplayFromStreamID(wf, lastStreamID)
 		for _, ev := range events {
 			// Mark that at least one event exists (even if filtered)
+			// 标记至少存在一个 event（即使被过滤）
 			firstEventSeen = true
 			if len(typeFilter) > 0 {
 				if _, ok := typeFilter[ev.Type]; !ok {
@@ -273,6 +289,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 		events := h.mgr.ReplaySince(wf, lastSeq)
 		for _, ev := range events {
 			// Mark that at least one event exists (even if filtered)
+			// 标记至少存在一个 event（即使被过滤）
 			firstEventSeen = true
 			if len(typeFilter) > 0 {
 				if _, ok := typeFilter[ev.Type]; !ok {
@@ -289,9 +306,12 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 
 	// Subscribe to live events starting from where replay ended
 	// Use last stream ID if available to avoid gaps, otherwise start fresh
+	// 从回放结束处订阅实时 event
+	// 有 last stream ID 时用它以避免缺口，否则从头开始
 	startFrom := "$" // Default to new messages only
 	if lastSentStreamID != "" {
 		// Continue from last replayed message to avoid gaps
+		// 从最后回放的消息继续，避免缺口
 		startFrom = lastSentStreamID
 	} else if lastStreamID == "" && lastSeq == 0 {
 		// No resume point, start from beginning
@@ -301,6 +321,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 	defer h.mgr.Unsubscribe(wf, ch)
 
 	// Heartbeat ticker (shorter to keep intermediaries happy)
+	// 心跳 ticker（间隔更短，让中间代理保持连接）
 	hb := time.NewTicker(10 * time.Second)
 	defer hb.Stop()
 
@@ -309,10 +330,12 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 	defer firstEventTimer.Stop()
 
 	// Post-completion inactivity timer (starts after WORKFLOW_COMPLETED)
+	// 完成后的空闲计时器（在 WORKFLOW_COMPLETED 之后启动）
 	var postCompleteTimer *time.Timer
 	var postCompleteCh <-chan time.Time
 	completedSeen := false
 	// Ensure timer is stopped on all exits to avoid leaks
+	// 确保所有退出路径都停止计时器，避免泄漏
 	defer func() {
 		if postCompleteTimer != nil {
 			postCompleteTimer.Stop()
@@ -346,12 +369,14 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 						return
 					}
 					// Other errors (timeout, etc) also indicate invalid workflow
+					// 其它错误（timeout 等）同样说明 workflow 不存在
 					fmt.Fprintf(w, "event: ERROR_OCCURRED\n")
 					fmt.Fprintf(w, "data: {\"workflow_id\":\"%s\",\"type\":\"ERROR_OCCURRED\",\"message\":\"Workflow not found or unavailable\"}\n\n", wf)
 					flusher.Flush()
 					return
 				}
 				// Workflow exists but no events yet - reset timer and continue waiting
+				// workflow 存在但尚无 event——重置计时器并继续等待
 				firstEventTimer.Reset(30 * time.Second)
 			}
 		case <-postCompleteCh:
@@ -359,10 +384,12 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 			return
 		case evt := <-ch:
 			// Detect completion and stream end ahead of filtering
+			// 在过滤之前先判断完成与 stream end
 			isCompleted := evt.Type == "WORKFLOW_COMPLETED"
 			isStreamEnd := evt.Type == "STREAM_END"
 
 			// Any incoming event means the workflow exists; disable first-event detection
+			// 任何到达的 event 都说明 workflow 存在；关闭首 event 检测
 			if !firstEventSeen {
 				firstEventSeen = true
 			}
@@ -385,6 +412,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Apply type filter, but still close on terminal events even if filtered
+			// 应用类型过滤，但 terminal event 即使被过滤也仍要关闭
 			if len(typeFilter) > 0 {
 				if _, ok := typeFilter[evt.Type]; !ok {
 					if isStreamEnd || isCompleted {
@@ -403,6 +431,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-hb.C:
 			// Heartbeat to keep connections alive through proxies
+			// 心跳以让连接穿过代理保持存活
 			fmt.Fprint(w, ": ping\n\n")
 			flusher.Flush()
 		}

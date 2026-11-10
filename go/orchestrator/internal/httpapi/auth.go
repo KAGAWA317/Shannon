@@ -13,6 +13,8 @@ import (
 //
 //	POST /api/auth/register
 //	POST /api/auth/login
+// AuthHTTPHandler 提供最简的 authentication HTTP 端点。
+// 端点：POST /api/auth/register、POST /api/auth/login
 type AuthHTTPHandler struct {
 	svc    *auth.Service
 	logger *zap.Logger
@@ -24,6 +26,7 @@ func NewAuthHTTPHandler(svc *auth.Service, logger *zap.Logger) *AuthHTTPHandler 
 }
 
 // RegisterRoutes registers auth endpoints on the given mux.
+// RegisterRoutes 在给定的 mux 上注册 auth 端点。
 func (h *AuthHTTPHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/auth/register", h.handleRegister)
 	mux.HandleFunc("/api/auth/login", h.handleLogin)
@@ -122,6 +125,7 @@ func (h *AuthHTTPHandler) handleRefresh(w http.ResponseWriter, r *http.Request) 
 }
 
 // writeJSON writes a JSON response with status and content-type.
+// writeJSON 按指定状态码与 content-type 写出 JSON response。
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -129,6 +133,7 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 }
 
 // sanitizeErr trims error messages for safe client output (UTF-8 safe).
+// sanitizeErr 截断错误信息以便安全返回给客户端（UTF-8 安全）。
 func sanitizeErr(s string) string {
 	// Keep it simple: don't leak internals
 	runes := []rune(s)

@@ -89,6 +89,7 @@ func ChainOfThought(
     if opts.BudgetAgentMax > 0 {
         wid := workflow.GetInfo(ctx).WorkflowExecution.ID
         // Prefer parent workflow ID from context when available for budget tracking and streaming
+        // budget 记账与 event stream 都按 parent workflow 归集；用子 workflow 自己的 ID 会把统计割裂开。
         if context != nil {
             if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
                 wid = p
@@ -145,6 +146,7 @@ func ChainOfThought(
     result.TotalTokens = cotResult.TokensUsed
 
     // Record token usage for the main CoT reasoning step when not budgeted
+    // 走 budget activity 时已内部记账，这里只处理非 budget 路径，避免重复计费。
     if opts.BudgetAgentMax <= 0 {
         wid := workflow.GetInfo(ctx).WorkflowExecution.ID
         if context != nil {
@@ -184,6 +186,7 @@ func ChainOfThought(
     }
 
 	// Parse reasoning steps from response
+	// 解析失败不报错：steps 为空会让 confidence 自然偏低，再由澄清分支兜底。
 	steps := parseReasoningSteps(cotResult.Response, config.StepDelimiter)
 	result.ReasoningSteps = steps
 
@@ -194,6 +197,7 @@ func ChainOfThought(
 	result.Confidence = calculateReasoningConfidence(steps, cotResult.Response)
 
 	// If we need to validate the reasoning, do an additional check
+	// 仅当要求解释且置信度 < 0.7 时才多花一次 LLM 调用重问。
 	if config.RequireExplanation && result.Confidence < 0.7 {
 		logger.Info("Low confidence reasoning, requesting clarification")
 
@@ -341,6 +345,7 @@ func parseReasoningSteps(response, delimiter string) []string {
 	}
 
 	// If no explicit steps found, try to extract logical segments
+	// 没有 step 标记时退化为按句切分，超过 20 字符才算有效片段。
 	if len(steps) == 0 {
 		segments := strings.Split(response, ". ")
 		for _, segment := range segments {
@@ -381,6 +386,7 @@ func extractFinalAnswer(response string, steps []string) string {
 	}
 
 	// If no explicit marker, use last step or last paragraph
+	// 找不到标记时取最后一步/最后一段，比返回全文更接近用户要的答案。
 	if len(steps) > 0 {
 		return steps[len(steps)-1]
 	}

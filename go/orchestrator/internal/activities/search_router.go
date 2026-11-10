@@ -10,6 +10,7 @@ import (
 )
 
 // SearchRouteInput defines input for routing a search to appropriate sources
+// SearchRouteInput 是把一次 search 路由到合适来源的入参。
 type SearchRouteInput struct {
 	Query           string                 `json:"query"`
 	Dimension       string                 `json:"dimension,omitempty"`       // Research dimension (e.g., "funding", "technology")
@@ -20,6 +21,7 @@ type SearchRouteInput struct {
 }
 
 // LocalizationContext provides localization info for searches
+// LocalizationContext 提供检索所需的本地化信息。
 type LocalizationContext struct {
 	Languages      []string            `json:"languages,omitempty"`       // Target languages (e.g., ["zh", "ja"])
 	LocalizedNames map[string][]string `json:"localized_names,omitempty"` // Entity name translations
@@ -27,6 +29,7 @@ type LocalizationContext struct {
 }
 
 // SearchRoute defines a single search to execute
+// SearchRoute 描述要执行的一次 search。
 type SearchRoute struct {
 	Query          string   `json:"query"`
 	SourceType     string   `json:"source_type"`
@@ -48,6 +51,7 @@ type SearchRouteResult struct {
 }
 
 // RouteSearch generates a search routing plan based on dimension and source type config
+// RouteSearch 依据 dimension 与 source type 配置生成 search 路由方案。
 func (a *Activities) RouteSearch(ctx context.Context, input SearchRouteInput) (*SearchRouteResult, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("RouteSearch: generating routing plan",
@@ -57,6 +61,7 @@ func (a *Activities) RouteSearch(ctx context.Context, input SearchRouteInput) (*
 	)
 
 	// Load source types configuration
+	// 加载 source types 配置。
 	cfg, err := config.LoadSourceTypes()
 	if err != nil {
 		logger.Warn("RouteSearch: failed to load source types config, using defaults", "error", err)
@@ -67,9 +72,11 @@ func (a *Activities) RouteSearch(ctx context.Context, input SearchRouteInput) (*
 	totalMaxResults := 0
 
 	// Determine source types to use
+	// 确定要使用的 source types。
 	sourceTypes := input.SourceTypes
 	if len(sourceTypes) == 0 && input.Dimension != "" && cfg != nil {
 		// Get source types for dimension
+		// 取该 dimension 对应的 source types。
 		primary, secondary := cfg.GetDimensionSources(input.Dimension)
 		sourceTypes = append(primary, secondary...)
 		logger.Info("RouteSearch: using dimension-based sources",
@@ -79,6 +86,7 @@ func (a *Activities) RouteSearch(ctx context.Context, input SearchRouteInput) (*
 	}
 
 	// Default source types if none specified
+	// 未指定 source types 时使用默认组合。
 	if len(sourceTypes) == 0 {
 		sourceTypes = []string{"news", "aggregator", "official"}
 		logger.Info("RouteSearch: using default sources", "sources", sourceTypes)
@@ -94,6 +102,7 @@ func (a *Activities) RouteSearch(ctx context.Context, input SearchRouteInput) (*
 	}
 
 	// Add localized search routes if needed
+	// 需要时追加本地化 search 路由。
 	if input.LocalizationCtx != nil && len(input.LocalizationCtx.Languages) > 0 {
 		localizedRoutes := a.buildLocalizedRoutes(cfg, input)
 		routes = append(routes, localizedRoutes...)
@@ -103,9 +112,11 @@ func (a *Activities) RouteSearch(ctx context.Context, input SearchRouteInput) (*
 	}
 
 	// Determine execution strategy based on priority and route count
+	// 按 priority 与路由数量决定执行策略。
 	strategy := "parallel"
 	if input.Priority == "high" && len(routes) > 3 {
 		strategy = "priority" // Execute high-priority routes first
+// 高优先级路由先执行。
 	}
 
 	result := &SearchRouteResult{
@@ -124,6 +135,7 @@ func (a *Activities) RouteSearch(ctx context.Context, input SearchRouteInput) (*
 }
 
 // buildRouteForSourceType creates a search route for a specific source type
+// buildRouteForSourceType 为指定 source type 构造一条 search 路由。
 func (a *Activities) buildRouteForSourceType(cfg *config.SourceTypesConfig, sourceType, query, priority string) *SearchRoute {
 	route := &SearchRoute{
 		Query:         query,
@@ -134,10 +146,12 @@ func (a *Activities) buildRouteForSourceType(cfg *config.SourceTypesConfig, sour
 
 	if cfg == nil {
 		// Use defaults when config not available
+		// 配置不可用时走内置默认值。
 		return a.buildDefaultRoute(sourceType, query)
 	}
 
 	// Try to get source type config
+	// 尝试取该 source type 的配置。
 	if st, ok := cfg.GetSourceType(sourceType); ok {
 		route.Sites = st.Sites
 		route.RecencyDays = st.RecencyDays
@@ -146,11 +160,13 @@ func (a *Activities) buildRouteForSourceType(cfg *config.SourceTypesConfig, sour
 		route.QuerySuffix = st.FallbackQuerySuffix
 
 		// Get Exa category if available
+		// 有 Exa category 就带上。
 		if st.ExaCategory != nil {
 			route.ExaCategory = *st.ExaCategory
 		}
 	} else if rs, ok := cfg.GetRegionalSource(sourceType); ok {
 		// Regional source
+		// 地区性来源。
 		route.Sites = rs.Sites
 		route.MaxResults = rs.MaxResults
 		route.PriorityBoost = rs.PriorityBoost
@@ -158,10 +174,12 @@ func (a *Activities) buildRouteForSourceType(cfg *config.SourceTypesConfig, sour
 		route.IsLocalized = true
 	} else {
 		// Unknown source type, use defaults
+		// 未知 source type，退回默认配置。
 		return a.buildDefaultRoute(sourceType, query)
 	}
 
 	// Adjust max results based on priority
+	// 按 priority 调整 max results：high 放大、low 缩小。
 	if priority == "high" {
 		route.MaxResults = int(float64(route.MaxResults) * 1.5)
 	} else if priority == "low" {
@@ -172,6 +190,7 @@ func (a *Activities) buildRouteForSourceType(cfg *config.SourceTypesConfig, sour
 }
 
 // buildDefaultRoute creates a default route for unknown source types
+// buildDefaultRoute 为未知 source type 生成默认路由。
 func (a *Activities) buildDefaultRoute(sourceType, query string) *SearchRoute {
 	defaults := map[string]SearchRoute{
 		"official": {
@@ -220,6 +239,7 @@ func (a *Activities) buildDefaultRoute(sourceType, query string) *SearchRoute {
 	}
 
 	// Generic fallback
+	// 通用兜底。
 	return &SearchRoute{
 		Query:         query,
 		SourceType:    sourceType,
@@ -229,6 +249,7 @@ func (a *Activities) buildDefaultRoute(sourceType, query string) *SearchRoute {
 }
 
 // buildLocalizedRoutes creates routes for localized searches
+// buildLocalizedRoutes 为本地化检索生成路由。
 func (a *Activities) buildLocalizedRoutes(cfg *config.SourceTypesConfig, input SearchRouteInput) []SearchRoute {
 	var routes []SearchRoute
 
@@ -238,9 +259,11 @@ func (a *Activities) buildLocalizedRoutes(cfg *config.SourceTypesConfig, input S
 
 	for _, lang := range input.LocalizationCtx.Languages {
 		// Map language to regional source
+		// 把语言映射为对应的地区性来源标识。
 		regionalSource := fmt.Sprintf("local_%s", lang)
 
 		// Get localized entity names for this language
+		// 取该语言下实体的本地化名称；没有就回退到原始 query。
 		var localizedQuery string
 		if names, ok := input.LocalizationCtx.LocalizedNames[lang]; ok && len(names) > 0 {
 			localizedQuery = names[0] // Use first localized name
@@ -258,6 +281,7 @@ func (a *Activities) buildLocalizedRoutes(cfg *config.SourceTypesConfig, input S
 		}
 
 		// Try to get regional config
+		// 尝试取地区配置。
 		if cfg != nil {
 			if rs, ok := cfg.GetRegionalSource(regionalSource); ok {
 				route.Sites = rs.Sites
@@ -266,6 +290,7 @@ func (a *Activities) buildLocalizedRoutes(cfg *config.SourceTypesConfig, input S
 			}
 		} else {
 			// Use defaults for common languages
+			// 常见语言使用内置默认站点。
 			switch lang {
 			case "zh":
 				route.Sites = []string{"36kr.com", "iyiou.com", "tianyancha.com", "pedaily.cn"}
@@ -283,11 +308,13 @@ func (a *Activities) buildLocalizedRoutes(cfg *config.SourceTypesConfig, input S
 }
 
 // MergeSearchResults merges results from multiple search routes with deduplication
+// MergeSearchResults 合并多条 search 路由的结果并去重。
 type MergeSearchInput struct {
 	Results []SearchRouteResults `json:"results"`
 }
 
 // SearchRouteResults holds results from a single search route
+// SearchRouteResults 保存单条 search 路由的结果。
 type SearchRouteResults struct {
 	Route    SearchRoute   `json:"route"`
 	Items    []SearchItem  `json:"items"`
@@ -306,6 +333,7 @@ type SearchItem struct {
 }
 
 // MergeSearchResult contains the merged, deduplicated results
+// MergeSearchResult 是合并去重后的结果。
 type MergeSearchResult struct {
 	Items           []SearchItem `json:"items"`
 	TotalResults    int          `json:"total_results"`
@@ -319,9 +347,11 @@ func (a *Activities) MergeSearchResults(ctx context.Context, input MergeSearchIn
 	logger.Info("MergeSearchResults: merging results", "route_count", len(input.Results))
 
 	// Load config for merge settings
+	// 加载合并相关的配置。
 	cfg, _ := config.LoadSourceTypes()
 
 	// Track seen URLs for deduplication
+	// 记录已见过的 URL，用于去重。
 	seenURLs := make(map[string]bool)
 	domainCounts := make(map[string]int)
 	sourceBreakdown := make(map[string]int)
@@ -331,12 +361,14 @@ func (a *Activities) MergeSearchResults(ctx context.Context, input MergeSearchIn
 	duplicates := 0
 
 	// Merge settings
+	// 合并参数。
 	maxPerDomain := 3
 	if cfg != nil {
 		maxPerDomain = cfg.ResultMerging.MaxPerDomain
 	}
 
 	// Process each route's results
+	// 逐条路由处理其结果。
 	for _, routeResult := range input.Results {
 		if !routeResult.Success {
 			continue
@@ -353,12 +385,14 @@ func (a *Activities) MergeSearchResults(ctx context.Context, input MergeSearchIn
 			}
 
 			// Check domain limit
+			// 检查同一 domain 的条数上限。
 			domain := extractDomain(item.URL)
 			if domainCounts[domain] >= maxPerDomain {
 				continue
 			}
 
 			// Apply priority boost from route
+			// 应用该路由的 priority boost。
 			item.Score = item.Score * routeResult.Route.PriorityBoost
 			item.SourceType = routeResult.Route.SourceType
 
@@ -392,6 +426,8 @@ func (a *Activities) MergeSearchResults(ctx context.Context, input MergeSearchIn
 func normalizeURL(url string) string {
 	// Simple normalization: remove trailing slashes and common tracking params
 	// In production, use a proper URL parsing library
+	// 简单归一化：去掉末尾斜杠等；
+	// 生产环境应改用正规的 URL 解析库。
 	if len(url) > 0 && url[len(url)-1] == '/' {
 		url = url[:len(url)-1]
 	}
@@ -401,6 +437,7 @@ func normalizeURL(url string) string {
 // extractDomain extracts the domain from a URL
 func extractDomain(url string) string {
 	// Simple extraction - in production, use net/url
+	// 简单截取；生产环境应改用 net/url。
 	start := 0
 	if len(url) > 8 && url[:8] == "https://" {
 		start = 8
@@ -419,6 +456,7 @@ func extractDomain(url string) string {
 // sortSearchItemsByScore sorts search items by score in descending order
 func sortSearchItemsByScore(items []SearchItem) {
 	// Simple bubble sort for now - replace with sort.Slice in production
+	// 目前是简单冒泡排序；生产环境应换成 sort.Slice。
 	for i := 0; i < len(items); i++ {
 		for j := i + 1; j < len(items); j++ {
 			if items[j].Score > items[i].Score {

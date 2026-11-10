@@ -51,6 +51,7 @@ func (s *SessionServiceImpl) CreateSession(ctx context.Context, req *pb.CreateSe
 	}
 
 	// Get tenant from auth context if available
+	// 有 authentication context 时从中获取租户
 	var tenantID string
 	if uc, err := auth.GetUserContext(ctx); err == nil && uc != nil {
 		tenantID = uc.TenantID.String()
@@ -222,6 +223,8 @@ func (s *SessionServiceImpl) ListSessions(ctx context.Context, req *pb.ListSessi
 
 	// In production, would query Redis for user sessions
 	// For now, return empty list
+	// 生产环境中应从 Redis 查询用户的 session
+	// 目前返回空列表
 	return &pb.ListSessionsResponse{
 		Sessions:   []*pb.SessionSummary{},
 		TotalCount: 0,
@@ -231,6 +234,7 @@ func (s *SessionServiceImpl) ListSessions(ctx context.Context, req *pb.ListSessi
 }
 
 // AddMessage adds a message to session history
+// AddMessage 把消息加入 session 历史
 func (s *SessionServiceImpl) AddMessage(ctx context.Context, req *pb.AddMessageRequest) (*pb.AddMessageResponse, error) {
 	s.logger.Info("Adding message to session",
 		zap.String("session_id", req.SessionId),
@@ -328,6 +332,7 @@ func (s *SessionServiceImpl) ClearHistory(ctx context.Context, req *pb.ClearHist
 }
 
 // Helper function to convert internal session to protobuf
+// 把内部 session 转换为 protobuf 的辅助函数
 func (s *SessionServiceImpl) sessionToProto(sess *session.Session, includeHistory bool) *pb.Session {
 	pbSession := &pb.Session{
 		Id:         sess.ID,
@@ -367,6 +372,7 @@ func (s *SessionServiceImpl) sessionToProto(sess *session.Session, includeHistor
 }
 
 // RegisterSessionServiceServer registers the service with the gRPC server
+// RegisterSessionServiceServer 把服务注册到 gRPC server
 func RegisterSessionServiceServer(s *grpc.Server, srv pb.SessionServiceServer) {
 	pb.RegisterSessionServiceServer(s, srv)
 }

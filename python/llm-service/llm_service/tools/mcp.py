@@ -42,15 +42,19 @@ def create_mcp_tool_class(
 ) -> Type[Tool]:
     """
     Create a Tool subclass that invokes an MCP HTTP endpoint.
+    创建一个调用 MCP HTTP endpoint 的 Tool 子类。
 
     The generated tool name is `name`; calling it POSTs {function: func_name, args: kwargs}
     to `url` and returns the JSON response as the tool output.
+    生成的 tool 名为 `name`；调用时会向 `url` POST {function: func_name, args: kwargs}，
+    并将 JSON response 作为 tool 输出返回。
     """
 
     params = parameters or []
     tool_params = [_to_param(p) for p in params]
 
     # Simple per-tool rate limiter (process-local)
+    # 简单的按 tool 的 rate limiter（进程内）
     _tool_requests: Dict[str, deque] = defaultdict(deque)
     _rate_default = int(
         os.getenv("MCP_RATE_LIMIT_DEFAULT", "60")
@@ -61,6 +65,7 @@ def create_mcp_tool_class(
 
         def _get_metadata(self) -> ToolMetadata:
             # Allow per-tool cost via env MCP_COST_<NAME>
+            # 允许通过环境变量 MCP_COST_<NAME> 配置单个 tool 成本
             cost_env = f"MCP_COST_{name.upper()}"
             try:
                 cost_per_use = float(os.getenv(cost_env, "0.001"))
@@ -83,6 +88,7 @@ def create_mcp_tool_class(
 
         def _get_parameters(self) -> List[ToolParameter]:
             # If no schema provided, accept a single OBJECT parameter named "args"
+            # 未提供 schema 时，接受单个名为 "args" 的 OBJECT 参数
             return tool_params or [
                 ToolParameter(
                     name="args",
@@ -95,10 +101,12 @@ def create_mcp_tool_class(
         async def _execute_impl(self, session_context=None, **kwargs) -> ToolResult:
             try:
                 # Rate limiting per tool name
+                # 按 tool 名 rate limit
                 now = time.time()
                 dq = _tool_requests[name]
                 limit = _rate_default if _rate_default > 0 else 60
                 # evict old entries
+                # 淘汰过期条目
                 window = 60.0
                 while dq and dq[0] < now - window:
                     dq.popleft()
@@ -111,6 +119,7 @@ def create_mcp_tool_class(
                 dq.append(now)
 
                 # If schema not provided, expect a single OBJECT parameter "args"
+                # 未提供 schema 时，期望单个 OBJECT 参数 "args"
                 call_args: Dict[str, Any]
                 if tool_params:
                     call_args = kwargs

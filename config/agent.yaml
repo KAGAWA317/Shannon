@@ -1,17 +1,23 @@
 # Shannon Agent Core Configuration
+# Shannon Agent Core 配置
 # This file configures resource limits, timeouts, and service settings
+# 本文件配置资源上限、timeout 与服务设置
 
 # WASI Sandbox Configuration
+# WASI sandbox 配置
 wasi:
   memory_limit_bytes: 268435456  # 256MB
   execution_timeout_secs: 30
   max_fuel: 1000000000  # 1 billion
   enable_filesystem: true
   # NOTE: /tmp removed from defaults to prevent cross-session data leaks.
+  # 注意：已从默认值中移除 /tmp，以防止跨 session 数据泄露。
   # Session workspace is mounted separately at /workspace with read-write access.
+  # session 工作区单独挂载到 /workspace，具备读写权限。
   allowed_paths: []
 
 # Memory Pool Configuration
+# 内存池配置
 memory:
   pool_size_bytes: 1073741824  # 1GB
   max_allocation_bytes: 104857600  # 100MB
@@ -20,6 +26,7 @@ memory:
   pressure_threshold: 0.9  # 90%
 
 # Tool Execution Configuration
+# tool 执行配置
 tools:
   default_timeout_secs: 60
   max_concurrent_executions: 5
@@ -27,6 +34,7 @@ tools:
   cache_ttl_secs: 300  # 5 minutes
 
 # LLM Service Configuration
+# LLM 服务配置
 llm:
   base_url: "http://llm-service:8000"
   request_timeout_secs: 30
@@ -34,6 +42,7 @@ llm:
   retry_delay_ms: 1000
 
 # FSM Configuration
+# FSM 配置
 fsm:
   max_iterations: 10
   time_budget_ms: 30000  # 30 seconds
@@ -41,12 +50,14 @@ fsm:
   transition_timeout_secs: 5
 
 # Metrics Configuration
+# 指标配置
 metrics:
   port: 2113
   enable_detailed: true
   collection_interval_secs: 10
 
 # Request enforcement configuration
+# request 执行约束配置
 enforcement:
   per_request_timeout_secs: 30
   per_request_max_tokens: 4096
@@ -56,18 +67,23 @@ enforcement:
   circuit_breaker_min_requests: 20
 
 # Python Executor Configuration
+# Python 执行器配置
 python_executor:
   # Default mode: "wasi" (fast, stdlib only) or "firecracker" (full packages)
+  # 默认模式："wasi"（快速，仅标准库）或 "firecracker"（支持完整依赖包）
   # When mode is "firecracker", agent-core will check health before each execution
   # and automatically fall back to WASI if Firecracker is unavailable.
+  # 当 mode 为 "firecracker" 时，agent-core 会在每次执行前检查健康状况，若 Firecracker 不可用则自动回退到 WASI。
   mode: "wasi"
 
   # WASI-specific limits
+  # WASI 专属限制
   wasi:
     memory_limit_mb: 256
     timeout_seconds: 30
 
   # Firecracker-specific limits
+  # Firecracker 专属限制
   firecracker:
     # Executor URL (set via FIRECRACKER_EXECUTOR_URL env var in production)
     # executor_url: "http://firecracker-executor:9001"
@@ -78,12 +94,14 @@ python_executor:
     pool_max_count: 20
 
   # Workspace limits (shared by both executors)
+  # 工作区限制（两种执行器共用）
   workspace:
     max_size_mb: 500
     max_file_count: 10000
     retention_hours: 24
 
 # Environment Variable Overrides:
+# 环境变量覆盖：
 # - WASI_MEMORY_LIMIT_MB: Override WASI memory limit in MB
 # - WASI_TIMEOUT_SECONDS: Override WASI execution timeout
 # - MEMORY_POOL_SIZE_MB: Override memory pool size in MB

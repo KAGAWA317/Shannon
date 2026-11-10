@@ -6,6 +6,7 @@ import (
 )
 
 // agentStartToCloseTimeout extracts timeout from context with fallback to default
+// human_in_loop 场景放宽到 48h 等人工审批，其余用调用方给的默认值。
 func agentStartToCloseTimeout(ctx map[string]interface{}, defaultTimeout time.Duration) time.Duration {
 	if ctx == nil {
 		return defaultTimeout

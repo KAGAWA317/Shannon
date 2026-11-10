@@ -28,7 +28,10 @@ class MemoryExtractResponse(BaseModel):
 
 
 def _extract_json_block(text: str) -> Optional[dict]:
-    """Extract JSON from model response, handling fenced blocks."""
+    """Extract JSON from model response, handling fenced blocks.
+
+    从模型 response 中提取 JSON，兼容围栏代码块。
+    """
     try:
         return json.loads(text)
     except Exception:
@@ -84,13 +87,17 @@ If worth_remembering is false, other fields can be empty strings."""
 
 @router.post("/extract", response_model=MemoryExtractResponse)
 async def extract_memory(request: Request, body: MemoryExtractRequest):
-    """Extract memorable knowledge from a task result."""
+    """Extract memorable knowledge from a task result.
+
+    从 task 结果中提取值得记住的知识。
+    """
     workflow_id = request.headers.get("X-Workflow-ID", "")
     agent_id = request.headers.get("X-Agent-ID", "")
 
     providers = getattr(request.app.state, "providers", None)
 
     # If no providers configured, can't extract — return not worth remembering
+    # 未配置 provider 时无法提取 —— 直接返回 not worth remembering
     if not providers or not providers.is_configured():
         logger.debug("memory.extract: no providers configured", extra={
             "workflow_id": workflow_id, "agent_id": agent_id,
@@ -98,6 +105,7 @@ async def extract_memory(request: Request, body: MemoryExtractRequest):
         return MemoryExtractResponse(worth_remembering=False)
 
     # Truncate inputs to control cost
+    # 截断输入以控制成本
     query = body.query[:1000]
     result = body.result[:4000]
 

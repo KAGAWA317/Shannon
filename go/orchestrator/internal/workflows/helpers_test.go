@@ -49,6 +49,7 @@ func TestConvertHistoryForAgent_NewlineEscaping(t *testing.T) {
 			},
 			want: []string{
 				// Literal backslash+n in source is NOT a newline byte — ReplaceAll doesn't touch it
+				// 源码里的字面量 \n 是两个字符，不是换行字节，ReplaceAll 不会误伤。
 				`assistant: Use \n for newlines`,
 			},
 		},
@@ -89,6 +90,7 @@ func TestConvertHistoryForAgent_NewlineEscaping(t *testing.T) {
 
 func TestConvertHistoryForAgent_RoundTrip(t *testing.T) {
 	// Verify that escaped content can be unescaped back to original
+	// 转义必须可逆，否则 agent 侧还原出的历史会和原文不一致。
 	original := "Line one\nLine two\nLine three"
 	messages := []Message{{Role: "assistant", Content: original}}
 

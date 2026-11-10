@@ -1,4 +1,7 @@
-"""Example of the direct tool API."""
+"""Example of the direct tool API.
+
+示例：直接调用 tool 的 API。
+"""
 
 import json
 import os

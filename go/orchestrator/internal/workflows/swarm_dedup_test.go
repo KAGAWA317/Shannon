@@ -192,10 +192,12 @@ func TestFetchTracker_CheckCache(t *testing.T) {
 		t.Error("expected cache miss for unknown URL")
 	}
 	// Non-fetch tool always misses
+	// cache 只对 fetch 类 tool 生效，search 结果不复用。
 	if _, hit := ft.checkCache("web_search", map[string]interface{}{"url": "https://example.com/page1"}); hit {
 		t.Error("expected miss for non-fetch tool")
 	}
 	// Nil tracker is safe
+	// nil receiver 直接 miss，调用方不必判空。
 	var nilFT *fetchTracker
 	if _, hit := nilFT.checkCache("web_fetch", map[string]interface{}{"url": "https://example.com"}); hit {
 		t.Error("nil tracker should never hit")
@@ -284,6 +286,7 @@ func TestFetchTracker_SeedFromTeamKnowledge(t *testing.T) {
 		t.Error("expected page1 in discovered")
 	}
 	// But fetchCache should NOT be seeded (no full content available)
+	// seed 只有摘要没有正文，所以 fetch cache 必须留空。
 	if len(ft.cache) != 0 {
 		t.Errorf("fetchCache should be empty (no full content in seed), got %d", len(ft.cache))
 	}

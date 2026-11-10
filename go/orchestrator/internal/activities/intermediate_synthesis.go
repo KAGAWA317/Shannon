@@ -41,6 +41,7 @@ type IntermediateSynthesisResult struct {
 }
 
 // IntermediateSynthesis combines partial results between research iterations
+// IntermediateSynthesis 在 research iteration 之间合并阶段性结果。
 func (a *Activities) IntermediateSynthesis(ctx context.Context, input IntermediateSynthesisInput) (*IntermediateSynthesisResult, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("IntermediateSynthesis: starting",
@@ -61,6 +62,7 @@ func (a *Activities) IntermediateSynthesis(ctx context.Context, input Intermedia
 	reqBody := map[string]interface{}{
 		"query":       userContent,
 		"max_tokens":  8192, // Extended for comprehensive intermediate synthesis
+		// 加大到 8192，以容纳完整的 intermediate synthesis。
 		"temperature": 0.3,
 		"agent_id":    "intermediate_synthesis",
 		"model_tier":  "small",
@@ -77,6 +79,7 @@ func (a *Activities) IntermediateSynthesis(ctx context.Context, input Intermedia
 
 	client := &http.Client{
 		Timeout:   120 * time.Second, // Extended for LLM processing time
+		// 加长到 120s，覆盖 LLM 处理耗时。
 		Transport: interceptors.NewWorkflowHTTPRoundTripper(nil),
 	}
 

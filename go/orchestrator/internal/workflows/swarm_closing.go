@@ -12,6 +12,8 @@ import (
 // Includes agent results and workspace file list.
 // currentRunFiles identifies files written by THIS swarm run's agents — their content is prioritized.
 // Files from previous runs (multi-turn session) are listed as paths only to avoid crowding out current content.
+// currentRunFiles 标识本轮 swarm 的 agent 写出的文件，其内容优先展示；
+// 以往轮次（多轮 session）的文件只列路径，避免挤掉本轮内容。
 func buildClosingSummary(results map[string]AgentLoopResult, files []activities.WorkspaceMaterial, currentRunFiles map[string]bool) string {
 	var parts []string
 

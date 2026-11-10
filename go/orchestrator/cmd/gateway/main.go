@@ -42,6 +42,7 @@ func main() {
 	defer logger.Sync()
 
 	// Discover configuration defaults from features.yaml (best effort)
+	// 从 features.yaml 读取配置默认值（尽力而为）。
 	var gatewaySkipAuthDefault *bool
 	if featuresCfg, err := cfg.Load(); err != nil {
 		logger.Warn("Failed to load feature configuration", zap.Error(err))
@@ -98,6 +99,8 @@ func main() {
 	// Initialize streaming manager with Redis so gateway can subscribe to
 	// workflow events for streaming card replies.
 	// Streaming manager uses go-redis/v8, gateway uses redis/v9 — create a v8 client.
+	// 初始化 streaming manager（连 Redis），以便 gateway 订阅 workflow event 来推送 streaming 卡片回复。
+	// streaming manager 用 go-redis/v8，而 gateway 用 redis/v9，因此单独建一个 v8 客户端。
 	streamingRedis := redisv8.NewClient(&redisv8.Options{
 		Addr:     redisOpts.Addr,
 		Password: redisOpts.Password,
@@ -139,6 +142,7 @@ func main() {
 	)
 
 	// Create session manager for persisting HITL messages to session history
+	// 创建 session manager，用于把 HITL 消息持久化到 session history。
 	sessionMgr, err := session.NewManager(redisOpts.Addr, logger)
 	if err != nil {
 		logger.Warn("Failed to create session manager for HITL persistence", zap.Error(err))
@@ -167,14 +171,17 @@ func main() {
 
 	// OAuth verifier (enterprise-only)
 	// Web OAuth credentials
+	// OAuth 校验器（企业版功能）。Web OAuth 凭据。
 	googleClientID := getEnvOrDefault("GOOGLE_OAUTH_CLIENT_ID", "")
 	googleClientSecret := getEnvOrDefault("GOOGLE_OAUTH_CLIENT_SECRET", "")
 	// Desktop OAuth credentials (for Tauri/native apps)
+	// Desktop OAuth 凭据（供 Tauri/原生应用使用）。
 	googleDesktopClientID := getEnvOrDefault("GOOGLE_DESKTOP_CLIENT_ID", "")
 	googleDesktopClientSecret := getEnvOrDefault("GOOGLE_DESKTOP_CLIENT_SECRET", "")
 	oauthVerifier := authpkg.NewGoogleOAuthVerifier(googleClientID, googleClientSecret, googleDesktopClientID, googleDesktopClientSecret)
 
 	// Enterprise: Load rate limit config from YAML (or use defaults)
+	// 企业版：从 YAML 加载 rate limit 配置（否则用默认值）。
 	rateLimitConfigPath := cfg.ResolveConfigFile("RATE_LIMIT_CONFIG_PATH", cfg.RateLimitConfigPaths, "config/rate_limits.yaml")
 	rateLimitConfig, err := middleware.LoadRateLimitConfig(rateLimitConfigPath)
 	if err != nil {
@@ -185,6 +192,7 @@ func main() {
 	}
 
 	// Create auth handler (needs rateLimitConfig for config-based RPM/RPH in /auth/me)
+	// 创建 auth handler（/auth/me 中基于配置的 RPM/RPH 需要 rateLimitConfig）。
 	authHandler := handlers.NewAuthHandler(authService, oauthVerifier, pgDB, logger, rateLimitConfig)
 
 	// Create middlewares
@@ -218,6 +226,7 @@ func main() {
 
 	// Auth endpoints (no auth required for registration, auth required for me/refresh)
 	// Auth endpoints
+	// authentication 端点（注册无需 authentication；me/refresh 需要 authentication）。
 	mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/v1/auth/refresh", authHandler.Refresh)
 	mux.Handle("GET /api/v1/auth/me",
@@ -276,6 +285,7 @@ func main() {
 	)
 
 	// Unified submit that returns the SSE stream URL (no long-lived stream here)
+	// 统一的提交入口，只返回 SSE stream URL（不在此处维持长连接）。
 	mux.Handle("POST /api/v1/tasks/stream",
 		tracingMiddleware(
 			authMiddleware(
@@ -379,6 +389,7 @@ func main() {
 	)
 
 	// Swarm HITL: send human message to Lead
+	// Swarm HITL：向 Lead 发送人工消息。
 	mux.Handle("POST /api/v1/swarm/{workflowID}/message",
 		tracingMiddleware(
 			authMiddleware(
@@ -475,6 +486,7 @@ func main() {
 	)
 
 	// Session events (chat history-like, excludes LLM_PARTIAL)
+	// session event（类似聊天记录，不含 LLM_PARTIAL）。
 	mux.Handle("GET /api/v1/sessions/{sessionId}/events",
 		tracingMiddleware(
 			authMiddleware(
@@ -513,6 +525,7 @@ func main() {
 
 	// Session workspace file operations (require auth)
 	// List files in session workspace
+	// session workspace 文件操作（需 authentication）：列出 session workspace 中的文件。
 	mux.Handle("GET /api/v1/sessions/{sessionId}/files",
 		tracingMiddleware(
 			authMiddleware(
@@ -540,6 +553,7 @@ func main() {
 
 	// User memory file operations (require auth, user_id from token)
 	// List files in authenticated user's memory directory
+	// 用户 memory 文件操作（需 authentication，user_id 取自 token）。
 	mux.Handle("GET /api/v1/memory/files",
 		tracingMiddleware(
 			authMiddleware(
@@ -667,6 +681,7 @@ func main() {
 	)
 
 	// Agents endpoints (single-purpose deterministic agents)
+	// agents 端点（单一职责的确定性 agent）。
 	mux.Handle("GET /api/v1/agents",
 		tracingMiddleware(
 			authMiddleware(
@@ -733,6 +748,9 @@ func main() {
 	// Tool execution endpoints (require auth)
 	// NOTE: GET /api/v1/tools must be registered BEFORE GET /api/v1/tools/{name}
 	// to avoid routing conflicts with Go 1.22 ServeMux.
+	// tool 执行端点（需 authentication）。
+	// 注意：GET /api/v1/tools 必须在 GET /api/v1/tools/{name} 之前注册，
+	// 否则会与 Go 1.22 ServeMux 的路由规则冲突。
 	mux.Handle("GET /api/v1/tools",
 		tracingMiddleware(
 			authMiddleware(
@@ -785,6 +803,7 @@ func main() {
 		)
 
 		// POST /v1/completions - passthrough proxy to LLM service (for CLI tool execution)
+		// POST /v1/completions——直通代理到 LLM service（供 CLI 执行 tool）。
 		mux.Handle("POST /v1/completions",
 			tracingMiddleware(
 				authMiddleware(
@@ -832,6 +851,7 @@ func main() {
 	}
 
 	// SSE/WebSocket reverse proxy to admin server
+	// SSE/WebSocket 反向代理到 admin server。
 	streamProxy, err := proxy.NewStreamingProxy(adminURL, logger)
 	if err != nil {
 		logger.Fatal("Failed to create streaming proxy", zap.Error(err))
@@ -861,18 +881,23 @@ func main() {
 	// Daemon command channel
 	daemonHub := daemon.NewHub(redisClient, logger)
 	// Apply claim TTL from features config if loaded
+	// 若已加载 features 配置，则应用其中的 claim TTL。
 	if featuresCfg, err := cfg.Load(); err == nil && featuresCfg.Daemon.HeartbeatTimeoutSeconds > 0 {
 		daemonHub.Claims().SetClaimTTL(time.Duration(featuresCfg.Daemon.HeartbeatTimeoutSeconds) * time.Second)
 	}
 	// Subscribe to dispatch requests from orchestrator (Redis stream bridge)
+	// 订阅 orchestrator 的 dispatch request（Redis stream 桥接）。
 	go daemonHub.SubscribeDispatches(ctx)
 	approvalManager := daemon.NewApprovalManager(redisClient)
 	// Token for internal admin server calls (/daemon/signal, /events).
 	// Falls back to APPROVALS_AUTH_TOKEN to match orchestrator's daemon signal endpoint.
+	// 内部 admin server 调用（/daemon/signal、/events）所用的 token；
+	// 缺省回退到 APPROVALS_AUTH_TOKEN，与 orchestrator 的 daemon signal 端点保持一致。
 	eventsAuthToken := getEnvOrDefault("EVENTS_AUTH_TOKEN", getEnvOrDefault("APPROVALS_AUTH_TOKEN", ""))
 	daemonHandler := handlers.NewDaemonHandler(daemonHub, approvalManager, adminURL, eventsAuthToken, logger)
 
 	// WebSocket endpoint for shan CLI daemons (no method prefix for WS upgrade)
+	// 供 shan CLI daemon 使用的 WebSocket 端点（WS 升级不写 method 前缀）。
 	mux.Handle("/v1/ws/messages",
 		tracingMiddleware(
 			authMiddleware(
@@ -892,6 +917,8 @@ func main() {
 
 	// Blob proxy: GET /api/v1/blob/{key} -> admin /blob/{key}
 	// Used to fetch large base64 screenshots stored in Redis
+	// Blob 代理：GET /api/v1/blob/{key} -> admin /blob/{key}；
+	// 用于拉取存放在 Redis 中的大体积 base64 截图。
 	mux.Handle("GET /api/v1/blob/",
 		tracingMiddleware(
 			authMiddleware(
@@ -903,6 +930,7 @@ func main() {
 	)
 
 	// Timeline proxy: GET /api/v1/tasks/{id}/timeline -> admin /timeline
+	// Timeline 代理：GET /api/v1/tasks/{id}/timeline -> admin /timeline。
 	mux.Handle("GET /api/v1/tasks/{id}/timeline",
 		tracingMiddleware(
 			authMiddleware(
@@ -938,6 +966,7 @@ func main() {
 	)
 
 	// CORS middleware for all routes (development friendly)
+	// 所有路由共用 CORS middleware（对开发友好）。
 	corsHandler := corsMiddleware(mux)
 
 	// Create HTTP server
@@ -966,6 +995,7 @@ func main() {
 	logger.Info("Gateway shutting down...")
 
 	// Stop background workers (prevents goroutine leaks)
+	// 停止后台 worker（避免 goroutine 泄漏）。
 	authService.Close()
 	if openaiHandler != nil {
 		openaiHandler.Close()
@@ -990,13 +1020,16 @@ func corsMiddleware(next http.Handler) http.Handler {
 		allowedHeaders := "Content-Type, Authorization, X-API-Key, X-User-Id, Idempotency-Key, traceparent, tracestate, Cache-Control, Last-Event-ID, If-Match"
 
 		// Expose custom headers for frontend access (rate limits, tracing, session)
+		// 暴露自定义 response 头供前端读取（rate limit、tracing、session）。
 		exposedHeaders := "X-RateLimit-Limit-Minute, X-RateLimit-Remaining-Minute, X-RateLimit-Limit-Hour, X-RateLimit-Remaining-Hour, X-RateLimit-Reset, X-Trace-Id, X-Span-Id, X-Session-ID, X-Shannon-Session-ID"
 
 		// Get allowed origins from environment (comma-separated) or default to wildcard
+		// 允许的来源从环境变量读取（逗号分隔），默认通配。
 		allowedOrigins := getEnvOrDefault("CORS_ALLOWED_ORIGINS", "*")
 
 		if !isStreaming {
 			// Allow CORS - use specific origins in production, wildcard for dev
+			// 允许 CORS——生产环境使用具体来源，开发环境用通配。
 			w.Header().Set("Access-Control-Allow-Origin", allowedOrigins)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", allowedHeaders)

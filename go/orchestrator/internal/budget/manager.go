@@ -17,6 +17,7 @@ import (
 )
 
 // TokenBudget represents budget constraints at different levels
+// TokenBudget 表示不同层级的 budget 约束
 type TokenBudget struct {
 	// Task-level budgets
 	TaskBudget     int `json:"task_budget"`
@@ -40,6 +41,7 @@ type TokenBudget struct {
 }
 
 // BudgetTokenUsage tracks token consumption for budget management (renamed to avoid conflict with models.TokenUsage)
+// BudgetTokenUsage 记录 budget 管理所需的 token 消耗（重命名以避免与 models.TokenUsage 冲突）
 type BudgetTokenUsage struct {
 	ID                  string                 `json:"id"`
 	UserID              string                 `json:"user_id"`
@@ -57,6 +59,7 @@ type BudgetTokenUsage struct {
 	// CacheAwareTotalTokens = InputTokens + OutputTokens + CacheReadTokens + CacheCreationTokens.
 	// Parallel to TotalTokens (= input + output), used for quota accounting that
 	// must include prompt-cache cost while keeping TotalTokens OpenAI-compatible.
+	// CacheAwareTotalTokens = InputTokens + OutputTokens + CacheReadTokens + CacheCreationTokens，与 TotalTokens（= input + output）并列，用于配额核算，须包含 prompt-cache 成本，同时保持 TotalTokens 与 OpenAI 兼容。
 	CacheAwareTotalTokens int                    `json:"cache_aware_total_tokens,omitempty"`
 	CallSequence        int                    `json:"call_sequence,omitempty"`
 	CostUSD             float64                `json:"cost_usd"`
@@ -79,6 +82,7 @@ type BudgetTokenUsage struct {
 //
 // Never acquire a lower-numbered lock while holding a higher-numbered lock.
 // Each mutex protects independent data structures, minimizing lock contention.
+// 加锁顺序（重要，用于避免死锁）：获取多个锁时始终按 mu → rateLimitsmu → cbMu → priorityMu → allocationMu → idempotencyMu 的顺序；绝不在持有更高编号锁时获取更低编号锁；每个 mutex 保护独立的数据结构，以最小化锁竞争。
 type BudgetManager struct {
 	db     *sql.DB
 	logger *zap.Logger
@@ -124,6 +128,7 @@ type BudgetManager struct {
 }
 
 // ErrTokenOverflow indicates a token counter would overflow the int range.
+// ErrTokenOverflow 表示 token 计数器将超出 int 范围
 var ErrTokenOverflow = fmt.Errorf("token count would overflow")
 
 // NewBudgetManager creates a new budget manager
@@ -165,6 +170,7 @@ type Options struct {
 	BackpressureThreshold  float64
 	MaxBackpressureDelayMs int
 	// Default task/session budgets (tokens); 0 = use built-in defaults
+	// 默认 task/session budget（token 数）；为 0 时使用内置默认值
 	DefaultTaskBudget    int
 	DefaultSessionBudget int
 }
@@ -190,6 +196,7 @@ func NewBudgetManagerWithOptions(db *sql.DB, logger *zap.Logger, opts Options) *
 // CheckBudget verifies if an operation can proceed within budget constraints
 func (bm *BudgetManager) CheckBudget(ctx context.Context, userID, sessionID, taskID string, estimatedTokens int) (*BudgetCheckResult, error) {
 	// Phase 1: Try read lock first for existing budgets (optimization for common case)
+	// 阶段 1：先尝试读锁读取已有 budget（常见路径的优化）
 	bm.mu.RLock()
 	userBudget, userExists := bm.userBudgets[userID]
 	sessionBudget, sessionExists := bm.sessionBudgets[sessionID]
@@ -199,6 +206,7 @@ func (bm *BudgetManager) CheckBudget(ctx context.Context, userID, sessionID, tas
 	if !userExists || !sessionExists {
 		bm.mu.Lock()
 		// Double-check pattern: budgets might have been created by another goroutine
+		// 双重检查：budget 可能已被其他 goroutine 创建
 		if !userExists {
 			if ub, exists := bm.userBudgets[userID]; exists {
 				userBudget = ub
@@ -290,6 +298,7 @@ func (bm *BudgetManager) CheckBudget(ctx context.Context, userID, sessionID, tas
 	}
 
 	// Estimate cost using priority-1 small tier model from config
+	// 使用配置中 priority-1 small 层级的模型估算成本
 	defaultModel := pricing.GetPriorityOneModel("small")
 	if defaultModel == "" {
 		defaultModel = "gpt-5-nano-2025-08-07" // Fallback if config unavailable
@@ -324,6 +333,7 @@ func (bm *BudgetManager) RecordUsage(ctx context.Context, usage *BudgetTokenUsag
 			// Key has expired, will be re-processed
 		}
 		// Mark as processed immediately to prevent TOCTOU races
+		// 立即标记为已处理，避免 TOCTOU 竞态
 		bm.processedUsage[usage.IdempotencyKey] = time.Now()
 		bm.idempotencyMu.Unlock()
 	}
@@ -334,6 +344,7 @@ func (bm *BudgetManager) RecordUsage(ctx context.Context, usage *BudgetTokenUsag
 		usage.CacheReadTokens + usage.CacheCreationTokens
 
 	// Calculate cost: prefer upstream-reported cost (e.g. Python LLM call) over pricing lookup
+	// 计算成本：优先采用上游上报的成本（如 Python LLM 调用），其次才查定价表
 	if usage.CostOverride > 0 {
 		usage.CostUSD = usage.CostOverride
 	} else {
@@ -348,6 +359,7 @@ func (bm *BudgetManager) RecordUsage(ctx context.Context, usage *BudgetTokenUsag
 	// CheckBudget / backpressure / circuit-breaker see the true cost,
 	// including prompt cache. Without this, cache-heavy sessions silently
 	// blow past their quota.
+	// 使用 CacheAwareTotalTokens（= input + output + cache_read + cache_creation）更新内存 budget，使后续 CheckBudget / backpressure / circuit-breaker 能看到真实成本（含 prompt cache）；否则 cache 密集的 sessions 会悄悄超出配额。
 	const maxInt = int(^uint(0) >> 1)
 	bm.mu.Lock()
 	if sessionBudget, ok := bm.sessionBudgets[usage.SessionID]; ok {
@@ -403,6 +415,7 @@ func (bm *BudgetManager) GetUsageReport(ctx context.Context, filters UsageFilter
 
 	// Query database for usage records using migration schema
 	// Join with task_executions to support filtering by workflow_id (common case) or task_id
+	// 关联 task_executions，以支持按 workflow_id（常见场景）或 task_id 过滤
 	rows, err := bm.db.QueryContext(ctx, `
 		SELECT tu.user_id, tu.task_id, tu.model, tu.provider,
 		       SUM(tu.prompt_tokens) as input_total,
@@ -474,6 +487,7 @@ func (bm *BudgetManager) getUserBudget(userID string) *TokenBudget {
 		return budget
 	}
 	// Return a transient default without mutating shared maps
+	// 返回临时默认值，不修改共享 map
 	return &TokenBudget{
 		HardLimit:        true,
 		WarningThreshold: 0.8,
@@ -485,6 +499,7 @@ func (bm *BudgetManager) getSessionBudget(sessionID string) *TokenBudget {
 		return budget
 	}
 	// Return a transient default without mutating shared maps
+	// 返回临时默认值，不修改共享 map
 	return &TokenBudget{
 		TaskBudget:       bm.defaultTaskBudget,
 		SessionBudget:    bm.defaultSessionBudget,
@@ -524,6 +539,7 @@ func (bm *BudgetManager) storeUsage(ctx context.Context, usage *BudgetTokenUsage
 				// User doesn't exist, create it
 				uid = uuid.New()
 				// Use QueryRowContext with RETURNING to properly get the id on conflict
+				// 使用 QueryRowContext + RETURNING，在冲突时也能正确取回 id
 				err = bm.db.QueryRowContext(ctx,
 					"INSERT INTO users (id, external_id, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) ON CONFLICT (external_id) DO UPDATE SET updated_at = NOW() RETURNING id",
 					uid, usage.UserID,
@@ -564,6 +580,7 @@ func (bm *BudgetManager) storeUsage(ctx context.Context, usage *BudgetTokenUsage
 					zap.String("task_id", parsed.String()))
 			} else if bm.db != nil {
 				// Might actually be a workflow_id that looks like a UUID; try resolving by workflow_id
+				// 可能是形似 UUID 的 workflow_id，改为按 workflow_id 解析
 				bm.logger.Debug("task_id UUID not found in task_executions; attempting workflow_id resolution",
 					zap.String("task_id", usage.TaskID))
 				var resolved uuid.UUID
@@ -639,6 +656,8 @@ func (bm *BudgetManager) initializeTables() {
 	// - token_usage table in 001_initial_schema.sql
 	// - budget_policies table can be added in a future migration
 	// This method is kept for backward compatibility but does minimal work
+	// 注意：相关表目前由 migration 创建，具体为：token_usage 表见 001_initial_schema.sql；
+	// budget_policies 表可在后续 migration 中添加。本方法仅为向后兼容保留，只做少量工作。
 
 	bm.logger.Info("Budget manager initialized - using migration-managed schema")
 }
@@ -669,6 +688,7 @@ type UsageReport struct {
 	EndTime   time.Time `json:"end_time"`
 	// TotalTokens is OpenAI-compatible (= prompt + completion). For
 	// quota/billing use CacheAwareTotalTokens, which adds cache classes.
+	// TotalTokens 与 OpenAI 兼容（= prompt + completion）；配额/计费请使用 CacheAwareTotalTokens，它额外包含 cache 类别。
 	TotalTokens           int                   `json:"total_tokens"`
 	CacheAwareTotalTokens int                   `json:"cache_aware_total_tokens"`
 	TotalCostUSD          float64               `json:"total_cost_usd"`
@@ -751,8 +771,10 @@ func (bm *BudgetManager) CheckBudgetWithBackpressure(
 	}
 
 	// Calculate usage percentage INCLUDING the new tokens (ensure budget exists)
+	// 计算包含新增 token 在内的使用率（确保 budget 已存在）
 	// Use session budget for backpressure calculation (daily budget removed)
 	// Copy required fields under lock to avoid data races on concurrent updates
+	// 在锁内复制所需字段，避免并发更新导致数据竞争
 	var (
 		sbExists      bool
 		sbTokensUsed  int
@@ -946,6 +968,7 @@ func (bm *BudgetManager) GetCircuitState(userID string) string {
 		return "closed"
 	}
 	// Lock for possible state transition without mixed unlock/lock
+	// 加锁以处理可能的状态转换，避免 unlock/lock 混用
 	cb.mu.Lock()
 	if cb.state == "open" && time.Since(cb.lastFailureTime) > cb.config.ResetTimeout {
 		cb.state = "half-open"
@@ -1084,6 +1107,7 @@ func NewEnhancedBudgetManager(db *sql.DB, logger *zap.Logger) *BudgetManager {
 // emitBudgetThresholdEvent emits a streaming event when budget thresholds are crossed
 func (bm *BudgetManager) emitBudgetThresholdEvent(taskID, sessionID, message string, payload map[string]interface{}) {
 	// This is best-effort, non-blocking - we don't want budget monitoring to fail the task
+	// 这是尽力而为、非阻塞的操作——budget 监控不应导致 task 失败
 	// The streaming manager will publish to Redis for SSE/WebSocket delivery
 	if taskID == "" {
 		return // No workflow ID to emit event to
@@ -1110,6 +1134,7 @@ func (bm *BudgetManager) emitBudgetThresholdEvent(taskID, sessionID, message str
 
 // startIdempotencyCleanup starts a background goroutine that periodically cleans up
 // expired idempotency keys. Uses sync.Once to ensure only one cleanup goroutine runs.
+// startIdempotencyCleanup 启动后台 goroutine 定期清理过期的幂等键；使用 sync.Once 保证只运行一个清理 goroutine。
 func (bm *BudgetManager) startIdempotencyCleanup() {
 	bm.cleanupOnce.Do(func() {
 		go bm.idempotencyCleanupLoop()
@@ -1120,6 +1145,7 @@ func (bm *BudgetManager) startIdempotencyCleanup() {
 
 // idempotencyCleanupLoop runs periodically to remove expired idempotency keys.
 // Cleanup interval is set to half the TTL for timely removal.
+// 清理间隔设为 TTL 的一半，以便及时移除
 func (bm *BudgetManager) idempotencyCleanupLoop() {
 	// Run cleanup at half the TTL interval for timely expiration
 	cleanupInterval := bm.idempotencyTTL / 2
@@ -1143,6 +1169,7 @@ func (bm *BudgetManager) idempotencyCleanupLoop() {
 
 // cleanupExpiredIdempotencyKeys removes idempotency keys that have exceeded their TTL.
 // This prevents unbounded memory growth from accumulated idempotency records.
+// 防止幂等记录累积导致内存无限增长
 func (bm *BudgetManager) cleanupExpiredIdempotencyKeys() {
 	now := time.Now()
 	expiredKeys := make([]string, 0)
@@ -1166,6 +1193,7 @@ func (bm *BudgetManager) cleanupExpiredIdempotencyKeys() {
 	bm.idempotencyMu.Lock()
 	for _, key := range expiredKeys {
 		// Double-check the key still exists and is still expired
+		// 再次确认该键仍存在且仍已过期
 		if processedAt, exists := bm.processedUsage[key]; exists {
 			if now.Sub(processedAt) > bm.idempotencyTTL {
 				delete(bm.processedUsage, key)

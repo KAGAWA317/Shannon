@@ -2,6 +2,9 @@
 
 TDD: These tests define the expected structure and content of swarm prompts.
 Write tests first, then implement the prompts to make them pass.
+
+按 TDD 写的 prompt 契约测试：先定下 swarm prompt 该有的结构与内容，
+再改 prompt 让它们通过。
 """
 
 import pytest
@@ -30,6 +33,7 @@ class TestAgentProtocol:
         from llm_service.roles.swarm import AGENT_LOOP_SYSTEM_PROMPT
 
         # These 4 actions MUST be present (done was removed — always converted to idle)
+        # 只保留这 4 个 action；done 已移除，运行时一律转成 idle
         for action in ["tool_call", "send_message", "publish_data", "idle"]:
             assert action in AGENT_LOOP_SYSTEM_PROMPT, f"Missing action: {action}"
 
@@ -38,7 +42,9 @@ class TestAgentProtocol:
         from llm_service.roles.swarm import AGENT_LOOP_SYSTEM_PROMPT
 
         # These were removed per plan PRM-3
+        # PRM-3 方案里删掉的 action
         # Check they're not listed as numbered actions (they may appear in general text)
+        # 只检查编号动作列表：这些词在正文里出现不算
         lines = AGENT_LOOP_SYSTEM_PROMPT.split("\n")
         action_lines = [l for l in lines if l.strip().startswith(("4.", "5.", "6.", "7.", "8.", "9."))]
         for line in action_lines:
@@ -177,6 +183,7 @@ class TestRoleCatalog:
         catalog = get_swarm_role_catalog()
         assert isinstance(catalog, dict)
         # Must include at least core roles
+        # 至少要有这几个核心 role
         assert "researcher" in catalog
         assert "analyst" in catalog
 
@@ -189,6 +196,7 @@ class TestRoleCatalog:
         for role_key in catalog:
             preset = get_role_preset(role_key)
             # Should either have a real system_prompt or be generalist
+            # 除 generalist 外，catalog 里的 role 都必须有真实 system_prompt
             if role_key != "generalist":
                 assert preset.get("system_prompt"), (
                     f"Role '{role_key}' is in catalog but has no preset system_prompt"
@@ -196,7 +204,10 @@ class TestRoleCatalog:
 
 
 class TestLeadPromptSource:
-    """Verify lead.py uses LEAD_SYSTEM_PROMPT from lead_protocol.py (not inline)."""
+    """Verify lead.py uses LEAD_SYSTEM_PROMPT from lead_protocol.py (not inline).
+
+    确认 lead.py 从 lead_protocol.py import prompt：内联一份会导致两处 prompt 各自漂移。
+    """
 
     def test_lead_endpoint_imports_from_lead_protocol(self):
         """lead.py should import LEAD_SYSTEM_PROMPT from roles.swarm.lead_protocol, not define inline."""
@@ -208,6 +219,7 @@ class TestLeadPromptSource:
         tree = ast.parse(source)
 
         # Check that LEAD_SYSTEM_PROMPT is imported, not assigned inline
+        # 必须是 import 进来的，不能在本文件内联赋值，否则又会冒出第二份 prompt
         has_import = False
         has_inline_def = False
         for node in ast.walk(tree):
@@ -228,7 +240,10 @@ class TestAgentSendMessageExamples:
     """Tests for send_message few-shot examples in agent protocol."""
 
     def test_agent_protocol_has_send_message_examples(self):
-        """Agent protocol must have >=4 send_message few-shot examples to activate cross-agent comms."""
+        """Agent protocol must have >=4 send_message few-shot examples to activate cross-agent comms.
+
+        few-shot 示例是激活 agent 间通信最有效的手段，比抽象规则管用。
+        """
         from llm_service.roles.swarm.agent_protocol import AGENT_LOOP_SYSTEM_PROMPT
         send_msg_count = AGENT_LOOP_SYSTEM_PROMPT.count('"action": "send_message"')
         assert send_msg_count >= 2, (
@@ -254,6 +269,7 @@ class TestLeadAdaptivePlanning:
             "Lead protocol should have ADAPTIVE PLANNING section encouraging mid-execution revise_plan."
         )
         # Must mention constraints to prevent over-revision
+        # 必须同时给出约束，防止 Lead 反复改计划
         assert "anti-spiral" in LEAD_SYSTEM_PROMPT.lower() or "CONSTRAINTS" in LEAD_SYSTEM_PROMPT, (
             "ADAPTIVE PLANNING section must include constraints to prevent over-revision."
         )
@@ -324,7 +340,10 @@ class TestLeadAnalysisQualityGate:
 
 
 class TestAgentQualitySelfCheck:
-    """Agent protocol must have quality self-check before going idle."""
+    """Agent protocol must have quality self-check before going idle.
+
+    agent 进 idle 前先自查交付质量，避免半成品直接回流给 Lead。
+    """
 
     def test_phase3_has_quality_check(self):
         from llm_service.roles.swarm.agent_protocol import AGENT_LOOP_SYSTEM_PROMPT
@@ -335,7 +354,10 @@ class TestAgentQualitySelfCheck:
         assert '"key_findings"' in AGENT_LOOP_SYSTEM_PROMPT
 
     def test_no_go_deep_instruction(self):
-        """A1: 'Go DEEP' causes infinite search loops. Must be replaced with quantified limit."""
+        """A1: 'Go DEEP' causes infinite search loops. Must be replaced with quantified limit.
+
+        「Go DEEP」这类无上限措辞会让 agent 无限搜索，必须换成明确的数量上限。
+        """
         from llm_service.roles.swarm.agent_protocol import AGENT_LOOP_SYSTEM_PROMPT
         prompt = AGENT_LOOP_SYSTEM_PROMPT
         assert "Go DEEP" not in prompt, "AGENT_LOOP_SYSTEM_PROMPT must not contain 'Go DEEP' — causes infinite search loops"
@@ -349,13 +371,19 @@ class TestAgentQualitySelfCheck:
         assert re.search(r'\d+-\d+ tool call', prompt), "PHASE 2 must specify numeric tool call budget (e.g. '5-8 tool calls')"
 
     def test_quality_selfcheck_no_search_trigger(self):
-        """A2: QUALITY SELF-CHECK must NOT trigger additional searches — causes N+1 loop."""
+        """A2: QUALITY SELF-CHECK must NOT trigger additional searches — causes N+1 loop.
+
+        自查里再触发搜索会变成 N+1 循环：每次自查都引出新搜索，永远收不了尾。
+        """
         from llm_service.roles.swarm.agent_protocol import AGENT_LOOP_SYSTEM_PROMPT
         prompt = AGENT_LOOP_SYSTEM_PROMPT
         assert "do one more search" not in prompt, "QUALITY SELF-CHECK must not trigger more searches — causes N+1 loop"
 
     def test_continue_protocol_has_call_limit(self):
-        """A4: CONTINUE PROTOCOL must limit tool calls to prevent runaway on reassignment."""
+        """A4: CONTINUE PROTOCOL must limit tool calls to prevent runaway on reassignment.
+
+        task 被重新指派后 agent 会接着干，没有调用上限就会一路跑飞。
+        """
         from llm_service.roles.swarm.agent_protocol import AGENT_LOOP_SYSTEM_PROMPT
         prompt = AGENT_LOOP_SYSTEM_PROMPT
         continue_section = prompt.split("CONTINUE PROTOCOL")[1].split("PHASE 1 — ORIENT")[0]
@@ -364,17 +392,24 @@ class TestAgentQualitySelfCheck:
             "CONTINUE PROTOCOL must specify numeric tool call budget"
 
     def test_phase2_has_focus_constraint(self):
-        """C2: PHASE 2 must instruct agents to stay on their assigned topic."""
+        """C2: PHASE 2 must instruct agents to stay on their assigned topic.
+
+        要求 agent 只做分到的话题，避免越界去搜别的域、和同伴重复劳动。
+        """
         from llm_service.roles.swarm.agent_protocol import AGENT_LOOP_SYSTEM_PROMPT
         prompt = AGENT_LOOP_SYSTEM_PROMPT
         # Extract PHASE 2 section: from "PHASE 2 — EXECUTE" to "PHASE 3 — SAVE"
+        # 只截取 PHASE 2 区段再检查，避免命中其它阶段的同名措辞
         phase2 = prompt.split("PHASE 2 — EXECUTE")[1].split("PHASE 3 — SAVE")[0]
         assert "STAY ON TOPIC" in phase2, \
             "PHASE 2 must include STAY ON TOPIC constraint to prevent cross-domain searching"
 
 
 class TestDateInjection:
-    """Task 0: Verify current date is injected into swarm prompts."""
+    """Task 0: Verify current date is injected into swarm prompts.
+
+    当前日期需注入 prompt，否则模型会把「今年」「最新」算成训练数据里的年份。
+    """
 
     def test_lead_prompt_has_date(self):
         """Lead user prompt must include current date for temporal awareness."""
@@ -396,7 +431,10 @@ class TestDateInjection:
 
 
 class TestAgentBatchFetch:
-    """Agent protocol must encourage batch web_fetch to reduce iteration count."""
+    """Agent protocol must encourage batch web_fetch to reduce iteration count.
+
+    鼓励一次 web_fetch 传多个 URL：串行抓取会让每个 agent 多烧几轮 LLM 调用。
+    """
 
     def test_has_batch_fetch_example(self):
         """Agent protocol must have a web_fetch example using urls=[] batch mode."""
@@ -422,7 +460,10 @@ class TestAgentBatchFetch:
 
 
 class TestAgentPhaseOptimization:
-    """Agent protocol must optimize phase transitions to reduce wasted iterations."""
+    """Agent protocol must optimize phase transitions to reduce wasted iterations.
+
+    精简阶段切换里可以跳过的步骤，每个 agent 每个步骤都是一次额外的 LLM 调用。
+    """
 
     def test_phase1_has_empty_workspace_skip(self):
         """Phase 1 should instruct agents to skip orient on empty workspace."""
@@ -436,7 +477,10 @@ class TestAgentPhaseOptimization:
         )
 
     def test_phase3_no_mandatory_file_list(self):
-        """Phase 3 should NOT require file_list before idle — agent already knows workspace from notes."""
+        """Phase 3 should NOT require file_list before idle — agent already knows workspace from notes.
+
+        notes 里已经有 workspace 信息，再列一次目录只是白烧一次 LLM 调用。
+        """
         from llm_service.roles.swarm.agent_protocol import AGENT_LOOP_SYSTEM_PROMPT
         phase3 = AGENT_LOOP_SYSTEM_PROMPT.split("PHASE 3 — SAVE")[1].split("QUALITY SELF-CHECK")[0]
         assert 'file_list(".")' not in phase3, (
@@ -445,7 +489,11 @@ class TestAgentPhaseOptimization:
         )
 
     def test_publish_data_not_too_frequent(self):
-        """publish_data should NOT be on a fixed schedule — agent decides when findings are worth sharing."""
+        """publish_data should NOT be on a fixed schedule — agent decides when findings are worth sharing.
+
+        固定节奏 publish 只是例行状态汇报，每次都要多烧 3-5 次 LLM 调用；
+        应由 agent 判断手上结果是否值得共享。
+        """
         from llm_service.roles.swarm.agent_protocol import AGENT_LOOP_SYSTEM_PROMPT
         assert "every 2-3 tool_calls" not in AGENT_LOOP_SYSTEM_PROMPT, (
             "publish_data every 2-3 tool calls wastes 3-5 LLM calls per agent on routine status. "

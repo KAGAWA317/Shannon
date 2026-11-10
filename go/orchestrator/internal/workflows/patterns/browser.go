@@ -45,6 +45,8 @@ type BrowserLoopResult struct {
 // 2. Agent reasons about what to do AND executes tools in one call
 // 3. Tool results become observations for next iteration
 // 4. Repeat until task complete or max iterations
+// 与把 REASON/ACT 拆成两次调用的 ReactLoop 不同，这里用单个 agent 边推理边行动：
+// 一次调用里既决定又执行 tool，tool 结果作为下一轮观测，直到 task 完成或达到迭代上限。
 func BrowserLoop(
 	ctx workflow.Context,
 	query string,
@@ -264,6 +266,7 @@ func BrowserLoop(
 
 		// Check for no-progress (agent didn't take any action)
 		// Use response pattern detection since tools execute in Python
+		// tool 在 Python 侧执行，因此用 response 文本 pattern 判断"是否毫无动作"。
 		if !responseIndicatesToolUse(agentResult.Response) {
 			logger.Warn("No tool execution detected in response, may be stuck",
 				"iteration", iteration,
@@ -464,6 +467,8 @@ func isBrowserTaskComplete(result activities.AgentExecutionResult) bool {
 	// NOTE: We do NOT check for hasToolExecution here because:
 	// 1. Tools are executed in Python LLM service, not always tracked in Go struct
 	// 2. The agent might just be reporting tool results, not signaling completion
+	// 这里刻意不检查 hasToolExecution：① tool 在 Python LLM 服务中执行，未必记入 Go 结构体；
+	// ② agent 可能只是在汇报 tool 结果，并非宣告完成。
 	// 3. Stuck detection is handled separately via hasRecentToolExecutions
 
 	return false
@@ -472,6 +477,7 @@ func isBrowserTaskComplete(result activities.AgentExecutionResult) bool {
 // hasToolExecution checks if any tools were executed
 // Note: This checks the Go struct, but tools executed in Python may not be tracked here.
 // Use responseIndicatesToolUse for more reliable detection.
+// 只检查 Go 结构体，Python 侧执行的 tool 可能未被记录；更可靠的判断请用 responseIndicatesToolUse。
 func hasToolExecution(toolExecs []activities.ToolExecution) bool {
 	return len(toolExecs) > 0
 }

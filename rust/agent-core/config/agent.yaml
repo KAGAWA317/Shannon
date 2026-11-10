@@ -1,5 +1,6 @@
 # Shannon Agent Core Configuration
 # This file configures resource limits, timeouts, and service settings
+# 本文件配置资源上限、timeout 与服务设置
 
 # WASI Sandbox Configuration
 wasi:

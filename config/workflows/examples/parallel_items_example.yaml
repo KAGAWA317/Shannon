@@ -1,9 +1,12 @@
 # Example: Parallel Item Processing with parallel_by
+# 示例：使用 parallel_by 并行处理条目
 #
 # This template demonstrates the parallel_by feature, which expands a context
 # array into parallel subtasks. Each item in the array gets its own agent.
+# 本模板演示 parallel_by 特性：它会把 context 中的数组展开为并行子 task，数组中的每个条目都会分配到一个独立 Agent。
 #
 # Usage:
+# 用法：
 #   POST /api/v1/tasks
 #   {
 #     "template": "parallel_items_example",
@@ -14,6 +17,7 @@
 #   }
 #
 # With cron scheduling (runs every weekday at 9 AM):
+# 结合 cron 调度（每个工作日上午 9 点运行）：
 #   POST /api/v1/tasks
 #   {
 #     "template": "parallel_items_example",
@@ -51,7 +55,9 @@ metadata:
 
 nodes:
   # Step 1: Research each topic in parallel
+  # 步骤 1：并行研究每个主题
   # The DAG node will spawn one subtask per topic using parallel_by
+  # DAG 节点会借助 parallel_by 为每个主题派生一个子 task
   - id: research_topics
     type: dag
     budget_max: 2000
@@ -68,6 +74,7 @@ nodes:
         Provide a {depth} summary of the key points.
 
   # Step 2: Synthesize results into a combined report
+  # 步骤 2：将结果综合为一份合并报告
   - id: synthesize_report
     type: simple
     strategy: chain_of_thought

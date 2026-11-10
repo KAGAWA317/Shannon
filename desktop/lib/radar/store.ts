@@ -9,6 +9,7 @@ export interface UIState extends AppState {
   leadActive: boolean;
   leadLastPulse: number;
   agentColors: Record<string, number>; // agent name → hue (0-360), populated in swarm mode
+  // agent 名称 → 色相（0-360），仅在 swarm 模式下填充
   applySnapshot: (snapshot: AppState) => void;
   applyTick: (diff: {
     tick_id: number;
@@ -112,6 +113,8 @@ export function createRadarStore(initial?: Partial<AppState>) {
         leadLastPulse: 0,
         // NOTE: agentColors is NOT reset here — it's managed by RadarBridge's
         // swarmAgentRegistry sync effect and must survive status transitions.
+        // 注意：这里不重置 agentColors —— 它由 RadarBridge 的
+        // swarmAgentRegistry 同步 effect 管理，必须在状态切换中保留。
       });
     },
   }));

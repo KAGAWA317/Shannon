@@ -15,6 +15,7 @@ static EVICTIONS_TOTAL: OnceLock<IntCounterVec> = OnceLock::new();
 static ALLOCATION_SIZE: OnceLock<HistogramVec> = OnceLock::new();
 
 // Thread-safe initialization result for memory metrics
+// 内存指标初始化的线程安全结果 cache
 static MEMORY_INIT_RESULT: OnceLock<Result<()>> = OnceLock::new();
 
 // Thread-safe memory metrics initialization
@@ -29,6 +30,7 @@ fn init_memory_metrics() -> Result<()> {
 }
 
 // Internal initialization - only called once
+// 内部初始化，只会被调用一次
 fn init_memory_metrics_internal() -> Result<()> {
     // Check if already initialized (defensive)
     if ALLOCATIONS_TOTAL.get().is_some() {
@@ -111,7 +113,9 @@ impl MemoryPool {
         let pressure_threshold = config.memory.pressure_threshold;
 
         // Initialize memory-specific metrics if not already done (thread-safe)
+        // 若尚未初始化则初始化内存相关指标（线程安全）
         // This uses std::sync::Once internally so it's safe to call multiple times
+        // 内部使用 std::sync::Once，因此可安全地重复调用
         if let Err(e) = init_memory_metrics() {
             tracing::warn!("Failed to initialize memory metrics: {}", e);
         }
@@ -210,9 +214,11 @@ impl MemoryPool {
         let data_size = data.len();
 
         // First, cleanup expired entries to free space
+        // 先清理过期条目以释放空间
         self.cleanup_expired().await;
 
         // If allocation would exceed limits, try LRU eviction first
+        // 若分配会超出上限，先尝试按 LRU 淘汰
         let mut current = *self.current_size.read().await;
         if current + data_size > self.max_total_size {
             let needed = current + data_size - self.max_total_size;
@@ -277,6 +283,7 @@ impl MemoryPool {
         *self.allocation_count.write().await += 1;
 
         // Pressure logging (non-fatal)
+        // 内存压力日志（非致命）
         let usage_pct = *current_size as f64 / self.max_total_size as f64;
         if usage_pct > self.critical_threshold {
             warn!(
@@ -298,7 +305,9 @@ impl MemoryPool {
     }
 
     // TTL semantics: ttl_seconds == 0 means "expire immediately".
+    // TTL 语义：ttl_seconds == 0 表示"立即过期"。
     // Non-zero TTLs are checked against created_at on access and cleanup.
+    // 非零 TTL 会在访问和清理时与 created_at 比较。
     pub async fn retrieve(&self, key: &str) -> Option<Bytes> {
         let mut pools = self.pools.write().await;
 
@@ -383,7 +392,9 @@ impl MemoryPool {
 
     /// Evict least recently used entries to free up space
     // Evict least-recently-used entries until at least needed_bytes are freed.
+    // 淘汰最久未使用的条目，直到至少释放 needed_bytes 字节。
     // Tie-breaker: if last_accessed is equal, fall back to created_at to stabilize ordering.
+    // 排序兜底：last_accessed 相同时改用 created_at，保证顺序稳定。
     async fn evict_lru(&self, needed_bytes: usize) -> usize {
         let mut pools = self.pools.write().await;
 
@@ -532,8 +543,11 @@ impl Drop for MemoryPool {
         // Wait for sweeper task with timeout
         if let Some(handle) = self.sweeper_handle.take() {
             // We need to use block_in_place or spawn_blocking since we're in a sync context
+            // 这里处于同步 context，本应使用 block_in_place 或 spawn_blocking；
             // But since this is Drop, we can't use async, so we'll just detach the task
+            // 但这是 Drop 实现，无法使用异步，因此直接分离 task，
             // and let tokio runtime handle cleanup
+            // 交由 tokio runtime 处理清理。
             handle.abort(); // Abort the task instead of waiting
         }
     }
@@ -551,6 +565,7 @@ pub struct MemoryStats {
 
 // ---------------------------------------------------------------------------------
 // Lightweight memory manager used by FSM (wrapper around MemoryPool + in-memory log)
+// FSM 使用的轻量内存管理器（封装 MemoryPool + 内存日志）
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryEntry {
@@ -578,11 +593,13 @@ impl MemoryManager {
 
     pub async fn store(&self, entry: MemoryEntry) {
         // Keep a rolling buffer up to capacity
+        // 维持滚动缓冲区，长度不超过容量上限
         let mut guard = self.entries.write().await;
         if guard.len() >= self.capacity {
             guard.remove(0);
         }
         // Also cache response bytes in pool (best-effort, 1h TTL)
+        // 同时把 response 字节 cache 到内存池（尽力而为，TTL 1 小时）
         let _ = self
             .pool
             .allocate(

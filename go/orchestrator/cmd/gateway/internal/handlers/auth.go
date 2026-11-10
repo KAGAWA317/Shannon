@@ -17,6 +17,7 @@ import (
 )
 
 // rateLimitEntry tracks request timestamps for sliding window rate limiting
+// rateLimitEntry 记录 request 时间戳，用于滑动窗口 rate limit。
 type rateLimitEntry struct {
 	requests []time.Time
 }
@@ -43,11 +44,13 @@ func NewAuthHandler(authService *auth.Service, oauthVerifier *auth.GoogleOAuthVe
 		rateLimiter:     make(map[string]*rateLimitEntry),
 	}
 	// Start background cleanup goroutine (runs once, not per-request)
+	// 启动一个后台清理 goroutine（只启动一次，不随 request 创建）。
 	go h.cleanupRateLimiter()
 	return h
 }
 
 // cleanupRateLimiter periodically removes stale rate limit entries
+// cleanupRateLimiter 周期性清理过期的 rate limit 记录。
 func (h *AuthHandler) cleanupRateLimiter() {
 	ticker := time.NewTicker(5 * time.Minute)
 	for range ticker.C {
@@ -168,6 +171,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Rate limiting: 30 requests per minute per IP (generous for login retries)
+	// rate limit：每 IP 每分钟 30 次（为登录 retry 留出余量）。
 	if !h.checkRateLimit(getClientIP(r), 30) {
 		h.sendError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Too many registration attempts. Please try again later.")
 		return
@@ -212,6 +216,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Register or retrieve user - returns JWT tokens + optional API key (for new users only)
+	// 注册或取回用户，返回 JWT token 以及可选的 API key（仅新用户）。
 	result, err := h.authService.RegisterFromOAuth(ctx, googleUser)
 	if err != nil {
 		h.logger.Error("Failed to register user from OAuth",
@@ -228,6 +233,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Error("Failed to get tenant", zap.Error(err), zap.String("tenant_id", result.User.TenantID.String()))
 		// Return error for database failures - tenant should exist after registration
+		// 数据库故障直接返回错误——注册完成后 tenant 必然存在。
 		h.sendError(w, http.StatusInternalServerError, "internal_error", "Failed to retrieve account information")
 		return
 	}
@@ -272,6 +278,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Rate limiting: 60 requests per minute per IP (token refresh can be frequent)
+	// rate limit：每 IP 每分钟 60 次（token 刷新可能较频繁）。
 	if !h.checkRateLimit(getClientIP(r), 60) {
 		h.sendError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Too many refresh attempts. Please try again later.")
 		return
@@ -610,10 +617,14 @@ func (h *AuthHandler) sendError(w http.ResponseWriter, statusCode int, errorCode
 // Behind AWS ALB, X-Forwarded-For format is: "spoofable, ..., client_ip_from_alb"
 // ALB appends the real client IP, so the rightmost IP is trustworthy.
 // This prevents spoofing via client-injected X-Forwarded-For headers.
+// getClientIP 从 request 头中提取真实客户端 IP。
+// 在 AWS ALB 后面，X-Forwarded-For 的格式是 "可伪造, ..., 由 ALB 追加的真实客户端 IP"；
+// ALB 会把真实 IP 追加到最右端，因此最右侧的 IP 可信，可防止客户端伪造 X-Forwarded-For。
 func getClientIP(r *http.Request) string {
 	// Check X-Forwarded-For header (set by ALB/proxies)
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		// Take the rightmost non-empty IP (added by ALB, not spoofable)
+		// 取最右侧的非空 IP（由 ALB 追加，不可伪造）。
 		parts := strings.Split(xff, ",")
 		for i := len(parts) - 1; i >= 0; i-- {
 			ip := strings.TrimSpace(parts[i])
@@ -624,6 +635,7 @@ func getClientIP(r *http.Request) string {
 	}
 
 	// Fallback to RemoteAddr — net.SplitHostPort handles IPv6 [::1]:port
+	// 回退到 RemoteAddr——net.SplitHostPort 能正确处理 IPv6 的 [::1]:port。
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr // already bare IP or unparseable, return as-is
@@ -633,6 +645,7 @@ func getClientIP(r *http.Request) string {
 
 func (h *AuthHandler) checkRateLimit(ip string, maxRequests int) bool {
 	// Sliding window rate limiter (production should use Redis)
+	// 滑动窗口 rate limiter（生产环境应改用 Redis）。
 	h.rateLimiterLock.Lock()
 	defer h.rateLimiterLock.Unlock()
 
@@ -665,6 +678,7 @@ func (h *AuthHandler) checkRateLimit(ip string, maxRequests int) bool {
 }
 
 // rateLimitsForPlan returns (rpm, rph) from the loaded rate limit config for a tenant plan.
+// rateLimitsForPlan 从已加载的 rate limit 配置中取出某个 tenant plan 对应的 (rpm, rph)。
 func (h *AuthHandler) rateLimitsForPlan(plan string) (int, int) {
 	if h.rateLimitConfig != nil {
 		if tier, ok := h.rateLimitConfig.Tiers[plan]; ok {

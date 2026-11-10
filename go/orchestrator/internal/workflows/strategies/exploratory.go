@@ -16,6 +16,7 @@ import (
 
 // ExploratoryWorkflow implements iterative discovery with hypothesis testing using patterns
 // This workflow explores a problem space through tree-of-thoughts pattern for systematic exploration
+// 三段式：ToT 探索 → 置信度不足时 Debate → 仍不足则 Reflection；每段之前都有 pause/cancel 检查点。
 func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting ExploratoryWorkflow with patterns",
@@ -46,6 +47,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
 	})
 	// Skip SSE emissions when running as child workflow (parent already emits)
+	// 作为 child 运行时由 parent 统一发 event，重复发会让前端收到两份。
 	controlHandler := &control.SignalHandler{
 		WorkflowID:  workflowID,
 		AgentID:     "exploratory",
@@ -68,6 +70,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 		BranchingFactor:   config.ExploratoryBranchFactor,
 		EvaluationMethod:  "scoring",
 		PruningThreshold:  1.0 - config.ExploratoryConfidenceThreshold, // Invert for pruning
+		// 配置里是"可接受置信度"，剪枝要的是"最低分"，两者互为补数。
 		ExplorationBudget: config.ExploratoryMaxIterations * config.ExploratoryBranchFactor,
 		BacktrackEnabled:  true,
 		ModelTier:         opts.ModelTier,
@@ -88,6 +91,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	}
 
 	// Memory retrieval with gate precedence (hierarchical > simple session)
+	// 两个 version gate 互斥：hierarchical 可用时不再走 simple session，避免同一批记忆注入两次。
 	hierarchicalVersion := workflow.GetVersion(ctx, "memory_retrieval_v1", workflow.DefaultVersion, 1)
 	sessionVersion := workflow.GetVersion(ctx, "session_memory_v1", workflow.DefaultVersion, 1)
 
@@ -135,6 +139,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	}
 
 	// Context compression (version-gated for determinism)
+	// 摘要写回 session，后续轮次直接复用，不再重复压缩同一段历史。
 	compressionVersion := workflow.GetVersion(ctx, "context_compress_v1", workflow.DefaultVersion, 1)
 	if compressionVersion >= 1 && input.SessionID != "" && len(input.History) > 20 {
 		// Check if compression is needed with rate limiting
@@ -207,6 +212,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	}
 
 	// Phase 2: If confidence is low, apply Debate pattern on top findings
+	// Debate 只取树的前 3 个分支当视角、固定 2 轮，避免在低置信时二次爆炸 token。
 	finalResult := totResult.BestSolution
 	totalTokens := totResult.TotalTokens
 	finalConfidence := totResult.Confidence
@@ -254,6 +260,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 		debateContext["exploration_findings"] = totResult.BestPath
 
 		// Inject memory into debate context (reuse from earlier fetch)
+		// 复用前面已抓取的记忆，不再查一次。
 		if len(memoryItems) > 0 {
 			debateContext["agent_memory"] = memoryItems
 		}
@@ -279,6 +286,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	}
 
 	// Phase 3: Apply Reflection pattern for final quality check
+	// 0.9 以上不再 reflection：多一轮 LLM 调用换来的提升有限。
 	if finalConfidence < 0.9 {
 		// Check pause/cancel before reflection phase
 		if err := controlHandler.CheckPausePoint(ctx, "pre_reflection"); err != nil {
@@ -385,6 +393,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 
 	// Aggregate agent metadata (model, provider, tokens, cost)
 	// Resolve actual model from tier using config (pattern doesn't track model used)
+	// pattern 内部不回报实际 model，只能按 tier 反查，因此这里算出的 cost 是估算值。
 	actualModel := getPriorityModelForTier(opts.ModelTier)
 	agentResults := []activities.AgentExecutionResult{
 		{

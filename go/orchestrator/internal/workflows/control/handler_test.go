@@ -83,6 +83,7 @@ func TestPauseSignalReceived(t *testing.T) {
 		_ = workflow.Sleep(ctx, 100*time.Millisecond)
 
 		// Check pause point - this should block if paused
+		// paused 时 CheckPausePoint 会阻塞，收到 resume 才继续往下走。
 		err := handler.CheckPausePoint(ctx, "test_checkpoint")
 		if err != nil {
 			return false, err
@@ -170,6 +171,7 @@ func TestCancelSignalTerminates(t *testing.T) {
 }
 
 // TestReplayDeterminism tests that pause/resume doesn't break replay determinism
+// 同一 workflow 跑两遍必须得到相同结果，pause/resume 不能引入非确定性分支。
 func TestReplayDeterminism(t *testing.T) {
 	// Run the same workflow twice to verify determinism
 	for i := 0; i < 2; i++ {
@@ -326,6 +328,7 @@ func TestChildWorkflowPausePropagation(t *testing.T) {
 
 	// In real scenario, child would receive propagated signal
 	// For this test, we verify the parent workflow completed after pause/resume
+	// 真实场景 child 由 parent 转发信号；这里只验证 parent 侧能正常走完 pause/resume。
 	var result string
 	require.NoError(t, env.GetWorkflowResult(&result))
 	assert.Contains(t, result, "completed")

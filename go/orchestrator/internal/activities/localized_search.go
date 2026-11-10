@@ -13,6 +13,7 @@ import (
 )
 
 // LocalizedSearchInput is the input for a localized search across multiple languages
+// LocalizedSearchInput 是按多语言做本地化检索的入参。
 type LocalizedSearchInput struct {
 	Query            string                 `json:"query"`
 	EntityName       string                 `json:"entity_name,omitempty"`       // Primary entity being researched
@@ -25,6 +26,7 @@ type LocalizedSearchInput struct {
 }
 
 // LocalizedSearchResult contains results from localized searches
+// LocalizedSearchResult 汇总各语言本地化检索的结果。
 type LocalizedSearchResult struct {
 	Results          map[string][]LocalizedResult `json:"results"`           // Language -> results
 	TotalResults     int                          `json:"total_results"`
@@ -35,6 +37,7 @@ type LocalizedSearchResult struct {
 }
 
 // LocalizedResult represents a single result from a localized search
+// LocalizedResult 是本地化检索返回的单条结果。
 type LocalizedResult struct {
 	URL           string  `json:"url"`
 	Title         string  `json:"title"`
@@ -46,6 +49,7 @@ type LocalizedResult struct {
 }
 
 // EntityLocalizationInput is the input for detecting entity name localizations
+// EntityLocalizationInput 是推断实体名各语言写法的入参。
 type EntityLocalizationInput struct {
 	EntityName       string                 `json:"entity_name"`
 	TargetLanguages  []string               `json:"target_languages"` // e.g., ["zh", "ja", "ko"]
@@ -55,6 +59,7 @@ type EntityLocalizationInput struct {
 }
 
 // EntityLocalizationResult contains detected name localizations
+// EntityLocalizationResult 保存推断出的各语言名称及其置信度。
 type EntityLocalizationResult struct {
 	EntityName       string              `json:"entity_name"`
 	LocalizedNames   map[string][]string `json:"localized_names"` // Language -> possible names
@@ -67,6 +72,7 @@ type EntityLocalizationResult struct {
 }
 
 // DetectEntityLocalization detects localized names for an entity
+// DetectEntityLocalization 推断某个实体在各目标语言下的名称。
 func (a *Activities) DetectEntityLocalization(ctx context.Context, input EntityLocalizationInput) (*EntityLocalizationResult, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("DetectEntityLocalization: starting",
@@ -76,6 +82,7 @@ func (a *Activities) DetectEntityLocalization(ctx context.Context, input EntityL
 	)
 
 	// Build prompt for entity localization detection
+	// 构造实体本地化识别用的 prompt。
 	systemPrompt := buildEntityLocalizationPrompt(input)
 	userContent := buildEntityLocalizationContent(input)
 
@@ -155,11 +162,13 @@ func (a *Activities) DetectEntityLocalization(ctx context.Context, input EntityL
 	}
 
 	// Parse structured response
+	// 解析结构化 response。
 	if err := parseEntityLocalizationResponse(llmResp.Response, result); err != nil {
 		logger.Warn("DetectEntityLocalization: failed to parse structured response",
 			"error", err,
 		)
 		// Fallback: use original name for all languages
+		// 兜底：所有语言都直接用原始名称，置信度给低值。
 		for _, lang := range input.TargetLanguages {
 			result.LocalizedNames[lang] = []string{input.EntityName}
 			result.Confidence[lang] = 0.3
@@ -239,6 +248,7 @@ func buildEntityLocalizationContent(input EntityLocalizationInput) string {
 // parseEntityLocalizationResponse parses the LLM response
 func parseEntityLocalizationResponse(response string, result *EntityLocalizationResult) error {
 	// Find JSON in response
+	// 从 response 里截出 JSON。
 	start := strings.Index(response, "{")
 	end := strings.LastIndex(response, "}")
 
@@ -269,8 +279,10 @@ func parseEntityLocalizationResponse(response string, result *EntityLocalization
 }
 
 // GetRegionalSourceSites returns recommended sites for a specific language/region
+// GetRegionalSourceSites 返回指定语言/地区推荐的站点列表。
 func GetRegionalSourceSites(language string) []string {
 	// Default regional sites for common languages
+	// 常见语言的默认地区站点。
 	regionalSites := map[string][]string{
 		"zh": {
 			"36kr.com",        // Chinese tech news

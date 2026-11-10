@@ -24,6 +24,7 @@ mod tests {
     use super::*;
 
     // Same minimal wasm as in wasi_sandbox tests
+    // 与 wasi_sandbox 测试相同的最小 wasm
     const MINIMAL_WASM: &[u8] = &[
         0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x04, 0x01, 0x60, 0x00, 0x00, 0x03,
         0x02, 0x01, 0x00, 0x07, 0x0a, 0x01, 0x06, 0x5f, 0x73, 0x74, 0x61, 0x72, 0x74, 0x00, 0x00,
@@ -64,12 +65,15 @@ pub struct ToolExecutor {
     #[cfg(feature = "wasi")]
     wasi: Option<WasiSandbox>,
     /// When true, Firecracker errors fail fast without WASI fallback.
+    /// 为 true 时，Firecracker 错误直接失败，不回退到 WASI。
     /// Set via DISABLE_WASI_FALLBACK=1 env var (for EKS where Firecracker is required).
+    /// 通过环境变量 DISABLE_WASI_FALLBACK=1 设置（EKS 环境要求必须使用 Firecracker）。
     disable_wasi_fallback: bool,
 }
 
 impl ToolExecutor {
     /// Check if WASI fallback should be disabled (for EKS Firecracker-only mode)
+    /// 判断是否应禁用 WASI 回退（用于 EKS 仅 Firecracker 模式）
     fn should_disable_wasi_fallback() -> bool {
         std::env::var("DISABLE_WASI_FALLBACK")
             .map(|v| v == "1" || v.to_lowercase() == "true")
@@ -116,19 +120,23 @@ impl ToolExecutor {
     #[cfg(not(feature = "wasi"))]
     pub fn set_wasi(&mut self, _wasi: Option<()>) {
         // No-op when WASI is disabled
+        // 未启用 WASI 时为空操作
     }
 
     /// Select tools remotely (stub implementation)
+    /// 远程选择 tool（桩实现）
     pub async fn select_tools_remote(
         &self,
         _task: &str,
         _exclude_dangerous: bool,
     ) -> Result<Vec<String>> {
         // Stub implementation - return basic tools for math calculations
+        // 桩实现：仅返回用于数学计算的基础 tool
         Ok(vec!["calculator".to_string()])
     }
 
     /// Execute a tool via the LLM service
+    /// 通过 LLM 服务执行 tool
     pub async fn execute_tool(
         &self,
         tool_call: &ToolCall,
@@ -144,6 +152,7 @@ impl ToolExecutor {
         }
 
         // Route calculator to local execution
+        // calculator 走本地执行
         if tool_call.tool_name == "calculator" {
             if let Some(expression) = tool_call
                 .parameters
@@ -156,13 +165,16 @@ impl ToolExecutor {
                 );
 
                 // Convert Python-style ** to meval's ^ for exponentiation
+                // 将 Python 风格的 ** 转为 meval 的 ^ 以表示幂运算
                 let converted_expression = expression.replace("**", "^");
                 info!("Converted expression for meval: {}", converted_expression);
 
                 // Use meval for mathematical expression evaluation
+                // 使用 meval 求值数学表达式
                 match meval::eval_str(&converted_expression) {
                     Ok(result) => {
                         // Check for infinity or NaN which indicate math errors
+                        // 检查无穷大或 NaN，这类结果表示数学错误
                         if result.is_infinite() || result.is_nan() {
                             let error_msg = if result.is_infinite() {
                                 "Math error: division by zero"
@@ -210,10 +222,12 @@ impl ToolExecutor {
         }
 
         // Route code execution to WASI sandbox when requested
+        // request 时代码执行路由到 WASI sandbox
         #[cfg(feature = "wasi")]
         if tool_call.tool_name == "code_executor" {
             if let Some(wasi) = &self.wasi {
                 // Expect a wasm module path and optional stdin
+                // 期望 wasm 模块路径及可选 stdin
                 let stdin = tool_call
                     .parameters
                     .get("stdin")
@@ -221,6 +235,7 @@ impl ToolExecutor {
                     .unwrap_or("");
 
                 // Extract argv parameters if provided (needed for Python WASM)
+                // 若提供 argv 参数则提取（Python WASM 需要）
                 let argv = tool_call
                     .parameters
                     .get("argv")
@@ -238,6 +253,7 @@ impl ToolExecutor {
                 );
 
                 // Prefer base64 payload if provided
+                // 若提供 base64 载荷则优先使用
                 let wasm_bytes_res: Result<Vec<u8>> = if let Some(b64) = tool_call
                     .parameters
                     .get("wasm_base64")
@@ -300,6 +316,7 @@ impl ToolExecutor {
         let url = format!("{}/tools/execute", self.llm_service_url);
 
         // Convert session_context from prost Struct to JSON if available
+        // 若存在 session_context，则从 prost Struct 转为 JSON
         let context_json = session_context.map(|ctx| {
             let mut map = serde_json::Map::new();
             for (k, v) in &ctx.fields {
@@ -341,6 +358,7 @@ impl ToolExecutor {
     }
 
     /// Get available tools from the LLM service
+    /// 从 LLM 服务获取可用 tool
     pub async fn get_available_tools(&self, exclude_dangerous: bool) -> Result<Vec<String>> {
         debug!("Fetching available tools");
 
@@ -365,17 +383,20 @@ impl ToolExecutor {
 
     fn should_route_to_firecracker(&self, tool_call: &ToolCall) -> bool {
         // Route firecracker_executor tool directly
+        // firecracker_executor tool 直接路由
         if tool_call.tool_name == "firecracker_executor" {
             info!("Routing to Firecracker: tool_name is firecracker_executor");
             return true;
         }
 
         // Only route code_executor to Firecracker
+        // 仅 code_executor 会路由到 Firecracker
         if tool_call.tool_name != "code_executor" {
             return false;
         }
 
         // Check PYTHON_EXECUTOR_MODE env var directly for reliability
+        // 直接读取 PYTHON_EXECUTOR_MODE 环境变量，更可靠
         let mode = std::env::var("PYTHON_EXECUTOR_MODE")
             .map(|v| v.to_lowercase())
             .unwrap_or_else(|_| "wasi".to_string());
@@ -399,6 +420,7 @@ impl ToolExecutor {
         let client = FirecrackerExecutorClient::from_env();
 
         // Check if Firecracker is available - no fallback, fail fast
+        // 检查 Firecracker 是否可用——不做回退，直接失败
         if !client.is_available().await {
             error!("Firecracker executor unavailable at {}", client.base_url());
             return Ok(ToolResult {
@@ -410,6 +432,7 @@ impl ToolExecutor {
         }
 
         // Accept 'code' or 'stdin' parameter (LLM may use either)
+        // 接受 'code' 或 'stdin' 参数（LLM 可能用其中任一）
         let code = tool_call
             .parameters
             .get("code")
@@ -502,6 +525,7 @@ impl ToolExecutor {
             }
             Err(e) if Self::is_transient_error(&e) => {
                 // WASI fallback disabled (EKS mode) - fail fast
+                // WASI 回退已禁用（EKS 模式）——直接失败
                 error!("Firecracker unavailable (WASI fallback disabled): {}", e);
                 Ok(ToolResult {
                     tool: tool_call.tool_name.clone(),
@@ -520,26 +544,32 @@ impl ToolExecutor {
     }
 
     /// Check if an error is transient and should trigger WASI fallback.
+    /// 判断错误是否为瞬时错误、应触发 WASI 回退。
     /// Returns true for connection refused, timeout, and 503 Service Unavailable.
+    /// 连接被拒绝、timeout 以及 503 Service Unavailable 时返回 true。
     fn is_transient_error(e: &anyhow::Error) -> bool {
         let err_str = e.to_string().to_lowercase();
 
         // Connection refused
+        // 连接被拒绝
         if err_str.contains("connection refused") {
             return true;
         }
 
         // Timeout errors
+        // timeout 错误
         if err_str.contains("timeout") || err_str.contains("timed out") {
             return true;
         }
 
         // 503 Service Unavailable
+        // 503 服务不可用
         if err_str.contains("503") || err_str.contains("service unavailable") {
             return true;
         }
 
         // DNS resolution failure
+        // DNS 解析失败
         if err_str.contains("dns") || err_str.contains("name resolution") {
             return true;
         }
@@ -548,7 +578,9 @@ impl ToolExecutor {
     }
 
     /// Execute code using WASI sandbox as fallback when Firecracker is unavailable.
+    /// Firecracker 不可用时，用 WASI sandbox 作为回退执行代码。
     /// This provides a degraded but functional execution path.
+    /// 提供一条降级但仍可用的执行路径。
     #[cfg(feature = "wasi")]
     async fn execute_wasi_fallback(
         &self,
@@ -556,6 +588,7 @@ impl ToolExecutor {
         _session_context: Option<&prost_types::Struct>,
     ) -> Result<ToolResult> {
         // Get the Python code from parameters
+        // 从参数中获取 Python 代码
         let code = match tool_call.parameters.get("code").and_then(|v| v.as_str()) {
             Some(c) => c,
             None => {
@@ -569,6 +602,7 @@ impl ToolExecutor {
         };
 
         // Check if WASI sandbox is available
+        // 检查 WASI sandbox 是否可用
         let wasi = match &self.wasi {
             Some(w) => w,
             None => {
@@ -586,10 +620,12 @@ impl ToolExecutor {
         };
 
         // Get Python WASM interpreter path from environment
+        // 从环境变量获取 Python WASM 解释器路径
         let wasm_path = std::env::var("PYTHON_WASI_WASM_PATH")
             .unwrap_or_else(|_| "/opt/wasm-interpreters/python-3.11.4.wasm".to_string());
 
         // Read the Python WASM interpreter
+        // 读取 Python WASM 解释器
         let wasm_bytes = match fs::read(&wasm_path).await {
             Ok(bytes) => bytes,
             Err(e) => {
@@ -610,7 +646,9 @@ impl ToolExecutor {
         };
 
         // Execute Python code via WASI with the code as stdin
+        // 通过 WASI 执行 Python 代码，代码经 stdin 传入
         // The Python interpreter reads from stdin when given -c flag
+        // 带 -c 参数时 Python 解释器从 stdin 读取代码
         let argv = Some(vec![
             "python".to_string(),
             "-c".to_string(),
@@ -641,6 +679,7 @@ impl ToolExecutor {
     }
 
     /// Fallback stub when WASI feature is disabled.
+    /// 未启用 WASI feature 时的回退桩实现。
     #[cfg(not(feature = "wasi"))]
     async fn execute_wasi_fallback(
         &self,

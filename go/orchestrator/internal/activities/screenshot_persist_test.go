@@ -18,6 +18,7 @@ func TestPersistScreenshot(t *testing.T) {
 	t.Setenv("SHANNON_SESSION_WORKSPACES_DIR", tmpDir)
 
 	// Create a fake PNG (1KB is enough for all tests)
+	// 构造一个假 PNG（1KB 足够所有测试使用）
 	fakeImage := make([]byte, 1024)
 	for i := range fakeImage {
 		fakeImage[i] = byte(i % 256)
@@ -67,6 +68,7 @@ func TestPersistScreenshot(t *testing.T) {
 
 	t.Run("exactly at minimum length succeeds", func(t *testing.T) {
 		// 100 bytes base64-encoded is 136 chars — above the 100-char guard
+		// 100 字节经 base64 编码后为 136 个字符——高于 100 字符的 guard 阈值
 		smallImage := make([]byte, 100)
 		for i := range smallImage {
 			smallImage[i] = byte(i)
@@ -112,6 +114,7 @@ func TestPersistScreenshot(t *testing.T) {
 
 	t.Run("base64 with whitespace and newlines", func(t *testing.T) {
 		// Insert newlines every 76 chars (MIME-style) and some spaces
+		// 每 76 个字符插入换行（MIME 风格），并加入一些空格
 		var withNewlines strings.Builder
 		for i, c := range b64Data {
 			if i > 0 && i%76 == 0 {

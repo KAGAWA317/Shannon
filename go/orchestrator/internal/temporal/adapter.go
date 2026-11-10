@@ -9,6 +9,7 @@ import (
 )
 
 // ZapAdapter adapts zap logger to Temporal's logger interface
+// ZapAdapter 把 zap logger 适配为 Temporal 的 logger 接口
 type ZapAdapter struct {
 	logger *zap.Logger
 }
@@ -47,8 +48,10 @@ func (z *ZapAdapter) fieldsFromKeyvals(keyvals []interface{}) []zap.Field {
 }
 
 // safeZapField creates a zap field, handling types that zap.Any() can't serialize
+// safeZapField 创建 zap 字段，处理 zap.Any() 无法序列化的类型
 func safeZapField(key string, val interface{}) (field zap.Field) {
 	// Recover from any panic during field creation
+	// 从字段创建期间可能出现的 panic 中恢复
 	defer func() {
 		if r := recover(); r != nil {
 			field = zap.String(key, fmt.Sprintf("<unserializable: %v>", r))
@@ -60,6 +63,7 @@ func safeZapField(key string, val interface{}) (field zap.Field) {
 	}
 
 	// Check for types that can cause zap.Any() to panic
+	// 检查可能导致 zap.Any() panic 的类型
 	rv := reflect.ValueOf(val)
 	switch rv.Kind() {
 	case reflect.Func:
@@ -76,11 +80,13 @@ func safeZapField(key string, val interface{}) (field zap.Field) {
 }
 
 // With returns a new logger with additional fields - required for Temporal SDK compatibility
+// With 返回带附加字段的新 logger——Temporal SDK 兼容性所需
 func (z *ZapAdapter) With(keyvals ...interface{}) log.Logger {
 	return &ZapAdapter{logger: z.logger.With(z.fieldsFromKeyvals(keyvals)...)}
 }
 
 // safeString converts value to string safely for logging
+// safeString 安全地把值转为字符串以便日志记录
 func safeString(val interface{}) string {
 	defer func() {
 		recover() // Ignore any panic during string conversion

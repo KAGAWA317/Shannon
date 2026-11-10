@@ -11,12 +11,16 @@ def test_should_use_source_format_by_role():
     assert should_use_source_format("research") is True
     assert should_use_source_format("generalist") is False
     assert should_use_source_format("research_supervisor") is False  # Not in the list
+    # 白名单只有这两个：research_supervisor 名字里带 research，但不在列表内
     assert should_use_source_format(None) is False
     assert should_use_source_format("") is False
 
 
 def test_validate_interpretation_output_general_allows_non_source():
-    """General format: lenient validation, no format checks."""
+    """General format: lenient validation, no format checks.
+
+    general 格式只做宽松校验，不要求 PART / source 结构。
+    """
     output = "Answer: " + ("x" * 100)
     is_valid, _ = validate_interpretation_output(
         output,
@@ -27,7 +31,10 @@ def test_validate_interpretation_output_general_allows_non_source():
 
 
 def test_validate_interpretation_output_general_rejects_too_short():
-    """General format: still rejects very short output."""
+    """General format: still rejects very short output.
+
+    宽松校验也有下限：过短的输出判为 too_short。
+    """
     output = "Short"
     is_valid, reason = validate_interpretation_output(
         output,
@@ -51,7 +58,10 @@ def test_validate_interpretation_output_general_rejects_continuation():
 
 
 def test_validate_interpretation_output_source_requires_format_when_short():
-    """Source format: requires PART format when output is short."""
+    """Source format: requires PART format when output is short.
+
+    输出偏短时必须有 PART / Source 结构，否则判为 no_format_and_short。
+    """
     output = "This is a plain answer without source headings." + ("x" * 260)
     is_valid, reason = validate_interpretation_output(
         output,
@@ -86,6 +96,9 @@ def test_validate_interpretation_output_rejects_ooda_pattern():
 
     This is the exact bug scenario: the LLM follows the OODA framework
     from the system prompt instead of synthesizing research results.
+
+    这正是当初的 bug 场景：LLM 沿用 system prompt 里的 OODA 框架输出分析，
+    而没有把调研结果综合成报告。
     """
     ooda_output = (
         "## Observe\n"
@@ -129,6 +142,9 @@ def test_validate_interpretation_output_allows_single_observe_mention():
 
     Only reject when 2+ OODA section markers are present, indicating the output
     is structured as an OODA loop rather than incidental word usage.
+
+    只有出现 2 个及以上 OODA section marker 才拒绝：单个词出现在正文里只算措辞，
+    不构成 OODA 结构。
     """
     output = (
         "## Key Findings\n"
@@ -152,6 +168,8 @@ def test_build_interpretation_messages_uses_interpretation_system_prompt():
     """When interpretation_system_prompt is provided, it should replace the tool-loop system prompt.
 
     This is the primary fix: interpretation pass should NOT see OODA/tool-planning instructions.
+
+    这是主要修复点：interpretation 这一轮不应该再看到 OODA 与 tool 编排指令。
     """
     tool_loop_prompt = "You are a research agent. Follow OODA loop. Use web_search..."
     interp_prompt = "You are a report writer. Synthesize findings."
@@ -167,6 +185,7 @@ def test_build_interpretation_messages_uses_interpretation_system_prompt():
     assert len(messages) == 2
     assert messages[0]["role"] == "system"
     # Must use the interpretation system prompt, NOT the tool-loop prompt
+    # 必须用 interpretation system prompt，而不是 tool-loop prompt
     assert messages[0]["content"] == interp_prompt
     assert "OODA" not in messages[0]["content"]
     assert "web_search" not in messages[0]["content"]
@@ -212,6 +231,8 @@ def test_deep_research_preset_has_interpretation_system_prompt():
 
     This is a contract test: if someone removes the field, the OODA contamination
     bug will return. This test ensures the fix persists.
+
+    契约测试：字段一旦被删，OODA 污染 bug 就会复发，所以用测试锁住这次修复。
     """
     from llm_service.roles.deep_research.deep_research_agent import DEEP_RESEARCH_AGENT_PRESET
 
@@ -219,6 +240,7 @@ def test_deep_research_preset_has_interpretation_system_prompt():
     interp_sys = DEEP_RESEARCH_AGENT_PRESET["interpretation_system_prompt"]
     assert isinstance(interp_sys, str)
     assert len(interp_sys) > 100  # Non-trivial content
+    # 长度下限用来排除空串 / 占位符
 
 
 def test_deep_research_interpretation_system_prompt_has_no_ooda():
@@ -226,6 +248,9 @@ def test_deep_research_interpretation_system_prompt_has_no_ooda():
 
     These belong only in the tool-loop system_prompt. Their presence in interpretation
     causes the LLM to output OODA analysis instead of synthesized reports.
+
+    这些内容只属于 tool-loop system_prompt；混进 interpretation 就会让 LLM 输出
+    OODA 分析而不是综合报告。
     """
     from llm_service.roles.deep_research.deep_research_agent import DEEP_RESEARCH_AGENT_PRESET
 
@@ -233,6 +258,7 @@ def test_deep_research_interpretation_system_prompt_has_no_ooda():
     forbidden_patterns = [
         "OODA",
         "Observe",  # as section header concept
+        # 作为 section header 出现即视为污染
         "Orient",
         "web_search",
         "web_fetch",
@@ -258,3 +284,4 @@ def test_deep_research_tool_loop_prompt_has_ooda():
     sys_prompt = DEEP_RESEARCH_AGENT_PRESET["system_prompt"]
     assert "OODA" in sys_prompt
     assert "OBSERVE" in sys_prompt  # "## 1. OBSERVE" in the prompt
+    # tool-loop prompt 里保留 "## 1. OBSERVE" 这样的阶段标题

@@ -38,6 +38,7 @@ func TestLLMModelsHandler_ListModels(t *testing.T) {
 	}
 
 	// Verify structure: each model has id, provider, tier
+	// 验证结构：每个 model 都有 id、provider、tier。
 	for _, m := range resp.Models {
 		if m.ID == "" {
 			t.Error("model has empty id")
@@ -51,6 +52,7 @@ func TestLLMModelsHandler_ListModels(t *testing.T) {
 	}
 
 	// Verify we get models from all three tiers
+	// 验证三个 tier 都有 model 返回。
 	tiers := map[string]bool{}
 	for _, m := range resp.Models {
 		tiers[m.Tier] = true
@@ -84,6 +86,7 @@ func TestLLMModelsHandler_ListModels_SpecificModels(t *testing.T) {
 	}
 
 	// Check specific models from testdata (tier + priority from model_tiers)
+	// 校验 testdata 中的特定 model（tier 与 priority 来自 model_tiers）。
 	tests := []struct {
 		id       string
 		provider string
@@ -113,6 +116,7 @@ func TestLLMModelsHandler_ListModels_SpecificModels(t *testing.T) {
 	}
 
 	// Catalog-only model (not in model_tiers) should appear with priority 0
+	// 仅存在于 catalog 的 model（不在 model_tiers 中）应出现且 priority 为 0。
 	extra, ok := byID["gpt-4.1-2025-04-14"]
 	if !ok {
 		t.Error("catalog-only model gpt-4.1-2025-04-14 not found")

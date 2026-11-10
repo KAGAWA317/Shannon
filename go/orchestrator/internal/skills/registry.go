@@ -11,6 +11,7 @@ import (
 )
 
 // NewRegistry creates a new empty skill registry.
+// NewRegistry 创建空的 skill 注册表。
 func NewRegistry() *SkillRegistry {
 	return &SkillRegistry{
 		skills:     make(map[string]SkillEntry),
@@ -20,6 +21,7 @@ func NewRegistry() *SkillRegistry {
 }
 
 // LoadDirectory scans a directory recursively for *.md skill files.
+// LoadDirectory 递归扫描目录中的 *.md skill 文件。
 func (r *SkillRegistry) LoadDirectory(root string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -29,6 +31,7 @@ func (r *SkillRegistry) LoadDirectory(root string) error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Directory doesn't exist, skip silently (common for optional overlays)
+			// 目录不存在时静默跳过（对可选覆盖层很常见）
 			return nil
 		}
 		return fmt.Errorf("failed to stat directory %s: %w", root, err)
@@ -57,6 +60,7 @@ func (r *SkillRegistry) LoadDirectory(root string) error {
 }
 
 // loadFileLocked loads a single skill file. Caller must hold the lock.
+// loadFileLocked 加载单个 skill 文件。调用方必须持有锁。
 func (r *SkillRegistry) loadFileLocked(path string) error {
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -105,6 +109,8 @@ func (r *SkillRegistry) loadFileLocked(path string) error {
 
 // Get retrieves a skill by key (name or name@version).
 // Returns the skill entry and true if found, or empty entry and false if not.
+// Get 按 key（name 或 name@version）获取 skill。
+// 找到时返回 skill 条目与 true，否则返回空条目与 false。
 func (r *SkillRegistry) Get(key string) (SkillEntry, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -114,6 +120,7 @@ func (r *SkillRegistry) Get(key string) (SkillEntry, bool) {
 }
 
 // List returns all skills as summaries (latest versions only).
+// List 以摘要形式返回所有 skill（仅最新版本）。
 func (r *SkillRegistry) List() []SkillSummary {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -123,11 +130,13 @@ func (r *SkillRegistry) List() []SkillSummary {
 
 	for _, entry := range r.skills {
 		// Only include each skill once (latest version)
+		// 每个 skill 只包含一次（最新版本）
 		if seen[entry.Skill.Name] {
 			continue
 		}
 
 		// Skip if this is a versioned key and not the latest
+		// 若为带版本的键且不是最新版本则跳过
 		latest, ok := r.skills[entry.Skill.Name]
 		if ok && latest.Key != entry.Key {
 			continue
@@ -173,6 +182,7 @@ func (r *SkillRegistry) ListByCategory(category string) []SkillSummary {
 		}
 
 		// Deduplicate by name (in case multiple versions in same category)
+		// 按名称去重（防止同一分类下存在多个版本）
 		if seen[entry.Skill.Name] {
 			continue
 		}
@@ -211,6 +221,7 @@ func (r *SkillRegistry) Categories() []string {
 }
 
 // Count returns the total number of unique skills (by name, not version).
+// Count 返回去重后的 skill 总数（按名称，非按版本）。
 func (r *SkillRegistry) Count() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -219,11 +230,14 @@ func (r *SkillRegistry) Count() int {
 
 // Finalize validates all loaded skills after all directories are loaded.
 // Call this after all LoadDirectory calls complete.
+// Finalize 在所有目录加载完成后校验全部已加载的 skill。
+// 需在所有 LoadDirectory 调用之后调用。
 func (r *SkillRegistry) Finalize() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	// Sort versions for each skill name (descending)
+	// 为每个 skill 名称的版本排序（降序）
 	for name, entries := range r.byName {
 		sort.Slice(entries, func(i, j int) bool {
 			return CompareVersions(entries[i].Skill.Version, entries[j].Skill.Version) > 0
@@ -242,6 +256,7 @@ func (r *SkillRegistry) Finalize() error {
 }
 
 // GetVersions returns all versions of a skill by name, sorted descending.
+// GetVersions 按名称返回某个 skill 的所有版本，降序排列。
 func (r *SkillRegistry) GetVersions(name string) []SkillEntry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
