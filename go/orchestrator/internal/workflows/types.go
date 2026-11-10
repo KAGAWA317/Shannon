@@ -18,6 +18,7 @@ type TaskInput struct {
 	TemplateName    string
 	TemplateVersion string
 	DisableAI       bool // When true, fall back only to templates (no AI decomposition)
+	// 打开后只走模板匹配，不再调用 LLM 做分解。
 
 	// Session context for multi-turn conversations
 	History    []Message              // Recent conversation history
@@ -29,6 +30,7 @@ type TaskInput struct {
 
 	// Workflow behavior flags (deterministic per-run)
 	BypassSingleResult bool // If true, return single successful result directly
+	// 单 subtask 成功时跳过合成调用，省一次 LLM。
 
 	// Parent workflow ID for event streaming (used by child workflows)
 	ParentWorkflowID string // Parent workflow ID for unified event streaming
@@ -38,6 +40,7 @@ type TaskInput struct {
 	ToolParameters map[string]interface{} // Pre-structured parameters for tool execution
 
 	// Optional: preplanned decomposition from router to avoid re-decompose downstream
+	// router 已分解过就透传，下游不再重复调用 DecomposeTask。
 	PreplannedDecomposition *activities.DecompositionResult
 }
 

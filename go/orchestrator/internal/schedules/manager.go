@@ -15,6 +15,7 @@ import (
 )
 
 // Typed errors for proper gRPC code mapping
+// 用于正确映射 gRPC 错误码的类型化错误
 var (
 	ErrInvalidCronExpression = errors.New("invalid cron expression")
 	ErrIntervalTooShort      = errors.New("cron interval too short")
@@ -65,6 +66,7 @@ func (m *Manager) CreateSchedule(ctx context.Context, req *CreateScheduleInput) 
 	}
 
 	// 3a. Check per-tenant schedule limit (from tenant metadata)
+	// 3a. 检查租户级 schedule 上限（来自租户 metadata）
 	maxSchedules, err := m.dbOps.GetTenantMaxSchedules(ctx, req.TenantID)
 	if err != nil {
 		m.logger.Warn("Failed to read tenant max_schedules, skipping tenant limit check", zap.Error(err))
@@ -119,6 +121,8 @@ func (m *Manager) CreateSchedule(ctx context.Context, req *CreateScheduleInput) 
 		Action: &client.ScheduleWorkflowAction{
 			// ID intentionally omitted - Temporal auto-generates unique ID per run
 			// Format: <schedule-id>-<timestamp>, enabling true per-execution history
+			// 有意不指定 ID——Temporal 会为每次运行自动生成唯一 ID
+			// 格式：<schedule-id>-<timestamp>，从而实现真正的按次执行历史
 			Workflow:           "ScheduledTaskWorkflow",
 			TaskQueue:          "shannon-tasks",
 			WorkflowRunTimeout: time.Duration(req.TimeoutSeconds) * time.Second,
@@ -183,6 +187,7 @@ func (m *Manager) CreateSchedule(ctx context.Context, req *CreateScheduleInput) 
 }
 
 // PauseSchedule pauses a schedule (prevents future runs)
+// PauseSchedule 暂停 schedule（阻止后续运行）
 func (m *Manager) PauseSchedule(ctx context.Context, scheduleID uuid.UUID, reason string) error {
 	// 1. Get schedule from DB
 	dbSchedule, err := m.dbOps.GetSchedule(ctx, scheduleID)
@@ -244,6 +249,7 @@ func (m *Manager) ResumeSchedule(ctx context.Context, scheduleID uuid.UUID, reas
 	nextRun := schedule.Next(time.Now().In(tz))
 
 	// 4. Update DB status and next run
+	// 4. 更新 DB 状态与下次运行时间
 	if err := m.dbOps.UpdateScheduleStatus(ctx, scheduleID, ScheduleStatusActive); err != nil {
 		return nil, fmt.Errorf("failed to update schedule status: %w", err)
 	}
@@ -276,6 +282,7 @@ func (m *Manager) DeleteSchedule(ctx context.Context, scheduleID uuid.UUID) erro
 			zap.Error(err),
 		)
 		// Continue with DB deletion even if Temporal delete fails
+		// 即使 Temporal 删除失败，也继续删除 DB 记录
 	}
 
 	// 3. Soft delete in DB
@@ -302,6 +309,7 @@ func (m *Manager) UpdateSchedule(ctx context.Context, req *UpdateScheduleInput) 
 	}
 
 	// 2. Validate new cron expression if provided
+	// 2. 若提供了新的 cron 表达式则校验
 	if req.CronExpression != nil && *req.CronExpression != "" {
 		if _, err := m.cronParser.Parse(*req.CronExpression); err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrInvalidCronExpression, err)
@@ -318,6 +326,7 @@ func (m *Manager) UpdateSchedule(ctx context.Context, req *UpdateScheduleInput) 
 	}
 
 	// 2.6. Validate timezone if provided (reject empty string - use existing or explicit value)
+	// 2.6. 若提供了时区则校验（拒绝空字符串——应使用现有值或显式传值）
 	if req.Timezone != nil {
 		if *req.Timezone == "" {
 			return nil, fmt.Errorf("%w: empty timezone not allowed, omit field to keep existing", ErrInvalidTimezone)
@@ -331,6 +340,7 @@ func (m *Manager) UpdateSchedule(ctx context.Context, req *UpdateScheduleInput) 
 	handle := m.temporalClient.ScheduleClient().GetHandle(ctx, dbSchedule.TemporalScheduleID)
 
 	// Check if any Temporal-affecting fields changed
+	// 检查是否有影响 Temporal 的字段发生变更
 	specChanged := req.CronExpression != nil || req.Timezone != nil
 	actionChanged := req.TaskQuery != nil || req.TaskContext != nil ||
 		req.MaxBudgetPerRunUSD != nil || req.TimeoutSeconds != nil
@@ -370,6 +380,7 @@ func (m *Manager) UpdateSchedule(ctx context.Context, req *UpdateScheduleInput) 
 					spec = &client.ScheduleSpec{}
 				}
 				// Temporal Describe returns compiled calendar specs; clear them to avoid merging old times
+				// Temporal Describe 会返回已编译的 calendar 规格；清空它们以避免合并旧时间
 				spec.Calendars = nil
 				spec.Intervals = nil
 				spec.CronExpressions = []string{cronExpr}
@@ -377,6 +388,7 @@ func (m *Manager) UpdateSchedule(ctx context.Context, req *UpdateScheduleInput) 
 				input.Description.Schedule.Spec = spec
 
 				// Update action args (query/context/budget/timeout)
+				// 更新 action 参数（query/context/budget/timeout）
 				if action, ok := input.Description.Schedule.Action.(*client.ScheduleWorkflowAction); ok {
 					action.Args = []interface{}{
 						ScheduledTaskInput{
@@ -406,12 +418,14 @@ func (m *Manager) UpdateSchedule(ctx context.Context, req *UpdateScheduleInput) 
 	}
 
 	// 5. Get authoritative next run time from Temporal (not local calculation)
+	// 5. 从 Temporal 获取权威的下次运行时间（不使用本地计算）
 	desc, err := handle.Describe(ctx)
 	if err != nil {
 		m.logger.Warn("Failed to describe Temporal schedule, falling back to local calculation",
 			zap.String("schedule_id", req.ScheduleID.String()),
 			zap.Error(err))
 		// Fallback to local calculation if Temporal describe fails
+		// Temporal describe 失败时回退到本地计算
 		cronExpr := dbSchedule.CronExpression
 		if req.CronExpression != nil {
 			cronExpr = *req.CronExpression
@@ -438,6 +452,7 @@ func (m *Manager) UpdateSchedule(ctx context.Context, req *UpdateScheduleInput) 
 		nextRun = desc.Info.NextActionTimes[0]
 	} else {
 		// No next action scheduled (paused or no future runs)
+		// 没有后续 action（已暂停或没有未来运行）
 		nextRun = time.Time{}
 	}
 
@@ -463,6 +478,7 @@ func (m *Manager) ListSchedules(ctx context.Context, userID, tenantID uuid.UUID,
 }
 
 // VerifyScheduleExists checks if a schedule exists in Temporal and marks it as deleted if orphaned
+// VerifyScheduleExists 检查 Temporal 中是否存在该 schedule，若已成孤立则标记为已删除
 func (m *Manager) VerifyScheduleExists(ctx context.Context, schedule *Schedule) (bool, error) {
 	if schedule.Status != ScheduleStatusActive && schedule.Status != ScheduleStatusPaused {
 		return true, nil // Only verify active/paused schedules
@@ -472,6 +488,7 @@ func (m *Manager) VerifyScheduleExists(ctx context.Context, schedule *Schedule) 
 	_, err := handle.Describe(ctx)
 	if err != nil {
 		// Check if it's a "not found" error
+		// 判断是否为“未找到”错误
 		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "NotFound") {
 			m.logger.Warn("Detected orphaned schedule - Temporal schedule not found",
 				zap.String("schedule_id", schedule.ID.String()),
@@ -485,6 +502,7 @@ func (m *Manager) VerifyScheduleExists(ctx context.Context, schedule *Schedule) 
 			return false, nil
 		}
 		// Other errors - don't mark as deleted, just report
+		// 其它错误——不标记为已删除，仅上报
 		m.logger.Warn("Failed to verify Temporal schedule", zap.Error(err))
 		return true, nil // Assume exists if we can't verify
 	}
@@ -492,6 +510,7 @@ func (m *Manager) VerifyScheduleExists(ctx context.Context, schedule *Schedule) 
 }
 
 // DetectAndCleanOrphanedSchedules checks all active schedules and marks orphaned ones as deleted
+// DetectAndCleanOrphanedSchedules 检查所有活跃 schedule，把孤立的标记为已删除
 func (m *Manager) DetectAndCleanOrphanedSchedules(ctx context.Context) ([]uuid.UUID, error) {
 	// Get all active/paused schedules
 	schedules, err := m.dbOps.GetAllActiveSchedules(ctx)
@@ -523,6 +542,7 @@ func (m *Manager) DetectAndCleanOrphanedSchedules(ctx context.Context) ([]uuid.U
 }
 
 // validateMinInterval checks if a cron expression meets the minimum interval requirement
+// validateMinInterval 检查 cron 表达式是否满足最小间隔要求
 func (m *Manager) validateMinInterval(cronExpression string) bool {
 	if m.config.MinCronIntervalMins <= 0 {
 		return true // No minimum enforced
@@ -540,6 +560,7 @@ func (m *Manager) validateMinInterval(cronExpression string) bool {
 	next2 := schedule.Next(next1)
 
 	// Check if interval is at least the minimum
+	// 检查间隔是否不小于最小值
 	intervalMinutes := next2.Sub(next1).Minutes()
 	return intervalMinutes >= float64(m.config.MinCronIntervalMins)
 }

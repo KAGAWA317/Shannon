@@ -23,6 +23,7 @@ type SourceTypeConfig struct {
 }
 
 // RegionalSourceConfig represents a regional/local source configuration
+// RegionalSourceConfig 表示某个区域/本地来源的配置
 type RegionalSourceConfig struct {
 	Description   string   `yaml:"description"`
 	Language      string   `yaml:"language"`
@@ -34,13 +35,16 @@ type RegionalSourceConfig struct {
 }
 
 // DimensionSourceMapping represents source type recommendations for a dimension
+// DimensionSourceMapping 表示某个维度推荐的来源类型
 type DimensionSourceMapping struct {
 	Primary    []string `yaml:"primary"`
 	Secondary  []string `yaml:"secondary"`
 	GapQueries []string `yaml:"gap_queries"` // Queries to use when info is missing
+	// 信息缺失时使用的查询
 }
 
 // EntityGapQuery represents gap-filling query patterns for missing entity info
+// EntityGapQuery 表示实体信息缺失时的补漏查询模式
 type EntityGapQuery struct {
 	Queries     []string `yaml:"queries"`
 	SourceTypes []string `yaml:"source_types"`
@@ -55,6 +59,7 @@ type EntityRelevanceConfig struct {
 }
 
 // PrefetchSource represents a forced prefetch source pattern
+// PrefetchSource 表示强制预取的来源模式
 type PrefetchSource struct {
 	Pattern   string   `yaml:"pattern"`   // URL pattern with {slug} placeholder
 	Priority  int      `yaml:"priority"`  // Lower = higher priority
@@ -85,6 +90,7 @@ type ResultMergingConfig struct {
 }
 
 // SourceTypesConfig represents the complete source types configuration
+// SourceTypesConfig 表示完整的来源类型配置
 type SourceTypesConfig struct {
 	SourceTypes            map[string]SourceTypeConfig       `yaml:"source_types"`
 	RegionalSources        map[string]RegionalSourceConfig   `yaml:"regional_sources"`
@@ -105,6 +111,7 @@ var (
 )
 
 // LoadSourceTypes loads the source_types.yaml configuration file
+// LoadSourceTypes 加载 source_types.yaml 配置文件
 func LoadSourceTypes() (*SourceTypesConfig, error) {
 	sourceTypesConfigMu.RLock()
 	if sourceTypesLoaded {
@@ -129,6 +136,7 @@ func LoadSourceTypes() (*SourceTypesConfig, error) {
 }
 
 // loadSourceTypesFromFile loads source types from the config file
+// loadSourceTypesFromFile 从配置文件加载来源类型
 func loadSourceTypesFromFile() (*SourceTypesConfig, error) {
 	cfgPath := os.Getenv("SOURCE_TYPES_CONFIG_PATH")
 	if cfgPath == "" {
@@ -148,6 +156,7 @@ func loadSourceTypesFromFile() (*SourceTypesConfig, error) {
 
 	if cfgPath == "" {
 		// Return default config if file not found
+		// 文件不存在时返回默认配置
 		return defaultSourceTypesConfig(), nil
 	}
 
@@ -234,6 +243,7 @@ func defaultSourceTypesConfig() *SourceTypesConfig {
 }
 
 // applySourceTypeDefaults applies default values for missing configurations
+// applySourceTypeDefaults 为缺失的配置填充默认值
 func applySourceTypeDefaults(cfg *SourceTypesConfig) {
 	if cfg.ResultMerging.MaxPerDomain == 0 {
 		cfg.ResultMerging.MaxPerDomain = 3
@@ -264,18 +274,21 @@ func applySourceTypeDefaults(cfg *SourceTypesConfig) {
 }
 
 // GetSourceType returns the configuration for a specific source type
+// GetSourceType 返回指定来源类型的配置
 func (c *SourceTypesConfig) GetSourceType(name string) (SourceTypeConfig, bool) {
 	st, ok := c.SourceTypes[name]
 	return st, ok
 }
 
 // GetRegionalSource returns the configuration for a specific regional source
+// GetRegionalSource 返回指定区域来源的配置
 func (c *SourceTypesConfig) GetRegionalSource(name string) (RegionalSourceConfig, bool) {
 	rs, ok := c.RegionalSources[name]
 	return rs, ok
 }
 
 // GetDimensionSources returns the recommended source types for a dimension
+// GetDimensionSources 返回某个维度推荐的来源类型
 func (c *SourceTypesConfig) GetDimensionSources(dimension string) ([]string, []string) {
 	mapping, ok := c.DimensionSourceMapping[dimension]
 	if !ok {
@@ -286,6 +299,7 @@ func (c *SourceTypesConfig) GetDimensionSources(dimension string) ([]string, []s
 }
 
 // GetSitesForSourceType returns the sites list for a source type
+// GetSitesForSourceType 返回某来源类型的站点列表
 func (c *SourceTypesConfig) GetSitesForSourceType(sourceType string) []string {
 	if st, ok := c.SourceTypes[sourceType]; ok {
 		return st.Sites
@@ -297,6 +311,7 @@ func (c *SourceTypesConfig) GetSitesForSourceType(sourceType string) []string {
 }
 
 // GetExaCategoryForSourceType returns the Exa category for a source type
+// GetExaCategoryForSourceType 返回某来源类型对应的 Exa 分类
 func (c *SourceTypesConfig) GetExaCategoryForSourceType(sourceType string) string {
 	if st, ok := c.SourceTypes[sourceType]; ok && st.ExaCategory != nil {
 		return *st.ExaCategory
@@ -305,6 +320,7 @@ func (c *SourceTypesConfig) GetExaCategoryForSourceType(sourceType string) strin
 }
 
 // GetGapQueriesForDimension returns gap-filling queries for a dimension
+// GetGapQueriesForDimension 返回某个维度的补漏查询
 func (c *SourceTypesConfig) GetGapQueriesForDimension(dimension string) []string {
 	if mapping, ok := c.DimensionSourceMapping[dimension]; ok {
 		return mapping.GapQueries
@@ -313,6 +329,7 @@ func (c *SourceTypesConfig) GetGapQueriesForDimension(dimension string) []string
 }
 
 // GetDimensionsForQueryType returns the dimensions for a query type
+// GetDimensionsForQueryType 返回某个查询类型对应的维度
 func (c *SourceTypesConfig) GetDimensionsForQueryType(queryType string) []string {
 	if dims, ok := c.QueryTypeDimensions[queryType]; ok {
 		return dims
@@ -322,6 +339,7 @@ func (c *SourceTypesConfig) GetDimensionsForQueryType(queryType string) []string
 }
 
 // GetEntityGapQueries returns gap-filling query patterns for a missing info type
+// GetEntityGapQueries 返回某类缺失信息的补漏查询模式
 func (c *SourceTypesConfig) GetEntityGapQueries(infoType string) ([]string, []string) {
 	if gq, ok := c.EntityGapQueries[infoType]; ok {
 		return gq.Queries, gq.SourceTypes
@@ -331,8 +349,11 @@ func (c *SourceTypesConfig) GetEntityGapQueries(infoType string) ([]string, []st
 
 // NormalizeDimensionName converts a dimension name to its normalized key form
 // e.g., "Entity Identity" -> "entity_identity", "Financial Performance" -> "financial_performance"
+// NormalizeDimensionName 将维度名转换为规范化键形式
+// 如 "Entity Identity" -> "entity_identity"、"Financial Performance" -> "financial_performance"
 func NormalizeDimensionName(dimension string) string {
 	// Convert to lowercase and replace spaces with underscores
+	// 转为小写并把空格替换为下划线
 	normalized := strings.ToLower(dimension)
 	normalized = strings.ReplaceAll(normalized, " ", "_")
 	normalized = strings.ReplaceAll(normalized, "-", "_")
@@ -347,6 +368,7 @@ func NormalizeDimensionName(dimension string) string {
 }
 
 // GetSourceTypesForDimension returns source types for a dimension, with normalization
+// GetSourceTypesForDimension 返回某个维度的来源类型（带规范化）
 func (c *SourceTypesConfig) GetSourceTypesForDimension(dimension string) (primary, secondary []string) {
 	// Try exact match first
 	if mapping, ok := c.DimensionSourceMapping[dimension]; ok {
@@ -362,6 +384,7 @@ func (c *SourceTypesConfig) GetSourceTypesForDimension(dimension string) (primar
 }
 
 // BuildSiteFilterQueries builds queries with site: prefix for a source type
+// BuildSiteFilterQueries 为某来源类型构造带 site: 前缀的查询
 func (c *SourceTypesConfig) BuildSiteFilterQueries(query, sourceType string) []string {
 	sites := c.GetSitesForSourceType(sourceType)
 	if len(sites) == 0 {
@@ -376,6 +399,7 @@ func (c *SourceTypesConfig) BuildSiteFilterQueries(query, sourceType string) []s
 }
 
 // GetAllSourceTypes returns all available source type names (global + regional)
+// GetAllSourceTypes 返回全部可用来源类型名（全局 + 区域）
 func (c *SourceTypesConfig) GetAllSourceTypes() []string {
 	types := make([]string, 0, len(c.SourceTypes)+len(c.RegionalSources))
 	for name := range c.SourceTypes {
@@ -388,6 +412,7 @@ func (c *SourceTypesConfig) GetAllSourceTypes() []string {
 }
 
 // GetRegionalSourcesForLanguage returns regional sources matching a language
+// GetRegionalSourcesForLanguage 返回与指定语言匹配的区域来源
 func (c *SourceTypesConfig) GetRegionalSourcesForLanguage(lang string) []string {
 	var sources []string
 	for name, rs := range c.RegionalSources {
@@ -400,11 +425,14 @@ func (c *SourceTypesConfig) GetRegionalSourcesForLanguage(lang string) []string 
 
 // ReloadSourceTypes forces a reload of the source types configuration
 // This can be used for hot-reload scenarios
+// ReloadSourceTypes 强制重新加载来源类型配置
+// 可用于热重载场景
 func ReloadSourceTypes() (*SourceTypesConfig, error) {
 	sourceTypesConfigMu.Lock()
 	defer sourceTypesConfigMu.Unlock()
 
 	// Force reload by resetting loaded flag and reloading
+	// 通过重置已加载标志并重新加载来强制刷新
 	cfg, err := loadSourceTypesFromFile()
 	sourceTypesConfig = cfg
 	sourceTypesConfigErr = err
@@ -413,6 +441,7 @@ func ReloadSourceTypes() (*SourceTypesConfig, error) {
 }
 
 // GetConfigPath returns the resolved config file path for debugging
+// GetConfigPath 返回解析后的配置文件路径，便于调试
 func GetSourceTypesConfigPath() string {
 	cfgPath := os.Getenv("SOURCE_TYPES_CONFIG_PATH")
 	if cfgPath != "" {
@@ -435,6 +464,8 @@ func GetSourceTypesConfigPath() string {
 
 // GetPrefetchURLs returns URLs to prefetch for a given entity name and query type
 // The returned URLs are sorted by priority (lower priority value = earlier in list)
+// GetPrefetchURLs 返回给定实体名与查询类型需要预取的 URL
+// 返回的 URL 按优先级排序（priority 值越小越靠前）
 func GetPrefetchURLs(entityName string, queryType string) []string {
 	cfg, err := LoadSourceTypes()
 	if err != nil || cfg == nil {
@@ -447,9 +478,11 @@ func GetPrefetchURLs(entityName string, queryType string) []string {
 	}
 
 	// Generate slug from entity name: lowercase, spaces to hyphens
+	// 由实体名生成 slug：转小写、空格转连字符
 	slug := strings.ToLower(strings.TrimSpace(entityName))
 	slug = strings.ReplaceAll(slug, " ", "-")
 	// Remove special characters that might break URLs
+	// 移除可能破坏 URL 的特殊字符
 	slug = strings.Map(func(r rune) rune {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
 			return r

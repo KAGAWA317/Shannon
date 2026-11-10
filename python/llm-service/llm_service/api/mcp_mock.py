@@ -16,6 +16,8 @@ async def mcp_mock(req: MCPInvokeRequest) -> Dict[str, Any]:
 
     - function: name of the function (supports only "echo")
     - args: payload object
+
+    用于冒烟测试的简单 MCP mock endpoint。
     """
     if req.function.lower() == "echo":
         return {"ok": True, "function": req.function, "echo": req.args or {}}

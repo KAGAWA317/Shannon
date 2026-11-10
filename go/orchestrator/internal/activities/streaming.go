@@ -31,6 +31,7 @@ type StreamProgress struct {
 type StreamingActivities struct {
 	// In production, this would connect to the actual LLM service
 	// For now, we'll simulate streaming
+	// 生产环境应接入真实的 LLM service；目前先模拟 streaming。
 }
 
 // NewStreamingActivities creates a new streaming activities handler
@@ -51,6 +52,8 @@ func (s *StreamingActivities) StreamExecute(ctx context.Context, input StreamExe
 
 	// Execute the agent once to obtain accurate tokens/model (non-streaming call)
 	// We then stream the final response via heartbeats for UI consumption.
+	// 先执行一次 agent 拿到准确的 tokens/model（这次是非流式调用），
+	// 再把最终 response 通过 heartbeat 分块推给 UI。
 	res, err := executeAgentCore(ctx, AgentExecutionInput{
 		Query:     input.Query,
 		AgentID:   input.AgentID,
@@ -199,6 +202,7 @@ func (s *StreamingActivities) BatchStreamExecute(
 
 // simulateAgentResponse simulates an agent's response
 // In production, this would call the actual LLM service
+// 模拟 agent 的 response；生产环境应调用真实的 LLM service。
 func (s *StreamingActivities) simulateAgentResponse(query string, context map[string]interface{}) string {
 	// Generate a response based on the query
 	response := fmt.Sprintf("Based on your query '%s', here is my analysis: ", query)
@@ -228,8 +232,10 @@ type StreamingResult struct {
 }
 
 // GetStreamingMetrics returns metrics for streaming operations
+// 返回 streaming 操作的指标。
 func (s *StreamingActivities) GetStreamingMetrics(ctx context.Context) (map[string]interface{}, error) {
 	// In production, this would return actual metrics
+	// 生产环境应返回真实指标。
 	return map[string]interface{}{
 		"total_streams":         42,
 		"active_streams":        3,

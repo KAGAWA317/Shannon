@@ -23,6 +23,7 @@ interface RunTimelineProps {
 }
 
 /** Get agent-specific icon color for swarm mode. Returns undefined for non-swarm. */
+/** 获取 swarm 模式下 agent 专属的图标颜色；非 swarm 模式返回 undefined。 */
 function getAgentIconColor(
     event: TimelineEvent,
     swarmMode?: boolean,
@@ -50,6 +51,7 @@ export function RunTimeline({ events, swarmMode, agentRegistry }: RunTimelinePro
                         )}
 
                         {/* Icon — use agent color in swarm mode, default status colors otherwise */}
+                        {/* 图标 — swarm 模式使用 agent 颜色，否则使用默认状态颜色 */}
                         <div
                             className={cn(
                                 "absolute left-0 top-1 flex h-6 w-6 items-center justify-center rounded-full border bg-background",

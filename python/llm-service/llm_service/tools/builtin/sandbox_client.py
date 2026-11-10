@@ -1,8 +1,11 @@
 """
 gRPC client for agent-core SandboxService.
+agent-core SandboxService 的 gRPC client。
 
 When SHANNON_USE_WASI_SANDBOX=1, file tools proxy to this service
 instead of executing locally.
+当 SHANNON_USE_WASI_SANDBOX=1 时，文件类 tool 会代理到此服务，
+而不是在本地执行。
 """
 
 import logging
@@ -14,6 +17,7 @@ logger = logging.getLogger(__name__)
 import grpc
 
 # Proto imports - generated from sandbox.proto
+# Proto 导入——由 sandbox.proto 生成
 try:
     from llm_service.grpc_gen.sandbox import sandbox_pb2, sandbox_pb2_grpc
     _PROTO_AVAILABLE = True
@@ -22,11 +26,14 @@ except ImportError:
 
 
 class SandboxClient:
-    """Client for agent-core SandboxService."""
+    """Client for agent-core SandboxService.
+    agent-core SandboxService 的 client。"""
 
     # Default timeout for gRPC calls (seconds)
+    # gRPC 调用的默认 timeout（秒）
     DEFAULT_TIMEOUT = 30
     # Maximum allowed command timeout (prevents DoS via unbounded waits)
+    # 允许的最大命令 timeout（防止通过无界等待造成 DoS）
     MAX_COMMAND_TIMEOUT = 60
 
     def __init__(self, address: Optional[str] = None, timeout: Optional[int] = None):
@@ -38,7 +45,8 @@ class SandboxClient:
         self._stub = None
 
     async def _ensure_connected(self):
-        """Lazy connection to sandbox service."""
+        """Lazy connection to sandbox service.
+        延迟连接到 sandbox service。"""
         if self._channel is None:
             self._channel = grpc.aio.insecure_channel(self.address)
             if _PROTO_AVAILABLE:
@@ -54,6 +62,7 @@ class SandboxClient:
     ) -> Tuple[bool, str, str, dict]:
         """
         Read a file from session workspace.
+        从 session workspace 读取文件。
 
         Returns:
             (success, content, error, metadata)
@@ -99,6 +108,7 @@ class SandboxClient:
     ) -> Tuple[bool, int, str, dict]:
         """
         Write a file to session workspace.
+        向 session workspace 写入文件。
 
         Returns:
             (success, bytes_written, error, metadata)
@@ -144,6 +154,7 @@ class SandboxClient:
     ) -> Tuple[bool, List[dict], str, dict]:
         """
         List files in session workspace.
+        列出 session workspace 中的文件。
 
         Returns:
             (success, entries, error, metadata)
@@ -200,6 +211,7 @@ class SandboxClient:
     ) -> Tuple[bool, List[dict], str, dict]:
         """
         Search file contents in session workspace.
+        在 session workspace 中搜索文件内容。
 
         Returns:
             (success, matches, error, metadata)
@@ -259,6 +271,7 @@ class SandboxClient:
     ) -> Tuple[bool, str, str, dict]:
         """
         Edit a file in session workspace by replacing text.
+        通过替换文本编辑 session workspace 中的文件。
 
         Returns:
             (success, snippet, error, metadata)
@@ -301,6 +314,7 @@ class SandboxClient:
     ) -> Tuple[bool, int, List[str], str]:
         """
         Delete file(s) or empty directory from session workspace.
+        从 session workspace 删除文件或空目录。
 
         Returns:
             (success, deleted_count, deleted_paths, error)
@@ -339,6 +353,7 @@ class SandboxClient:
     ) -> Tuple[bool, str, str, int, str, dict]:
         """
         Execute a safe command in session workspace.
+        在 session workspace 中执行安全命令。
 
         Returns:
             (success, stdout, stderr, exit_code, error, metadata)
@@ -357,12 +372,16 @@ class SandboxClient:
                 timeout_seconds=timeout_seconds,
             )
             # Handle timeout: 0 means "use server default" (30s in Rust)
+            # 处理 timeout：0 表示“使用服务端默认值”（Rust 侧为 30s）
             # Clamp positive values to prevent DoS via unbounded waits
+            # 对正值做上限钳制，防止通过无界等待造成 DoS
             if timeout_seconds <= 0:
                 effective_timeout = self.DEFAULT_TIMEOUT  # Match Rust's default
+                # 与 Rust 侧的默认值保持一致
             else:
                 effective_timeout = min(timeout_seconds, self.MAX_COMMAND_TIMEOUT)
             cmd_timeout = effective_timeout + 5  # Allow 5s buffer for gRPC overhead
+            # 为 gRPC 开销预留 5s buffer
             response = await self._stub.ExecuteCommand(request, timeout=cmd_timeout)
             logger.info("Sandbox gRPC execute_command completed", extra={"session_id": session_id, "operation": "execute_command", "success": response.success})
             return (
@@ -380,7 +399,8 @@ class SandboxClient:
             return (False, "", "", 1, f"gRPC error: {e.details()}", {})
 
     async def close(self):
-        """Close the gRPC channel."""
+        """Close the gRPC channel.
+        关闭 gRPC channel。"""
         if self._channel:
             await self._channel.close()
             self._channel = None
@@ -388,11 +408,13 @@ class SandboxClient:
 
 
 # Singleton client instance
+# 单例 client 实例
 _client: Optional[SandboxClient] = None
 
 
 def get_sandbox_client() -> SandboxClient:
-    """Get or create the sandbox client singleton."""
+    """Get or create the sandbox client singleton.
+    获取或创建 sandbox client 单例。"""
     global _client
     if _client is None:
         _client = SandboxClient()
@@ -400,5 +422,6 @@ def get_sandbox_client() -> SandboxClient:
 
 
 def is_sandbox_enabled() -> bool:
-    """Check if WASI sandbox is enabled."""
+    """Check if WASI sandbox is enabled.
+    检查是否启用了 WASI sandbox。"""
     return os.getenv("SHANNON_USE_WASI_SANDBOX", "0") in ("1", "true", "yes")

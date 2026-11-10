@@ -60,6 +60,7 @@ func TestGenerateFallbackTitle(t *testing.T) {
 			}
 
 			// Verify result doesn't exceed max length (accounting for "...")
+			// 验证结果不超过最大长度（需计入 "..."）
 			runes := []rune(result)
 			if len(runes) > 43 { // 40 + "..." = 43
 				t.Errorf("generateFallbackTitle() result too long: %d runes", len(runes))
@@ -115,6 +116,7 @@ func TestGenerateSessionTitle_InputValidation(t *testing.T) {
 
 func TestGenerateSessionTitle_UTF8Truncation(t *testing.T) {
 	// This test verifies that UTF-8 multi-byte characters are not corrupted during truncation
+	// 该测试验证 UTF-8 多字节字符在截断过程中不会被破坏
 	tests := []struct {
 		name  string
 		title string
@@ -143,6 +145,7 @@ func TestGenerateSessionTitle_UTF8Truncation(t *testing.T) {
 			longTitle := tt.title + tt.title + tt.title
 
 			// Truncate using the same logic as the actual code
+			// 使用与实际代码相同的逻辑进行截断
 			titleRunes := []rune(longTitle)
 			var truncated string
 			if len(titleRunes) > 60 {

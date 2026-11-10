@@ -54,14 +54,17 @@ func (dh *DaemonHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request)
 
 	// onReply callback — routes replies back to the originating channel and/or Temporal workflow,
 	// then broadcasts to all other channels configured for the same agent.
+	// onReply 回调——把回复路由回原渠道和/或 Temporal workflow，再广播给同一 agent 的其他已配置渠道。
 	onReply := func(ctx context.Context, meta daemon.ClaimMetadata, reply daemon.ReplyPayload) {
 		// Signal Temporal workflow if this reply is for a scheduled task.
 		// Skip daemon streams (synthetic "daemon:" prefix) — no Temporal workflow to signal.
+		// 若该回复属于定时 task，则 signal 对应的 Temporal workflow；跳过 daemon stream（合成前缀 "daemon:"），它们没有可 signal 的 workflow。
 		if meta.WorkflowID != "" && !strings.HasPrefix(meta.WorkflowID, "daemon:") {
 			dh.signalWorkflow(ctx, meta, reply)
 		}
 
 		// Outbound channel routing removed in OSS (channels package not available)
+		// OSS 版本已移除出站渠道路由（没有 channels 包）。
 	}
 
 	// Approval callbacks
@@ -113,6 +116,7 @@ func (dh *DaemonHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request)
 }
 
 // signalWorkflow sends a daemon reply signal to the Temporal workflow via the admin server.
+// signalWorkflow 通过 admin server 向 Temporal workflow 发送 daemon 回复 signal。
 func (dh *DaemonHandler) signalWorkflow(ctx context.Context, meta daemon.ClaimMetadata, reply daemon.ReplyPayload) {
 	if dh.adminURL == "" {
 		dh.logger.Warn("cannot signal workflow: adminURL not configured", zap.String("workflow_id", meta.WorkflowID))
@@ -159,6 +163,7 @@ func (dh *DaemonHandler) signalWorkflow(ctx context.Context, meta daemon.ClaimMe
 }
 
 // handleApprovalRequest broadcasts an approval to all channels for the agent.
+// handleApprovalRequest 把审批广播到该 agent 的所有渠道。
 func (dh *DaemonHandler) handleApprovalRequest(ctx context.Context, connID, tenantID, userID string, req daemon.DaemonApprovalRequest) {
 	approval := daemon.PendingApproval{
 		RequestID: req.RequestID,
@@ -181,6 +186,7 @@ func (dh *DaemonHandler) handleApprovalRequest(ctx context.Context, connID, tena
 }
 
 // handleApprovalResolved dismisses channel approval messages when ShanClaw resolved first.
+// handleApprovalResolved 在 ShanClaw 已先解决时，关闭渠道上的审批消息。
 func (dh *DaemonHandler) handleApprovalResolved(ctx context.Context, resolved daemon.DaemonApprovalResolved) {
 	_, err := dh.approvals.Resolve(ctx, resolved.RequestID)
 	if err != nil {
@@ -206,6 +212,7 @@ func isValidDecision(decision string) bool {
 
 // ResolveApproval resolves an approval from a channel callback (Slack/LINE), sends
 // the decision to the daemon, and dismisses other channel messages.
+// ResolveApproval 处理来自渠道回调（Slack/LINE）的审批：把决定发给 daemon，并关闭其他渠道消息。
 func (dh *DaemonHandler) ResolveApproval(ctx context.Context, requestID, decision, resolvedBy string) error {
 	if !isValidDecision(decision) {
 		return fmt.Errorf("invalid approval decision: %q", decision)
@@ -219,6 +226,7 @@ func (dh *DaemonHandler) ResolveApproval(ctx context.Context, requestID, decisio
 	// Send approval_response to daemon — fail closed if delivery fails.
 	// If the daemon can't receive the decision, re-store the approval so
 	// another callback (or retry) can attempt delivery.
+	// 向 daemon 发送 approval_response——投递失败即 fail closed；若 daemon 收不到决定，就把审批重新存回，供其他回调（或 retry）再次投递。
 	payload, _ := json.Marshal(daemon.ApprovalResponsePayload{
 		RequestID:  requestID,
 		Decision:   decision,

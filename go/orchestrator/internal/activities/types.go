@@ -48,24 +48,32 @@ type Subtask struct {
 	Dependencies    []string
 	EstimatedTokens int
 	// Structured subtask classification to avoid brittle string matching
+	// 结构化的 subtask 分类，避免依赖脆弱的字符串匹配。
 	TaskType string `json:"task_type,omitempty"`
 	// Plan IO (optional, plan_io_v1): topics produced/consumed by this subtask
+	// Plan IO（可选，plan_io_v1）：本 subtask 产出与消费的 topic。
 	Produces []string `json:"produces,omitempty"`
 	Consumes []string `json:"consumes,omitempty"`
 	// Optional grouping for research-area-driven decomposition
+	// 可选分组，供按 research area 驱动的 task 拆解使用。
 	ParentArea string `json:"parent_area,omitempty"`
 	// LLM-native tool selection
+	// 由 LLM 自行选择 tool。
 	SuggestedTools []string               `json:"suggested_tools"`
 	ToolParameters map[string]interface{} `json:"tool_parameters"`
 	// Persona assignment for specialized agent behavior
+	// 指定 persona，以启用专门的 agent 行为。
 	SuggestedPersona string `json:"suggested_persona"`
 	// Deep Research 2.0: Task Contract fields for explicit boundaries
+	// Deep Research 2.0：Task Contract 字段，用于显式界定 task 边界。
 	OutputFormat   *OutputFormatSpec   `json:"output_format,omitempty"`   // Expected output structure
 	SourceGuidance *SourceGuidanceSpec `json:"source_guidance,omitempty"` // Source type recommendations
 	SearchBudget   *SearchBudgetSpec   `json:"search_budget,omitempty"`   // Search limits
 	Boundaries     *BoundariesSpec     `json:"boundaries,omitempty"`      // Scope boundaries
 	// Multimodal: whether this subtask needs direct access to user-uploaded attachments.
 	// Set by decomposition LLM. When false, attachments are stripped from agent context to save tokens.
+	// 多模态：该 subtask 是否需要直接访问用户上传的附件。
+	// 由负责拆解的 LLM 设置；为 false 时会从 agent context 中剥离附件以节省 tokens。
 	NeedsAttachments bool `json:"needs_attachments,omitempty"`
 }
 
@@ -79,6 +87,7 @@ type AgentExecutionInput struct {
 	UserID    string   // User identifier (for memory mount, audit)
 	History   []string // Conversation history
 	// LLM-native tool selection
+	// 由 LLM 自行选择 tool。
 	SuggestedTools []string               `json:"suggested_tools"`
 	ToolParameters map[string]interface{} `json:"tool_parameters"`
 	// Persona for specialized agent behavior
@@ -105,14 +114,17 @@ type AgentExecutionResult struct {
 	Success             bool
 	Error               string
 	// Tools used and their outputs (when applicable)
+	// 使用过的 tools 及其输出（适用时）。
 	ToolsUsed      []string               `json:"tools_used,omitempty"`
 	ToolExecutions []ToolExecution        `json:"tool_executions,omitempty"`
 	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 	// ScreenshotPaths holds relative paths of persisted browser screenshots (e.g. "screenshots/17093..._0.png")
+	// ScreenshotPaths 保存已持久化的浏览器截图相对路径（如 "screenshots/17093..._0.png"）。
 	ScreenshotPaths []string `json:"screenshot_paths,omitempty"`
 }
 
 // ToolExecution summarizes a single tool invocation result returned by Agent-Core
+// ToolExecution 概括 Agent-Core 返回的单次 tool 调用结果。
 type ToolExecution struct {
 	Tool        string      `json:"tool"`
 	Success     bool        `json:"success"`
@@ -131,6 +143,7 @@ type SynthesisInput struct {
 	ParentWorkflowID   string      `json:"parent_workflow_id,omitempty"`
 	CollectedCitations interface{} `json:"collected_citations,omitempty"` // []metadata.Citation to avoid import cycle
 	// SessionID for reading workspace files (swarm mode)
+	// SessionID 用于读取 workspace 文件（swarm 模式）。
 	SessionID string `json:"session_id,omitempty"`
 }
 
@@ -170,6 +183,7 @@ type VerifyClaimsInput struct {
 }
 
 // VerificationResult contains claim verification analysis (V2 format with three-category classification)
+// VerificationResult 保存 claim 校验分析结果（V2 格式，按三类判定划分）。
 type VerificationResult struct {
 	OverallConfidence float64          `json:"overall_confidence"` // 0.0-1.0
 	TotalClaims       int              `json:"total_claims"`       // Number of claims extracted
@@ -194,6 +208,7 @@ type VerificationResult struct {
 }
 
 // ClaimVerification contains verification for a single claim (V2 format)
+// ClaimVerification 是单条 claim 的校验结果（V2 格式）。
 type ClaimVerification struct {
 	Claim                string  `json:"claim"`                 // The factual claim text
 	SupportingCitations  []int   `json:"supporting_citations"`  // Citation numbers supporting this claim
@@ -225,6 +240,11 @@ type SessionUpdateInput struct {
 	// session.TotalTokensUsed and pricing so cache cost is reflected in
 	// the running session counter and cost. Cache-blind callers can leave
 	// this zero; the activity will fall back to TokensUsed.
+	// 可选：计入 cache 的 token 总量（= input + output + cache_read +
+	// cache_creation）。大于 0 时 UpdateSessionResult 优先用它写入
+	// session.TotalTokensUsed 并参与计价，使 cache 成本反映到
+	// session 累计计数与费用中。不感知 cache 的调用方可以留 0，
+	// activity 会回退到 TokensUsed。
 	CacheAwareTokensUsed int
 	AgentsUsed           int
 	CostUSD              float64
@@ -241,6 +261,7 @@ type SessionUpdateResult struct {
 }
 
 // AgentUsage captures model-specific token usage for cost calculation
+// AgentUsage 记录按 model 区分的 token 用量，用于成本计算。
 type AgentUsage struct {
 	Model                 string `json:"model"`
 	Provider              string `json:"provider,omitempty"`

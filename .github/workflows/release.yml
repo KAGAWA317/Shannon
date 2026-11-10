@@ -87,6 +87,8 @@ jobs:
 
       # agent-core: amd64 only (Rust + QEMU arm64 is too slow ~60min)
       # Other services: multi-arch (Go/Python are fast under QEMU)
+      # agent-core：仅 amd64（Rust + QEMU 的 arm64 构建约需 60 分钟，过慢）
+      # 其他服务：多架构（Go/Python 在 QEMU 下速度尚可）
       - name: Build and push ${{ matrix.service.name }}
         uses: docker/build-push-action@v5
         with:
@@ -105,6 +107,8 @@ jobs:
 
   # Desktop build is temporarily disabled — missing lib/auth module.
   # Will be restored in a separate workflow once the desktop auth is fixed.
+  # 桌面端构建暂时禁用 — 缺少 lib/auth 模块。
+  # 待桌面端 authentication 修复后，将在单独的 workflow 中恢复。
 
   create-release:
     needs: [build-and-push]

@@ -13,6 +13,7 @@ import (
 )
 
 // DaemonSignalHandler signals Temporal workflows when daemon replies arrive.
+// DaemonSignalHandler 在 daemon 回复到达时向 Temporal workflow 发送 signal。
 type DaemonSignalHandler struct {
 	temporal  client.Client
 	logger    *zap.Logger
@@ -31,6 +32,8 @@ type daemonSignalRequest struct {
 
 // HandleSignal receives a daemon reply and signals the corresponding Temporal workflow.
 // POST /daemon/signal (admin server, internal only)
+// HandleSignal 接收 daemon 回复并向对应的 Temporal workflow 发送 signal。
+// POST /daemon/signal（admin server，仅内部）
 func (h *DaemonSignalHandler) HandleSignal(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -38,6 +41,7 @@ func (h *DaemonSignalHandler) HandleSignal(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Auth via internal token (same pattern as approval/events)
+	// 通过内部 token 做 auth（与 approval/events 相同模式）
 	if h.authToken != "" {
 		token := r.Header.Get("Authorization")
 		if token != "Bearer "+h.authToken {
@@ -79,6 +83,7 @@ func (h *DaemonSignalHandler) HandleSignal(w http.ResponseWriter, r *http.Reques
 }
 
 // RegisterRoutes registers the daemon signal endpoint on the admin HTTP mux.
+// RegisterRoutes 在 admin HTTP mux 上注册 daemon signal 端点。
 func (h *DaemonSignalHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/daemon/signal", h.HandleSignal)
 }

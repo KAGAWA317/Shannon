@@ -22,6 +22,7 @@ const (
 	StreamEventWorkspaceUpdated  StreamEventType = "WORKSPACE_UPDATED"
 	StreamEventTaskListUpdated   StreamEventType = "TASKLIST_UPDATED"
 	// Extended types (emitted when corresponding gates are enabled)
+	// 扩展 event 类型（对应 gate 打开时才会发出）。
 	StreamEventTeamRecruited       StreamEventType = "TEAM_RECRUITED"
 	StreamEventTeamRetired         StreamEventType = "TEAM_RETIRED"
 	StreamEventRoleAssigned        StreamEventType = "ROLE_ASSIGNED"
@@ -53,6 +54,7 @@ const (
 
 	// Stream lifecycle
 	StreamEventStreamEnd StreamEventType = "STREAM_END" // Explicit end-of-stream signal
+	// 显式的流结束信号。
 
 	// Human approval
 	StreamEventApprovalRequested StreamEventType = "APPROVAL_REQUESTED"
@@ -65,6 +67,7 @@ const (
 	StreamEventReviewUserFeedback   StreamEventType = "REVIEW_USER_FEEDBACK"
 
 	// Workflow control (pause/resume/cancel)
+	// workflow 控制：PAUSING/CANCELLING 只表示收到信号，PAUSED/CANCELLED 才表示在 checkpoint 处真正生效。
 	StreamEventWorkflowPausing    StreamEventType = "WORKFLOW_PAUSING"    // Pause signal received
 	StreamEventWorkflowPaused     StreamEventType = "WORKFLOW_PAUSED"     // Actually blocked at checkpoint
 	StreamEventWorkflowResumed    StreamEventType = "WORKFLOW_RESUMED"    // Unblocked after pause
@@ -83,6 +86,7 @@ type EmitTaskUpdateInput struct {
 }
 
 // EmitTaskUpdate logs a minimal deterministic event. In future it can publish to a stream.
+// EmitTaskUpdate 记录一个最小的确定性 event；将来可以改为发布到 stream。
 func EmitTaskUpdate(ctx context.Context, in EmitTaskUpdateInput) error {
 	logger := activity.GetLogger(ctx)
 	logger.Info("streaming_v1 event",
@@ -93,6 +97,7 @@ func EmitTaskUpdate(ctx context.Context, in EmitTaskUpdateInput) error {
 		"ts", in.Timestamp,
 	)
 	// Publish to in-process stream manager (best-effort)
+	// 发布到进程内 stream manager（best-effort）。
 	streaming.Get().Publish(in.WorkflowID, streaming.Event{
 		WorkflowID: in.WorkflowID,
 		Type:       string(in.EventType),

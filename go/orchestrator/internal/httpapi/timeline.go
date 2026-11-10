@@ -20,6 +20,7 @@ import (
 )
 
 // TimelineHandler builds human-readable timelines from Temporal history and optionally persists to DB.
+// TimelineHandler 从 Temporal history 构建可读时间线，并可选持久化到 DB。
 type TimelineHandler struct {
 	tclient  client.Client
 	dbClient *db.Client
@@ -56,6 +57,7 @@ func (h *TimelineHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 // handleBuildTimeline: GET /timeline?workflow_id=&run_id=&mode=summary|full&include_payloads=false&persist=true
+// handleBuildTimeline: GET /timeline?workflow_id=&run_id=&mode=summary|full&include_payloads=false&persist=true
 func (h *TimelineHandler) handleBuildTimeline(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
@@ -88,11 +90,13 @@ func (h *TimelineHandler) handleBuildTimeline(w http.ResponseWriter, r *http.Req
 
 	if persist && h.dbClient != nil {
 		// Persist asynchronously to avoid blocking request path
+		// 异步持久化，避免阻塞 request 路径
 		go func(evts []db.EventLog) {
 			ctx, c := context.WithTimeout(context.Background(), 30*time.Second)
 			defer c()
 			for i := range evts {
 				// Attach a monotonic seq if missing (use index)
+				// 缺少 seq 时补一个单调递增的 seq（用索引）
 				if evts[i].Seq == 0 {
 					evts[i].Seq = uint64(i + 1)
 				}
@@ -125,6 +129,7 @@ type timelineStats struct {
 }
 
 // buildTimeline maps Temporal history to human-readable events. Mode: summary|full
+// buildTimeline 把 Temporal history 映射为可读 event。Mode: summary|full
 func (h *TimelineHandler) buildTimeline(ctx context.Context, workflowID, runID, mode string, includePayloads bool) ([]db.EventLog, timelineStats, error) {
 	it := h.tclient.GetWorkflowHistory(ctx, workflowID, runID, false, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)
 	if it == nil {

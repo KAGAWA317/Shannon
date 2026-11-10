@@ -81,6 +81,7 @@ func (h *SkillHandler) GetSkillVersions(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Convert to summaries
+	// 转换为摘要列表。
 	var summaries []skills.SkillSummary
 	for _, entry := range versions {
 		summaries = append(summaries, skills.SkillSummary{

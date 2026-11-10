@@ -19,6 +19,7 @@ class FakeProvider(LLMProvider):
 
     def _initialize_models(self):
         # noop: tests inject models directly
+        # 空实现：测试直接注入模型
         return
 
     async def complete(self, request: CompletionRequest) -> CompletionResponse:

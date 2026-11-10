@@ -1,16 +1,22 @@
-"""Test swarm fast path: forced_tool_calls with DATA_ONLY_TOOLS skip LLM call."""
+"""Test swarm fast path: forced_tool_calls with DATA_ONLY_TOOLS skip LLM call.
+swarm fast path 测试：带 DATA_ONLY_TOOLS 的 forced_tool_calls 会跳过 LLM 调用。
+"""
 import pytest
 from llm_service.api.agent import DATA_ONLY_TOOLS, generate_tool_digest
 
 
 class TestDataOnlyTools:
-    """Verify DATA_ONLY_TOOLS set contents."""
+    """Verify DATA_ONLY_TOOLS set contents.
+    验证 DATA_ONLY_TOOLS 集合的内容。
+    """
 
     def test_contains_search_tools(self):
         assert "web_search" in DATA_ONLY_TOOLS
 
     def test_excludes_fetch_tools(self):
-        """web_fetch/web_subpage_fetch removed: agent needs full content inline."""
+        """web_fetch/web_subpage_fetch removed: agent needs full content inline.
+        web_fetch/web_subpage_fetch 已移除：agent 需要内联的完整内容。
+        """
         assert "web_fetch" not in DATA_ONLY_TOOLS
         assert "web_subpage_fetch" not in DATA_ONLY_TOOLS
 
@@ -25,18 +31,24 @@ class TestDataOnlyTools:
         assert "calculator" in DATA_ONLY_TOOLS
 
     def test_excludes_non_data_tools(self):
-        """Tools that need LLM interpretation should NOT be in DATA_ONLY_TOOLS."""
+        """Tools that need LLM interpretation should NOT be in DATA_ONLY_TOOLS.
+        需要 LLM 解释的 tool 不应出现在 DATA_ONLY_TOOLS 中。
+        """
         assert "python_executor" not in DATA_ONLY_TOOLS
         assert "web_crawl" not in DATA_ONLY_TOOLS
         assert "file_edit" not in DATA_ONLY_TOOLS
 
     def test_is_frozenset(self):
-        """DATA_ONLY_TOOLS must be immutable."""
+        """DATA_ONLY_TOOLS must be immutable.
+        DATA_ONLY_TOOLS 必须是不可变的。
+        """
         assert isinstance(DATA_ONLY_TOOLS, frozenset)
 
 
 class TestGenerateToolDigest:
-    """Verify generate_tool_digest produces usable output."""
+    """Verify generate_tool_digest produces usable output.
+    验证 generate_tool_digest 产出可用的输出。
+    """
 
     def test_single_successful_web_search(self):
         records = [{
@@ -59,7 +71,9 @@ class TestGenerateToolDigest:
         assert digest == ""
 
     def test_fallback_to_raw_tool_results(self):
-        """When no records but tool_results is provided, digest uses the raw text."""
+        """When no records but tool_results is provided, digest uses the raw text.
+        当没有 records 但提供了 tool_results 时，digest 使用原始文本。
+        """
         digest = generate_tool_digest("some raw tool output", [], max_chars=3000)
         assert "some raw tool output" in digest
         assert "Tool Output Summary" in digest

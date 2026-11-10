@@ -29,6 +29,7 @@ type RegistryConfig struct {
 }
 
 // Registry manages OpenAI-compatible model mappings.
+// Registry 管理 OpenAI 兼容的 model 映射。
 type Registry struct {
 	config  *RegistryConfig
 	mu      sync.RWMutex
@@ -42,6 +43,7 @@ var (
 )
 
 // GetRegistry returns the singleton model registry.
+// GetRegistry 返回单例 model registry。
 func GetRegistry() (*Registry, error) {
 	globalRegistryOnce.Do(func() {
 		globalRegistry, globalRegistryErr = loadRegistry()
@@ -90,6 +92,7 @@ func loadRegistry() (*Registry, error) {
 	}
 
 	// Return default registry if no config file found
+	// 没找到 config 文件时返回默认 registry。
 	return newDefaultRegistry(), nil
 }
 
@@ -152,6 +155,7 @@ func newDefaultRegistry() *Registry {
 }
 
 // GetModel returns the configuration for a model, or error if not found.
+// GetModel 返回指定 model 的配置，model 不存在时返回 error。
 func (r *Registry) GetModel(modelName string) (*ModelConfig, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

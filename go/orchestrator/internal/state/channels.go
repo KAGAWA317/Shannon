@@ -10,6 +10,7 @@ import (
 )
 
 // StateChannel represents a typed, validated state container
+// StateChannel 表示带类型、可校验的状态容器
 type StateChannel struct {
 	Name        string          `json:"name"`
 	Version     string          `json:"version"`
@@ -21,6 +22,7 @@ type StateChannel struct {
 }
 
 // ChannelMetadata contains metadata about the state channel
+// ChannelMetadata 包含状态通道的 metadata
 type ChannelMetadata struct {
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
@@ -37,9 +39,11 @@ type Checkpoint struct {
 }
 
 // Validator is a function that validates state
+// Validator 是校验状态的函数
 type Validator func(interface{}) error
 
 // Validatable interface for types that can validate themselves
+// Validatable 接口供可自校验的类型实现
 type Validatable interface {
 	Validate() error
 }
@@ -59,6 +63,7 @@ func NewStateChannel(name string) *StateChannel {
 }
 
 // AddValidator adds a validation function to the channel
+// AddValidator 为通道添加校验函数
 func (sc *StateChannel) AddValidator(v Validator) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
@@ -173,6 +178,7 @@ func (sc *StateChannel) GetCheckpoint(checkpointID string) (Checkpoint, bool) {
 }
 
 // Clear removes all checkpoints except the most recent N
+// Clear 只保留最近 N 个 checkpoint，其余全部移除
 func (sc *StateChannel) Clear(keepRecent int) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()

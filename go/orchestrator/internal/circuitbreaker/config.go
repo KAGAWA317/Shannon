@@ -7,6 +7,7 @@ import (
 )
 
 // CircuitBreakerConfig represents configuration for a circuit breaker
+// CircuitBreakerConfig 表示 circuit breaker 的配置
 type CircuitBreakerConfig struct {
 	MaxRequests      uint32
 	Interval         time.Duration
@@ -16,6 +17,7 @@ type CircuitBreakerConfig struct {
 }
 
 // GetRedisConfig returns Redis circuit breaker configuration from environment variables
+// GetRedisConfig 从环境变量读取 Redis circuit breaker 配置
 func GetRedisConfig() CircuitBreakerConfig {
 	return CircuitBreakerConfig{
 		MaxRequests:      getEnvUint32("CB_REDIS_MAX_REQUESTS", 5),
@@ -27,6 +29,7 @@ func GetRedisConfig() CircuitBreakerConfig {
 }
 
 // GetDatabaseConfig returns PostgreSQL circuit breaker configuration from environment variables
+// GetDatabaseConfig 从环境变量读取 PostgreSQL circuit breaker 配置
 func GetDatabaseConfig() CircuitBreakerConfig {
 	return CircuitBreakerConfig{
 		MaxRequests:      getEnvUint32("CB_DB_MAX_REQUESTS", 3),
@@ -38,6 +41,7 @@ func GetDatabaseConfig() CircuitBreakerConfig {
 }
 
 // GetGRPCConfig returns gRPC circuit breaker configuration from environment variables
+// GetGRPCConfig 从环境变量读取 gRPC circuit breaker 配置
 func GetGRPCConfig() CircuitBreakerConfig {
 	return CircuitBreakerConfig{
 		MaxRequests:      getEnvUint32("CB_GRPC_MAX_REQUESTS", 5),
@@ -49,6 +53,7 @@ func GetGRPCConfig() CircuitBreakerConfig {
 }
 
 // GetGRPCConnectionConfig returns gRPC connection circuit breaker configuration from environment variables
+// GetGRPCConnectionConfig 从环境变量读取 gRPC 连接级 circuit breaker 配置
 func GetGRPCConnectionConfig() CircuitBreakerConfig {
 	return CircuitBreakerConfig{
 		MaxRequests:      getEnvUint32("CB_GRPC_CONN_MAX_REQUESTS", 3),
@@ -60,6 +65,7 @@ func GetGRPCConnectionConfig() CircuitBreakerConfig {
 }
 
 // GetHTTPConfig returns HTTP circuit breaker configuration from environment variables
+// GetHTTPConfig 从环境变量读取 HTTP circuit breaker 配置
 func GetHTTPConfig() CircuitBreakerConfig {
 	return CircuitBreakerConfig{
 		MaxRequests:      getEnvUint32("CB_HTTP_MAX_REQUESTS", 5),
@@ -71,6 +77,7 @@ func GetHTTPConfig() CircuitBreakerConfig {
 }
 
 // ToConfig converts CircuitBreakerConfig to circuit breaker Config
+// ToConfig 将 CircuitBreakerConfig 转换为 circuit breaker 的 Config
 func (cbc CircuitBreakerConfig) ToConfig() Config {
 	return Config{
 		MaxRequests:      cbc.MaxRequests,

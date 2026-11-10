@@ -28,17 +28,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Stealth mode: patches navigator.webdriver, plugins, chrome.runtime, etc.
+# stealth mode：修补 navigator.webdriver、plugins、chrome.runtime 等特征
 STEALTH_ENABLED = os.getenv("STEALTH_ENABLED", "1").strip().lower() in ("1", "true", "yes")
 _stealth = Stealth() if STEALTH_ENABLED else None
 
 # Proxy fallback for WAF-blocked sites (e.g., Akamai)
+# 针对被 WAF 拦截的站点（如 Akamai）的代理兜底
 SCRAPER_API_KEY = os.getenv("SCRAPER_API_KEY", "")
 PROXY_FALLBACK_ENABLED = bool(SCRAPER_API_KEY)
 
 # Page titles that indicate WAF/bot blocking
+# 表示被 WAF/机器人拦截的页面标题
 WAF_BLOCK_TITLES = {"access denied", "403 forbidden", "attention required", "just a moment"}
 
 # Proxy requests need longer timeout (residential proxy adds latency)
+# 代理 request 需要更长的 timeout（住宅代理会增加延迟）
 PROXY_TIMEOUT_MS = int(os.getenv("PROXY_TIMEOUT_MS", "60000"))
 
 # Configuration (read from environment variables)
@@ -70,6 +74,7 @@ def _is_waf_blocked(title: str) -> bool:
 
 
 # Lazy-initialized proxy browser (only created on first WAF block)
+# 延迟初始化的代理浏览器（仅在首次遇到 WAF 拦截时创建）
 _proxy_browser: Browser = None
 _proxy_browser_lock = asyncio.Lock()
 
@@ -84,6 +89,7 @@ async def _get_proxy_browser() -> Optional[Browser]:
             return _proxy_browser
         logger.info("Launching proxy browser (ScraperAPI)")
         # ScraperAPI proxy: headless_browser_mode optimizes for Playwright/Chromium
+        # ScraperAPI 代理：headless_browser_mode 针对 Playwright/Chromium 做了优化
         _proxy_browser = await _playwright.chromium.launch(
             headless=True,
             proxy={
@@ -111,6 +117,7 @@ _session_manager: BrowserSessionManager = None
 
 
 # Popup dismissal selectors (click-based)
+# 弹窗关闭选择器（基于点击）
 POPUP_SELECTORS = [
     # Cookie consent buttons
     "#onetrust-accept-btn-handler",
@@ -141,6 +148,7 @@ POPUP_SELECTORS = [
 ]
 
 # JavaScript to detect if popup/modal is visible
+# 用于检测弹窗/模态框是否可见的 JavaScript
 POPUP_DETECTION_JS = """
 () => {
     const selectors = [
@@ -183,6 +191,7 @@ POPUP_DETECTION_JS = """
 """
 
 # JavaScript to remove popup elements from DOM
+# 用于从 DOM 中移除弹窗元素的 JavaScript
 POPUP_REMOVAL_JS = """
 () => {
     const selectors = [
@@ -230,6 +239,7 @@ POPUP_REMOVAL_JS = """
 
 # JavaScript to detect scroll-hijacking containers (Swiper, fullPage.js, etc.)
 # Returns slide count if detected, so Python can do slide-by-slide capture.
+# 检测到则返回 slide 数量，便于 Python 逐屏截图
 DETECT_SCROLL_HIJACK_JS = """
 () => {
     const html = document.documentElement;
@@ -269,6 +279,7 @@ DETECT_SCROLL_HIJACK_JS = """
 """
 
 # Navigate to a specific slide index in a scroll-hijacking container
+# 跳转到滚动劫持容器中的指定 slide
 NAVIGATE_TO_SLIDE_JS = """
 (slideIndex) => {
     // Swiper
@@ -298,6 +309,8 @@ NAVIGATE_TO_SLIDE_JS = """
 # Force all lazy-loaded images to eager and trigger load via incremental scroll.
 # Handles: native loading="lazy", IntersectionObserver-based JS lazy loaders,
 # and scroll-triggered CSS animations (opacity:0 until scroll).
+# 覆盖：原生 loading="lazy"、基于 IntersectionObserver 的 JS 懒加载，
+# 以及滚动触发的 CSS 动画（滚动前 opacity:0）。
 FORCE_LAZY_LOAD_JS = """
 () => {
     // Force native lazy images to eager and re-trigger load
@@ -313,6 +326,7 @@ FORCE_LAZY_LOAD_JS = """
 """
 
 # Check how many images are still not loaded
+# 检查还有多少图片未加载完成
 CHECK_IMAGES_LOADED_JS = """
 () => {
     const imgs = document.querySelectorAll('img');
@@ -328,6 +342,7 @@ CHECK_IMAGES_LOADED_JS = """
 
 
 # Check if the currently active slide has visible content (for lazy-loaded slides)
+# 检查当前激活的 slide 是否有可见内容（针对懒加载 slide）
 CHECK_ACTIVE_SLIDE_CONTENT_JS = """
 () => {
     const swiperEl = document.querySelector('.swiper');
@@ -349,6 +364,7 @@ async def _preload_lazy_content(page, viewport_height: int = 800) -> None:
     and scroll-triggered CSS animations. Should be called before full_page screenshots.
     """
     # Layer 1: Force native lazy→eager
+    # 第 1 层：把原生懒加载改为 eager
     try:
         forced = await page.evaluate(FORCE_LAZY_LOAD_JS)
         if forced > 0:
@@ -357,6 +373,7 @@ async def _preload_lazy_content(page, viewport_height: int = 800) -> None:
         logger.debug(f"Force lazy load failed: {e}")
 
     # Layer 2: Incremental scroll to trigger IntersectionObserver/scroll handlers
+    # 第 2 层：增量滚动以触发 IntersectionObserver/滚动处理逻辑
     try:
         scroll_height = await page.evaluate("() => document.documentElement.scrollHeight")
         if scroll_height > viewport_height:
@@ -367,12 +384,14 @@ async def _preload_lazy_content(page, viewport_height: int = 800) -> None:
                 await page.wait_for_timeout(150)
                 pos += step
             # Scroll back to top
+            # 滚回页面顶部
             await page.evaluate("() => window.scrollTo(0, 0)")
             await page.wait_for_timeout(200)
     except Exception as e:
         logger.debug(f"Incremental scroll failed: {e}")
 
     # Layer 3: Wait briefly for any remaining images to finish loading
+    # 第 3 层：短暂等待剩余图片加载完成
     try:
         status = await page.evaluate(CHECK_IMAGES_LOADED_JS)
         if status.get("notLoaded", 0) > 0:
@@ -401,6 +420,7 @@ class CaptureResponse(BaseModel):
 
 
 # Device presets for responsive capture
+# responsive 截图使用的设备预设
 DEVICE_PRESETS = {
     "desktop": {"width": 1280, "height": 800, "is_mobile": False, "has_touch": False},
     "mobile": {"width": 375, "height": 812, "is_mobile": True, "has_touch": True,
@@ -409,6 +429,7 @@ DEVICE_PRESETS = {
 }
 
 # Default selectors for LP section detection (top-level only to avoid over-segmentation)
+# LP 分块检测的默认选择器（只用顶层元素，避免过度切分）
 DEFAULT_SECTION_SELECTORS = [
     "body > section",
     "body > div > section",
@@ -516,6 +537,7 @@ async def lifespan(app: FastAPI):
     logger.info("Browser started (stealth=%s, proxy_fallback=%s)", STEALTH_ENABLED, PROXY_FALLBACK_ENABLED)
 
     # Initialize session manager for browser automation
+    # 初始化浏览器自动化的 session 管理器
     _session_manager = BrowserSessionManager(
         _browser, stealth_fn=_apply_stealth, default_user_agent=DEFAULT_USER_AGENT
     )
@@ -565,12 +587,14 @@ async def _do_capture(browser: Browser, url: str, body: CaptureRequest, timeout_
         page.set_default_timeout(nav_timeout)
 
         # Navigate with timeout (use domcontentloaded to avoid waiting for all resources)
+        # 带 timeout 地导航（使用 domcontentloaded，避免等待所有资源）
         await page.goto(url, timeout=nav_timeout, wait_until="domcontentloaded")
 
         # Wait for page to settle
         await page.wait_for_timeout(body.wait_ms)
 
         # Detect if popup is present
+        # 检测是否存在弹窗
         popup_detected = False
         popup_screenshot_b64 = None
         try:
@@ -579,12 +603,14 @@ async def _do_capture(browser: Browser, url: str, body: CaptureRequest, timeout_
             logger.warning(f"Popup detection failed: {e}")
 
         # If popup detected, capture it first before dismissal
+        # 若检测到弹窗，先截图再关闭
         if popup_detected:
             logger.info(f"Popup detected on {url}, capturing before dismissal")
             popup_bytes = await page.screenshot(full_page=False)  # Viewport only for popup
             popup_screenshot_b64 = base64.b64encode(popup_bytes).decode("utf-8")
 
         # Try to dismiss popups by clicking close buttons
+        # 尝试点击关闭按钮来关闭弹窗
         popups_dismissed = 0
         for selector in POPUP_SELECTORS:
             try:
@@ -595,8 +621,10 @@ async def _do_capture(browser: Browser, url: str, body: CaptureRequest, timeout_
                     await page.wait_for_timeout(500)  # Wait for animation
             except Exception:
                 continue  # Selector not found or not clickable
+                # 选择器不存在或不可点击
 
         # DOM-based popup removal as fallback
+        # 兜底：直接通过 DOM 移除弹窗
         try:
             removed = await page.evaluate(POPUP_REMOVAL_JS)
             popups_dismissed += removed
@@ -604,10 +632,12 @@ async def _do_capture(browser: Browser, url: str, body: CaptureRequest, timeout_
             logger.warning(f"DOM removal failed: {e}")
 
         # Final wait for any animations
+        # 最后等待动画结束
         if popups_dismissed > 0:
             await page.wait_for_timeout(500)
 
         # Detect scroll-hijacking (Swiper, fullPage.js, etc.) and capture slide-by-slide
+        # 检测滚动劫持（Swiper、fullPage.js 等）并逐屏截图
         hijack_info = None
         if body.full_page:
             try:
@@ -645,6 +675,7 @@ async def _do_capture(browser: Browser, url: str, body: CaptureRequest, timeout_
                     await page.evaluate(NAVIGATE_TO_SLIDE_JS, slide_idx)
                     await page.wait_for_timeout(400)
                     # Skip slides that are empty after lazy-load rendering
+                    # 跳过懒加载渲染后仍为空的 slide
                     has_content = await page.evaluate(CHECK_ACTIVE_SLIDE_CONTENT_JS)
                     if not has_content:
                         continue
@@ -682,6 +713,7 @@ async def _do_capture(browser: Browser, url: str, body: CaptureRequest, timeout_
         title = await page.title()
 
         # Extract visible text content if requested (for content hashing/diff)
+        # 按需提取可见文本（用于内容哈希/比对）
         text_content = None
         if body.include_text:
             try:
@@ -724,17 +756,21 @@ async def capture(body: CaptureRequest, _: None = Depends(_rate_limit)):
     url = str(body.url)
 
     # SSRF protection
+    # SSRF 防护
     validate_url(url)
 
     # Check if service is initialized (lifespan startup completed)
+    # 检查 service 是否已初始化（lifespan 启动流程已完成）
     if _semaphore is None or _browser is None:
         raise HTTPException(status_code=503, detail="Service not ready - please retry")
 
     # Acquire semaphore for concurrency control
+    # 获取信号量以控制并发
     async with _semaphore:
         result = await _do_capture(_browser, url, body)
 
         # If WAF blocked and proxy available, retry through residential proxy
+        # 若被 WAF 拦截且已配置代理，则通过住宅代理 retry
         if _is_waf_blocked(result.title) and PROXY_FALLBACK_ENABLED:
             logger.info("WAF blocked on %s (title=%s), retrying with proxy", url, result.title)
             try:
@@ -777,6 +813,7 @@ async def capture_sections(body: SectionCaptureRequest, _: None = Depends(_rate_
                 logger.warning(f"Device '{body.device}' not found, using desktop")
 
             # Create context with device emulation
+            # 创建带设备模拟的 context
             context_opts = {
                 "viewport": {"width": device_settings["width"], "height": device_settings["height"]},
                 "user_agent": device_settings.get("user_agent", DEFAULT_USER_AGENT),
@@ -799,6 +836,7 @@ async def capture_sections(body: SectionCaptureRequest, _: None = Depends(_rate_
             await page.wait_for_timeout(body.wait_ms)
 
             # Dismiss popups (reuse existing logic)
+            # 关闭弹窗（复用已有逻辑）
             for selector in POPUP_SELECTORS:
                 try:
                     element = page.locator(selector).first
@@ -814,6 +852,7 @@ async def capture_sections(body: SectionCaptureRequest, _: None = Depends(_rate_
                 pass
 
             # Detect scroll-hijacking containers (Swiper, fullPage.js, etc.)
+            # 检测滚动劫持容器（Swiper、fullPage.js 等）
             hijack_info = None
             try:
                 hijack_info = await page.evaluate(DETECT_SCROLL_HIJACK_JS)
@@ -826,6 +865,7 @@ async def capture_sections(body: SectionCaptureRequest, _: None = Depends(_rate_
             viewport_height = device_settings["height"]
 
             # For scroll-hijacked pages, capture each slide as a section
+            # 对于滚动劫持页面，把每个 slide 作为独立分块截图
             if hijack_info and hijack_info.get("contentSlides"):
                 logger.info(f"Detected {hijack_info['type']} with {len(hijack_info['contentSlides'])} content slides on {url}")
                 from io import BytesIO
@@ -833,6 +873,7 @@ async def capture_sections(body: SectionCaptureRequest, _: None = Depends(_rate_
                 section_results = []
                 content_slides = hijack_info["contentSlides"]
                 # Cap at max_sections
+                # 不超过 max_sections 上限
                 if len(content_slides) > body.max_sections:
                     content_slides = content_slides[:body.max_sections]
 
@@ -842,6 +883,7 @@ async def capture_sections(body: SectionCaptureRequest, _: None = Depends(_rate_
                         await page.evaluate(NAVIGATE_TO_SLIDE_JS, slide_idx)
                         await page.wait_for_timeout(400)
                         # Skip slides that are empty after lazy-load rendering
+                        # 跳过懒加载渲染后仍为空的 slide
                         has_content = await page.evaluate(CHECK_ACTIVE_SLIDE_CONTENT_JS)
                         if not has_content:
                             continue
@@ -894,6 +936,7 @@ async def capture_sections(body: SectionCaptureRequest, _: None = Depends(_rate_
                 sections_found = len(raw_sections)
 
                 # Fallback: viewport-based chunking if too few sections
+                # 兜底：分块过少时按 viewport 切分
                 if len(raw_sections) < 3:
                     logger.info(f"Only {len(raw_sections)} sections found, using viewport chunking")
                     raw_sections = []
@@ -911,10 +954,12 @@ async def capture_sections(body: SectionCaptureRequest, _: None = Depends(_rate_
                         y += chunk_height
 
                 # Sort by Y position and dedupe overlapping
+                # 按 Y 坐标排序并去除重叠
                 raw_sections.sort(key=lambda s: s["y"])
                 deduped = []
                 for sec in raw_sections:
                     # Skip if overlaps >50% with previous
+                    # 与上一个分块重叠超过 50% 则跳过
                     if deduped:
                         prev = deduped[-1]
                         prev_end = prev["y"] + prev["height"]
@@ -926,6 +971,7 @@ async def capture_sections(body: SectionCaptureRequest, _: None = Depends(_rate_
                     deduped.append(sec)
 
                 # Merge adjacent small sections
+                # 合并相邻的小分块
                 merged = []
                 for sec in deduped:
                     if merged and sec["height"] < body.merge_threshold:
@@ -933,22 +979,27 @@ async def capture_sections(body: SectionCaptureRequest, _: None = Depends(_rate_
                         gap = sec["y"] - (prev["y"] + prev["height"])
                         if gap < 100 and prev["height"] < body.merge_threshold:
                             # Merge with previous
+                            # 与上一个分块合并
                             prev["height"] = (sec["y"] + sec["height"]) - prev["y"]
                             prev["selector"] = "merged"
                             continue
                     merged.append(sec)
 
                 # Cap at max_sections
+                # 不超过 max_sections 上限
                 if len(merged) > body.max_sections:
                     merged = merged[:body.max_sections]
 
                 # Preload lazy content before full-page capture
+                # 整页截图前先预加载懒加载内容
                 await _preload_lazy_content(page, device_settings["height"])
 
                 # Take full-page screenshot first, then clip sections from it
+                # 先截整页，再从整页截图中裁剪各分块
                 full_screenshot_bytes = await page.screenshot(full_page=True)
 
                 # Capture each section by clipping from full screenshot
+                # 从整页截图中裁剪出每个分块
                 section_results = []
                 for idx, sec in enumerate(merged):
                     try:
@@ -959,12 +1010,14 @@ async def capture_sections(body: SectionCaptureRequest, _: None = Depends(_rate_
                         full_img = Image.open(BytesIO(full_screenshot_bytes))
 
                         # Calculate crop box (left, upper, right, lower)
+                        # 计算裁剪区域（left, upper, right, lower）
                         left = 0
                         upper = int(sec["y"])
                         right = int(sec["width"]) if sec["width"] <= full_img.width else full_img.width
                         lower = int(sec["y"] + sec["height"])
 
                         # Clamp to image bounds
+                        # 限制在图片边界内
                         upper = max(0, min(upper, full_img.height))
                         lower = max(0, min(lower, full_img.height))
 
@@ -1026,6 +1079,7 @@ async def capture_sections(body: SectionCaptureRequest, _: None = Depends(_rate_
 # =============================================================================
 # Browser Session API - Stateful browser automation
 # =============================================================================
+# 浏览器 Session API - 有状态的浏览器自动化
 
 class BrowserActionType(str, Enum):
     """Supported browser actions."""
@@ -1163,6 +1217,7 @@ async def browser_action(action_req: BrowserActionRequest, _: None = Depends(_ra
                     raise HTTPException(status_code=400, detail="URL required for navigate action")
 
                 # SSRF protection
+                # SSRF 防护
                 validate_url(action_req.url)
 
                 await page.goto(

@@ -1,4 +1,6 @@
-"""Tests for strip_markdown_json_wrapper robustness."""
+"""Tests for strip_markdown_json_wrapper robustness.
+strip_markdown_json_wrapper 健壮性测试。
+"""
 
 from llm_service.api.agent import strip_markdown_json_wrapper
 
@@ -14,7 +16,9 @@ class TestStripMarkdownJsonWrapper:
         assert result == '{"action": "tool_call", "tool": "web_search"}'
 
     def test_fenced_json_with_trailing_text(self):
-        """The exact bug: LLM outputs JSON in fences + notes after."""
+        """The exact bug: LLM outputs JSON in fences + notes after.
+        正是这个 bug：LLM 在 fences 中输出 JSON，之后还附带 notes。
+        """
         text = (
             '```json\n'
             '{"action": "tool_call", "tool": "web_fetch", "tool_params": {"urls": ["https://example.com"]}}\n'

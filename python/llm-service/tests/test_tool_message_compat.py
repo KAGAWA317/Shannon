@@ -5,6 +5,11 @@ Tests production bugs:
 2. Anthropic provider gets invalid tool_use_id (anthropic_provider.py)
 3. OpenAI/Groq send legacy 'functions' with role:'tool' messages (openai_provider.py)
 4. Legacy function_call not upgraded to tool_calls when role:'tool' present (base.py)
+覆盖以下生产 bug：
+1. prepare_openai_messages 产出空的 tool_call_id（base.py）
+2. Anthropic provider 拿到非法的 tool_use_id（anthropic_provider.py）
+3. OpenAI/Groq 在 role:'tool' message 上仍发送 legacy 'functions'（openai_provider.py）
+4. 存在 role:'tool' 时 legacy function_call 未被升级为 tool_calls（base.py）
 """
 import importlib
 import re
@@ -17,12 +22,17 @@ _has_openai = importlib.util.find_spec("openai") is not None
 
 
 # --- Bug 1: base.py empty ID guard ---
+# --- Bug 1：base.py 的空 ID 兜底 ---
 
 class TestPrepareOpenAIMessagesToolIds:
-    """prepare_openai_messages must never produce empty tool_call_id or tool_call.id."""
+    """prepare_openai_messages must never produce empty tool_call_id or tool_call.id.
+    prepare_openai_messages 绝不能产出空的 tool_call_id 或 tool_call.id。
+    """
 
     def test_empty_tool_use_id_gets_fallback(self):
-        """Anthropic-style messages with empty IDs must get valid fallbacks."""
+        """Anthropic-style messages with empty IDs must get valid fallbacks.
+        Anthropic 风格、ID 为空的 message 必须得到合法兜底值。
+        """
         messages = [
             {"role": "assistant", "content": [
                 {"type": "tool_use", "id": "", "name": "get_weather", "input": {}}
@@ -40,7 +50,9 @@ class TestPrepareOpenAIMessagesToolIds:
                     assert tc["id"], "tool_call id must not be empty"
 
     def test_missing_tool_use_id_key_gets_fallback(self):
-        """tool_result blocks missing tool_use_id key entirely."""
+        """tool_result blocks missing tool_use_id key entirely.
+        tool_result 块完全缺少 tool_use_id key 的情况。
+        """
         messages = [
             {"role": "assistant", "content": [
                 {"type": "tool_use", "id": "", "name": "search", "input": {}}
@@ -48,6 +60,7 @@ class TestPrepareOpenAIMessagesToolIds:
             {"role": "user", "content": [
                 {"type": "tool_result", "content": "data"}
                 # Note: no tool_use_id key at all
+                # 注意：这里根本没有 tool_use_id key
             ]},
         ]
         result = prepare_openai_messages(messages)
@@ -56,7 +69,9 @@ class TestPrepareOpenAIMessagesToolIds:
             assert msg["tool_call_id"], "tool_call_id must not be empty"
 
     def test_valid_ids_pass_through_unchanged(self):
-        """Valid IDs (call_xxx, toolu_xxx) must not be modified."""
+        """Valid IDs (call_xxx, toolu_xxx) must not be modified.
+        合法 ID（call_xxx、toolu_xxx）不得被改写。
+        """
         messages = [
             {"role": "assistant", "content": [
                 {"type": "tool_use", "id": "call_abc123", "name": "search", "input": {}}
@@ -73,9 +88,12 @@ class TestPrepareOpenAIMessagesToolIds:
 
 
 # --- Bug 2: Anthropic tool_use_id sanitization ---
+# --- Bug 2：Anthropic tool_use_id 清洗 ---
 
 class TestAnthropicToolUseIdSanitization:
-    """Anthropic _convert_messages_to_claude_format must produce valid tool_use_id."""
+    """Anthropic _convert_messages_to_claude_format must produce valid tool_use_id.
+    Anthropic 的 _convert_messages_to_claude_format 必须产出合法的 tool_use_id。
+    """
 
     def _convert(self, messages):
         from llm_provider.anthropic_provider import AnthropicProvider
@@ -83,7 +101,9 @@ class TestAnthropicToolUseIdSanitization:
         return provider._convert_messages_to_claude_format(messages)
 
     def test_openai_ids_remain_valid(self):
-        """OpenAI-format call_xxx IDs pass Anthropic regex."""
+        """OpenAI-format call_xxx IDs pass Anthropic regex.
+        OpenAI 格式的 call_xxx ID 能通过 Anthropic 的正则校验。
+        """
         messages = [
             {"role": "user", "content": "test"},
             {"role": "assistant", "content": None, "tool_calls": [
@@ -102,7 +122,9 @@ class TestAnthropicToolUseIdSanitization:
                         assert TOOL_ID_PATTERN.match(block["tool_use_id"]), f"Invalid: {block['tool_use_id']!r}"
 
     def test_empty_ids_get_valid_fallback(self):
-        """Empty string IDs must be replaced with valid fallbacks."""
+        """Empty string IDs must be replaced with valid fallbacks.
+        空字符串 ID 必须替换为合法兜底值。
+        """
         messages = [
             {"role": "user", "content": "test"},
             {"role": "assistant", "content": None, "tool_calls": [
@@ -123,7 +145,9 @@ class TestAnthropicToolUseIdSanitization:
                             f"Empty ID should be replaced: {block['tool_use_id']!r}"
 
     def test_ids_with_special_chars_sanitized(self):
-        """IDs with dots/colons/spaces must be sanitized."""
+        """IDs with dots/colons/spaces must be sanitized.
+        含点、冒号、空格的 ID 必须被清洗。
+        """
         messages = [
             {"role": "user", "content": "test"},
             {"role": "assistant", "content": None, "tool_calls": [
@@ -145,10 +169,13 @@ class TestAnthropicToolUseIdSanitization:
 
 
 # --- Integration: ShanClaw multi-turn conversation ---
+# --- 集成：ShanClaw 多轮对话 ---
 
 class TestCrossProviderToolMessages:
     """Simulate the exact production failure: ShanClaw multi-turn tool
-    conversation routed to different providers."""
+    conversation routed to different providers.
+    复现真实的生产故障：ShanClaw 的多轮 tool 对话被路由到不同 provider。
+    """
 
     SHANCLAW_CONVERSATION = [
         {"role": "system", "content": "You are a helpful assistant."},
@@ -168,7 +195,9 @@ class TestCrossProviderToolMessages:
     ]
 
     def test_shanclaw_messages_to_anthropic(self):
-        """ShanClaw OpenAI-format messages must convert cleanly to Anthropic."""
+        """ShanClaw OpenAI-format messages must convert cleanly to Anthropic.
+        ShanClaw 的 OpenAI 格式 message 必须能干净地转换成 Anthropic 格式。
+        """
         from llm_provider.anthropic_provider import AnthropicProvider
         provider = AnthropicProvider.__new__(AnthropicProvider)
         _, claude_msgs = provider._convert_messages_to_claude_format(
@@ -185,7 +214,9 @@ class TestCrossProviderToolMessages:
                             f"Invalid tool_use_id: {block['tool_use_id']!r}"
 
     def test_shanclaw_messages_to_openai(self):
-        """ShanClaw messages through prepare_openai_messages must have valid IDs."""
+        """ShanClaw messages through prepare_openai_messages must have valid IDs.
+        ShanClaw 的 message 经过 prepare_openai_messages 后必须带合法 ID。
+        """
         result = prepare_openai_messages(self.SHANCLAW_CONVERSATION)
         for msg in result:
             if msg.get("role") == "tool":
@@ -196,11 +227,15 @@ class TestCrossProviderToolMessages:
 
 
 # --- Bug 3: OpenAI/Groq functions → tools conversion ---
+# --- Bug 3：OpenAI/Groq 的 functions → tools 转换 ---
 
 @pytest.mark.skipif(not _has_openai, reason="openai SDK not installed")
 class TestFunctionsToToolsConversion:
     """OpenAI provider must detect role:'tool' messages and convert
-    legacy functions to modern tools param."""
+    legacy functions to modern tools param.
+    OpenAI provider 必须识别 role:'tool' message，并把 legacy functions
+    转成现代的 tools 参数。
+    """
 
     SAMPLE_FUNCTIONS = [
         {"name": "get_weather", "description": "Get weather",
@@ -236,7 +271,9 @@ class TestFunctionsToToolsConversion:
         assert tools[0]["function"]["parameters"] == self.SAMPLE_FUNCTIONS[0]["parameters"]
 
     def test_functions_to_tools_idempotent(self):
-        """Already-wrapped tools format should pass through unchanged."""
+        """Already-wrapped tools format should pass through unchanged.
+        已经是 tools 格式的输入应原样透传。
+        """
         from llm_provider.openai_provider import OpenAIProvider as cls
         already_wrapped = [{"type": "function", "function": self.SAMPLE_FUNCTIONS[0]}]
         tools = cls._functions_to_tools_param(already_wrapped)
@@ -250,25 +287,33 @@ class TestFunctionsToToolsConversion:
 
 
 # --- Bug 4: Legacy function_call → tool_calls upgrade ---
+# --- Bug 4：legacy function_call → tool_calls 升级 ---
 
 class TestFunctionCallToToolCallsUpgrade:
     """When messages contain role:'tool' + assistant function_call (legacy),
-    prepare_openai_messages must upgrade function_call to tool_calls."""
+    prepare_openai_messages must upgrade function_call to tool_calls.
+    当 message 中同时出现 role:'tool' 和 assistant 的 function_call（legacy）时，
+    prepare_openai_messages 必须把 function_call 升级为 tool_calls。
+    """
 
     LEGACY_CONVERSATION = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "What's the weather?"},
         # Legacy format: function_call instead of tool_calls
+        # legacy 格式：用 function_call 而不是 tool_calls
         {"role": "assistant", "content": None,
          "function_call": {"name": "get_weather", "arguments": '{"city": "Tokyo"}'}},
         # Modern format: role:"tool"
+        # 现代格式：role:"tool"
         {"role": "tool", "tool_call_id": "call_abc123", "content": "Sunny, 25C"},
         {"role": "assistant", "content": "It's sunny in Tokyo."},
         {"role": "user", "content": "How about Osaka?"},
     ]
 
     def test_detects_function_call_tool_mismatch(self):
-        """_has_function_call_tool_mismatch detects legacy + modern mix."""
+        """_has_function_call_tool_mismatch detects legacy + modern mix.
+        _has_function_call_tool_mismatch 能识别 legacy 与现代格式混用。
+        """
         assert _has_function_call_tool_mismatch(self.LEGACY_CONVERSATION) is True
 
     def test_no_mismatch_when_no_tool_role(self):
@@ -291,10 +336,13 @@ class TestFunctionCallToToolCallsUpgrade:
         assert _has_function_call_tool_mismatch(messages) is False
 
     def test_upgrade_function_call_to_tool_calls(self):
-        """Legacy function_call must be converted to tool_calls format."""
+        """Legacy function_call must be converted to tool_calls format.
+        legacy function_call 必须转换成 tool_calls 格式。
+        """
         result = prepare_openai_messages(self.LEGACY_CONVERSATION)
 
         # Find the upgraded assistant message
+        # 找到被升级的那条 assistant message
         upgraded = [m for m in result if m.get("tool_calls")]
         assert len(upgraded) == 1, f"Expected 1 upgraded message, got {len(upgraded)}"
 
@@ -305,17 +353,23 @@ class TestFunctionCallToToolCallsUpgrade:
         assert tc["id"], "tool_call must have a non-empty ID"
 
         # function_call key should be removed
+        # function_call key 应被移除
         assert "function_call" not in upgraded[0]
 
     def test_upgrade_preserves_other_messages(self):
-        """Non-function_call messages must pass through unchanged."""
+        """Non-function_call messages must pass through unchanged.
+        不含 function_call 的 message 必须原样透传。
+        """
         result = prepare_openai_messages(self.LEGACY_CONVERSATION)
         # System, user, tool, assistant (text), user should all be present
+        # system、user、tool、assistant（文本）、user 都应存在
         roles = [m["role"] for m in result]
         assert roles == ["system", "user", "assistant", "tool", "assistant", "user"]
 
     def test_fast_path_upgrade(self):
-        """Fast path (all string content) should still upgrade function_call."""
+        """Fast path (all string content) should still upgrade function_call.
+        快速路径（content 全为字符串）也应升级 function_call。
+        """
         messages = [
             {"role": "user", "content": "hi"},
             {"role": "assistant", "content": "Let me check.",
@@ -331,9 +385,12 @@ class TestFunctionCallToToolCallsUpgrade:
 
 
 # --- Bug 5: Defensive sanitization of malformed history ---
+# --- Bug 5：对畸形历史做防御性清洗 ---
 
 class TestSanitizeCompletionMessages:
-    """sanitize_completion_messages must strip malformed entries that crash providers."""
+    """sanitize_completion_messages must strip malformed entries that crash providers.
+    sanitize_completion_messages 必须剔除会让 provider 崩溃的畸形条目。
+    """
 
     def test_strips_tool_call_placeholders(self):
         messages = [
@@ -363,13 +420,16 @@ class TestSanitizeCompletionMessages:
         ]
         result = sanitize_completion_messages(messages)
         # Error assistant stripped → two consecutive users merged → 2 messages
+        # 出错的 assistant 被剔除 → 两条相邻 user 被合并 → 剩 2 条 message
         assert len(result) == 2
         roles = [m["role"] for m in result]
         assert roles == ["user", "assistant"]
         assert result[0]["content"] == "try again"
 
     def test_drops_orphaned_tool_results(self):
-        """role:'tool' without preceding tool_calls must be dropped."""
+        """role:'tool' without preceding tool_calls must be dropped.
+        前面没有 tool_calls 的 role:'tool' 必须被丢弃。
+        """
         messages = [
             {"role": "user", "content": "hi"},
             {"role": "tool", "tool_call_id": "call_123", "content": "result"},
@@ -380,7 +440,9 @@ class TestSanitizeCompletionMessages:
         assert not any(m.get("role") == "tool" for m in result)
 
     def test_keeps_valid_tool_results(self):
-        """role:'tool' following tool_calls assistant must be kept."""
+        """role:'tool' following tool_calls assistant must be kept.
+        紧跟 tool_calls assistant 的 role:'tool' 必须保留。
+        """
         messages = [
             {"role": "user", "content": "weather?"},
             {"role": "assistant", "content": None, "tool_calls": [
@@ -394,7 +456,9 @@ class TestSanitizeCompletionMessages:
         assert len(result) == 4
 
     def test_merges_consecutive_same_role(self):
-        """Consecutive assistant messages should be merged (keep last)."""
+        """Consecutive assistant messages should be merged (keep last).
+        相邻的 assistant message 应被合并（保留最后一条）。
+        """
         messages = [
             {"role": "user", "content": "hi"},
             {"role": "assistant", "content": "first"},
@@ -406,7 +470,9 @@ class TestSanitizeCompletionMessages:
         assert result[1]["content"] == "second"
 
     def test_preserves_consecutive_tool_messages(self):
-        """Multiple role:'tool' messages in a row should NOT be merged."""
+        """Multiple role:'tool' messages in a row should NOT be merged.
+        连续多条 role:'tool' message 不应被合并。
+        """
         messages = [
             {"role": "user", "content": "do both"},
             {"role": "assistant", "content": None, "tool_calls": [
@@ -434,12 +500,15 @@ class TestSanitizeCompletionMessages:
         assert result == messages
 
     def test_production_corrupted_session(self):
-        """Simulate the exact corruption pattern from little-v's session."""
+        """Simulate the exact corruption pattern from little-v's session.
+        复现 little-v 那个 session 的精确损坏形态。
+        """
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": "search the web for AI news"},
             {"role": "assistant", "content": "Let me search for that."},
             # Heartbeat corruption starts here
+            # heartbeat 造成的损坏从这里开始
             {"role": "assistant", "content": "[tool_call: web_search]"},
             {"role": "tool", "tool_call_id": "", "content": "search results here"},
             {"role": "assistant", "content": "[tool_call: web_search]"},
@@ -447,10 +516,12 @@ class TestSanitizeCompletionMessages:
             {"role": "assistant", "content": "I apologize, but I encountered an error processing your request."},
             {"role": "assistant", "content": "[error: agent failed to respond]"},
             # Real user message after corruption
+            # 损坏之后的真实 user message
             {"role": "user", "content": "try again"},
         ]
         result = sanitize_completion_messages(messages)
         # Should be: system, user, assistant ("Let me search"), user ("try again")
+        # 结果应为：system、user、assistant（"Let me search"）、user（"try again"）
         assert len(result) == 4
         roles = [m["role"] for m in result]
         assert roles == ["system", "user", "assistant", "user"]

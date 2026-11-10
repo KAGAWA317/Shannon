@@ -1,10 +1,16 @@
 """Deep Research role presets for ResearchWorkflow.
+Deep Research 角色预设，供 ResearchWorkflow 使用。
 
 This module contains specialized roles for:
+本模块包含以下专用角色：
 - deep_research_agent: Main subtask agent for deep research
+- deep_research_agent：深度研究的主要 subtask agent
 - research_refiner: Query expansion and research planning
+- research_refiner：查询扩展与研究规划
 - domain_discovery: Company domain identification
+- domain_discovery：公司域名识别
 - domain_prefetch: Website content pre-fetching
+- domain_prefetch：网站内容预抓取
 """
 
 from .deep_research_agent import DEEP_RESEARCH_AGENT_PRESET

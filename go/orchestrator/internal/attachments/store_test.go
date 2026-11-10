@@ -90,11 +90,13 @@ func TestStore_SessionIsolation(t *testing.T) {
 	assert.ErrorIs(t, err, ErrAttachmentNotFound)
 
 	// No session param (internal/admin call) → allowed
+	// 无 session 参数（内部/admin 调用）→ 允许
 	att, err = store.Get(ctx, id)
 	require.NoError(t, err)
 	assert.Equal(t, "session-A", att.SessionID)
 
 	// Empty string session param → treated as no-check (backward compat)
+	// session 参数为空字符串 → 视为不校验（向后兼容）
 	att, err = store.Get(ctx, id, "")
 	require.NoError(t, err)
 	assert.Equal(t, "session-A", att.SessionID)

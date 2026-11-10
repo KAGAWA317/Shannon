@@ -112,6 +112,7 @@ func TestUnregisterDropsCount(t *testing.T) {
 	}
 
 	// Unregister unknown ID is a no-op.
+	// 注销未知 ID 是空操作。
 	hub.Unregister("nonexistent")
 }
 
@@ -237,6 +238,7 @@ func TestDispatchStickyRouting(t *testing.T) {
 	hub.Register(c2)
 
 	// Set sticky so thread-5 goes to conn-1 only.
+	// 设置粘性，使 thread-5 只路由到 conn-1。
 	hub.SetSticky(ChannelSlack, "thread-5", "conn-1")
 
 	err := hub.Dispatch(context.Background(), "tenant-a", "user-1", MessagePayload{
@@ -302,6 +304,7 @@ func TestDispatchSystemChannelIgnoresSticky(t *testing.T) {
 	hub.Register(c2)
 
 	// Set sticky for system channel (should be ignored).
+	// 为系统渠道设置粘性（应被忽略）。
 	hub.SetSticky(ChannelSystem, "thread-sys", "conn-1")
 
 	err := hub.Dispatch(context.Background(), "tenant-a", "user-1", MessagePayload{
@@ -314,6 +317,7 @@ func TestDispatchSystemChannelIgnoresSticky(t *testing.T) {
 	}
 
 	// Both still receive it (sticky ignored for system).
+	// 两者仍都收到消息（系统渠道忽略粘性）。
 	if s1.count() != 1 || s2.count() != 1 {
 		t.Fatalf("expected both to receive system message, got %d and %d", s1.count(), s2.count())
 	}
@@ -367,6 +371,7 @@ func TestHandleClaimAndReply(t *testing.T) {
 	}
 
 	// Claim is now released; reply again should fail.
+	// claim 已释放；再次回复应失败。
 	_, err = hub.HandleReply(ctx, "msg-100")
 	if err != ErrClaimNotFound {
 		t.Fatalf("expected ErrClaimNotFound after release, got %v", err)
@@ -450,6 +455,7 @@ func TestHandleProgressWithWorkflowID_Idempotent(t *testing.T) {
 	// First progress with workflow_id → triggers callback
 	hub.HandleProgress(ctx, "msg-400", &ProgressPayload{WorkflowID: "wf-456"})
 	// Second progress with same workflow_id → no callback (already set)
+	// 相同 workflow_id 的第二次进度 → 不触发回调（已设置过）
 	hub.HandleProgress(ctx, "msg-400", &ProgressPayload{WorkflowID: "wf-456"})
 	// Third progress without workflow_id → no callback
 	hub.HandleProgress(ctx, "msg-400", nil)

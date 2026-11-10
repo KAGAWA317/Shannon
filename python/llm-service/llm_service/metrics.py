@@ -1,9 +1,13 @@
-"""Prometheus metrics for Shannon LLM Service"""
+"""Prometheus metrics for Shannon LLM Service
+
+Shannon LLM Service 的 Prometheus metrics。
+"""
 
 import time
 from prometheus_client import Counter, Histogram, Gauge, Info
 
 # LLM completion metrics
+# LLM completion 指标
 LLM_REQUESTS_TOTAL = Counter(
     "llm_requests_total",
     "Total number of LLM requests",
@@ -28,6 +32,7 @@ LLM_COST_TOTAL = Counter(
 )
 
 # Service metrics
+# 服务指标
 SERVICE_INFO = Info("llm_service_info", "LLM service information")
 
 ACTIVE_CONNECTIONS = Gauge(
@@ -35,6 +40,7 @@ ACTIVE_CONNECTIONS = Gauge(
 )
 
 # Error metrics
+# 错误指标
 ERROR_REQUESTS_TOTAL = Counter(
     "llm_service_errors_total",
     "Total number of errors",
@@ -42,6 +48,7 @@ ERROR_REQUESTS_TOTAL = Counter(
 )
 
 # MCP metrics
+# MCP 指标
 MCP_REQUESTS_TOTAL = Counter(
     "llm_mcp_requests_total",
     "Total number of MCP requests",
@@ -56,6 +63,7 @@ MCP_REQUEST_DURATION = Histogram(
 )
 
 # Planner fallback metrics
+# planner fallback 指标
 PLANNER_FALLBACKS_TOTAL = Counter(
     "llm_planner_fallbacks_total",
     "Total number of planner fallbacks to heuristic/static plan",
@@ -63,7 +71,10 @@ PLANNER_FALLBACKS_TOTAL = Counter(
 
 
 class MetricsCollector:
-    """Collects and manages metrics for the LLM service"""
+    """Collects and manages metrics for the LLM service
+
+    收集并管理 LLM service 的指标。
+    """
 
     def __init__(
         self, service_name: str = "shannon-llm-service", version: str = "0.1.0"
@@ -72,13 +83,18 @@ class MetricsCollector:
         self.version = version
 
         # Set service info
+        # 设置服务信息
         SERVICE_INFO.info({"service_name": service_name, "version": version})
 
     def record_cache_request(self, operation: str, status: str, duration: float):
-        """No-op: API-layer cache metrics removed (single cache strategy)."""
+        """No-op: API-layer cache metrics removed (single cache strategy).
+
+        空操作：API 层 cache 指标已移除（单一 cache 策略）。
+        """
         return
 
     # API-layer cache stats removed (single cache strategy)
+    # API 层 cache 统计已移除（单一 cache 策略）
 
     def record_llm_request(
         self,
@@ -91,7 +107,10 @@ class MetricsCollector:
         completion_tokens: int,
         cost: float,
     ):
-        """Record LLM request metrics"""
+        """Record LLM request metrics
+
+        记录 LLM request 指标。
+        """
         cache_status = "hit" if cache_hit else "miss"
 
         LLM_REQUESTS_TOTAL.labels(
@@ -111,15 +130,24 @@ class MetricsCollector:
         LLM_COST_TOTAL.labels(provider=provider, model=model).inc(cost)
 
     def record_error(self, error_type: str, component: str):
-        """Record error metrics"""
+        """Record error metrics
+
+        记录错误指标。
+        """
         ERROR_REQUESTS_TOTAL.labels(error_type=error_type, component=component).inc()
 
     def record_planner_fallback(self):
-        """Record a planner fallback occurrence"""
+        """Record a planner fallback occurrence
+
+        记录一次 planner fallback。
+        """
         PLANNER_FALLBACKS_TOTAL.inc()
 
     def set_active_connections(self, count: int):
-        """Update active connections count"""
+        """Update active connections count
+
+        更新活跃连接数。
+        """
         ACTIVE_CONNECTIONS.set(count)
 
     # --- MCP ---
@@ -133,11 +161,15 @@ class MetricsCollector:
 
 
 # Global metrics instance
+# 全局 metrics 实例
 metrics = MetricsCollector()
 
 
 class TimedOperation:
-    """Context manager for timing operations"""
+    """Context manager for timing operations
+
+    用于计时的 context 管理器。
+    """
 
     def __init__(self, operation_name: str, component: str = "service"):
         self.operation_name = operation_name
@@ -153,6 +185,7 @@ class TimedOperation:
         self.duration = time.time() - self.start_time
 
         # Record error if exception occurred
+        # 若发生 exception 则记录错误
         if exc_type is not None:
             error_type = exc_type.__name__ if exc_type else "unknown"
             metrics.record_error(error_type, self.component)

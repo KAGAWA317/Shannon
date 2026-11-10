@@ -43,6 +43,7 @@ def _heuristic_analysis(body: ComplexityRequest) -> ComplexityResponse:
     query_length = len(body.query)
 
     # Check for calculation/tool-based tasks first - these need standard mode for tool execution
+    # 优先检查计算/tool 类 task —— 这些需要 standard 模式以执行 tool
     if any(
         word in query_lower
         for word in ["calculate", "compute", "multiply", "divide", "add", "subtract"]
@@ -137,7 +138,10 @@ def _extract_json_block(text: str) -> Optional[Dict[str, Any]]:
 async def analyze_complexity(
     request: Request, body: ComplexityRequest, debug: Optional[bool] = False
 ):
-    """Analyze the complexity of a query. If providers are configured, ask a model; otherwise, use heuristics."""
+    """Analyze the complexity of a query. If providers are configured, ask a model; otherwise, use heuristics.
+
+    分析查询的复杂度。若已配置 provider，则由模型判定；否则使用启发式规则。
+    """
     providers = getattr(request.app.state, "providers", None)
 
     # If no providers configured, use heuristics
@@ -203,6 +207,7 @@ async def analyze_complexity(
         return resp
     except Exception:
         # Any model error -> heuristic fallback to keep endpoint reliable
+        # 任何模型错误都回退到启发式规则，以保证 endpoint 可用
         heur = _heuristic_analysis(body)
         if debug:
             heur.raw_output = "<error calling provider>"
@@ -210,6 +215,7 @@ async def analyze_complexity(
 
 
 # Task Analysis API for FSM modernization
+# 面向 FSM 现代化的 task 分析 API
 class TaskAnalysisRequest(BaseModel):
     task: str = Field(..., description="Task to analyze")
     context: Optional[Dict[str, Any]] = Field(
@@ -244,7 +250,10 @@ class TaskAnalysisResponse(BaseModel):
 
 
 def _heuristic_task_analysis(task: str) -> TaskAnalysisResponse:
-    """Heuristic task analysis that mirrors the Rust FSM logic"""
+    """Heuristic task analysis that mirrors the Rust FSM logic
+
+    启发式 task 分析，与 Rust 侧 FSM 逻辑保持一致。
+    """
     lower_task = task.lower()
 
     # Classify task type
@@ -270,6 +279,7 @@ def _heuristic_task_analysis(task: str) -> TaskAnalysisResponse:
         task_type = "Unknown"
 
     # Calculate complexity score (matching Rust logic)
+    # 计算复杂度评分（与 Rust 逻辑保持一致）
     complexity = 0.0
     complexity += min(len(task) / 500.0, 0.3)  # Length factor
     word_count = len(task.split())
@@ -348,6 +358,9 @@ async def analyze_task(request: Request, body: TaskAnalysisRequest):
     """
     Analyze a task to extract understanding for FSM processing.
     Replaces hardcoded Rust FSM classification logic.
+
+    分析 task 以提取供 FSM 处理所需的理解。
+    替代 Rust 中硬编码的 FSM 分类逻辑。
     """
     providers = getattr(request.app.state, "providers", None)
 

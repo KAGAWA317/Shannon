@@ -49,6 +49,7 @@ func TestRedisWrapper_NormalOperations(t *testing.T) {
 	}
 
 	// Test Get non-existent key (should return redis.Nil, not trip breaker)
+	// 测试不存在的 key：应返回 redis.Nil，且不触发 circuit breaker
 	nilResult := wrapper.Get(ctx, "nonexistent:key")
 	if nilResult.Err() != redis.Nil {
 		t.Errorf("Expected redis.Nil for non-existent key, got %v", nilResult.Err())
@@ -135,6 +136,7 @@ func TestRedisWrapper_RedisNilHandling(t *testing.T) {
 	}
 
 	// Circuit breaker should remain closed (redis.Nil is not a failure)
+	// redis.Nil 不算失败，circuit breaker 应保持 closed
 	if wrapper.IsCircuitBreakerOpen() {
 		t.Error("Circuit breaker should remain closed for redis.Nil results")
 	}

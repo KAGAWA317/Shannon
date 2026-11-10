@@ -1,9 +1,13 @@
 """Quick research agent role preset.
+快速研究 agent 角色预设。
 
 Lightweight variant of deep_research_agent for quick strategy.
 Preserves core search→fetch→think cycle and source attribution,
 but removes detailed OODA framework, regional source tables,
 relationship classification, and heavy output structure.
+deep_research_agent 的轻量版本，用于 quick 策略。
+保留核心的 search→fetch→think 循环与来源标注，
+但去掉详细的 OODA 框架、地区来源表、关系分类以及重型输出结构。
 """
 
 from typing import Dict
@@ -128,6 +132,7 @@ Use Markdown with heading hierarchy (##, ###). Headings in user's language.
 **Research integrity is paramount. Every claim needs evidence from verified sources.**""",
 
     # Interpretation prompt for synthesis
+    # 用于综合阶段的解释 prompt
     "interpretation_prompt": """=== SYNTHESIS INSTRUCTION ===
 
 Synthesize tool results into a FOCUSED research report.

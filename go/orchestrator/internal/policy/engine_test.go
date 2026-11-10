@@ -165,6 +165,7 @@ default decision := {
 	}
 
 	// In dry-run mode, engine should still evaluate but not enforce
+	// dry-run 模式下仍会评估 policy，但不做实际拦截
 	input := &PolicyInput{
 		SessionID:   "test-session",
 		AgentID:     "test-agent",
@@ -181,6 +182,7 @@ default decision := {
 	}
 
 	// In dry-run mode, should always allow but with a reason indicating what would have happened
+	// dry-run 模式下一律 allow，但 reason 会说明本应发生的决策
 	if !decision.Allow {
 		t.Error("Expected dry-run mode to allow request")
 	}
@@ -232,6 +234,7 @@ func TestLoadConfigFromShannon_InvalidMode(t *testing.T) {
 	config := LoadConfigFromShannon(shannonPolicy)
 
 	// Should default to off mode and disable engine
+	// 非法 mode 应回落到 off，并关闭 engine
 	if config.Mode != ModeOff {
 		t.Errorf("Expected mode to default to %s, got %s", ModeOff, config.Mode)
 	}
@@ -307,6 +310,7 @@ deny["dangerous query pattern detected"] {
 	ctx := context.Background()
 
 	// Test 1: Allow rule should work when no deny rules match
+	// 用例 1：无 deny 规则命中时，allow 规则生效
 	input1 := &PolicyInput{
 		SessionID:   "test",
 		AgentID:     "test",
@@ -327,6 +331,7 @@ deny["dangerous query pattern detected"] {
 	}
 
 	// Test 2: Deny rule should override allow rule
+	// 用例 2：deny 规则优先于 allow 规则
 	input2 := &PolicyInput{
 		SessionID:   "test",
 		AgentID:     "test",

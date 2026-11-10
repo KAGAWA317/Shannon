@@ -16,6 +16,7 @@ var (
 )
 
 // InitTemplateRegistry loads templates from the provided directories and stores the registry for workflow access.
+// 目录不存在只记 debug 后跳过；其它错误累积成一条返回，但已加载的部分仍会安装。
 func InitTemplateRegistry(logger *zap.Logger, dirs ...string) (*templates.Registry, error) {
 	reg := templates.NewRegistry()
 
@@ -62,6 +63,7 @@ func InitTemplateRegistry(logger *zap.Logger, dirs ...string) (*templates.Regist
 }
 
 // TemplateRegistry returns the currently initialised registry (may be empty).
+// 双检锁：读路径不阻塞，未初始化时惰性建一个空 registry，调用方无需判 nil。
 func TemplateRegistry() *templates.Registry {
 	templateRegistryLock.RLock()
 	if templateRegistry != nil {

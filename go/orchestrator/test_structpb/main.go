@@ -8,6 +8,7 @@ import (
 )
 
 // sanitizeForStructpb converts values to types compatible with structpb.NewStruct.
+// sanitizeForStructpb 把值转换为 structpb.NewStruct 兼容的类型。
 func sanitizeForStructpb(m map[string]interface{}) map[string]interface{} {
 	if m == nil {
 		return nil

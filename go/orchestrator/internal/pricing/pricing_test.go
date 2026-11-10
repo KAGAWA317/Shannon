@@ -18,6 +18,7 @@ func TestDefaultPerToken(t *testing.T) {
 	}
 
 	// defaults.combined_per_1k: 0.005 = 0.000005 per token
+	// defaults.combined_per_1k: 0.005 = 每 token 0.000005
 	expectedMin := 0.000004
 	expectedMax := 0.000006
 	if price < expectedMin || price > expectedMax {
@@ -40,20 +41,29 @@ func TestPricePerTokenForModel(t *testing.T) {
 	}{
 		// Price ranges based on config/models.yaml (per token, not per 1k)
 		// gpt-5-nano-2025-08-07: 0.0001/0.0004 per 1k = 0.0000001/0.0000004 per token
+		// 价格区间基于 config/models.yaml（按 token，非按 1k）
+		// gpt-5-nano-2025-08-07: 0.0001/0.0004 每 1k = 0.0000001/0.0000004 每 token
 		{"gpt-5-nano-2025-08-07", true, 0.0000001, 0.0000004},
 		// gpt-5.1: 0.00125/0.01 per 1k = 0.00000125/0.00001 per token
+		// gpt-5.1: 0.00125/0.01 每 1k = 0.00000125/0.00001 每 token
 		{"gpt-5.1", true, 0.00000125, 0.00001},
 		// gpt-5-pro-2025-10-06: 0.02/0.08 per 1k = 0.00002/0.00008 per token
+		// gpt-5-pro-2025-10-06: 0.02/0.08 每 1k = 0.00002/0.00008 每 token
 		{"gpt-5-pro-2025-10-06", true, 0.00002, 0.00008},
 		// claude-sonnet-4-5-20250929: 0.003/0.015 per 1k = 0.000003/0.000015 per token
+		// claude-sonnet-4-5-20250929: 0.003/0.015 每 1k = 0.000003/0.000015 每 token
 		{"claude-sonnet-4-5-20250929", true, 0.000003, 0.000015},
 		// claude-haiku-4-5-20251001: 0.001/0.005 per 1k = 0.000001/0.000005 per token
+		// claude-haiku-4-5-20251001: 0.001/0.005 每 1k = 0.000001/0.000005 每 token
 		{"claude-haiku-4-5-20251001", true, 0.000001, 0.000005},
 		// deepseek-chat: 0.00027/0.0011 per 1k = 0.00000027/0.0000011 per token
+		// deepseek-chat: 0.00027/0.0011 每 1k = 0.00000027/0.0000011 每 token
 		{"deepseek-chat", true, 0.00000027, 0.0000011},
 		// claude-sonnet-4-6: 0.003/0.015 per 1k = 0.000003/0.000015 per token
+		// claude-sonnet-4-6: 0.003/0.015 每 1k = 0.000003/0.000015 每 token
 		{"claude-sonnet-4-6", true, 0.000003, 0.000015},
 		// claude-opus-4-6: 0.005/0.025 per 1k = 0.000005/0.000025 per token
+		// claude-opus-4-6: 0.005/0.025 每 1k = 0.000005/0.000025 每 token
 		{"claude-opus-4-6", true, 0.000005, 0.000025},
 		{"unknown-model", false, 0, 0},
 		{"", false, 0, 0},
@@ -87,6 +97,7 @@ func TestCostForTokens(t *testing.T) {
 		{"gpt-5.1", 1000, 0.00125, 0.01},
 		{"gpt-5-pro-2025-10-06", 1000, 0.02, 0.08},
 		// Unknown models should use default: 0.005 per 1k
+		// 未知模型应使用默认价：每 1k 0.005
 		{"unknown-model", 1000, 0.005, 0.005},
 		{"", 1000, 0.005, 0.005},
 		{"gpt-5-nano-2025-08-07", 0, 0, 0},
@@ -118,7 +129,9 @@ func TestCostForSplit_SyntheticScraperModels(t *testing.T) {
 		tolerance    float64
 	}{
 		// shannon_web_search: (7500/1000) × 0.002 = $0.015
+		// shannon_web_search: (7500/1000) × 0.002 = $0.015
 		{"shannon_web_search", 7500, 0.015, 0.001},
+		// shannon_firecrawl: (7500/1000) × 0.000133 ≈ $0.001
 		// shannon_firecrawl: (7500/1000) × 0.000133 ≈ $0.001
 		{"shannon_firecrawl", 7500, 0.001, 0.001},
 	}
@@ -126,6 +139,7 @@ func TestCostForSplit_SyntheticScraperModels(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.model, func(t *testing.T) {
 			// Synthetic tools use 0 input tokens, all output
+			// 合成 tool 不消耗 input token，全部计入 output
 			cost := CostForSplit(tt.model, 0, tt.outputTokens)
 			if math.Abs(cost-tt.wantCost) > tt.tolerance {
 				t.Errorf("CostForSplit(%s, 0, %d) = %f, want %f (±%f)",
@@ -202,6 +216,10 @@ func TestCostForSplitWithCache(t *testing.T) {
 			// base = 5000/1000 * 0.0002 + 1000/1000 * 0.0005 = 0.001 + 0.0005 = 0.0015
 			// discount = 3000/1000 * 0.0002 * 0.75 = 0.00045
 			// expected = 0.0015 - 0.00045 = 0.00105
+			// grok-4-1-fast-non-reasoning: 输入 0.0002/1K，输出 0.0005/1K
+			// base = 5000/1000 * 0.0002 + 1000/1000 * 0.0005 = 0.001 + 0.0005 = 0.0015
+			// discount = 3000/1000 * 0.0002 * 0.75 = 0.00045
+			// expected = 0.0015 - 0.00045 = 0.00105
 			name:                "xai_cache_discount_75pct",
 			model:               "grok-4-1-fast-non-reasoning",
 			inputTokens:         5000,
@@ -214,6 +232,10 @@ func TestCostForSplitWithCache(t *testing.T) {
 		},
 		{
 			// kimi-k2-turbo-preview: input 0.00115/1K, output 0.008/1K
+			// base = 5000/1000 * 0.00115 + 1000/1000 * 0.008 = 0.00575 + 0.008 = 0.01375
+			// discount = 3000/1000 * 0.00115 * 0.75 = 0.0025875
+			// expected = 0.01375 - 0.0025875 = 0.0111625
+			// kimi-k2-turbo-preview: 输入 0.00115/1K，输出 0.008/1K
 			// base = 5000/1000 * 0.00115 + 1000/1000 * 0.008 = 0.00575 + 0.008 = 0.01375
 			// discount = 3000/1000 * 0.00115 * 0.75 = 0.0025875
 			// expected = 0.01375 - 0.0025875 = 0.0111625
@@ -233,6 +255,11 @@ func TestCostForSplitWithCache(t *testing.T) {
 			// cache_read at 10%: + 3000/1000 * 0.00033 * 0.1 = 0.000099
 			// cache_creation at 125%: + 2000/1000 * 0.00033 * 1.25 = 0.000825
 			// expected = 0.00298 + 0.000099 + 0.000825 = 0.003904
+			// MiniMax-M2.7: 输入 0.00033/1K，输出 0.00133/1K，cache 单独计价（Anthropic 风格）。
+			// base = 5000/1000 * 0.00033 + 1000/1000 * 0.00133 = 0.00165 + 0.00133 = 0.00298
+			// cache_read 按 10%：+ 3000/1000 * 0.00033 * 0.1 = 0.000099
+			// cache_creation 按 125%：+ 2000/1000 * 0.00033 * 1.25 = 0.000825
+			// expected = 0.00298 + 0.000099 + 0.000825 = 0.003904
 			name:                "minimax_cache_separate",
 			model:               "MiniMax-M2.7",
 			inputTokens:         5000,
@@ -247,6 +274,12 @@ func TestCostForSplitWithCache(t *testing.T) {
 			// claude-sonnet-4-5-20250929: input 0.003/1K, output 0.015/1K
 			// base = 1000/1000 * 0.003 + 500/1000 * 0.015 = 0.003 + 0.0075 = 0.0105
 			// cache_creation 3000 total, 2000 at 1h TTL, 1000 at 5m TTL
+			// 5m: 1000/1000 * 0.003 * 1.25 = 0.00375
+			// 1h: 2000/1000 * 0.003 * 2.0  = 0.012
+			// expected = 0.0105 + 0.00375 + 0.012 = 0.02625
+			// claude-sonnet-4-5-20250929: 输入 0.003/1K，输出 0.015/1K
+			// base = 1000/1000 * 0.003 + 500/1000 * 0.015 = 0.003 + 0.0075 = 0.0105
+			// cache_creation 共 3000，其中 2000 按 1h TTL，1000 按 5m TTL
 			// 5m: 1000/1000 * 0.003 * 1.25 = 0.00375
 			// 1h: 2000/1000 * 0.003 * 2.0  = 0.012
 			// expected = 0.0105 + 0.00375 + 0.012 = 0.02625
@@ -265,6 +298,11 @@ func TestCostForSplitWithCache(t *testing.T) {
 			// claude-sonnet-4-5-20250929: input 0.003/1K, output 0.015/1K
 			// base = 1000/1000 * 0.003 + 500/1000 * 0.015 = 0.003 + 0.0075 = 0.0105
 			// cache_creation 2000 all at 5m TTL (no 1h)
+			// 5m: 2000/1000 * 0.003 * 1.25 = 0.0075
+			// expected = 0.0105 + 0.0075 = 0.018
+			// claude-sonnet-4-5-20250929: 输入 0.003/1K，输出 0.015/1K
+			// base = 1000/1000 * 0.003 + 500/1000 * 0.015 = 0.003 + 0.0075 = 0.0105
+			// cache_creation 共 2000，全部按 5m TTL（无 1h）
 			// 5m: 2000/1000 * 0.003 * 1.25 = 0.0075
 			// expected = 0.0105 + 0.0075 = 0.018
 			name:                  "anthropic_all_5m_no_1h",

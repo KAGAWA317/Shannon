@@ -306,6 +306,8 @@ func ReactLoop(
 		// Bias toward web_search + web_fetch when running in research mode to ensure citations
 		// The LLM can use web_search to find sources, then web_fetch to read full content
 		// For non-research tasks, enable python_executor for computation tasks
+		// tool 由 LLM 自行选择，不做 pattern matching；研究 mode 下偏向 web_search + web_fetch 以保证引用，
+		// 非研究场景则启用 python_executor 以支持计算。
 		if baseContext != nil {
 			if getContextBool(baseContext, "force_research") {
 				suggestedTools = []string{"web_search", "web_fetch", "python_executor"}
@@ -315,6 +317,8 @@ func ReactLoop(
 				// Enable python_executor for general tasks to allow real code execution
 				// This prevents hallucination where LLM writes <tool_call> as text
 				// Note: Firecracker VM has no network; only pure computation works
+				// 启用 python_executor 让 LLM 真正执行代码，避免它把 <tool_call> 当文本写出（幻觉）；
+				// 注意 Firecracker VM 无网络，只能做纯计算。
 				suggestedTools = []string{"python_executor"}
 			}
 		} else {
@@ -728,6 +732,8 @@ func ReactLoop(
 // truncateBase64Images removes only base64 image data from observations/actions
 // to prevent context overflow. Screenshots are already emitted to UI via TOOL_OBSERVATION events.
 // This is safe for all workflows - only removes binary image data, not text content.
+// 只移除观测/动作中的 base64 图片数据以防 context 溢出；截图已通过 TOOL_OBSERVATION event 发给 UI。
+// 对所有 workflow 都安全：只删二进制图像数据，不动文本内容。
 func truncateBase64Images(content string) string {
 	// Check for base64 image data patterns (screenshots, images)
 	// Common patterns: "screenshot": "iVBOR...", "image": "data:image/png;base64,..."
@@ -801,8 +807,10 @@ func isTaskComplete(reasoning string) bool {
 
 // Removed extractToolsFromReasoning - all tool selection is now LLM-driven
 // to maintain consistency with the LLM-native architecture
+// 已移除 extractToolsFromReasoning：tool 选择全部交给 LLM，以保持 LLM 原生架构的一致性。
 
 // shouldStopReactLoop checks multiple criteria for early termination
+// 提前终止判据：① 找到高置信解法；② 最近两轮结果相似（收敛）；③ 最近两轮没有新增引用/信息。
 func shouldStopReactLoop(observations []string, thoughts []string, agentResults []activities.AgentExecutionResult, iteration int) bool {
 	// Need at least 2 iterations to compare
 	if iteration < 2 {

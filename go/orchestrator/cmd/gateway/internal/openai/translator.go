@@ -31,6 +31,7 @@ func NewTranslator(registry *Registry) *Translator {
 }
 
 // Translate converts an OpenAI ChatCompletionRequest to a Shannon SubmitTaskRequest.
+// Translate 把 OpenAI ChatCompletionRequest 转换为 Shannon 的 SubmitTaskRequest。
 func (t *Translator) Translate(req *ChatCompletionRequest, userID, tenantID string) (*TranslatedRequest, error) {
 	// Validate request
 	if len(req.Messages) == 0 {
@@ -61,6 +62,7 @@ func (t *Translator) Translate(req *ChatCompletionRequest, userID, tenantID stri
 	ctxMap := t.buildContext(req, modelConfig)
 
 	// Sanitize context for structpb compatibility (converts []string to []interface{}, etc.)
+	// 对 context 做 structpb 兼容化处理（把 []string 等转成 []interface{}）。
 	sanitizedCtx := sanitizeForStructpb(ctxMap)
 
 	// Convert context to protobuf struct
@@ -73,6 +75,7 @@ func (t *Translator) Translate(req *ChatCompletionRequest, userID, tenantID stri
 	labels := map[string]string{}
 	// If context.agent is present, use "standard" mode to route through OrchestratorWorkflow
 	// which has the AgentWorkflow routing logic
+	// 若 context.agent 存在，则用 "standard" mode 走 OrchestratorWorkflow，由它负责 AgentWorkflow 的路由逻辑。
 	if _, hasAgent := ctxMap["agent"].(string); hasAgent {
 		labels["mode"] = "standard"
 	} else {
@@ -195,6 +198,8 @@ func (t *Translator) TranslateWithSession(req *ChatCompletionRequest, userID, te
 // extractQuery extracts the query from the messages array.
 // Uses the last user message as the primary query.
 // Accepts messages with text content OR attachments (attachment-only is valid).
+// extractQuery 从 messages 中提取 query：以最后一条 user 消息为主查询；
+// 文本内容和附件都算有效输入（只有附件也可以）。
 func (t *Translator) extractQuery(messages []ChatMessage) string {
 	// Find the last user message
 	for i := len(messages) - 1; i >= 0; i-- {
@@ -217,8 +222,12 @@ func (t *Translator) extractQuery(messages []ChatMessage) string {
 // deriveSessionID generates a session ID from the conversation.
 // Uses hash of authenticated userID + system message + first user message for consistency.
 // userID is included to prevent cross-user session collision.
+// deriveSessionID 由对话内容生成 session ID：
+// 使用 authenticated userID + system 消息 + 首条 user 消息 的哈希，保证同一对话稳定命中同一 session；
+// 把 userID 计入哈希，避免不同用户之间发生 session 冲突。
 func (t *Translator) deriveSessionID(req *ChatCompletionRequest, userID string) string {
 	// If user provided a custom user ID, combine with auth user for isolation
+	// 用户提供了自定义 user ID 时，再与 authentication 用户组合，以保持隔离。
 	if req.User != "" {
 		if userID != "" {
 			return "openai-" + userID + "-" + req.User
@@ -270,6 +279,7 @@ func (t *Translator) deriveSessionID(req *ChatCompletionRequest, userID string) 
 }
 
 // buildContext creates the Shannon context map from request parameters.
+// buildContext 依据 request 参数构造 Shannon 的 context map。
 func (t *Translator) buildContext(req *ChatCompletionRequest, modelConfig *ModelConfig) map[string]interface{} {
 	ctx := make(map[string]interface{})
 
@@ -279,6 +289,7 @@ func (t *Translator) buildContext(req *ChatCompletionRequest, modelConfig *Model
 	}
 
 	// Apply shannon_options if present (these take precedence)
+	// 先应用 shannon_options（其优先级更高）。
 	if req.ShannonOptions != nil {
 		// Copy context from shannon_options
 		for k, v := range req.ShannonOptions.Context {
@@ -327,6 +338,7 @@ func (t *Translator) buildContext(req *ChatCompletionRequest, modelConfig *Model
 	}
 
 	// Apply temperature (pointer allows distinguishing "not set" from 0)
+	// 应用 temperature（用指针区分“未设置”和 0）。
 	if req.Temperature != nil {
 		ctx["temperature"] = *req.Temperature
 	}
@@ -353,6 +365,7 @@ func (t *Translator) buildContext(req *ChatCompletionRequest, modelConfig *Model
 	}
 
 	// Include conversation history for context (except last user message which is the query)
+	// 把对话历史一并放入 context（最后一条 user 消息除外，它就是 query）。
 	history := t.buildConversationHistory(req.Messages)
 	if len(history) > 0 {
 		ctx["conversation_history"] = history
@@ -364,6 +377,8 @@ func (t *Translator) buildContext(req *ChatCompletionRequest, modelConfig *Model
 // applyShannonResearchPreset seeds model_tier defaults for research requests
 // arriving via chat completions. Mirrors the task handler's applyStrategyPreset
 // logic: force_research without explicit strategy defaults to "standard".
+// applyShannonResearchPreset 为通过 chat completions 进来的研究 request 填充 model_tier 默认值；
+// 与 task handler 的 applyStrategyPreset 逻辑一致：force_research 未显式指定 strategy 时默认 standard。
 func applyShannonResearchPreset(ctx map[string]interface{}) {
 	if ctx == nil {
 		return
@@ -371,6 +386,7 @@ func applyShannonResearchPreset(ctx map[string]interface{}) {
 
 	// Default force_research to "standard" strategy when none specified
 	// (matches task.go:340-344 behavior)
+	// 未指定 strategy 时，把 force_research 的 strategy 默认设为 "standard"（与 task.go:340-344 行为一致）。
 	rs, rsOk := ctx["research_strategy"].(string)
 	if !rsOk || strings.TrimSpace(rs) == "" {
 		if forceResearch, _ := ctx["force_research"].(bool); forceResearch {
@@ -409,6 +425,7 @@ func (t *Translator) buildConversationHistory(messages []ChatMessage) []map[stri
 	var history []map[string]string
 
 	// Skip system messages and the last user message (which is the query)
+	// 跳过 system 消息和最后一条 user 消息（它就是 query）。
 	lastUserIdx := -1
 	for i := len(messages) - 1; i >= 0; i-- {
 		if messages[i].Role == "user" {
@@ -426,6 +443,7 @@ func (t *Translator) buildConversationHistory(messages []ChatMessage) []map[stri
 		}
 		// Use attachment-enriched content for history so downstream sees
 		// "[Attached: ...]" summaries (from Task 2 content parsing).
+		// 历史消息使用补充过附件摘要的 content，让下游能看到 "[Attached: ...]" 摘要（来自 Task 2 的内容解析）。
 		content := msg.Content
 		if msg.ContentWithAttachmentSummary != "" {
 			content = msg.ContentWithAttachmentSummary
@@ -452,6 +470,8 @@ func min(a, b int) int {
 // - nil, bool, int/float64, string
 // - map[string]interface{} (recursively sanitized)
 // - []interface{} (NOT []string, []int, etc.)
+// sanitizeForStructpb 把值转成 structpb.NewStruct 可接受的类型。structpb 只接受：
+// nil、bool、int/float64、string；map[string]interface{}（递归清洗）；[]interface{}（不接受 []string、[]int 等）。
 func sanitizeForStructpb(m map[string]interface{}) map[string]interface{} {
 	if m == nil {
 		return nil

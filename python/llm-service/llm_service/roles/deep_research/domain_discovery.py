@@ -1,7 +1,9 @@
 """Domain discovery role preset.
+域名发现角色预设。
 
 Company official domain identification specialist. Extracts official
 website domains from web search results with strict JSON output.
+公司官方域名识别专家。从 web 搜索结果中提取官方网站域名，输出严格 JSON。
 """
 
 from typing import Dict
@@ -60,6 +62,7 @@ If no official domains found:
     "allowed_tools": ["web_search"],
     "caps": {"max_tokens": 2000, "temperature": 0.1},
     # Interpretation pass: fix "I will xxx" issue by forcing JSON output after tool-loop
+    # 解释阶段：在 tool-loop 之后强制 JSON 输出，修复 "I will xxx" 问题
     "interpretation_prompt": """Extract official website domains from the search results above.
 Return ONLY a JSON object with no explanation or commentary.
 
@@ -75,4 +78,5 @@ Rules:
 
 OUTPUT ONLY THE JSON OBJECT. NO OTHER TEXT.""",
     "skip_output_validation": True,  # JSON output is short, skip length validation
+    # JSON 输出很短，跳过长度校验
 }

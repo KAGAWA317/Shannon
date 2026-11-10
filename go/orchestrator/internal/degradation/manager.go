@@ -9,6 +9,7 @@ import (
 )
 
 // Manager coordinates all degradation-related functionality
+// Manager 统一协调所有 degradation 相关能力
 type Manager struct {
 	strategy              DegradationStrategy
 	modeManager           *ModeManager
@@ -46,6 +47,7 @@ func NewManager(
 }
 
 // Start begins background health monitoring and degradation tracking
+// Start 启动后台健康检查与 degradation 跟踪
 func (m *Manager) Start(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -84,6 +86,7 @@ func (m *Manager) Stop() error {
 }
 
 // healthMonitorLoop runs periodic health checks and updates metrics
+// healthMonitorLoop 周期性执行健康检查并刷新 metrics
 func (m *Manager) healthMonitorLoop() {
 	ticker := time.NewTicker(m.healthCheckInterval)
 	defer ticker.Stop()
@@ -99,6 +102,7 @@ func (m *Manager) healthMonitorLoop() {
 }
 
 // updateHealthMetrics updates health-related metrics
+// updateHealthMetrics 刷新健康相关 metrics
 func (m *Manager) updateHealthMetrics() {
 	// Get system health from strategy
 	if defaultStrategy, ok := m.strategy.(*DefaultStrategy); ok {
@@ -112,6 +116,7 @@ func (m *Manager) updateHealthMetrics() {
 
 		// Update circuit breaker health metrics
 		RecordCircuitBreakerHealth("redis", health.Redis.CircuitBreaker == 2) // StateOpen = 2
+		// StateOpen = 2，即 circuit breaker 处于 open 时记为不健康
 		RecordCircuitBreakerHealth("database", health.Database.CircuitBreaker == 2)
 
 		// Update current degradation level
@@ -135,6 +140,7 @@ func (m *Manager) GetStrategy() DegradationStrategy {
 }
 
 // CheckSystemHealth returns current system health status
+// CheckSystemHealth 返回当前系统健康状态
 func (m *Manager) CheckSystemHealth(ctx context.Context) (*SystemHealth, error) {
 	if defaultStrategy, ok := m.strategy.(*DefaultStrategy); ok {
 		health := defaultStrategy.checkSystemHealth()
@@ -154,6 +160,7 @@ func (m *Manager) CheckSystemHealth(ctx context.Context) (*SystemHealth, error) 
 }
 
 // UpdateExternalServiceHealth updates health status for external services
+// UpdateExternalServiceHealth 更新外部服务的健康状态
 func (m *Manager) UpdateExternalServiceHealth(service string, healthy bool) {
 	if defaultStrategy, ok := m.strategy.(*DefaultStrategy); ok {
 		switch service {
@@ -176,6 +183,7 @@ func (m *Manager) IsSystemDegraded(ctx context.Context) (bool, DegradationLevel,
 }
 
 // GetRecommendedMode returns the recommended execution mode considering degradation
+// GetRecommendedMode 结合 degradation 情况返回推荐的执行 mode
 func (m *Manager) GetRecommendedMode(
 	ctx context.Context,
 	originalMode string,
@@ -206,6 +214,7 @@ func (m *Manager) GetRecommendedMode(
 }
 
 // ShouldReturnPartialResults determines if partial results should be returned
+// ShouldReturnPartialResults 判断是否应返回 partial results
 func (m *Manager) ShouldReturnPartialResults(
 	ctx context.Context,
 	workflowType string,
@@ -215,6 +224,7 @@ func (m *Manager) ShouldReturnPartialResults(
 }
 
 // AggregatePartialResults aggregates partial results into a coherent response
+// AggregatePartialResults 将 partial results 聚合为一致的 response
 func (m *Manager) AggregatePartialResults(
 	ctx context.Context,
 	results []PartialResult,
@@ -236,6 +246,7 @@ func (m *Manager) CreatePartialResult(
 }
 
 // CanExecuteOperation checks if an operation should proceed in current state
+// CanExecuteOperation 判断当前状态下该 operation 是否可执行
 func (m *Manager) CanExecuteOperation(ctx context.Context, operation string) (bool, string, error) {
 	canExecute, behavior, err := m.modeManager.CanExecuteOperation(ctx, operation)
 	return canExecute, behavior.String(), err

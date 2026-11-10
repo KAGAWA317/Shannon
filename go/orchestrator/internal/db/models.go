@@ -13,6 +13,7 @@ import (
 type JSONB map[string]interface{}
 
 // ErrConcurrentAccess is returned when JSONB cloning fails due to concurrent map access
+// JSONB 克隆因并发 map 访问失败时返回 ErrConcurrentAccess
 var ErrConcurrentAccess = fmt.Errorf("concurrent map access during JSONB clone")
 
 // SafeClone creates a deep copy of JSONB via JSON serialization.
@@ -20,6 +21,10 @@ var ErrConcurrentAccess = fmt.Errorf("concurrent map access during JSONB clone")
 //
 // WARNING: Returns empty JSONB{} on concurrent access or errors.
 // Use TryClone() if you need to detect and handle failures.
+// SafeClone 通过 JSON 序列化深拷贝 JSONB。
+// 用 recover() 优雅处理并发 map 访问 panic。
+// WARNING: 并发访问或出错时返回空的 JSONB{}。
+// 需要检测并处理失败时请用 TryClone()。
 func (j JSONB) SafeClone() (result JSONB) {
 	clone, _ := j.TryClone()
 	return clone
@@ -28,12 +33,16 @@ func (j JSONB) SafeClone() (result JSONB) {
 // TryClone creates a deep copy of JSONB via JSON serialization.
 // Returns an error if cloning fails due to concurrent access or serialization issues.
 // This is the preferred method when you need to handle clone failures explicitly.
+// TryClone 通过 JSON 序列化深拷贝 JSONB。
+// 因并发访问或序列化问题导致克隆失败时返回错误。
+// 需要显式处理克隆失败时应优先使用该方法。
 func (j JSONB) TryClone() (result JSONB, err error) {
 	if j == nil {
 		return nil, nil
 	}
 
 	// Recover from panic caused by concurrent map iteration
+	// 从并发 map 迭代引发的 panic 中恢复
 	defer func() {
 		if r := recover(); r != nil {
 			result = JSONB{}
@@ -42,6 +51,7 @@ func (j JSONB) TryClone() (result JSONB, err error) {
 	}()
 
 	// Use JSON round-trip for deep clone
+	// 用 JSON 往返实现深拷贝
 	data, marshalErr := json.Marshal(j)
 	if marshalErr != nil {
 		return JSONB{}, fmt.Errorf("JSONB marshal failed: %w", marshalErr)
@@ -77,6 +87,7 @@ func (j *JSONB) Scan(value interface{}) error {
 }
 
 // TaskExecution represents a workflow/task execution record
+// TaskExecution 表示一次 workflow/task 执行记录
 type TaskExecution struct {
 	ID          uuid.UUID  `db:"id"`
 	WorkflowID  string     `db:"workflow_id"`
@@ -111,6 +122,7 @@ type TaskExecution struct {
 	ComplexityScore float64 `db:"complexity_score"`
 
 	// Prompt cache metrics (Anthropic cache read/creation tokens)
+	// prompt cache 指标（Anthropic cache read/creation token）
 	CacheReadTokens     int `db:"cache_read_tokens"`
 	CacheCreationTokens int `db:"cache_creation_tokens"`
 
@@ -118,9 +130,13 @@ type TaskExecution struct {
 	// Parallel to TotalTokens (= prompt + completion); used by quota tracking
 	// where prompt-cache cost must count, while keeping TotalTokens
 	// OpenAI-compatible. See migration 121.
+	// cache 感知汇总：prompt + completion + cache_read + cache_creation。
+	// 与 TotalTokens（= prompt + completion）并列；用于必须计入 prompt cache 成本的配额统计，
+	// 同时保持 TotalTokens 与 OpenAI 兼容。见迁移 121。
 	CacheAwareTotalTokens int `db:"cache_aware_total_tokens"`
 
 	// Structured response (unified API format, stored in response JSONB column)
+	// 结构化 response（统一 API 格式，存入 response JSONB 列）
 	Response JSONB `db:"response"`
 
 	// Metadata
@@ -130,6 +146,7 @@ type TaskExecution struct {
 	// Trigger information (unified execution model)
 	TriggerType string     `db:"trigger_type"` // 'api', 'schedule'
 	ScheduleID  *uuid.UUID `db:"schedule_id"`  // FK to scheduled_tasks (NULL for API-triggered)
+	// 指向 scheduled_tasks 的外键（API 触发时为 NULL）
 }
 
 // AgentExecution represents an individual agent execution
@@ -183,6 +200,7 @@ type ToolExecution struct {
 }
 
 // SessionArchive represents a snapshot of a Redis session
+// SessionArchive 表示 Redis session 的快照
 type SessionArchive struct {
 	ID        uuid.UUID  `db:"id"`
 	SessionID string     `db:"session_id"`
@@ -250,6 +268,7 @@ type AuditLog struct {
 }
 
 // TaskExecutionFilter provides filtering options for task queries
+// TaskExecutionFilter 提供 task 查询的过滤条件
 type TaskExecutionFilter struct {
 	UserID    *uuid.UUID
 	SessionID *string

@@ -137,6 +137,10 @@ func parseFlexibleInt(v interface{}) (int, bool) {
 // SECURITY: session_id is ALWAYS overwritten from the authoritative metadata value.
 // The context map originates from user-controlled request bodies; allowing a client-supplied
 // session_id to survive would let an attacker reference another session's attachments.
+// 为 session-aware tool 注入 session_id 与 agent_id，并处理 nil context、缺键、nil 值、空串、非字符串类型；
+// 是 executeAgentCore 与 ExecuteAgentWithForcedTools 共用的唯一注入入口。
+// 安全：session_id 始终用 metadata 中的权威值覆盖——context 来自用户可控的 request body，
+// 若保留客户端传入的 session_id，攻击者就能引用其他 session 的附件。
 func ensureSessionContext(ctx map[string]interface{}, sessionID, agentID string) map[string]interface{} {
 	if ctx == nil {
 		ctx = make(map[string]interface{})
@@ -698,6 +702,7 @@ func evaluateAgentPolicy(ctx context.Context, input AgentExecutionInput, logger 
 // executeAgentCore contains the shared logic for executing an agent via gRPC
 // This is used by both ExecuteAgent and ExecuteSimpleTask activities to avoid
 // activities calling other activities directly
+// 两条 activity（ExecuteAgent 与 ExecuteSimpleTask）共用的 gRPC 执行逻辑，避免 activity 之间直接互调。
 func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *zap.Logger) (AgentExecutionResult, error) {
 	// Ensure we have a valid logger
 	if logger == nil {
@@ -920,6 +925,9 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	// NOTE: This disables agent streaming (see useStreaming below) since tool calls can't stream.
 	// Tradeoff: real tool execution > streaming UX.
 	// Set DISABLE_DEFAULT_TOOLS=1 to restore the pre-fix behavior (no default tools, streaming enabled).
+	// 优先使用 LLM 建议的 tool，否则默认 python_executor，避免 LLM 把 <tool_call> 当纯文本输出而不真正执行；
+	// 代价是关闭 agent streaming（tool 调用无法走 streaming），取舍为真实 tool 执行优先于 streaming 体验。
+	// DISABLE_DEFAULT_TOOLS=1 可恢复旧行为（不注入默认 tool、保留 streaming）。
 	disableDefaultTools := getenvInt("DISABLE_DEFAULT_TOOLS", 0) > 0
 	var allowedByRole []string
 	if len(input.SuggestedTools) > 0 {
@@ -1089,6 +1097,8 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	// Roles are designed for specialized agents with domain-specific system prompts and tools.
 	// The role's specialized prompt understands its tools better than /tools/select's generic LLM.
 	// This pattern scales automatically to any new role without code changes.
+	// 只要指定了 role 就跳过 /tools/select，改用 LLM 原生 function calling：
+	// role 自带领域 system prompt 与 tool 集，比通用选择器更懂自己的 tool；新增 role 无需改代码即可生效。
 	disableToolSelectRole := false
 	if input.Context != nil {
 		if roleVal, ok := input.Context["role"]; ok {
@@ -1173,6 +1183,8 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	// The context map user_id is informational (for policy/vendor adapters).
 	// Security-critical user_id (memory mounts) uses TaskMetadata.UserId
 	// and SessionContext.user_id, which are set directly from input.UserID.
+	// 把 user_id 写入 context 供 agent-core 使用（memory 挂载、审计），且刻意不覆盖已有值；
+	// 安全相关的 user_id 走 TaskMetadata.UserId 与 SessionContext.user_id，直接取自 input.UserID。
 	if input.UserID != "" {
 		if _, exists := input.Context["user_id"]; !exists {
 			input.Context["user_id"] = input.UserID
@@ -1322,12 +1334,16 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	// MCP_COST_TO_TOKENS: legacy path for tool cost -> token conversion.
 	// Superseded by per-tool cost recording via tool_cost_entries in agent metadata.
 	// Keep at 0 (disabled) to prevent double-counting with the new path.
+	// MCP_COST_TO_TOKENS 是 tool 成本折算 token 的旧路径，已被 metadata 中 tool_cost_entries 的按 tool 计费取代；
+	// 保持 0（关闭）以避免与新路径重复计费。
 	mcpCostToTokens := getenvInt("MCP_COST_TO_TOKENS", 0)
 
 	// Streaming is opt-in and only used when no tools are required.
 	// When tools are present, we force unary so that ExecuteTaskResponse.metadata
 	// (carrying tool_cost_entries) is available for budget recording.
 	// If this constraint changes, runStreaming must also propagate metadata.
+	// streaming 是可选路径，仅在无 tool 时启用；有 tool 时强制走 unary，
+	// 以便拿到 ExecuteTaskResponse.metadata（含 tool_cost_entries）用于 budget 记录；若放宽该限制，runStreaming 也必须透传 metadata。
 	useStreaming := getenvInt("ENABLE_AGENT_STREAMING", 1) > 0
 	if len(allowedByRole) > 0 || len(selectedToolCalls) > 0 || (input.ToolParameters != nil && len(input.ToolParameters) > 0) {
 		useStreaming = false
@@ -1904,6 +1920,8 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 			// Defensive: if streaming returned tool results, metadata (including
 			// tool_cost_entries) was not propagated. Log a warning so we can detect
 			// if the useStreaming gate ever lets tool-bearing agents through.
+			// 防御性检查：streaming 路径若返回了 tool 结果，说明 metadata（含 tool_cost_entries）未传出；
+			// 打警告以便发现 useStreaming 门控放行了带 tool 的 agent。
 			if len(res.ToolsUsed) > 0 {
 				logger.Warn("Streaming path returned tool results; tool_cost_entries not captured",
 					zap.Strings("tools_used", res.ToolsUsed),
@@ -1958,6 +1976,8 @@ func ExecuteAgent(ctx context.Context, input AgentExecutionInput) (AgentExecutio
 // ExecuteAgentWithForcedTools bypasses agent-core gRPC and calls /agent/query directly
 // with forced_tool_calls to avoid serialization issues. Use when ToolParameters are
 // pre-computed from decomposition (e.g., analytics queries).
+// 绕过 agent-core gRPC，直接调用 /agent/query 并携带 forced_tool_calls 以避免序列化问题；
+// 适用于 ToolParameters 已由分解阶段预先算好的场景（如 analytics 查询）。
 func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput) (AgentExecutionResult, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("ExecuteAgentWithForcedTools activity started",
@@ -2258,6 +2278,8 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	// agentResponse.Success only reflects whether the HTTP/LLM call succeeded
 	// (always true on the happy path), not whether the individual tool succeeded.
 	// The per-tool success flag is embedded in metadata["tool_executions"][i]["success"].
+	// tool 是否真正成功要看 metadata.tool_executions 中逐项的 success；
+	// agentResponse.Success 只表示 HTTP/LLM 调用成功（正常路径恒为 true）。
 	toolSuccess := agentResponse.Success
 	toolErrMsg := ""
 	if agentResponse.Metadata != nil {
@@ -2390,6 +2412,8 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	// Collect browser screenshot paths from tool executions.
 	// Two cases: (1) Python already persisted → screenshot_path is set,
 	// (2) Direct tool path → screenshot is base64, persist here.
+	// 收集浏览器截图路径，分两种情况：Python 侧已落盘（screenshot_path 已设置）与
+	// 直接 tool 路径（截图为 base64，需在此持久化）。
 	var screenshotPaths []string
 	if input.SessionID != "" {
 		zapLogger := zap.L()

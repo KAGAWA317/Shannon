@@ -26,6 +26,7 @@ def count_sse_events(workflow_id, types_filter=None, timeout_sec=5):
             return count, None
     except requests.Timeout:
         # Timeout is expected - we just want to count events received so far
+        # timeout 属于预期情况——这里只统计已收到的 event 数
         return count, None
     except Exception as e:
         return 0, str(e)
@@ -104,6 +105,7 @@ def main():
         }, timeout=2, stream=True)
 
         # If we get 200, gateway accepts it; if 400, it rejects
+        # 返回 200 表示 gateway 接受该参数，400 表示拒绝
         if response.status_code == 400:
             print("   ❌ FAIL: Gateway rejecting Redis stream IDs (HTTP 400)")
             return 1
@@ -113,6 +115,7 @@ def main():
             print(f"   ⚠️  Unexpected status code: {response.status_code}")
     except requests.Timeout:
         # Timeout is OK - means gateway accepted and started streaming
+        # timeout 说明 gateway 已接受并开始推送，属于正常现象
         print("   ✅ PASS: Gateway accepts Redis stream IDs (streaming started)")
 
     print("\n" + "=" * 60)

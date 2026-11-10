@@ -1,28 +1,48 @@
 # Shannon Persona Definitions
+# Shannon Persona 定义
 # ⚠️  WARNING: THIS FILE IS NOT CURRENTLY LOADED OR USED BY SHANNON
+# ⚠️  警告：本文件当前未被 Shannon 加载或使用
 #
 # Current Status:
+# 当前状态：
 # - This persona system is planned but NOT YET IMPLEMENTED
+# - 该 persona 系统已规划，但尚未实现
 # - The Python LLM service does not load this file
+# - Python LLM 服务不会加载本文件
 # - Only role presets in python/llm-service/llm_service/roles/presets.py are active
+# - 只有 python/llm-service/llm_service/roles/presets.py 中的角色预设生效
 # - See go/orchestrator/internal/activities/agent.go:453-506 for implementation notes
+# - 实现说明见 go/orchestrator/internal/activities/agent.go:453-506
 #
 # What Works Now:
+# 当前可用的方式：
 # - Use context["role"] to select from: generalist, analysis, research, writer, critic
+# - 通过 context["role"] 选择：generalist、analysis、research、writer、critic
 # - Use context["system_prompt"] to completely override the system prompt
+# - 通过 context["system_prompt"] 完全覆盖 system prompt
 # - See docs/system-prompts.md for full documentation
+# - 完整文档见 docs/system-prompts.md
 #
 # Known Issues:
+# 已知问题：
 # - Tool names below (grep, read, glob, code_executor, edit, write, bash, etc.)
 #   do NOT match actual tool registry names
+# - 下文的 tool 名（grep、read、glob、code_executor、edit、write、bash 等）与实际 tool 注册表中的名称不一致
 # - Actual tools: calculator, web_search, python_wasi_executor, file_ops, session_file
+# - 实际 tool：calculator、web_search、python_wasi_executor、file_ops、session_file
 # - Tool names must be mapped when this config is wired up
+# - 接入本配置时必须先做 tool 名映射
 #
 # Future Implementation:
+# 后续实现计划：
 # - These personas will be automatically assigned to subtasks based on task content
+# - 这些 persona 将根据 task 内容自动分配给子 task
 # - Will support keyword matching, LLM selection, and semantic matching
+# - 将支持关键词匹配、LLM 选择与语义匹配
 # - Will enable tool allowlists per persona and richer prompt templates
+# - 将支持按 persona 设置 tool 白名单与更丰富的 prompt 模板
 # - Tool name mapping required before activation
+# - 启用前必须先完成 tool 名映射
 
 personas:
   generalist:

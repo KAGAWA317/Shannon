@@ -18,6 +18,7 @@ import (
 // ScientificWorkflow implements hypothesis-driven investigation using patterns
 // This workflow generates competing hypotheses with Chain-of-Thought, tests them with Debate,
 // and refines understanding through Reflection
+// 用 Chain-of-Thought 生成竞争假设，用 Debate 检验，再用 Reflection 收敛认识。
 func ScientificWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting ScientificWorkflow with patterns",

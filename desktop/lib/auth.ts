@@ -86,6 +86,7 @@ let refreshPromise: Promise<boolean> | null = null;
 
 export async function refreshAccessToken(): Promise<boolean> {
     // Prevent concurrent refresh attempts
+    // 防止并发 refresh 请求
     if (refreshPromise) {
         return refreshPromise;
     }

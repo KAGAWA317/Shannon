@@ -1,5 +1,7 @@
 # Shannon Orchestrator Configuration - Test Configuration for Hot-Reload Demo
+# Shannon Orchestrator 配置 - 热重载演示用的测试配置
 # This demonstrates dynamic configuration changes without service restart
+# 演示无需重启服务即可动态变更配置
 
 service:
   port: 50052
@@ -94,6 +96,7 @@ logging:
   encoding: "console"  # Changed from "json" for easier debugging
 
 # Vector DB Configuration - ENABLED for testing
+# 向量库配置 - 测试环境下启用
 vector:
   enabled: true
   host: ""
@@ -107,6 +110,7 @@ vector:
   timeout: "5s"
 
 # Tracing Configuration - ENABLED for testing
+# 追踪配置 - 测试环境下启用
 tracing:
   enabled: true  # Enabled for development/testing
   service_name: "shannon-orchestrator-test"

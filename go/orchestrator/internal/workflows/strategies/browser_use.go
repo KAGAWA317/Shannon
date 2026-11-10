@@ -23,6 +23,9 @@ import (
 // - Single agent per iteration that decides AND executes actions
 // - No separate reasoner/actor split that causes duplicate tool calls
 // - Screenshots are truncated in context but emitted to UI for visibility
+// 与把 REASON/ACT 拆成两次调用的 ReactWorkflow 不同，这里用单个 agent 边推理边行动：
+// 每轮由一个 agent 决定并执行动作，避免"推理者/执行者"分离造成的重复 tool 调用；
+// 截图在 context 中被截断，但仍发给 UI 供观察。
 func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting BrowserUseWorkflow",

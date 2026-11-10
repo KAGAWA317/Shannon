@@ -13,14 +13,17 @@ import (
 )
 
 // ContextKey is the key type for context values
+// ContextKey 是 context 值的键类型
 type ContextKey string
 
 const (
 	// UserContextKey is the context key for user information
+	// UserContextKey 是用户信息的 context 键
 	UserContextKey ContextKey = "user"
 )
 
 // Middleware provides authentication middleware for HTTP and gRPC
+// Middleware 提供 HTTP 与 gRPC 的 authentication middleware
 type Middleware struct {
 	authService *Service
 	jwtManager  *JWTManager
@@ -106,6 +109,8 @@ func (m *Middleware) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 		if m.skipAuth {
 			// In dev mode, respect x-user-id and x-tenant-id from metadata if provided
 			// This allows testing ownership/tenancy isolation without real auth
+			// dev 模式下，如提供了 metadata 中的 x-user-id 和 x-tenant-id 则采用
+			// 便于在没有真实 authentication 时测试归属/租户隔离
 			userID := uuid.MustParse("00000000-0000-0000-0000-000000000002")
 			tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
@@ -142,6 +147,7 @@ func (m *Middleware) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 		var userCtx *UserContext
 
 		// Try to extract token from authorization header
+		// 尝试从 authorization 头中提取 token
 		if authHeaders := md.Get("authorization"); len(authHeaders) > 0 {
 			token, err := ExtractBearerToken(authHeaders[0])
 			if err == nil {
@@ -153,6 +159,7 @@ func (m *Middleware) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 		}
 
 		// Try API key if no JWT found
+		// 没有 JWT 时尝试 API key
 		if userCtx == nil {
 			if apiKeys := md.Get("x-api-key"); len(apiKeys) > 0 {
 				var err error
@@ -175,6 +182,7 @@ func (m *Middleware) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 }
 
 // RequireScopes checks if the user has the required scopes
+// RequireScopes 检查用户是否具备所需 scope
 func RequireScopes(ctx context.Context, requiredScopes ...string) error {
 	userCtx, ok := ctx.Value(UserContextKey).(*UserContext)
 	if !ok {
@@ -182,6 +190,7 @@ func RequireScopes(ctx context.Context, requiredScopes ...string) error {
 	}
 
 	// Check if user has all required scopes
+	// 检查用户是否具备全部所需 scope
 	for _, required := range requiredScopes {
 		found := false
 		for _, scope := range userCtx.Scopes {

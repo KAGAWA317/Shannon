@@ -38,6 +38,7 @@ func TestGetSessionEvents_GroupedTurns_Defaults(t *testing.T) {
 	tenantUUID := "22222222-2222-2222-2222-222222222222"
 
 	// 1) Session ownership lookup
+	// 1) 查询 session 归属。
 	mock.ExpectQuery(regexp.QuoteMeta(
 		"SELECT id, user_id, context->>'external_id' as external_id FROM sessions WHERE (id::text = $1 OR context->>'external_id' = $1) AND user_id = $2 AND tenant_id = $3 AND deleted_at IS NULL",
 	)).WithArgs(sessionInput, userUUID, tenantUUID).
@@ -45,12 +46,14 @@ func TestGetSessionEvents_GroupedTurns_Defaults(t *testing.T) {
 			AddRow(sessionUUID, userUUID, nil))
 
 	// 2) Count turns
+	// 2) 统计 turn 数量。
 	mock.ExpectQuery(regexp.QuoteMeta(
 		"SELECT COUNT(*) FROM task_executions WHERE session_id = $1 AND user_id = $2 AND tenant_id = $3",
 	)).WithArgs(sessionUUID, userUUID, tenantUUID).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
 
 	// 3) Select turns (two rows)
+	// 3) 查询 turn 列表（两行）。
 	now := time.Now().UTC().Truncate(time.Second)
 	rows := sqlmock.NewRows([]string{
 		"id", "workflow_id", "query", "result", "started_at", "completed_at", "total_tokens", "duration_ms", "metadata",
@@ -63,6 +66,7 @@ func TestGetSessionEvents_GroupedTurns_Defaults(t *testing.T) {
 	)).WithArgs(sessionUUID, userUUID, tenantUUID, 10, 0).WillReturnRows(rows)
 
 	// 4) Events for both workflows
+	// 4) 查询两个 workflow 的 event。
 	evQuery := `
             SELECT workflow_id, type, COALESCE(agent_id,''), COALESCE(message,''), timestamp, COALESCE(seq,0), COALESCE(stream_id,'')
             FROM event_logs
@@ -86,6 +90,7 @@ func TestGetSessionEvents_GroupedTurns_Defaults(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), auth.UserContextKey, &auth.UserContext{UserID: uid, TenantID: tid}))
 
 	// Use ServeMux to bind path parameter
+	// 用 ServeMux 绑定路径参数。
 	mux := http.NewServeMux()
 	mux.Handle("GET /api/v1/sessions/{sessionId}/events", http.HandlerFunc(h.GetSessionEvents))
 
@@ -128,6 +133,7 @@ func TestGetSessionEvents_GroupedTurns_Defaults(t *testing.T) {
 		t.Fatalf("unexpected task ids: %s, %s", resp.Turns[0].TaskID, resp.Turns[1].TaskID)
 	}
 	// Final output fallback: second turn should pick from LLM_OUTPUT
+	// final output 兜底：第二个 turn 应从 LLM_OUTPUT 取值。
 	if !strings.Contains(resp.Turns[1].FinalOutput, "equals 12") {
 		t.Fatalf("fallback final_output not applied: %q", resp.Turns[1].FinalOutput)
 	}

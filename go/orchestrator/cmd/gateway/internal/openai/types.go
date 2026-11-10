@@ -30,6 +30,7 @@ type ChatCompletionRequest struct {
 
 // ShannonOptions contains Shannon-specific request options.
 // These extend the OpenAI API with Shannon capabilities.
+// ShannonOptions 包含 Shannon 专有的 request 选项，在 OpenAI API 之上扩展 Shannon 能力。
 type ShannonOptions struct {
 	// Context is passed directly to the Shannon orchestrator
 	Context map[string]interface{} `json:"context,omitempty"`
@@ -48,6 +49,8 @@ type ShannonOptions struct {
 // ChatMessage represents a single message in the conversation.
 // Supports both plain string content (backward compatible) and OpenAI-compatible
 // content arrays containing text, image_url, and file blocks.
+// ChatMessage 表示对话中的一条消息：既支持纯字符串 content（向后兼容），
+// 也支持 OpenAI 兼容的 content 数组（text、image_url、file 块）。
 type ChatMessage struct {
 	Role                         string          `json:"-"`
 	Content                      string          `json:"-"` // Extracted text (always populated)
@@ -58,6 +61,7 @@ type ChatMessage struct {
 }
 
 // MarshalJSON produces OpenAI-compatible JSON with content as a plain string.
+// MarshalJSON 输出 OpenAI 兼容的 JSON，content 为纯字符串。
 func (m ChatMessage) MarshalJSON() ([]byte, error) {
 	type plain struct {
 		Role    string `json:"role"`
@@ -72,6 +76,7 @@ func (m ChatMessage) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON supports both string content and array-of-blocks content.
+// UnmarshalJSON 同时支持字符串 content 与块数组 content。
 func (m *ChatMessage) UnmarshalJSON(data []byte) error {
 	// Use an intermediate struct to capture raw content
 	var aux struct {
@@ -161,6 +166,7 @@ type ChatCompletionChunk struct {
 
 // ShannonEvent represents an agent lifecycle or progress event.
 // These are Shannon-specific extensions to the OpenAI streaming format.
+// ShannonEvent 表示 agent 生命周期或进度 event，是对 OpenAI streaming 格式的 Shannon 扩展。
 type ShannonEvent struct {
 	Type      string                 `json:"type"`                // Event type (AGENT_STARTED, TOOL_INVOKED, etc.)
 	AgentID   string                 `json:"agent_id,omitempty"`  // Agent identifier (e.g., "Ryogoku", "synthesis")
@@ -239,10 +245,12 @@ func generateID() string {
 }
 
 // randomSuffix generates a cryptographically secure random alphanumeric suffix.
+// randomSuffix 生成密码学安全的随机字母数字后缀。
 func randomSuffix(length int) string {
 	bytes := make([]byte, (length+1)/2)
 	if _, err := rand.Read(bytes); err != nil {
 		// Fallback to timestamp-based (less secure but functional)
+		// 回退到基于时间戳的方案（安全性较低但可用）。
 		return fmt.Sprintf("%016x", time.Now().UnixNano())[:length]
 	}
 	return hex.EncodeToString(bytes)[:length]

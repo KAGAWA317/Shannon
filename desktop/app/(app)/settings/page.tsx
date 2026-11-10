@@ -77,6 +77,7 @@ export default function SettingsPage() {
     const handleLogout = () => {
         logout();
         // OSS mode: go back to run page (logout just clears local storage)
+        // OSS 模式：回到 run 页面（logout 只清理本地存储）
         router.push("/run-detail?session_id=new");
     };
 

@@ -1,9 +1,13 @@
-"""Example of using labels for workflow routing."""
+"""Example of using labels for workflow routing.
+
+示例：使用 label 进行 workflow 路由。
+"""
 
 import os
 from shannon import ShannonClient, EventType
 
 # Initialize client
+# 初始化客户端
 client = ShannonClient(
     base_url="http://localhost:8080",
     api_key=os.getenv("SHANNON_API_KEY", ""),
@@ -24,6 +28,7 @@ print(f"  Workflow ID: {handle.workflow_id}")
 print()
 
 # Stream to see agent delegation in action
+# 通过流式 event 观察 agent 委派过程
 print("Streaming events (delegation/team events if present will appear)...")
 print("-" * 60)
 
@@ -57,6 +62,7 @@ print("-" * 60)
 print()
 
 # Get final result
+# 获取最终结果
 result = handle.result(timeout=60)
 print(f"✓ Final result: {result}")
 

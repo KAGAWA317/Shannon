@@ -139,6 +139,7 @@ impl LLMClient {
         let url = format!("{}/agent/query", self.base_url);
 
         // Use Cow to avoid unnecessary string allocations
+        // 用 Cow 避免不必要的字符串分配
         let tools_vec = tools
             .unwrap_or_default()
             .into_iter()
@@ -146,6 +147,7 @@ impl LLMClient {
             .collect();
 
         // Determine model_tier, allowing context override
+        // 确定 model_tier，允许 context 覆盖
         let ctx_val = context.clone().unwrap_or_else(|| serde_json::json!({}));
         let tier_from_mode = match mode {
             "simple" => "small".to_string(),
@@ -166,6 +168,7 @@ impl LLMClient {
         }
 
         // Check for max_tokens override in context, otherwise use 16384 default (increased for GPT-5 reasoning models)
+        // 检查 context 中是否有 max_tokens 覆盖，否则用 16384 默认值（为 GPT-5 推理模型调大）
         let max_tokens = if let Some(obj) = ctx_val.as_object() {
             obj.get("max_tokens")
                 .and_then(|v| {
@@ -201,14 +204,17 @@ impl LLMClient {
         debug!("Sending query to LLM service: {:?}", request);
 
         // Add trace context propagation headers
+        // 添加 trace context 传播头
         let headers = http::HeaderMap::new();
 
         // Use the active span context instead of environment variable
+        // 使用活跃 span 的 context，而非环境变量
         // crate::tracing::inject_current_trace_context(&mut headers); // TODO: Fix tracing import
 
         let mut request_builder = self.client.post(&url).json(&request);
 
         // Add the trace headers to the request
+        // 把 trace 头加入 request
         for (key, value) in headers.iter() {
             if let Ok(header_value) = value.to_str() {
                 request_builder = request_builder.header(key.as_str(), header_value);
@@ -225,6 +231,7 @@ impl LLMClient {
             warn!("LLM service returned error: {} - {}", status, body);
 
             // Always surface errors for observability (removed dev mock fallback)
+            // 错误始终向上抛出，便于观测（已移除开发期 mock 回退）
             return Err(AgentError::HttpError {
                 status: status.as_u16(),
                 message: format!("LLM service error: {} - {}", status, body),
@@ -255,6 +262,7 @@ impl LLMClient {
         }
 
         // Extract real token split from metadata if available (Python sends these)
+        // 若 metadata 中有真实的 token 拆分则提取（Python 会传）
         let (prompt_tokens, completion_tokens) = extract_token_split(
             &agent_response.metadata, agent_response.tokens_used
         );
@@ -450,11 +458,15 @@ impl LLMClient {
         Ok(Box::pin(mapped))
     }
     // Complexity analysis removed with FSM
+    // 复杂度分析已随 FSM 一并移除
 }
 
 /// Extract real input/output token split from agent metadata.
+/// 从 agent metadata 中提取真实的输入/输出 token 拆分。
 /// Handles both numeric and string-encoded values (Python may serialize either way).
+/// 同时兼容数字和字符串编码的值（Python 两种都可能序列化）。
 /// Falls back to 1/3 : 2/3 estimate if metadata is missing or unparseable.
+/// metadata 缺失或无法解析时，回退为 1/3 : 2/3 的估算。
 fn extract_token_split(metadata: &Option<serde_json::Value>, total: u32) -> (u32, u32) {
     if let Some(meta) = metadata {
         let input = parse_token_value(meta.get("input_tokens"));
@@ -464,10 +476,12 @@ fn extract_token_split(metadata: &Option<serde_json::Value>, total: u32) -> (u32
         }
     }
     // Fallback: rough estimate
+    // 回退：粗略估算
     (total / 3, total * 2 / 3)
 }
 
 /// Parse a token count from a JSON value that may be a number or a string.
+/// 从可能是数字或字符串的 JSON 值中解析 token 数。
 fn parse_token_value(v: Option<&serde_json::Value>) -> Option<u32> {
     v.and_then(|val| {
         val.as_u64()
@@ -478,10 +492,12 @@ fn parse_token_value(v: Option<&serde_json::Value>) -> Option<u32> {
 
 fn calculate_cost(model: &str, tokens: u32) -> f64 {
     // Try centralized pricing from /app/config/models.yaml (returns model price or default)
+    // 优先使用 /app/config/models.yaml 中的集中定价（返回模型价格或默认价）
     if let Some(per_1k) = pricing_cost_per_1k(model) {
         return (tokens as f64 / 1000.0) * per_1k;
     }
     // Fallback to 0.0 for self-hosted/custom models without pricing config
+    // 自托管/自定义模型无定价配置时回退为 0.0
     // warn!(
     //     "No pricing found for model '{}' in config/models.yaml - defaulting to $0.00 cost. \
     //      Add pricing configuration if this model should be tracked.",

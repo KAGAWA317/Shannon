@@ -10,6 +10,7 @@ import (
 )
 
 // TestWatchAndPersist_NilClients verifies early return on nil clients
+// TestWatchAndPersist_NilClients 验证客户端为 nil 时提前返回
 func TestWatchAndPersist_NilClients(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -62,3 +63,7 @@ func TestWatchAndPersist_NilClients(t *testing.T) {
 // flow require complex mocking of Temporal client and database operations.
 // The critical fix (5-minute context timeout) has been manually verified in
 // integration tests. See service.go:1806 for the timeout implementation.
+// 注意：watchAndPersist timeout 行为与持久化流程的进一步测试
+// 需要对 Temporal client 与数据库操作做复杂 mock。
+// 关键修复（5 分钟 context timeout）已在集成测试中人工验证。
+// timeout 实现见 service.go:1806。

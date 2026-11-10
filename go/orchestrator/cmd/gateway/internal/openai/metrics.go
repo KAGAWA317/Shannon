@@ -15,6 +15,7 @@ var (
 			Help: "Total number of OpenAI-compatible API requests",
 		},
 		[]string{"model", "endpoint", "status"}, // status: success, error, rate_limited
+		// status 取值：success、error、rate_limited
 	)
 
 	RequestLatency = promauto.NewHistogramVec(
@@ -33,6 +34,7 @@ var (
 			Help: "Total tokens used via OpenAI-compatible API",
 		},
 		[]string{"model", "type"}, // type: prompt, completion
+		// type 取值：prompt、completion
 	)
 
 	TokensPerRequest = promauto.NewHistogramVec(

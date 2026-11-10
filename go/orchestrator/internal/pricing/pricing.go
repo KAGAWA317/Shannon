@@ -15,6 +15,7 @@ import (
 )
 
 // Config structure for pricing section in config/models.yaml
+// config/models.yaml 中 pricing 段的配置结构
 type config struct {
 	ModelTiers struct {
 		Small struct {
@@ -50,6 +51,7 @@ type config struct {
 		} `yaml:"models"`
 	} `yaml:"pricing"`
 	// ModelCatalog maps provider → model → metadata (used for zero-cost provider detection)
+	// ModelCatalog 映射 provider → model → metadata（用于零成本 provider 判定）
 	ModelCatalog map[string]map[string]interface{} `yaml:"model_catalog"`
 }
 
@@ -69,24 +71,28 @@ var defaultPaths = []string{
 }
 
 // findUpConfig searches parent directories for config/models.yaml starting at CWD.
+// findUpConfig 从当前工作目录开始向上搜索父目录中的 config/models.yaml。
 func findUpConfig() (string, bool) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return "", false
 	}
 	// Walk upwards up to 6 levels to be safe in test/package paths
+	// 向上最多遍历 6 层，以适配测试/包路径
 	for i := 0; i < 6; i++ {
 		cand := filepath.Join(wd, "config", "models.yaml")
 		if _, err := os.Stat(cand); err == nil {
 			return cand, true
 		}
 		// Also try repo root style: look for a sibling "config/models.yaml" while we traverse up
+		// 同时尝试仓库根目录形式：向上遍历时查找同级的 "config/models.yaml"
 		wd = filepath.Dir(wd)
 	}
 	return "", false
 }
 
 // loadLocked loads the configuration - must be called while holding mu.Lock()
+// loadLocked 加载配置——必须在持有 mu.Lock() 时调用
 func loadLocked() {
 	var cfg config
 	// 1) Try explicit and common defaults
@@ -108,6 +114,7 @@ func loadLocked() {
 		break
 	}
 	// 2) If not loaded yet, search upwards from current working directory
+	// 2) 若尚未加载，从当前工作目录向上搜索
 	if cfg.Pricing.Defaults.CombinedPer1K == 0 && len(cfg.Pricing.Models) == 0 {
 		if path, ok := findUpConfig(); ok {
 			if data, err := os.ReadFile(path); err == nil {
@@ -120,6 +127,7 @@ func loadLocked() {
 		}
 	}
 	// No locking needed - caller must hold the lock
+	// 无需加锁——调用方必须已持有锁
 	loaded = &cfg
 	initialized = true
 }
@@ -133,6 +141,7 @@ func get() *config {
 	mu.RUnlock()
 
 	// Need to initialize - use write lock to prevent races
+	// 需要初始化——用写锁防止竞态
 	mu.Lock()
 	defer mu.Unlock()
 	// Double-check after acquiring write lock
@@ -143,6 +152,7 @@ func get() *config {
 }
 
 // ModifiedTime returns the mtime of the config file used (best-effort)
+// ModifiedTime 返回所用配置文件的 mtime（尽力而为）
 func ModifiedTime() time.Time {
 	for _, p := range defaultPaths {
 		if p == "" {
@@ -157,6 +167,8 @@ func ModifiedTime() time.Time {
 
 // Reload forces a re-read of pricing configuration.
 // Thread-safe: uses mutex to prevent race conditions.
+// Reload 强制重新读取定价配置。
+// 线程安全：用互斥锁防止竞态。
 func Reload() {
 	mu.Lock()
 	defer mu.Unlock()
@@ -168,16 +180,19 @@ func Reload() {
 }
 
 // DefaultPerToken returns default combined price per token
+// DefaultPerToken 返回默认的每 token 合计价格
 func DefaultPerToken() float64 {
 	cfg := get()
 	if cfg.Pricing.Defaults.CombinedPer1K > 0 {
 		return cfg.Pricing.Defaults.CombinedPer1K / 1000.0
 	}
 	// Fallback: $0.005 per 1K tokens (generic default)
+	// 回退：每 1K token $0.005（通用默认值）
 	return 0.000005
 }
 
 // PricePerTokenForModel returns combined price per token for a model if available
+// PricePerTokenForModel 返回某模型的每 token 合计价格（若有）
 func PricePerTokenForModel(model string) (float64, bool) {
 	if model == "" {
 		return 0, false
@@ -189,6 +204,7 @@ func PricePerTokenForModel(model string) (float64, bool) {
 				return m.CombinedPer1K / 1000.0, true
 			}
 			// If only input/output provided, approximate combined as average
+			// 若只提供 input/output 价格，按平均值近似合计价
 			if m.InputPer1K > 0 && m.OutputPer1K > 0 {
 				return ((m.InputPer1K + m.OutputPer1K) / 2.0) / 1000.0, true
 			}
@@ -198,10 +214,12 @@ func PricePerTokenForModel(model string) (float64, bool) {
 }
 
 // CostForTokens returns cost in USD for total tokens with optional model
+// CostForTokens 返回总 token 的美元成本，可选指定模型
 func CostForTokens(model string, tokens int) float64 {
 	// Validate token count
 	if tokens < 0 {
 		tokens = 0 // Treat negative as zero to avoid negative costs
+		// 负数按 0 处理，避免负成本
 	}
 
 	if price, ok := PricePerTokenForModel(model); ok {
@@ -217,6 +235,8 @@ func CostForTokens(model string, tokens int) float64 {
 
 // CostForSplit computes cost using input/output token split when available.
 // Falls back to combined pricing or default if model not found.
+// CostForSplit 在可拆分 input/output token 时按拆分计价。
+// 模型未找到时回退到合计价或默认价。
 func CostForSplit(model string, inputTokens, outputTokens int) float64 {
 	// Validate token counts
 	if inputTokens < 0 {
@@ -233,6 +253,7 @@ func CostForSplit(model string, inputTokens, outputTokens int) float64 {
 			in := m.InputPer1K
 			out := m.OutputPer1K
 			// Explicit zero pricing (e.g. local Ollama models) → return 0, don't fallback
+			// 显式零价（如本地 Ollama 模型）→ 返回 0，不回退
 			if in == 0 && out == 0 && m.CombinedPer1K == 0 {
 				return 0
 			}
@@ -248,6 +269,7 @@ func CostForSplit(model string, inputTokens, outputTokens int) float64 {
 	}
 	// Check if model belongs to a zero-cost provider (e.g. Ollama local models)
 	// before falling back to default pricing
+	// 在回退到默认定价之前，先判断模型是否属于零成本 provider（如 Ollama 本地模型）
 	if isZeroCostProvider(model) {
 		return 0
 	}
@@ -267,6 +289,12 @@ func CostForSplit(model string, inputTokens, outputTokens int) float64 {
 // cacheCreation1hTokens is the subset of cacheCreationTokens that used 1h TTL.
 // For Kimi/xAI: input_tokens includes cache; cache_read gets 75% discount (billed at 25%).
 // For OpenAI (default): input_tokens includes cache; cache_read gets 50% discount.
+// CostForSplitWithCache 计算成本，包含 prompt cache 的价格调整。
+// Anthropic/MiniMax：input_tokens 不含 cache；cache_read 按 10%，
+// 5m 创建按 125%，1h 创建按 input 价格的 200%。
+// cacheCreation1hTokens 是使用 1h TTL 的那部分 cacheCreationTokens。
+// Kimi/xAI：input_tokens 含 cache；cache_read 享 75% 折扣（按 25% 计费）。
+// OpenAI（默认）：input_tokens 含 cache；cache_read 享 50% 折扣。
 func CostForSplitWithCache(model string, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, cacheCreation1hTokens int, provider string) float64 {
 	base := CostForSplit(model, inputTokens, outputTokens)
 	if cacheReadTokens <= 0 && cacheCreationTokens <= 0 {
@@ -291,6 +319,9 @@ func CostForSplitWithCache(model string, inputTokens, outputTokens, cacheReadTok
 		// Anthropic/MiniMax: cache tokens are separate from input_tokens,
 		// add them at discounted (read) / premium (creation) rates.
 		// 1h TTL creation is billed at 2.0x; 5m TTL creation at 1.25x.
+		// Anthropic/MiniMax：cache token 与 input_tokens 分开，
+		// 按折扣价（读）/溢价（创建）单独累加。
+		// 1h TTL 创建按 2.0 倍计费；5m TTL 创建按 1.25 倍。
 		base += (float64(cacheReadTokens) / 1000.0) * inputPer1K * 0.1
 		cache5m := cacheCreationTokens - cacheCreation1hTokens
 		if cache5m < 0 {
@@ -302,9 +333,13 @@ func CostForSplitWithCache(model string, inputTokens, outputTokens, cacheReadTok
 		// Kimi/xAI: cached tokens included in input_tokens at full price,
 		// actual billing is 25% (75% discount) — subtract the 75% discount.
 		// xAI: grok-4-1-fast cached input $0.05/1M vs base $0.20/1M.
+		// Kimi/xAI：cache token 已按全价计入 input_tokens，
+		// 实际按 25% 计费（75% 折扣）——减去这 75% 折扣。
+		// xAI：grok-4-1-fast cache 输入 $0.05/1M，基础价 $0.20/1M。
 		base -= (float64(cacheReadTokens) / 1000.0) * inputPer1K * 0.75
 	default:
 		// OpenAI: cached tokens already in input_tokens at full price, subtract 50% discount
+		// OpenAI：cache token 已按全价计入 input_tokens，减去 50% 折扣
 		base -= (float64(cacheReadTokens) / 1000.0) * inputPer1K * 0.5
 	}
 
@@ -315,6 +350,7 @@ func CostForSplitWithCache(model string, inputTokens, outputTokens, cacheReadTok
 }
 
 // ValidateMap validates the pricing section in a raw config map for the config manager.
+// ValidateMap 为配置管理器校验原始配置 map 中的 pricing 段。
 func ValidateMap(m map[string]interface{}) error {
 	p, ok := m["pricing"].(map[string]interface{})
 	if !ok {
@@ -353,6 +389,8 @@ func ValidateMap(m map[string]interface{}) error {
 
 // GetPriorityOneProvider returns the priority-1 provider for a given tier from config.
 // Returns empty string if not found in config (caller should use fallback).
+// GetPriorityOneProvider 从配置返回某 tier 的优先级 1 provider。
+// 配置中不存在时返回空字符串（调用方应使用兜底）。
 func GetPriorityOneProvider(tier string) string {
 	cfg := get()
 	if cfg == nil {
@@ -388,6 +426,8 @@ func GetPriorityOneProvider(tier string) string {
 
 // GetPriorityOneModel returns the priority-1 model for a given tier from config.
 // Returns empty string if not found in config.
+// GetPriorityOneModel 从配置返回某 tier 的优先级 1 模型。
+// 配置中不存在时返回空字符串。
 func GetPriorityOneModel(tier string) string {
 	cfg := get()
 	if cfg == nil {
@@ -422,6 +462,9 @@ func GetPriorityOneModel(tier string) string {
 // GetPriorityModelForProvider returns the preferred model for a given tier and provider.
 // It scans the tier's provider list and returns the model with the lowest priority value
 // for the specified provider (case-insensitive). Returns empty string if not found.
+// GetPriorityModelForProvider 返回某 tier 与 provider 下首选的模型。
+// 它扫描该 tier 的 provider 列表，返回指定 provider（大小写不敏感）
+// 中 priority 值最小的模型。未找到时返回空字符串。
 func GetPriorityModelForProvider(tier, provider string) string {
 	cfg := get()
 	if cfg == nil || provider == "" {
@@ -461,6 +504,9 @@ func GetPriorityModelForProvider(tier, provider string) string {
 // GetProviderForModel searches all model tiers to find which provider offers a given model.
 // Returns empty string if the model is not found in any tier.
 // This is useful for reverse-lookup: given a model name, determine its provider.
+// GetProviderForModel 搜索所有模型 tier，找出哪个 provider 提供该模型。
+// 任何 tier 中都找不到时返回空字符串。
+// 这适合反向查找：给定模型名，确定其 provider。
 func GetProviderForModel(tier, model string) string {
 	cfg := get()
 	if cfg == nil || model == "" {
@@ -492,12 +538,14 @@ func GetProviderForModel(tier, model string) string {
 }
 
 // zeroCostProviders lists providers where all models are free (local inference).
+// zeroCostProviders 列出所有模型都免费的 provider（本地推理）。
 var zeroCostProviders = map[string]bool{
 	"ollama": true,
 }
 
 // isZeroCostProvider checks if a model belongs to a free provider (e.g. Ollama)
 // by looking it up in model_catalog.
+// isZeroCostProvider 在 model_catalog 中查找，判断模型是否属于免费 provider（如 Ollama）。
 func isZeroCostProvider(model string) bool {
 	cfg := get()
 	if cfg == nil || model == "" {

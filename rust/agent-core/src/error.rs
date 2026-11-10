@@ -1,22 +1,27 @@
 use thiserror::Error;
 
 /// Core error type for Shannon agent enforcement gateway
+/// Shannon agent 执行约束网关的核心错误类型
 #[derive(Error, Debug)]
 pub enum AgentError {
     /// Tool execution errors
+    /// tool 执行错误
     #[error("Tool '{name}' execution failed: {reason}")]
     #[allow(dead_code)]
     ToolExecutionFailed { name: String, reason: String },
 
     /// LLM service errors
+    /// LLM 服务错误
     #[error("Failed to parse LLM response: {0}")]
     LlmResponseParseError(String),
 
     /// Configuration errors
+    /// 配置错误
     #[error("Configuration error: {0}")]
     ConfigurationError(String),
 
     /// Network/HTTP errors
+    /// 网络/HTTP 错误
     #[error("Network request failed: {0}")]
     NetworkError(String),
 
@@ -24,6 +29,7 @@ pub enum AgentError {
     HttpError { status: u16, message: String },
 
     /// Concurrency errors
+    /// 并发错误
     #[error("Mutex poisoned: {0}")]
     MutexPoisoned(String),
 
@@ -31,6 +37,7 @@ pub enum AgentError {
     TaskTimeout { seconds: u64 },
 
     /// Generic errors for compatibility
+    /// 用于兼容的通用错误
     #[error("Internal error: {0}")]
     InternalError(String),
 
@@ -39,9 +46,11 @@ pub enum AgentError {
 }
 
 /// Result type alias for agent operations
+/// agent 操作的 Result 类型别名
 pub type AgentResult<T> = Result<T, AgentError>;
 
 // Conversion implementations for common error types
+// 常见错误类型的转换实现
 impl From<std::io::Error> for AgentError {
     fn from(err: std::io::Error) -> Self {
         AgentError::InternalError(err.to_string())
@@ -78,8 +87,10 @@ impl<T> From<std::sync::PoisonError<T>> for AgentError {
 }
 
 // Helper functions for creating common errors
+// 创建常见错误的辅助函数
 impl AgentError {
     /// Create a tool execution error with context
+    /// 创建带 context 的 tool 执行错误
     #[allow(dead_code)]
     pub fn tool_failed(name: impl Into<String>, reason: impl Into<String>) -> Self {
         AgentError::ToolExecutionFailed {

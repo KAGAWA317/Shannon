@@ -119,6 +119,8 @@ func parseImageURL(url string) (*RawAttachment, int, error) {
 	// Unknown extensions fall through to a URL-only ref — the daemon fetches
 	// the URL and uses local tools (bash, archive_extract) to make sense of
 	// it. See attachment-format-parity §2 P0.
+	// URL 路径：只拒绝危险类型（可执行文件/安装包）。未知扩展名按 URL 引用透传——daemon 会拉取该 URL，
+	// 并用本地 tool（bash、archive_extract）解析。见 attachment-format-parity §2 P0。
 	if attachments.IsDangerous(mt) {
 		return nil, 0, fmt.Errorf("rejected attachment type from URL: %s", mt)
 	}
@@ -130,6 +132,7 @@ func parseImageURL(url string) (*RawAttachment, int, error) {
 }
 
 // parseDataURI decodes a data URI (data:<mediatype>;base64,<data>) into a RawAttachment.
+// parseDataURI 把 data URI（data:<mediatype>;base64,<data>）解码为 RawAttachment。
 func parseDataURI(uri string) (*RawAttachment, int, error) {
 	parts := strings.SplitN(uri, ",", 2)
 	if len(parts) != 2 {
@@ -149,6 +152,8 @@ func parseDataURI(uri string) (*RawAttachment, int, error) {
 	// uploads must be IsExtractable — passthrough types (archives / a/v /
 	// octet-stream) should arrive as URL-only refs, not inlined. Dangerous
 	// types are always rejected.
+	// 尽早拒绝空 MIME（如 "data:;base64,..."）。内联 base64 上传必须是 IsExtractable 类型；
+	// passthrough 类型（归档/音视频/octet-stream）应以 URL 引用而非内联形式到达；危险类型一律拒绝。
 	if mediaType == "" {
 		return nil, 0, fmt.Errorf("missing media type in data URI (expected data:<type>;base64,...)")
 	}

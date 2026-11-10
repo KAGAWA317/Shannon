@@ -158,6 +158,7 @@ const WORKFLOW_TYPES: WorkflowTypeOption[] = [
 ];
 
 // Derive workflow type from task_context
+// 从 task_context 反推 workflow 类型
 function getWorkflowTypeFromContext(taskContext?: Record<string, any>): WorkflowType {
     if (!taskContext || Object.keys(taskContext).length === 0) {
         return "auto";
@@ -215,6 +216,7 @@ function WorkflowTypeBadge({ taskContext }: { taskContext?: Record<string, any> 
 }
 
 // Helper to format cron expression in human-readable form
+// 把 cron 表达式格式化成人类可读文本的辅助函数
 function formatCron(cron: string): string {
     const parts = cron.split(" ");
     if (parts.length !== 5) return cron;
@@ -770,6 +772,8 @@ const defaultFormData: ScheduleFormData = {
 
 // Build task_context from workflow type
 // Backend expects map[string]string, so all values must be strings
+// 按 workflow 类型构造 task_context
+// 后端要求 map[string]string，因此所有值都必须转成字符串
 function buildTaskContext(workflowType: WorkflowType, customContext: string): Record<string, string> | undefined {
     if (workflowType === "custom") {
         try {
@@ -912,6 +916,7 @@ function ScheduleFormDialog({
                     className="space-y-4"
                     onKeyDown={(e) => {
                         // Allow keyboard shortcuts (Cmd/Ctrl + A, C, V, X, Z) to work in inputs
+                        // 放行输入框内的快捷键（Cmd/Ctrl + A、C、V、X、Z），避免被外层拦截
                         if ((e.metaKey || e.ctrlKey) && ['a', 'c', 'v', 'x', 'z'].includes(e.key.toLowerCase())) {
                             e.stopPropagation();
                         }

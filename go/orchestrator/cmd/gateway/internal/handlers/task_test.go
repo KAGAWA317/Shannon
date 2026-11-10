@@ -27,6 +27,7 @@ import (
 )
 
 // --- Fake Orchestrator client capturing SubmitTask requests ---
+// --- 捕获 SubmitTask request 的 fake Orchestrator client ---
 type fakeOrchClient struct {
 	lastReq *orchpb.SubmitTaskRequest
 }
@@ -41,6 +42,7 @@ func (f *fakeOrchClient) SubmitTask(ctx context.Context, in *orchpb.SubmitTaskRe
 }
 
 // Unused methods for interface completeness
+// 为满足 interface 完整性而保留的未使用方法。
 func (f *fakeOrchClient) GetTaskStatus(ctx context.Context, in *orchpb.GetTaskStatusRequest, opts ...grpc.CallOption) (*orchpb.GetTaskStatusResponse, error) {
 	return nil, nil
 }
@@ -381,6 +383,8 @@ func createTestSkillRegistry(t *testing.T) *skills.SkillRegistry {
 
 	// We can't easily add skills without files, so we'll use reflection or
 	// a workaround. For simplicity, create a temp directory with skill files.
+	// 没有文件时无法直接添加 skill，本想用反射之类的办法绕过；
+	// 简化处理：建一个临时目录写入 skill 文件再加载。
 	tmpDir := t.TempDir()
 
 	// Create a dangerous skill
@@ -630,6 +634,7 @@ func keysOf(m map[string]interface{}) []string {
 func TestExtractAndStoreContextAttachments_NilContext(t *testing.T) {
 	h := newHandlerWithFake(t, &fakeOrchClient{})
 	// nil context map should be a no-op
+	// nil 的 context map 应为 no-op。
 	err := h.extractAndStoreContextAttachments(context.Background(), "sess-1", nil)
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
@@ -669,6 +674,7 @@ func TestExtractAndStoreContextAttachments_PassthroughRefs(t *testing.T) {
 		t.Fatalf("expected nil error, got %v", err)
 	}
 	// URL ref should pass through unchanged
+	// URL 引用应原样透传。
 	atts := ctxMap["attachments"].([]interface{})
 	if len(atts) != 1 {
 		t.Fatalf("expected 1 attachment, got %d", len(atts))
@@ -728,6 +734,7 @@ func TestExtractAndStoreContextAttachments_StoresInRedis(t *testing.T) {
 	ref := atts[0].(map[string]interface{})
 
 	// Should have an ID, not raw data
+	// 应得到 id，而不是原始 data。
 	if _, hasID := ref["id"]; !hasID {
 		t.Fatal("expected 'id' in ref")
 	}
@@ -745,6 +752,7 @@ func TestExtractAndStoreContextAttachments_StoresInRedis(t *testing.T) {
 	}
 
 	// Verify data actually stored in Redis
+	// 验证 data 确实写入了 Redis。
 	keys := mr.Keys()
 	found := false
 	for _, k := range keys {

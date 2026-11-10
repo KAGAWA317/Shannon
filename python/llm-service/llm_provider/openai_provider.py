@@ -2,6 +2,10 @@
 OpenAI Provider Implementation
 Adds support for OpenAI Responses API with fallback to Chat Completions.
 Prefers provider-reported token usage; falls back to estimation only if needed.
+
+OpenAI provider 实现
+支持 OpenAI Responses API，并可回退到 Chat Completions。
+优先使用 provider 上报的 token 用量；仅在必要时回退到估算。
 """
 
 import os
@@ -15,10 +19,14 @@ from .base import LLMProvider, CompletionRequest, CompletionResponse, TokenUsage
 
 
 class OpenAIProvider(LLMProvider):
-    """OpenAI API provider implementation"""
+    """OpenAI API provider implementation
+
+    OpenAI API 的 provider 实现。
+    """
 
     def __init__(self, config: Dict[str, Any]):
         # Initialize OpenAI client
+        # 初始化 OpenAI 客户端
         api_key = config.get("api_key") or os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OpenAI API key not provided")
@@ -27,6 +35,7 @@ class OpenAIProvider(LLMProvider):
         timeout = int(config.get("timeout", 60) or 60)
 
         # Pass organization and timeout at construction time
+        # 在构造时传入 organization 与 timeout
         self.client = AsyncOpenAI(
             api_key=api_key,
             organization=self.organization,
@@ -34,41 +43,58 @@ class OpenAIProvider(LLMProvider):
         )
 
         # Token encoders for different models
+        # 各 model 的 token encoder
         self.encoders = {}
 
         super().__init__(config)
 
     def _resolve_alias(self, model_id: str) -> str:
-        """Return the configured alias for a given vendor model_id, if any."""
+        """Return the configured alias for a given vendor model_id, if any.
+
+        返回给定厂商 model_id 对应的已配置别名（若有）。
+        """
         for alias, cfg in self.models.items():
             if getattr(cfg, "model_id", None) == model_id:
                 return alias
         return model_id
 
     def _initialize_models(self):
-        """Load OpenAI model configurations from YAML-driven config."""
+        """Load OpenAI model configurations from YAML-driven config.
+
+        从 YAML 驱动的配置加载 OpenAI model 配置。
+        """
 
         self._load_models_from_config()
 
     def _get_encoder(self, model: str):
-        """Get or create token encoder for a model"""
+        """Get or create token encoder for a model
+
+        获取或创建某个 model 的 token encoder。
+        """
         if model not in self.encoders:
             try:
                 self.encoders[model] = tiktoken.encoding_for_model(model)
             except KeyError:
                 # Fall back to cl100k_base encoding
+                # 回退到 cl100k_base 编码
                 self.encoders[model] = tiktoken.get_encoding("cl100k_base")
         return self.encoders[model]
 
     def count_tokens(self, messages: List[Dict[str, Any]], model: str) -> int:
-        """Count tokens using tiktoken"""
+        """Count tokens using tiktoken
+
+        使用 tiktoken 统计 token 数。
+        """
         encoder = self._get_encoder(model)
 
         # Token counting logic based on OpenAI's guidelines
+        # 基于 OpenAI 指南的 token 计数逻辑
         tokens_per_message = (
             3  # Every message follows <im_start>{role/name}\n{content}<im_end>\n
+            # 每条消息都遵循 <im_start>{role/name}\n{content}<im_end>\n
         )
         tokens_per_name = 1  # If there's a name, the role is omitted
+        # 若存在 name 字段，则省略 role
 
         num_tokens = 0
         for message in messages:
@@ -85,26 +111,33 @@ class OpenAIProvider(LLMProvider):
                                 num_tokens += len(encoder.encode(block.get("text", "")))
                             elif block.get("type") in ("image", "image_url"):
                                 # ~85 tokens low-detail, ~765 high-detail; use 256 as safe midpoint
+                                # low-detail 约 85 个 token，high-detail 约 765 个；取 256 作为安全中间值
                                 num_tokens += 256
                         elif isinstance(block, str):
                             num_tokens += len(encoder.encode(block))
 
         num_tokens += 3  # Every reply is primed with <im_start>assistant<im_sep>
+        # 每个回复都以 <im_start>assistant<im_sep> 作为起始
         return num_tokens
 
     @retry(
         stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5, min=1, max=8)
     )
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
-        """Generate a completion using OpenAI API (Responses API preferred)."""
+        """Generate a completion using OpenAI API (Responses API preferred).
+
+        使用 OpenAI API 生成 completion（优先 Responses API）。
+        """
         import logging
         logger = logging.getLogger(__name__)
 
         # Select model based on tier or explicit override
+        # 按层级或显式覆盖选择 model
         model_config = self.resolve_model_config(request)
         model = model_config.model_id
 
         # Choose API route based on model capabilities and request intent
+        # 依据 model 能力与 request 意图选择 API 路由
         route = self._choose_api_route(request, model_config)
         if route == "responses":
             if hasattr(self.client, "responses") and hasattr(
@@ -130,11 +163,14 @@ class OpenAIProvider(LLMProvider):
         }
 
         # GPT-5 family (excluding gpt-5-pro) has restricted parameter support
+        # GPT-5 系列（不含 gpt-5-pro）支持的参数受限
         is_gpt5_chat = model.startswith("gpt-5") and not model.startswith("gpt-5-pro")
         # OpenAI reasoning models (o1, o3, o4) don't support sampling params
+        # OpenAI reasoning model（o1、o3、o4）不支持采样参数
         is_reasoning_model = any(model.startswith(p) for p in ("o1", "o3", "o4"))
 
         # Only include sampling parameters if NOT GPT-5 chat or reasoning models
+        # 仅当不是 GPT-5 chat 或 reasoning model 时才带上采样参数
         if not is_gpt5_chat and not is_reasoning_model:
             api_request["temperature"] = request.temperature
             api_request["top_p"] = request.top_p
@@ -143,19 +179,26 @@ class OpenAIProvider(LLMProvider):
 
         # Compute a safe max completion tokens based on context window headroom
         # This prevents requesting more tokens than the model can return given the prompt size
+        # 基于 context window 余量计算安全的 max completion token
+        # 避免 request 的 token 超过 model 在给定 prompt 大小下能返回的数量
         prompt_tokens_est = self.count_tokens(request.messages, model)
         # Reserve a small safety margin for tool metadata or post-processing
+        # 为 tool metadata 或后处理预留少量安全余量
         safety_margin = 256
         # Model-configured maxima
+        # model 配置的上限
         model_context = getattr(model_config, "context_window", 8192)
         model_max_output = getattr(model_config, "max_tokens", model_context)
         # Requested maximum, if provided
+        # request 的上限（若提供）
         requested_max = int(request.max_tokens) if request.max_tokens else model_max_output
         # Available headroom for completion
+        # completion 可用的余量
         headroom = max(0, model_context - prompt_tokens_est - safety_margin)
         adjusted_max = max(1, min(requested_max, model_max_output, headroom))
 
         # Debug: Log the calculation for GPT-5
+        # 调试：记录 GPT-5 的 token 上限计算
         if model.startswith("gpt-5"):
             logger.info(
                 f"Token limit calculation for {model}: "
@@ -191,12 +234,16 @@ class OpenAIProvider(LLMProvider):
         if request.functions:
             # Modern OpenAI API requires 'tools' param (not legacy 'functions')
             # when messages contain role:"tool" entries
+            # 当消息中包含 role:"tool" 条目时，现代 OpenAI API 要求使用 'tools'
+            # 参数（而非旧式 'functions'）
             if self._has_tool_role_messages(api_request.get("messages", [])):
                 api_request["tools"] = self._functions_to_tools_param(request.functions)
             else:
                 api_request["functions"] = request.functions
             # Only set tool_choice when tools/functions are actually present.
             # Fallback from Anthropic may carry function_call without clearing it.
+            # 仅在确实存在 tools/functions 时设置 tool_choice。
+            # 从 Anthropic 回退时可能带着 function_call 而未清除。
             if request.function_call:
                 if request.function_call == "any":
                     api_request["tool_choice"] = "required"
@@ -260,6 +307,8 @@ class OpenAIProvider(LLMProvider):
         # Normalize message content: some models (e.g., GPT‑5/4.1) may return
         # content as a list of parts instead of a plain string. Extract the
         # text segments to avoid returning an empty string with non‑zero tokens.
+        # 归一化消息 content：部分 model（如 GPT‑5/4.1）可能返回 content part 列表
+        # 而非普通字符串。此处提取文本片段，避免在 token 数非零时返回空字符串。
         def _extract_text_from_message(msg) -> str:
             try:
                 content = getattr(msg, "content", None)
@@ -343,6 +392,8 @@ class OpenAIProvider(LLMProvider):
 
         # Special case: finish_reason == "function_call" or "tool_calls"
         # Content is in message.tool_calls array (new format) or message.function_call (old format)
+        # 特殊情况：finish_reason 为 "function_call" 或 "tool_calls"
+        # 内容位于 message.tool_calls 数组（新格式）或 message.function_call（旧格式）
         if not content_text or not content_text.strip():
             if choice.finish_reason in ["function_call", "tool_calls"]:
                 # Try new format first (tool_calls array)
@@ -373,10 +424,13 @@ class OpenAIProvider(LLMProvider):
                             pass
 
         # Guard: If content is still empty but completion_tokens > 0, handle gracefully
+        # 防护：若 content 仍为空但 completion_tokens > 0，则优雅处理
         completion_tokens_actual = int(getattr(response.usage, "completion_tokens", 0))
         if (not content_text or not content_text.strip()) and completion_tokens_actual > 0:
             # Special case: finish_reason == "length" means model hit token limit
             # GPT-5 reasoning models may consume all tokens for internal reasoning
+            # 特殊情况：finish_reason == "length" 表示 model 触及 token 上限
+            # GPT-5 reasoning model 可能把所有 token 都用于内部推理
             if choice.finish_reason == "length":
                 logger.warning(
                     f"Model {model} hit token limit with empty content. "
@@ -386,12 +440,14 @@ class OpenAIProvider(LLMProvider):
                     f"Returning partial content message."
                 )
                 # Return a partial content message instead of raising an exception
+                # 返回部分内容的提示消息，而不是抛出 exception
                 content_text = (
                     f"[Incomplete response: Model hit token limit ({completion_tokens_actual} tokens used). "
                     f"The response was truncated. Consider increasing max_tokens or simplifying the prompt.]"
                 )
             else:
                 # For other finish_reasons with empty content, this is an error
+                # 其他 finish_reason 却内容为空，属于错误
                 logger.error(
                     f"Empty content after all extraction attempts for model {model}. "
                     f"finish_reason: {choice.finish_reason}, "
@@ -423,6 +479,7 @@ class OpenAIProvider(LLMProvider):
             )
 
         # Prefer provider usage for tokens
+        # 优先使用 provider 返回的 token 用量
         try:
             prompt_tokens = int(getattr(response.usage, "prompt_tokens", 0))
             completion_tokens = int(getattr(response.usage, "completion_tokens", 0))
@@ -433,6 +490,7 @@ class OpenAIProvider(LLMProvider):
             )
         except Exception:
             # Fallback to estimation only if needed
+            # 仅在必要时回退到估算
             prompt_tokens = self.count_tokens(request.messages, model)
             completion_tokens = self.count_tokens(
                 [{"role": "assistant", "content": content_text}], model
@@ -440,6 +498,7 @@ class OpenAIProvider(LLMProvider):
             total_tokens = prompt_tokens + completion_tokens
 
         # Extract cache metrics (OpenAI automatic caching)
+        # 提取 cache 指标（OpenAI 自动 cache）
         cache_read = 0
         try:
             details = getattr(response.usage, "prompt_tokens_details", None)
@@ -449,16 +508,19 @@ class OpenAIProvider(LLMProvider):
             pass
 
         # Use configured alias for cost lookup when available
+        # 有已配置别名时用它查找成本
         cost = self.estimate_cost(
             prompt_tokens, completion_tokens, self._resolve_alias(model),
             cache_read_tokens=cache_read,
         )
 
         # Normalize function/tool call information to a plain dict for JSON safety
+        # 将 function/tool call 信息归一化为普通 dict，确保 JSON 安全
         normalized_fc = None
         all_tool_calls = []
         try:
             # Newer SDKs expose structured tool calls; prefer those when present
+            # 较新的 SDK 暴露结构化 tool call；存在时优先使用
             if hasattr(message, "tool_calls") and message.tool_calls:
                 for tc in message.tool_calls:
                     tc_id = getattr(tc, "id", None)
@@ -495,6 +557,7 @@ class OpenAIProvider(LLMProvider):
                     }
         except Exception:
             # Be permissive – missing/invalid function call info should not fail the request
+            # 保持宽容 —— 缺失/无效的 function call 信息不应让 request 失败
             normalized_fc = None
             all_tool_calls = []
 
@@ -518,13 +581,18 @@ class OpenAIProvider(LLMProvider):
         )
 
     async def stream_complete(self, request: CompletionRequest) -> AsyncIterator[str]:
-        """Stream a completion using OpenAI API"""
+        """Stream a completion using OpenAI API
+
+        使用 OpenAI API 流式生成 completion。
+        """
 
         # Select model based on tier or explicit override
+        # 按层级或显式覆盖选择 model
         model_config = self.resolve_model_config(request)
         model = model_config.model_id
 
         # Prepare API request (align parameters with non-streaming variant)
+        # 准备 API request（参数与非流式版本保持一致）
         api_request = {
             "model": model,
             "messages": prepare_openai_messages(request.messages),
@@ -532,11 +600,14 @@ class OpenAIProvider(LLMProvider):
         }
 
         # GPT-5 family (excluding gpt-5-pro) has restricted parameter support
+        # GPT-5 系列（不含 gpt-5-pro）支持的参数受限
         is_gpt5_chat = model.startswith("gpt-5") and not model.startswith("gpt-5-pro")
         # OpenAI reasoning models (o1, o3, o4) don't support sampling params
+        # OpenAI reasoning model（o1、o3、o4）不支持采样参数
         is_reasoning_model = any(model.startswith(p) for p in ("o1", "o3", "o4"))
 
         # Only include sampling parameters if NOT GPT-5 chat or reasoning models
+        # 仅当不是 GPT-5 chat 或 reasoning model 时才带上采样参数
         if not is_gpt5_chat and not is_reasoning_model:
             api_request["temperature"] = request.temperature
             api_request["top_p"] = request.top_p
@@ -579,11 +650,18 @@ class OpenAIProvider(LLMProvider):
         # Make streaming API call
         # Request usage statistics for streaming
         # Add stream options for usage
+        # 发起 streaming API 调用
+        # 为 streaming request 统计 usage
+        # 添加 usage 相关的 stream options
         api_request["stream_options"] = {"include_usage": True}
 
         # Helper to extract text from streaming delta (handles GPT-5 formats)
+        # 从 streaming delta 中提取文本的辅助函数（处理 GPT-5 格式）
         def _extract_delta_content(delta) -> str:
-            """Extract text content from streaming delta, handling GPT-5 formats."""
+            """Extract text content from streaming delta, handling GPT-5 formats.
+
+            从 streaming delta 中提取文本内容，处理 GPT-5 格式。
+            """
             # 1. Standard delta.content (string)
             content = getattr(delta, "content", None)
             if isinstance(content, str) and content:
@@ -625,6 +703,8 @@ class OpenAIProvider(LLMProvider):
 
             # Accumulate tool/function calls across streaming deltas.
             # OpenAI streams tool calls incrementally (name/arguments chunks).
+            # 跨 streaming delta 累计 tool/function call。
+            # OpenAI 会增量流式输出 tool call（name/arguments 分块）
             tool_calls_by_index: Dict[int, Dict[str, Any]] = {}
             last_model = model
             last_finish_reason = None
@@ -642,6 +722,7 @@ class OpenAIProvider(LLMProvider):
 
             async for chunk in stream:
                 # Track actual model from chunks when available
+                # 尽可能从 chunk 中跟踪实际使用的 model
                 if getattr(chunk, "model", None):
                     last_model = chunk.model
 
@@ -650,10 +731,12 @@ class OpenAIProvider(LLMProvider):
                     delta = choice.delta
 
                     # Track finish_reason (set on the final chunk)
+                    # 跟踪 finish_reason（在最后一个 chunk 上设置）
                     if choice.finish_reason:
                         last_finish_reason = choice.finish_reason
 
                     # Newer SDK: tool_calls streaming (array of calls)
+                    # 较新 SDK：tool_calls 流式输出（call 数组）
                     for tc in getattr(delta, "tool_calls", None) or []:
                         try:
                             idx = getattr(tc, "index", None)
@@ -672,6 +755,7 @@ class OpenAIProvider(LLMProvider):
                             continue
 
                     # Older SDK: function_call streaming (single call)
+                    # 较旧 SDK：function_call 流式输出（单次调用）
                     fc = getattr(delta, "function_call", None)
                     if fc is not None:
                         try:
@@ -686,6 +770,7 @@ class OpenAIProvider(LLMProvider):
                         yield text
 
                 # Check for usage in the chunk (usually the last one)
+                # 检查 chunk 中的 usage（通常是最后一个）
                 if chunk.usage:
                     stream_cache_read = 0
                     try:
@@ -713,6 +798,7 @@ class OpenAIProvider(LLMProvider):
                         "finish_reason": last_finish_reason or "stop",
                     }
                     # Include (possibly multiple) tool calls when present.
+                    # 存在 tool call（可能多个）时一并附带。
                     if tool_calls_by_index:
                         ordered = [
                             tool_calls_by_index[i]
@@ -729,6 +815,7 @@ class OpenAIProvider(LLMProvider):
                     yield meta
 
             # If usage wasn't emitted but we did see tool calls, emit tool call metadata anyway.
+            # 若未输出 usage 但确实看到了 tool call，仍然输出 tool call metadata。
             if not yielded_final_meta and tool_calls_by_index:
                 ordered = [
                     tool_calls_by_index[i]
@@ -752,7 +839,10 @@ class OpenAIProvider(LLMProvider):
     async def generate_embedding(
         self, text: str, model: str = "text-embedding-3-small"
     ) -> List[float]:
-        """Generate embeddings using OpenAI API."""
+        """Generate embeddings using OpenAI API.
+
+        使用 OpenAI API 生成 embedding。
+        """
 
         try:
             response = await self.client.embeddings.create(model=model, input=text)
@@ -767,8 +857,16 @@ class OpenAIProvider(LLMProvider):
         - Prefer Chat for tool calling and strict JSON mode (more mature behavior).
         - Prefer Chat for GPT-5 and GPT-4.1 families (standard chat completions).
         - Prefer Responses for reasoning‑heavy tasks when supported and signaled by complexity.
+
+        在 Responses 与 Chat API 之间做启发式选择。
+
+        - GPT-5-pro 必须使用 Responses API（仅该处可用）
+        - tool 调用与严格 JSON 模式优先用 Chat（行为更成熟）
+        - GPT-5 与 GPT-4.1 系列优先用 Chat（标准 chat completions）
+        - reasoning 繁重的 task，在支持且 complexity 有信号时优先用 Responses
         """
         # Multimodal content must use Chat Completions — Responses API doesn't support it
+        # 多模态内容必须使用 Chat Completions —— Responses API 不支持
         has_image_content = any(
             isinstance(m.get("content"), list) for m in (request.messages or [])
         )
@@ -776,12 +874,14 @@ class OpenAIProvider(LLMProvider):
             return "chat"
 
         # Reasoning models (o1, o3, o4) stay on Chat Completions unless chaining
+        # 除非需要串联，reasoning model（o1、o3、o4）保持在 Chat Completions
         model_name_route = getattr(model_config, "model_id", "")
         is_reasoning = any(model_name_route.startswith(p) for p in ("o1", "o3", "o4"))
         if is_reasoning and not getattr(request, "previous_response_id", None):
             return "chat"
 
         # Prefer Responses API when chaining from a previous response
+        # 从上一个 response 串联时优先 Responses API
         if getattr(request, "previous_response_id", None):
             return "responses"
 
@@ -796,6 +896,7 @@ class OpenAIProvider(LLMProvider):
         high_complexity = (request.complexity_score or 0.0) >= 0.7
 
         # Check requirements that need Chat Completions API BEFORE model family checks
+        # 在判断 model 系列之前，先检查必须使用 Chat Completions API 的需求
         if has_tools and getattr(caps, "supports_tools", True):
             return "chat"
         if wants_json and getattr(caps, "supports_json_mode", True):
@@ -803,21 +904,28 @@ class OpenAIProvider(LLMProvider):
 
         # GPT-5 family: Use Chat API by default (more reliable than Responses API)
         # Responses API has strict content type validation and empty output issues with reasoning models
+        # GPT-5 系列：默认使用 Chat API（比 Responses API 更可靠）
+        # Responses API 对 content type 校验严格，且对 reasoning model 存在空输出问题
         if model_name.startswith("gpt-5"):
             return "chat"
 
         # GPT-4.1 family uses standard chat completions API
+        # GPT-4.1 系列使用标准 chat completions API
         if model_name.startswith("gpt-4."):
             return "chat"
 
         if high_complexity and getattr(caps, "supports_reasoning", False):
             return "responses"
         # Default preference: Chat Completions API
+        # 默认偏好：Chat Completions API
         return "chat"
 
     @staticmethod
     def _has_tool_role_messages(messages: list) -> bool:
-        """Check if messages contain role:'tool' entries (modern OpenAI format)."""
+        """Check if messages contain role:'tool' entries (modern OpenAI format).
+
+        检查消息中是否包含 role:'tool' 条目（现代 OpenAI 格式）。
+        """
         return any(
             isinstance(m, dict) and m.get("role") == "tool"
             for m in messages
@@ -829,6 +937,11 @@ class OpenAIProvider(LLMProvider):
 
         Input:  [{"name": "...", "description": "...", "parameters": {...}}]
         Output: [{"type": "function", "function": {"name": "...", ...}}]
+
+        将旧式 functions 列表转换为现代 tools 参数格式。
+
+        输入： [{"name": "...", "description": "...", "parameters": {...}}]
+        输出： [{"type": "function", "function": {"name": "...", ...}}]
         """
         tools = []
         for fn in functions:
@@ -843,13 +956,18 @@ class OpenAIProvider(LLMProvider):
     async def _complete_responses_api(
         self, request: CompletionRequest, model: str
     ) -> CompletionResponse:
-        """Call OpenAI Responses API and normalize to CompletionResponse."""
+        """Call OpenAI Responses API and normalize to CompletionResponse.
+
+        调用 OpenAI Responses API 并归一化为 CompletionResponse。
+        """
         import time
 
         # Get model config for token limits
+        # 获取 model 配置以确定 token 上限
         model_config = self.resolve_model_config(request)
 
         # Map OpenAI chat-style messages to Responses input blocks
+        # 将 OpenAI chat 风格消息映射为 Responses 的 input block
         inputs: List[Dict[str, Any]] = []
         for msg in request.messages:
             role = msg.get("role", "user")
@@ -858,6 +976,7 @@ class OpenAIProvider(LLMProvider):
             inputs.append({"role": role, "content": [content_block]})
 
         # Clamp max_output_tokens to model limits (same as Chat API path)
+        # 将 max_output_tokens 限制在 model 上限内（与 Chat API 路径一致）
         prompt_tokens_est = self.count_tokens(request.messages, model)
         safety_margin = 256
         model_context = getattr(model_config, "context_window", 8192)
@@ -873,9 +992,12 @@ class OpenAIProvider(LLMProvider):
 
         # Chain from previous response for cache reuse (OpenAI keeps
         # the full conversation server-side, so we only send the new message).
+        # 基于上一个 response 串联以复用 cache（OpenAI 在服务端保留完整对话，
+        # 因此只发送新消息）。
         if request.previous_response_id:
             params["previous_response_id"] = request.previous_response_id
             # Only send the last user message as incremental input
+            # 仅把最后一条 user 消息作为增量输入
             last_user = [m for m in request.messages if m.get("role") == "user"]
             if last_user:
                 params["input"] = [{"role": "user", "content": [{"type": "input_text", "text": extract_text_from_content(last_user[-1].get("content", ""))}]}]
@@ -884,14 +1006,18 @@ class OpenAIProvider(LLMProvider):
         else:
             params["input"] = inputs
             params["store"] = True  # Enable server-side storage for future chaining
+            # 启用服务端存储，供后续串联使用
 
         if request.reasoning_effort and any(model.startswith(p) for p in ("o1", "o3", "o4")):
             params["reasoning"] = {"effort": request.reasoning_effort}
 
         # Note: Responses API doesn't support response_format parameter
         # If needed, the fallback to Chat Completions API will handle it
+        # 注意：Responses API 不支持 response_format 参数
+        # 如需要，回退到 Chat Completions API 时会处理
         if request.functions:
             # Minimal pass-through using function blocks
+            # 使用 function block 做最小化透传
             tools: List[Dict[str, Any]] = []
             for fn in request.functions:
                 if not isinstance(fn, dict):
@@ -934,6 +1060,7 @@ class OpenAIProvider(LLMProvider):
             raise
 
         # Prefer output_text when Responses API provides it directly
+        # Responses API 直接提供 output_text 时优先使用
         direct_text = getattr(response, "output_text", None)
         if isinstance(direct_text, str) and direct_text.strip():
             content = direct_text.strip()
@@ -948,6 +1075,7 @@ class OpenAIProvider(LLMProvider):
                 }
         else:
             # Extract text blocks; usage may be a dict-like
+            # 提取文本 block；usage 可能是类 dict 对象
             text_parts: List[str] = []
             try:
                 raw = response.model_dump()
@@ -986,6 +1114,7 @@ class OpenAIProvider(LLMProvider):
             total_tokens = int(usage.get("total_tokens", input_tokens + output_tokens))
         except Exception:
             # Fallback to estimation
+            # 回退到估算
             input_tokens = self.count_tokens(request.messages, model)
             output_tokens = self.count_tokens(
                 [{"role": "assistant", "content": content}], model
@@ -995,6 +1124,7 @@ class OpenAIProvider(LLMProvider):
         cache_read = 0
         try:
             # Responses API uses input_tokens_details (not prompt_tokens_details)
+            # Responses API 使用 input_tokens_details（而非 prompt_tokens_details）
             details = getattr(response.usage, "input_tokens_details", None) or \
                       getattr(response.usage, "prompt_tokens_details", None)
             if details:
@@ -1009,6 +1139,7 @@ class OpenAIProvider(LLMProvider):
         )
 
         # For Responses API, max_output_tokens is the effective limit
+        # 对 Responses API 而言，max_output_tokens 即实际生效的上限
         effective_max = params.get("max_output_tokens", 2048)
 
         return CompletionResponse(

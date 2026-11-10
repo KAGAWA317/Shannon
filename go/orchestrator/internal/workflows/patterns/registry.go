@@ -88,6 +88,7 @@ type DefaultPatternSelector struct{}
 // SelectPattern chooses the best pattern for a task
 func (s *DefaultPatternSelector) SelectPattern(query string, context map[string]interface{}, available []Pattern) (Pattern, error) {
 	// Simple heuristic-based selection
+	// 目前只认 context["pattern"] 显式提示，否则退回第一个注册的 pattern，没有按 task 特征真正打分。
 	// Could be enhanced with ML-based selection
 
 	// Check for explicit pattern hint
@@ -181,6 +182,7 @@ func registerDefaultPatterns() {
 	// Register existing patterns
 	// These will be implemented as Pattern interface wrappers
 	// around existing implementations
+	// 内置 pattern 都是既有实现的薄适配层，注册顺序决定默认选择结果。
 	_ = globalRegistry.Register(reflectionPattern{})
 	_ = globalRegistry.Register(reactPattern{})
 	_ = globalRegistry.Register(chainOfThoughtPattern{})

@@ -33,6 +33,7 @@ type Features struct {
 }
 
 // RateLimitConfigPaths is the canonical search order for rate_limits.yaml.
+// RateLimitConfigPaths 是 rate_limits.yaml 的规范搜索顺序。
 var RateLimitConfigPaths = []string{
 	"/app/config/rate_limits.yaml",
 	"config/rate_limits.yaml",
@@ -43,6 +44,8 @@ var RateLimitConfigPaths = []string{
 // probing candidate paths. Only regular files are accepted (directories are
 // skipped). Returns the fallback string when nothing is found so callers can
 // produce a meaningful error message.
+// ResolveConfigFile 先检查环境变量，再探测候选路径来查找配置文件。仅接受普通文件（跳过目录）。
+// 都找不到时返回 fallback 字符串，便于调用方给出有意义的错误信息。
 func ResolveConfigFile(envVar string, candidates []string, fallback string) string {
 	if v := os.Getenv(envVar); v != "" {
 		return v
@@ -57,6 +60,7 @@ func ResolveConfigFile(envVar string, candidates []string, fallback string) stri
 }
 
 // Load loads features.yaml from CONFIG_PATH or /app/config/features.yaml
+// Load 从 CONFIG_PATH 或 /app/config/features.yaml 加载 features.yaml
 func Load() (*Features, error) {
 	cfgPath := os.Getenv("CONFIG_PATH")
 	if cfgPath == "" {
@@ -84,6 +88,7 @@ func Load() (*Features, error) {
 }
 
 // MetricsPort returns port from config or an env override METRICS_PORT, falling back to defaultPort
+// MetricsPort 返回配置中的端口，或 METRICS_PORT 环境变量覆盖值，否则回退到 defaultPort
 func MetricsPort(defaultPort int) int {
 	if p := os.Getenv("METRICS_PORT"); p != "" {
 		var v int
@@ -101,6 +106,7 @@ func MetricsPort(defaultPort int) int {
 }
 
 // BudgetConfig captures budget-related knobs loaded from config or env
+// BudgetConfig 汇总从配置或环境变量加载的 budget 相关参数
 type BudgetConfig struct {
 	Backpressure struct {
 		Threshold  float64 `mapstructure:"threshold"`
@@ -118,6 +124,7 @@ type BudgetConfig struct {
 }
 
 // WorkflowsConfig captures workflow-related knobs defined in features.yaml
+// WorkflowsConfig 汇总 features.yaml 中定义的 workflow 相关参数
 type WorkflowsConfig struct {
 	Synthesis struct {
 		BypassSingleResult *bool `mapstructure:"bypass_single_result"`
@@ -129,6 +136,7 @@ type WorkflowsConfig struct {
 }
 
 // EnforcementConfig captures enforcement defaults coming from features.yaml
+// EnforcementConfig 汇总 features.yaml 中的执行默认值
 type EnforcementConfig struct {
 	TimeoutSeconds int `mapstructure:"timeout_seconds"`
 	MaxTokens      int `mapstructure:"max_tokens"`
@@ -160,6 +168,7 @@ type DaemonConfig struct {
 }
 
 // CitationConfig captures Citation V2 feature flags (P1)
+// CitationConfig 汇总 Citation V2 功能开关（P1）
 type CitationConfig struct {
 	V2Enabled           *bool    `mapstructure:"v2_enabled"`
 	V2StrictMode        *bool    `mapstructure:"v2_strict_mode"`
@@ -171,6 +180,7 @@ type CitationConfig struct {
 }
 
 // WorkspaceTierConfig defines retention and storage limits per tier
+// WorkspaceTierConfig 定义各档位的保留期与存储上限
 type WorkspaceTierConfig struct {
 	RetentionDays int `mapstructure:"retention_days"`
 	MaxSizeGB     int `mapstructure:"max_size_gb"`
@@ -187,6 +197,7 @@ type WorkspaceConfig struct {
 }
 
 // WorkspaceDefaults returns the default workspace tier configuration
+// WorkspaceDefaults 返回默认的 workspace 档位配置
 func WorkspaceDefaults() WorkspaceConfig {
 	return WorkspaceConfig{
 		Tiers: struct {
@@ -203,6 +214,7 @@ func WorkspaceDefaults() WorkspaceConfig {
 }
 
 // BudgetFromEnvOrDefaults returns merged budget config using env overrides first, then config file, with sensible defaults.
+// BudgetFromEnvOrDefaults 合并 budget 配置：优先环境变量，其次配置文件，最后使用合理默认值。
 func BudgetFromEnvOrDefaults(f *Features) BudgetConfig {
 	// defaults
 	bc := BudgetConfig{}
@@ -293,6 +305,7 @@ func BudgetFromEnvOrDefaults(f *Features) BudgetConfig {
 }
 
 // WorkflowRuntimeConfig represents resolved workflow-related runtime settings.
+// WorkflowRuntimeConfig 表示解析后的 workflow 运行时设置。
 type WorkflowRuntimeConfig struct {
 	BypassSingleResult     bool
 	BypassFromEnv          bool
@@ -303,6 +316,7 @@ type WorkflowRuntimeConfig struct {
 }
 
 // ResolveWorkflowRuntime merges features.yaml defaults with environment overrides.
+// ResolveWorkflowRuntime 合并 features.yaml 默认值与环境变量覆盖。
 func ResolveWorkflowRuntime(f *Features) WorkflowRuntimeConfig {
 	cfg := WorkflowRuntimeConfig{
 		BypassSingleResult: true,
@@ -341,6 +355,7 @@ func ResolveWorkflowRuntime(f *Features) WorkflowRuntimeConfig {
 }
 
 // ParseBool converts common string representations to bool.
+// ParseBool 将常见字符串表示转换为 bool。
 func ParseBool(val string) bool {
 	switch strings.ToLower(strings.TrimSpace(val)) {
 	case "1", "true", "yes", "on":
@@ -356,12 +371,15 @@ func ParseBool(val string) bool {
 }
 
 // EnforcementRuntime represents resolved enforcement-related runtime settings.
+// EnforcementRuntime 表示解析后的执行相关运行时设置。
 type EnforcementRuntime struct {
 	ProviderRateControlEnabled bool
 }
 
 // ResolveEnforcementRuntime merges features.yaml defaults with environment overrides.
 // Default: ProviderRateControlEnabled = true; env PROVIDER_RATE_CONTROL_ENABLED overrides if set.
+// ResolveEnforcementRuntime 合并 features.yaml 默认值与环境变量覆盖。
+// 默认 ProviderRateControlEnabled = true；设置环境变量 PROVIDER_RATE_CONTROL_ENABLED 时以其为准。
 func ResolveEnforcementRuntime(f *Features) EnforcementRuntime {
 	cfg := EnforcementRuntime{
 		ProviderRateControlEnabled: true,
@@ -381,6 +399,7 @@ func ResolveEnforcementRuntime(f *Features) EnforcementRuntime {
 }
 
 // CitationRuntime represents resolved Citation V2 runtime settings (P1)
+// CitationRuntime 表示解析后的 Citation V2 运行时设置（P1）
 type CitationRuntime struct {
 	V2Enabled           bool
 	V2StrictMode        bool
@@ -393,6 +412,8 @@ type CitationRuntime struct {
 
 // ResolveCitationRuntime merges features.yaml defaults with environment overrides.
 // Defaults: V2Enabled=true, V2StrictMode=false, V2MinSupportRate=0.1, etc.
+// ResolveCitationRuntime 合并 features.yaml 默认值与环境变量覆盖。
+// 默认 V2Enabled=true、V2StrictMode=false、V2MinSupportRate=0.1 等。
 func ResolveCitationRuntime(f *Features) CitationRuntime {
 	cfg := CitationRuntime{
 		V2Enabled:           true,

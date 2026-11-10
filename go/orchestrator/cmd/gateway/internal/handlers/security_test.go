@@ -110,6 +110,7 @@ func (m *MockOrchestratorClient) GetControlState(ctx context.Context, req *orchp
 }
 
 // Schedule methods (stubs for interface completeness)
+// Schedule 相关方法（为满足 interface 完整性而保留的 stub）。
 func (m *MockOrchestratorClient) CreateSchedule(ctx context.Context, req *orchpb.CreateScheduleRequest, opts ...grpc.CallOption) (*orchpb.CreateScheduleResponse, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
@@ -344,6 +345,8 @@ func TestApproveTask_ValidationAndAuth(t *testing.T) {
 func TestAPIKeyPropagation_Metadata(t *testing.T) {
 	// Note: This test verifies the metadata propagation pattern exists
 	// Actual metadata propagation is tested via integration tests
+	// 注意：本测试只验证 metadata 透传的写法存在，
+	// 真正的 metadata 透传由集成测试覆盖。
 	t.Run("Submit task with API key header", func(t *testing.T) {
 		mockClient := new(MockOrchestratorClient)
 		mockClient.On("SubmitTask", mock.Anything, mock.Anything).
@@ -370,6 +373,7 @@ func TestAPIKeyPropagation_Metadata(t *testing.T) {
 		handler.SubmitTask(w, req)
 
 		// Verify successful response (metadata propagation verified in integration tests)
+		// 验证 response 成功（metadata 透传在集成测试中验证）。
 		assert.Equal(t, http.StatusOK, w.Code)
 		mockClient.AssertExpectations(t)
 	})

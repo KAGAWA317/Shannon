@@ -44,6 +44,8 @@ func determineModelTier(context map[string]interface{}, defaultTier string) stri
 	// NOTE: These tiers apply to AGENT EXECUTION only.
 	// Final synthesis always uses "large" tier (hardcoded in synthesis.go:361).
 	// Utility activities (coverage_eval, fact_extraction, etc.) use "small" tier.
+	// 这些档位只作用于 agent 执行；最终合成固定用 "large"（见 synthesis.go）；
+	// tool 型 activity（coverage_eval、fact_extraction 等）用 "small"。
 	if strategyRaw, ok := context["research_strategy"].(string); ok && strings.TrimSpace(strategyRaw) != "" {
 		strategy := strings.ToLower(strings.TrimSpace(strategyRaw))
 
@@ -58,6 +60,8 @@ func determineModelTier(context map[string]interface{}, defaultTier string) stri
 			// Use medium for agent execution; final synthesis will use large.
 			// Research shows agentic workflows with smaller models + iteration
 			// match or outperform single large-model calls at lower cost.
+			// agent 执行用 medium，最终合成用 large：研究表明小 model + 迭代的 agent workflow
+			// 能以更低成本达到甚至超过单次 large model 调用。
 			return "medium"
 		case "academic":
 			// Academic uses medium for agent execution; final synthesis uses large.

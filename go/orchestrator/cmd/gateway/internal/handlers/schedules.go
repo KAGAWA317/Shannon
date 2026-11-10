@@ -559,10 +559,13 @@ func (h *ScheduleHandler) sendError(w http.ResponseWriter, msg string, code int)
 
 // jsonEncodedPrefix marks values that were JSON-encoded during transport.
 // This prefix prevents backwards-incompatible coercion of string values like "true" or "123".
+// jsonEncodedPrefix 标记在传输过程中被 JSON 编码过的值；该前缀避免把 "true"、"123" 这类字符串值做不兼容的强制转换。
 const jsonEncodedPrefix = "\x00json:"
 
 // encodeTaskContext converts map[string]interface{} to map[string]string for proto transport.
 // Non-string values (arrays, objects, booleans, numbers) are JSON-encoded with a prefix marker.
+// encodeTaskContext 把 map[string]interface{} 转成 map[string]string 以适配 proto 传输；
+// 非字符串值（数组、对象、布尔、数字）会 JSON 编码并加上前缀标记。
 func encodeTaskContext(ctx map[string]interface{}) map[string]string {
 	if ctx == nil {
 		return nil

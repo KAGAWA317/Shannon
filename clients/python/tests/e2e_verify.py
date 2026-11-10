@@ -2,6 +2,8 @@
 """
 E2E verification of Python SDK against live local Shannon stack.
 
+针对本地运行中的 Shannon 全栈，对 Python SDK 做 E2E 验证。
+
 Requires: SHANNON_BASE_URL (default http://localhost:8080), all services running.
 Usage: uv run --extra dev python tests/e2e_verify.py
 """
@@ -14,6 +16,7 @@ import time
 import traceback
 
 # Add src to path for editable install
+# 把 src 加入 path，以支持 editable install
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from shannon import (
@@ -46,7 +49,10 @@ def report(name: str, passed: bool, detail: str = "", skip: bool = False):
 
 
 async def test_health(client: AsyncShannonClient):
-    """Test health and readiness endpoints."""
+    """Test health and readiness endpoints.
+
+    测试 health 与 readiness 端点。
+    """
     print("\n--- Health ---")
     h = await client.health()
     report("health()", h.get("status") == "healthy", f"got: {h}")
@@ -56,7 +62,10 @@ async def test_health(client: AsyncShannonClient):
 
 
 async def test_task_lifecycle(client: AsyncShannonClient):
-    """Test submit, status, wait, result."""
+    """Test submit, status, wait, result.
+
+    测试 submit、status、wait、result。
+    """
     print("\n--- Task Lifecycle ---")
 
     handle = await client.submit_task("What is 2+2? Reply with just the number.")
@@ -74,6 +83,7 @@ async def test_task_lifecycle(client: AsyncShannonClient):
     )
 
     # Wait for completion (60s timeout)
+    # 等待完成（60s timeout）
     final = await client.wait(handle.task_id, timeout=60)
     report(
         "wait() completes",
@@ -100,13 +110,17 @@ async def test_task_lifecycle(client: AsyncShannonClient):
 
 
 async def test_task_cancel(client: AsyncShannonClient):
-    """Test cancel on a task."""
+    """Test cancel on a task.
+
+    测试对 task 的 cancel。
+    """
     print("\n--- Task Cancel ---")
     handle = await client.submit_task(
         "Write a 5000 word essay about the history of computing.",
         context={"force_research": "true"},
     )
     # Give it a moment to start
+    # 给它一点时间启动
     await asyncio.sleep(2)
 
     cancelled = await client.cancel(handle.task_id, reason="E2E test cancel")
@@ -122,7 +136,10 @@ async def test_task_cancel(client: AsyncShannonClient):
 
 
 async def test_streaming(client: AsyncShannonClient):
-    """Test SSE streaming."""
+    """Test SSE streaming.
+
+    测试 SSE streaming 输出。
+    """
     print("\n--- SSE Streaming ---")
     handle, stream_url = await client.submit_and_stream("What is the capital of France?")
     report(
@@ -155,11 +172,15 @@ async def test_streaming(client: AsyncShannonClient):
 
 
 async def test_sessions(client: AsyncShannonClient):
-    """Test session management."""
+    """Test session management.
+
+    测试 session 管理。
+    """
     print("\n--- Sessions ---")
     session_id = f"e2e-test-{int(time.time())}"
 
     # Submit task with session to create it
+    # 提交带 session 的 task，以创建该 session
     handle = await client.submit_task(
         "Say hello", session_id=session_id
     )
@@ -203,7 +224,10 @@ async def test_sessions(client: AsyncShannonClient):
 
 
 async def test_tools_api(client: AsyncShannonClient):
-    """Test Tool API (new in this PR)."""
+    """Test Tool API (new in this PR).
+
+    测试 Tool API（本次 PR 新增）。
+    """
     print("\n--- Tools API ---")
 
     tools = await client.list_tools()
@@ -215,6 +239,7 @@ async def test_tools_api(client: AsyncShannonClient):
         return
 
     # Verify Tool model fields
+    # 校验 Tool model 的字段
     t = tools[0]
     report(
         "Tool model has name+description",
@@ -231,6 +256,7 @@ async def test_tools_api(client: AsyncShannonClient):
     )
 
     # Try to find a safe tool to execute (web_search or calculator)
+    # 找一个可安全执行的 tool（web_search 或 calculator）
     safe_tools = [x for x in tools if x.name in ("web_search", "calculator", "searchapi_search")]
     if safe_tools:
         tool_name = safe_tools[0].name
@@ -250,7 +276,10 @@ async def test_tools_api(client: AsyncShannonClient):
 
 
 async def test_openai_compat(client: AsyncShannonClient):
-    """Test OpenAI-compatible endpoints (new in this PR)."""
+    """Test OpenAI-compatible endpoints (new in this PR).
+
+    测试 OpenAI 兼容端点（本次 PR 新增）。
+    """
     print("\n--- OpenAI-Compatible ---")
 
     # List models
@@ -311,7 +340,10 @@ async def test_openai_compat(client: AsyncShannonClient):
 
 
 async def test_agents_api(client: AsyncShannonClient):
-    """Test Agents API (new in this PR)."""
+    """Test Agents API (new in this PR).
+
+    测试 Agents API（本次 PR 新增）。
+    """
     print("\n--- Agents API ---")
 
     agents = await client.list_agents()
@@ -399,7 +431,10 @@ async def test_agents_api(client: AsyncShannonClient):
 
 
 async def test_skills_api(client: AsyncShannonClient):
-    """Test Skills API."""
+    """Test Skills API.
+
+    测试 Skills API。
+    """
     print("\n--- Skills API ---")
 
     skills = await client.list_skills()
@@ -424,16 +459,21 @@ async def test_skills_api(client: AsyncShannonClient):
 
 
 async def test_control_signals(client: AsyncShannonClient):
-    """Test pause/resume/control-state."""
+    """Test pause/resume/control-state.
+
+    测试 pause/resume/control-state。
+    """
     print("\n--- Control Signals ---")
 
     # Submit a long-running task
+    # 提交一个长耗时 task
     handle = await client.submit_task(
         "Write a detailed analysis of quantum computing applications in cryptography. "
         "Cover at least 10 different applications with examples.",
         context={"force_research": "true"},
     )
     # Give it time to start
+    # 留给它启动的时间
     await asyncio.sleep(3)
 
     status = await client.get_status(handle.task_id)
@@ -464,12 +504,16 @@ async def test_control_signals(client: AsyncShannonClient):
     report("resume_task() succeeds", resumed is True, f"returned: {resumed}")
 
     # Cancel to clean up
+    # 取消以清理
     await asyncio.sleep(1)
     await client.cancel(handle.task_id, reason="E2E cleanup")
 
 
 async def test_swarm_message(client: AsyncShannonClient):
-    """Test follow-up messaging for swarm workflows."""
+    """Test follow-up messaging for swarm workflows.
+
+    测试 swarm workflow 的 follow-up messaging。
+    """
     print("\n--- Swarm Messaging ---")
 
     handle = await client.submit_task(
@@ -511,7 +555,10 @@ async def test_swarm_message(client: AsyncShannonClient):
 
 
 async def test_file_apis(client: AsyncShannonClient):
-    """Test workspace and memory file endpoints."""
+    """Test workspace and memory file endpoints.
+
+    测试 workspace 与 memory 的文件端点。
+    """
     print("\n--- File APIs ---")
 
     session_id = f"e2e-files-{int(time.time())}"
@@ -566,7 +613,10 @@ async def test_file_apis(client: AsyncShannonClient):
 
 
 async def test_task_list_and_events(client: AsyncShannonClient, handle):
-    """Test list_tasks and get_task_events using the handle from task lifecycle."""
+    """Test list_tasks and get_task_events using the handle from task lifecycle.
+
+    使用 task lifecycle 返回的 handle 测试 list_tasks 与 get_task_events。
+    """
     print("\n--- Task List & Events ---")
 
     tasks, total = await client.list_tasks()

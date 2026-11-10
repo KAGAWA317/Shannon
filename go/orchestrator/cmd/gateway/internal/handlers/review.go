@@ -26,9 +26,12 @@ import (
 // MaxReviewRounds is the maximum number of review conversation rounds allowed.
 // At the final round, the LLM is instructed to produce a definitive plan.
 // Beyond this limit, further feedback is rejected (user must approve).
+// MaxReviewRounds 是评审对话允许的最大轮数；到达最后一轮时要求 LLM 给出确定方案，
+// 超过上限则拒绝继续反馈（用户只能批准）。
 const MaxReviewRounds = 10
 
 // ReviewHandler handles HITL research plan review requests.
+// ReviewHandler 处理 HITL 研究计划评审 request。
 type ReviewHandler struct {
 	orchClient orchpb.OrchestratorServiceClient
 	redis      *redis.Client
@@ -145,6 +148,7 @@ func (h *ReviewHandler) HandleReview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Owner check (skip if owner not set — e.g., dev mode without user_id in context)
+	// 归属校验（owner 未设置时跳过，例如开发 mode 下 context 中没有 user_id）。
 	if state.OwnerUserID != "" && state.OwnerUserID != userCtx.UserID.String() {
 		h.sendError(w, "Forbidden: not the task owner", http.StatusForbidden)
 		return
@@ -182,10 +186,12 @@ func (h *ReviewHandler) handleFeedback(
 	// Acquire distributed lock to prevent race condition during long LLM call.
 	// Without this, two concurrent feedback requests can both pass version check,
 	// then clobber each other's state on write.
+	// 加分布式锁，避免长时间 LLM 调用期间的竞态：否则两个并发反馈 request 可能都通过版本校验，写入时互相覆盖。
 	lockKey := key + ":lock"
 	lockTTL := 90 * time.Second // longer than LLM timeout (60s) + buffer
 	// Use unique lock value to prevent accidental deletion of another request's lock
 	// if TTL expires and lock is re-acquired by another request.
+	// 锁值保持唯一，避免 TTL 过期后锁被他人获取时误删对方的锁。
 	lockBytes := make([]byte, 16)
 	if _, err := rand.Read(lockBytes); err != nil {
 		h.logger.Error("Failed to generate lock value", zap.Error(err))
@@ -205,6 +211,7 @@ func (h *ReviewHandler) handleFeedback(
 	}
 	// Conditional delete: only release lock if we still own it (value matches).
 	// Prevents accidentally deleting another request's lock if ours expired.
+	// 条件删除：只有仍持有锁（value 匹配）才释放，防止锁过期后误删他人的锁。
 	defer func() {
 		unlockScript := redis.NewScript(`
 			if redis.call("get", KEYS[1]) == ARGV[1] then
@@ -244,6 +251,7 @@ func (h *ReviewHandler) handleFeedback(
 
 	// Call LLM service for updated plan.
 	// Use a detached context so client disconnects don't cancel the LLM call.
+	// 调用 LLM 服务获取更新后的计划；使用独立的 context，客户端断连不会取消这次 LLM 调用。
 	llmCtx, llmCancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer llmCancel()
 	plan, err := h.callResearchPlan(llmCtx, state.Query, state.Context, state.Rounds, isFinalRound, nextRound)
@@ -275,6 +283,7 @@ func (h *ReviewHandler) handleFeedback(
 
 	// Parse and strip [RESEARCH_BRIEF] block from LLM response (machine-consumed metadata).
 	// Same pattern as [INTENT:...] — parsed by gateway, stripped from user-visible message.
+	// 解析并剥离 [RESEARCH_BRIEF] 块（供机器消费的 metadata），与 [INTENT:...] 同一套路：由 gateway 解析，并从用户可见消息中移除。
 	briefRegex := regexp.MustCompile(`(?s)\[RESEARCH_BRIEF\]\n?(.*?)\n?\[/RESEARCH_BRIEF\]`)
 	if match := briefRegex.FindStringSubmatch(plan.Message); len(match) > 1 {
 		state.ResearchBrief = strings.TrimSpace(match[1])
@@ -290,6 +299,8 @@ func (h *ReviewHandler) handleFeedback(
 	// Always update CurrentPlan with the latest assistant message so users can approve
 	// at any point. The intent is a hint for the UI (show approve button more prominently
 	// when ready), but backend allows approval of any plan.
+	// 始终用最新的 assistant 消息更新 CurrentPlan，使用户随时可以批准；intent 只是给 UI 的提示
+	// （ready 时更突出地展示批准按钮），后端允许批准任何计划。
 	state.CurrentPlan = plan.Message
 	state.Round++
 	state.Version++
@@ -301,6 +312,7 @@ func (h *ReviewHandler) handleFeedback(
 	}
 	// Force ready on final round — LLM should output a definitive direction,
 	// but we enforce it regardless. User still needs to click Approve.
+	// 最后一轮强制置为 ready——LLM 本应给出确定方向，但这里无论如何都强制；用户仍需点击批准。
 	if isFinalRound && intent == "feedback" {
 		intent = "ready"
 		// Also set CurrentPlan so Approve has a non-empty FinalPlan
@@ -308,6 +320,7 @@ func (h *ReviewHandler) handleFeedback(
 	}
 
 	// Save to Redis (keep original TTL) — AFTER intent/CurrentPlan resolution
+	// 写入 Redis（保留原有 TTL）——在确定 intent/CurrentPlan 之后。
 	stateBytes, _ := json.Marshal(state)
 	ttl, err := h.redis.TTL(ctx, key).Result()
 	if err != nil || ttl <= 0 {
@@ -321,6 +334,7 @@ func (h *ReviewHandler) handleFeedback(
 
 	// Publish review events to Redis stream so they're captured by SSE and persisted.
 	// This makes the review conversation visible in session history on page reload.
+	// 把评审 event 发布到 Redis stream，以便 SSE 捕获并持久化，页面刷新后评审对话仍能在 session history 中看到。
 	roundPayload := map[string]interface{}{"round": state.Round, "version": state.Version}
 	h.publishStreamEvent(workflowID, "REVIEW_USER_FEEDBACK", "user", req.Message, roundPayload)
 	h.publishStreamEvent(workflowID, "RESEARCH_PLAN_UPDATED", "research-planner", plan.Message,
@@ -354,6 +368,7 @@ func (h *ReviewHandler) handleApprove(
 	}
 
 	// Optimistic concurrency check (ensure user approves the plan they saw)
+	// 乐观并发校验：确保用户批准的是他看到的那个版本。
 	if ifMatch := r.Header.Get("If-Match"); ifMatch != "" {
 		if ifMatch != strconv.Itoa(state.Version) {
 			h.sendError(w, "Conflict: plan has been updated. Please review the latest version.", http.StatusConflict)
@@ -364,6 +379,7 @@ func (h *ReviewHandler) handleApprove(
 	// Acquire lock to prevent race with in-flight feedback.
 	// If feedback is mid-flight, it holds the lock and we fail fast.
 	// If we acquire first, feedback will fail when it tries to acquire.
+	// 加锁避免与进行中的反馈 request 竞争：若反馈正在进行，它持有锁，这里快速失败；若先拿到锁，反馈 request 稍后会获取失败。
 	lockKey := key + ":lock"
 	lockTTL := 30 * time.Second // shorter than feedback (approve is fast)
 	lockBytes := make([]byte, 16)
@@ -398,6 +414,8 @@ func (h *ReviewHandler) handleApprove(
 	// CurrentPlan is only set when LLM returns intent="ready" with an actionable direction.
 	// Empty plan means LLM only asked clarifying questions (intent="feedback") or user
 	// skipped directly to approve without getting a plan.
+	// 批准前确认存在研究计划。仅当 LLM 返回 intent=ready 且给出可执行方向时才会设置 CurrentPlan；
+	// 计划为空说明 LLM 只问了澄清问题（intent=feedback），或用户未生成计划就直接批准。
 	if strings.TrimSpace(state.CurrentPlan) == "" {
 		h.sendError(w, "No research plan to approve. Please provide feedback to generate a plan first.", http.StatusBadRequest)
 		return
@@ -423,6 +441,7 @@ func (h *ReviewHandler) handleApprove(
 	}
 
 	// Mark review as approved in Redis (keep state for page reload, TTL handles cleanup)
+	// 在 Redis 中标记为已批准（保留状态供页面刷新，过期由 TTL 处理）。
 	state.Status = "approved"
 	if approvedBytes, err := json.Marshal(state); err == nil {
 		if err := h.redis.Set(ctx, key, approvedBytes, 60*time.Minute).Err(); err != nil {
@@ -565,6 +584,8 @@ func (h *ReviewHandler) HandleGetReview(w http.ResponseWriter, r *http.Request) 
 // publishStreamEvent publishes a review event to the Redis event stream so it's
 // captured by SSE and persisted to DB — same format as orchestrator events.
 // This makes review conversation messages first-class citizens in the event system.
+// publishStreamEvent 把评审 event 发布到 Redis event stream，由 SSE 捕获并持久化到 DB，格式与 orchestrator event 一致，
+// 使评审对话成为 event 系统中的一等公民。
 func (h *ReviewHandler) publishStreamEvent(workflowID, eventType, agentID, message string, payload map[string]interface{}) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()

@@ -19,6 +19,7 @@ import (
 )
 
 // QuotaDefaults defines token quota defaults for a plan
+// QuotaDefaults 定义某个套餐的 token 配额默认值
 type QuotaDefaults struct {
 	MonthlyTokens        int     `yaml:"monthly_tokens"`
 	DailyTokens          int     `yaml:"daily_tokens"`
@@ -63,6 +64,7 @@ func NewService(db *sqlx.DB, logger *zap.Logger, jwtSecret string) *Service {
 	}
 
 	// Start background worker pool for async updates (2 workers)
+	// 启动异步更新的后台 worker 池（2 个 worker）
 	for i := 0; i < 2; i++ {
 		go s.asyncUpdateWorker(i)
 	}
@@ -71,6 +73,7 @@ func NewService(db *sqlx.DB, logger *zap.Logger, jwtSecret string) *Service {
 }
 
 // asyncUpdateWorker processes async DB updates from the channel
+// asyncUpdateWorker 从 channel 取出并处理异步 DB 更新
 func (s *Service) asyncUpdateWorker(workerID int) {
 	for {
 		select {
@@ -96,12 +99,14 @@ func (s *Service) Close() {
 }
 
 // enqueueUpdate adds an update to the async queue (non-blocking, drops if full)
+// enqueueUpdate 把更新放入异步队列（非阻塞，队列满则丢弃）
 func (s *Service) enqueueUpdate(query string, args ...interface{}) {
 	select {
 	case s.updateCh <- asyncUpdate{query: query, args: args}:
 		// Successfully queued
 	default:
 		// Channel full, log and drop (better than unbounded goroutines)
+		// channel 已满，记录日志并丢弃（优于无界 goroutine）
 		s.logger.Warn("Async update queue full, dropping update",
 			zap.String("query", query))
 	}
@@ -110,6 +115,8 @@ func (s *Service) enqueueUpdate(query string, args ...interface{}) {
 // defaultQuotaDefaults returns the built-in tenant quota defaults for the OSS repo.
 // Rate limits still live in rate_limits.yaml, but quota defaults are intentionally
 // code-owned so startup does not depend on optional YAML sections.
+// defaultQuotaDefaults 返回 OSS 仓库内置的租户配额默认值。
+// rate limit 仍配置在 rate_limits.yaml，但配额默认值有意由代码持有，使启动不依赖可选的 YAML 段。
 func defaultQuotaDefaults() map[string]QuotaDefaults {
 	return map[string]QuotaDefaults{
 		"free": {
@@ -226,6 +233,7 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*User, er
 }
 
 // Login authenticates a user and returns tokens
+// Login 对用户做 authentication 并返回 token
 func (s *Service) Login(ctx context.Context, req *LoginRequest) (*TokenPair, error) {
 	// Find user by email
 	var user User
@@ -279,6 +287,7 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*TokenPair, err
 }
 
 // Refresh issues a new access token from a valid refresh token
+// Refresh 用有效的 refresh token 签发新的 access token
 func (s *Service) Refresh(ctx context.Context, refreshToken string) (*TokenPair, error) {
 	if refreshToken == "" {
 		return nil, fmt.Errorf("refresh token required")
@@ -308,12 +317,14 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*TokenPair,
 	}
 
 	// Generate new token pair first (no side effects)
+	// 先生成新的 token 对（无副作用）
 	newPair, newHash, err := s.jwtManager.GenerateTokenPair(&user)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
 	// Use transaction to ensure atomicity: store new token BEFORE revoking old one
+	// 用事务保证原子性：先存新 token，再撤销旧 token
 	tx, err := s.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start transaction: %w", err)
@@ -326,6 +337,7 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*TokenPair,
 	}
 
 	// Only revoke old token after new one is stored
+	// 仅在新 token 存储成功后才撤销旧 token
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE auth.refresh_tokens
 		SET revoked = true, revoked_at = NOW()
@@ -341,6 +353,7 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*TokenPair,
 	}
 
 	// Update last login best-effort (outside transaction)
+	// 尽力更新最后登录时间（在事务之外）
 	if _, err := s.db.ExecContext(ctx, "UPDATE auth.users SET last_login = NOW() WHERE id = $1", user.ID); err != nil {
 		s.logger.Warn("Failed to update last_login", zap.Error(err), zap.String("user_id", user.ID.String()))
 	}
@@ -352,6 +365,7 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*TokenPair,
 
 // ValidateAccessToken validates a JWT access token and enriches the user context
 // with tenant plan information for rate limiting.
+// ValidateAccessToken 校验 JWT access token，并补充租户套餐信息用于 rate limit。
 func (s *Service) ValidateAccessToken(ctx context.Context, token string) (*UserContext, error) {
 	userCtx, err := s.jwtManager.ValidateAccessToken(token)
 	if err != nil {
@@ -373,6 +387,7 @@ func (s *Service) ValidateAccessToken(ctx context.Context, token string) (*UserC
 }
 
 // ValidateAPIKey validates an API key and returns user context
+// ValidateAPIKey 校验 API key 并返回用户 context
 func (s *Service) ValidateAPIKey(ctx context.Context, apiKey string) (*UserContext, error) {
 	// Extract key prefix (first 8 chars)
 	if len(apiKey) < 8 {
@@ -401,6 +416,7 @@ func (s *Service) ValidateAPIKey(ctx context.Context, apiKey string) (*UserConte
 		zap.Int("count", len(keys)))
 
 	// Find matching key with constant-time comparison
+	// 用常量时间比较查找匹配的 key
 	var key *APIKey
 	for _, k := range keys {
 		if compareTokenHash(k.KeyHash, keyHash) {
@@ -419,6 +435,7 @@ func (s *Service) ValidateAPIKey(ctx context.Context, apiKey string) (*UserConte
 	}
 
 	// Update last used via bounded worker pool (prevents unbounded goroutines)
+	// 通过有界 worker 池更新最后使用时间（避免无界 goroutine）
 	s.enqueueUpdate("UPDATE auth.api_keys SET last_used = NOW() WHERE id = $1", key.ID)
 
 	// Get user details
@@ -430,6 +447,7 @@ func (s *Service) ValidateAPIKey(ctx context.Context, apiKey string) (*UserConte
 	}
 
 	// Get tenant details for plan info (enterprise rate limiting)
+	// 获取租户详情以得到套餐信息（企业版 rate limit）
 	var tenant Tenant
 	err = s.db.GetContext(ctx, &tenant,
 		"SELECT id, plan FROM auth.tenants WHERE id = $1", user.TenantID)
@@ -460,8 +478,10 @@ func (s *Service) ValidateAPIKey(ctx context.Context, apiKey string) (*UserConte
 }
 
 // CreateAPIKey creates a new API key for a user
+// CreateAPIKey 为用户创建新的 API key
 func (s *Service) CreateAPIKey(ctx context.Context, userID uuid.UUID, req *CreateAPIKeyRequest) (string, *APIKey, error) {
 	// Get user to verify they exist and get tenant ID
+	// 获取用户以确认其存在并拿到租户 ID
 	var user User
 	err := s.db.GetContext(ctx, &user,
 		"SELECT * FROM auth.users WHERE id = $1", userID)
@@ -487,6 +507,8 @@ func (s *Service) CreateAPIKey(ctx context.Context, userID uuid.UUID, req *Creat
 
 	// Create API key record
 	// Handle optional description
+	// 创建 API key 记录
+	// 处理可选的 description
 	var description *string
 	if req.Description != "" {
 		description = &req.Description
@@ -530,14 +552,19 @@ func (s *Service) CreateAPIKey(ctx context.Context, userID uuid.UUID, req *Creat
 		zap.String("name", key.Name))
 
 	// Return the actual API key (only shown once)
+	// 返回真实的 API key（仅此一次可见）
 	return apiKey, key, nil
 }
 
 // RegisterFromOAuth creates or retrieves a user from OAuth provider
 // Returns JWT tokens for web session. API key is only created for NEW users.
 // Existing users should use their previously created API keys for SDK access.
+// RegisterFromOAuth 通过 OAuth provider 创建或获取用户。
+// 为 web session 返回 JWT token；仅新用户会创建 API key。
+// 已有用户应使用此前创建的 API key 访问 SDK。
 func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser) (*OAuthLoginResult, error) {
 	// Check if user already exists by email
+	// 按 email 检查用户是否已存在
 	var existingUser User
 	query := `SELECT * FROM auth.users WHERE email = $1`
 	err := s.db.GetContext(ctx, &existingUser, query, googleUser.Email)
@@ -545,6 +572,8 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 	if err == nil {
 		// User exists - return JWT tokens only (no new API key)
 		// Users should use their existing API keys for SDK/programmatic access
+		// 用户已存在——只返回 JWT token（不新建 API key）
+		// SDK/编程访问应使用其已有 API key
 		s.logger.Info("Existing user logging in via OAuth",
 			zap.String("email", googleUser.Email),
 			zap.String("user_id", existingUser.ID.String()))
@@ -556,6 +585,7 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 		}
 
 		// Store refresh token (fail if unable - consistent with Login())
+		// 存储 refresh token（失败即返回，与 Login() 行为一致）
 		if err := s.storeRefreshToken(ctx, &existingUser, refreshTokenHash); err != nil {
 			return nil, fmt.Errorf("failed to store refresh token: %w", err)
 		}
@@ -576,6 +606,7 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 	}
 
 	// User doesn't exist - create new user, tenant, and API key
+	// 用户不存在——创建新用户、租户和 API key
 	s.logger.Info("Creating new user from OAuth",
 		zap.String("email", googleUser.Email),
 		zap.String("name", googleUser.Name))
@@ -610,6 +641,7 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 	}
 
 	// Create user (no password since OAuth-only)
+	// 创建用户（OAuth 用户无密码）
 	newUser := &User{
 		ID:              uuid.New(),
 		Email:           googleUser.Email,
@@ -652,6 +684,7 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 		zap.String("tenant_id", tenantID.String()))
 
 	// Create initial API key for new user (for SDK/programmatic access)
+	// 为新用户创建初始 API key（用于 SDK/编程访问）
 	apiKey, _, err := s.CreateAPIKey(ctx, newUser.ID, &CreateAPIKeyRequest{
 		Name:        "Default API Key",
 		Description: "Auto-generated from Google OAuth registration",
@@ -667,6 +700,7 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 	}
 
 	// Store refresh token (fail if unable - consistent with Login())
+	// 存储 refresh token（失败即返回，与 Login() 行为一致）
 	if err := s.storeRefreshToken(ctx, newUser, refreshTokenHash); err != nil {
 		return nil, fmt.Errorf("failed to store refresh token: %w", err)
 	}
@@ -682,6 +716,7 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 // Helper functions
 
 // GetQuotaDefaults returns a copy of the built-in quota defaults for all plans.
+// GetQuotaDefaults 返回所有套餐内置配额默认值的副本。
 func (s *Service) GetQuotaDefaults() map[string]QuotaDefaults {
 	result := make(map[string]QuotaDefaults, len(s.quotaDefaults))
 	for plan, defaults := range s.quotaDefaults {
@@ -692,6 +727,7 @@ func (s *Service) GetQuotaDefaults() map[string]QuotaDefaults {
 
 // ResolveQuotaDefaults looks up quota defaults for a product+plan combination.
 // Tries "{product}_{plan}" first, falls back to "{plan}".
+// ResolveQuotaDefaults 按 product+plan 组合查找配额默认值，先试 "{product}_{plan}"，再回退到 "{plan}"。
 func (s *Service) ResolveQuotaDefaults(product, plan string) QuotaDefaults {
 	if product != "" && product != "shannon" {
 		if q, ok := s.quotaDefaults[product+"_"+plan]; ok {
@@ -727,6 +763,7 @@ func (s *Service) createTenant(ctx context.Context, username, product string) (u
 	}
 
 	// Store product and max_schedules in tenant metadata
+	// 在租户 metadata 中存储 product 与 max_schedules
 	metadata := map[string]interface{}{"product": product}
 	if quotas.MaxSchedules > 0 {
 		metadata["max_schedules"] = quotas.MaxSchedules
@@ -764,6 +801,7 @@ func (s *Service) storeRefreshToken(ctx context.Context, user *User, tokenHash s
 }
 
 // storeRefreshTokenTx stores a refresh token within a transaction
+// storeRefreshTokenTx 在事务内存储 refresh token
 func (s *Service) storeRefreshTokenTx(ctx context.Context, tx *sqlx.Tx, user *User, tokenHash string) error {
 	query := `
 		INSERT INTO auth.refresh_tokens (user_id, tenant_id, token_hash, expires_at)
@@ -791,6 +829,7 @@ func (s *Service) logAuditEvent(ctx context.Context, eventType string, userID, t
 	}
 
 	// Serialize details map to JSON for JSONB column
+	// 将 details map 序列化为 JSON 以写入 JSONB 列
 	var detailsJSON []byte
 	if details != nil {
 		var err error
@@ -834,8 +873,15 @@ func (s *Service) logAuditEvent(ctx context.Context, eventType string, userID, t
 // record is left without a key. A subsequent call will return the existing user
 // with is_new_user=false and api_key="" — callers should handle this by retrying
 // or prompting re-registration.
+// ProvisionUser 在指定租户下创建或获取用户，幂等：相同 username 返回已有用户。
+// 默认签发新的 API key（此前的 "default" key 会被撤销）；对已有用户传 rotateKey=false 可跳过轮换，此时 api_key 为空。
+// 用于通过自有 OAuth（如 LINE Login）对用户做 authentication、再在 Shannon 中开通按用户身份的 BFF 服务（如 Sagasu）。
+// Schema 约束（见 migrations/postgres/003_authentication.sql）：username 全局唯一（非按租户）且为 VARCHAR(100)；调用方必须使用稳定且全局唯一的标识作为 username（如 LINE user sub 为 U + 32 位十六进制 = 33 字符，安全）；若该 username 已注册在其它租户下，返回 ErrUsernameTakenByOtherTenant。
+// 并发：使用 INSERT … ON CONFLICT DO NOTHING 使“创建或返回”在 DB 层原子化，消除 check-then-insert 竞态。
+// 部分失败：若用户创建成功但 API key 创建失败，该用户记录没有 key；后续调用会返回 is_new_user=false 且 api_key="" 的已有用户——调用方应 retry 或提示重新注册。
 func (s *Service) ProvisionUser(ctx context.Context, tenantID uuid.UUID, username, displayName string, metadata JSONMap, rotateKey bool) (userID uuid.UUID, apiKey string, isNewUser bool, err error) {
 	// Verify the target tenant exists before attempting any user work.
+	// 在创建用户前先确认目标租户存在。
 	var tenantExists bool
 	if err = s.db.GetContext(ctx, &tenantExists,
 		"SELECT EXISTS(SELECT 1 FROM auth.tenants WHERE id = $1 AND is_active = true)", tenantID); err != nil {
@@ -847,6 +893,8 @@ func (s *Service) ProvisionUser(ctx context.Context, tenantID uuid.UUID, usernam
 
 	// Build synthetic, non-routable email. Format: provisioned+{username}@{tenantID}.internal
 	// Deterministic (same user → same email), clearly non-real, satisfies UNIQUE constraint.
+	// 构造合成的、不可路由的 email。格式：provisioned+{username}@{tenantID}.internal
+	// 确定性（同一用户 → 同一 email）、明显非真实，同时满足 UNIQUE 约束。
 	syntheticEmail := fmt.Sprintf("provisioned+%s@%s.internal", username, tenantID.String())
 
 	if metadata == nil {
@@ -878,6 +926,8 @@ func (s *Service) ProvisionUser(ctx context.Context, tenantID uuid.UUID, usernam
 	// Wrap auth.users + public.users inserts in a transaction to eliminate partial
 	// state: a crash between the two inserts would leave a user missing their
 	// public.users row, causing silent FK failures on scheduled_tasks.
+	// 将 auth.users 与 public.users 的插入包在同一事务中，消除部分写入状态：两次插入之间崩溃会让用户缺少
+	// public.users 记录，导致 scheduled_tasks 上的外键静默失败。
 	tx, err := s.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return uuid.Nil, "", false, fmt.Errorf("failed to begin transaction: %w", err)
@@ -890,6 +940,8 @@ func (s *Service) ProvisionUser(ctx context.Context, tenantID uuid.UUID, usernam
 
 	// Atomic create-or-skip: ON CONFLICT DO NOTHING eliminates the check-then-insert
 	// race. RowsAffected == 0 means another request already inserted this username.
+	// 原子创建或跳过：ON CONFLICT DO NOTHING 消除 check-then-insert 竞态。
+	// RowsAffected == 0 表示另一 request 已插入该 username。
 	insertQuery := `
 		INSERT INTO auth.users
 			(id, email, username, password_hash, full_name, tenant_id, role, is_active, is_verified, email_verified_at, metadata)
@@ -907,6 +959,8 @@ func (s *Service) ProvisionUser(ctx context.Context, tenantID uuid.UUID, usernam
 	if rowsAffected == 0 {
 		// Username already exists (either pre-existing or lost a concurrent race).
 		// Roll back the no-op transaction and fall through to the existing-user path.
+		// username 已存在（预先存在或并发竞争失败）。
+		// 回滚该空操作事务，转入已有用户路径。
 		tx.Rollback()
 
 		var existing User
@@ -916,11 +970,15 @@ func (s *Service) ProvisionUser(ctx context.Context, tenantID uuid.UUID, usernam
 		}
 		// Guard against cross-tenant username collision. Username is globally unique
 		// in the schema; if another tenant holds it, that is an unresolvable conflict.
+		// 防止跨租户 username 冲突。schema 中 username 全局唯一；
+		// 若被其它租户占用，属于无法解决的冲突。
 		if existing.TenantID != tenantID {
 			return uuid.Nil, "", false, ErrUsernameTakenByOtherTenant
 		}
 		// Ensure public.users row exists — it may be missing if a previous provision
 		// call succeeded on auth.users but failed before reaching this insert.
+		// 确保 public.users 记录存在——若上一次 provision 调用在 auth.users 成功、
+		// 但未执行到此处插入就失败，该记录可能缺失。
 		if _, err = s.db.ExecContext(ctx, `
 			INSERT INTO users (id, external_id, tenant_id, auth_user_id, created_at, updated_at)
 			VALUES ($1, $2, $3, $4, NOW(), NOW())
@@ -933,12 +991,16 @@ func (s *Service) ProvisionUser(ctx context.Context, tenantID uuid.UUID, usernam
 		// If caller does not need a new key (e.g. logging in on another device
 		// where the BFF already holds a valid key), skip rotation to avoid
 		// invalidating sessions on other devices.
+		// 若调用方不需要新 key（如在另一台设备登录且 BFF 已持有有效 key），
+		// 跳过轮换，避免使其它设备上的 session 失效。
 		if !rotateKey {
 			return existing.ID, "", false, nil
 		}
 
 		// Issue an additional API key without revoking existing ones.
 		// Each device gets its own key so multi-device sessions coexist.
+		// 额外签发一个 API key，不撤销已有 key。
+		// 每台设备各用一个 key，使多设备 session 共存。
 		freshKey, _, err := s.CreateAPIKey(ctx, existing.ID, &CreateAPIKeyRequest{Name: "default"})
 		if err != nil {
 			return uuid.Nil, "", false, fmt.Errorf("failed to issue API key: %w", err)
@@ -949,6 +1011,9 @@ func (s *Service) ProvisionUser(ctx context.Context, tenantID uuid.UUID, usernam
 	// New user: mirror into public.users inside the same transaction.
 	// external_id = username (BFF's stable opaque identity, e.g. LINE sub).
 	// auth_user_id links back to auth.users per migration 010_auth_user_link.
+	// 新用户：在同一事务内镜像写入 public.users。
+	// external_id = username（BFF 的稳定不透明标识，如 LINE sub）。
+	// auth_user_id 按迁移 010_auth_user_link 回链 auth.users。
 	if _, err = tx.ExecContext(ctx, `
 		INSERT INTO users (id, external_id, tenant_id, auth_user_id, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, NOW(), NOW())
@@ -964,12 +1029,16 @@ func (s *Service) ProvisionUser(ctx context.Context, tenantID uuid.UUID, usernam
 	// Issue the initial API key (only returned once).
 	// API key name is fixed at "default" to avoid overflowing api_keys.name VARCHAR(100)
 	// regardless of username length (username can be up to 100 chars per schema).
+	// 签发初始 API key（仅返回一次）。
+	// API key 名称固定为 "default"，避免不论 username 多长（按 schema 可达 100 字符）都撑爆 api_keys.name 的 VARCHAR(100)。
 	apiKeyStr, _, err := s.CreateAPIKey(ctx, newUser.ID, &CreateAPIKeyRequest{
 		Name: "default",
 	})
 	if err != nil {
 		// User record exists but has no API key. Caller will receive is_new_user=false
 		// on a retry (rowsAffected will be 0) and must handle the missing-key case.
+		// 用户记录存在但没有 API key。retry 时调用方会收到 is_new_user=false
+		// （rowsAffected 为 0），必须处理缺少 key 的情况。
 		s.logger.Error("API key creation failed after user insert — partial state",
 			zap.String("user_id", newUser.ID.String()),
 			zap.String("username", username),
@@ -994,13 +1063,18 @@ func (s *Service) ProvisionUser(ctx context.Context, tenantID uuid.UUID, usernam
 // If tenantID is uuid.Nil, a new tenant is created for the user (1 user = 1 tenant).
 // If the user already exists (re-login), their existing tenant is reused regardless
 // of the tenantID parameter — this makes it safe for callers to always omit tenantID.
+// ProvisionUserAutoTenant 自动创建租户并开通用户。
+// tenantID 为 uuid.Nil 时为用户新建租户（1 用户 = 1 租户）。
+// 用户已存在（重新登录）时复用其现有租户，与传入的 tenantID 无关——因此调用方可以始终不传 tenantID。
 func (s *Service) ProvisionUserAutoTenant(ctx context.Context, tenantID uuid.UUID, username, displayName string, metadata JSONMap, rotateKey bool) (userID uuid.UUID, resolvedTenantID uuid.UUID, apiKey string, isNewUser bool, err error) {
 	// Check if user already exists — if so, use their existing tenant.
+	// 检查用户是否已存在——若存在则使用其现有租户。
 	var existing User
 	existsErr := s.db.GetContext(ctx, &existing,
 		"SELECT id, tenant_id FROM auth.users WHERE username = $1", username)
 	if existsErr == nil {
 		// User exists — delegate to standard ProvisionUser with their actual tenant.
+		// 用户已存在——按其实际租户转交标准 ProvisionUser。
 		userID, apiKey, isNewUser, err = s.ProvisionUser(ctx, existing.TenantID, username, displayName, metadata, rotateKey)
 		return userID, existing.TenantID, apiKey, isNewUser, err
 	}
@@ -1009,6 +1083,7 @@ func (s *Service) ProvisionUserAutoTenant(ctx context.Context, tenantID uuid.UUI
 	}
 
 	// New user — create a tenant if none provided.
+	// 新用户——未提供租户时创建租户。
 	autoCreatedTenant := false
 	if tenantID == uuid.Nil {
 		name := displayName
@@ -1016,6 +1091,7 @@ func (s *Service) ProvisionUserAutoTenant(ctx context.Context, tenantID uuid.UUI
 			name = username
 		}
 		// Extract product from metadata (e.g., frontend sends "product": "myapp")
+		// 从 metadata 中提取 product（如前端发送 "product": "myapp"）
 		product := "shannon"
 		if metadata != nil {
 			if p, ok := metadata["product"].(string); ok && p != "" {
@@ -1036,6 +1112,7 @@ func (s *Service) ProvisionUserAutoTenant(ctx context.Context, tenantID uuid.UUI
 	if err != nil {
 		if autoCreatedTenant {
 			// Clean up orphaned tenant if user creation failed.
+			// 用户创建失败时清理孤立租户。
 			if _, delErr := s.db.ExecContext(ctx, "DELETE FROM auth.tenants WHERE id = $1", tenantID); delErr != nil {
 				s.logger.Error("Failed to clean up orphaned tenant — manual cleanup required",
 					zap.String("tenant_id", tenantID.String()), zap.Error(delErr))
@@ -1044,6 +1121,8 @@ func (s *Service) ProvisionUserAutoTenant(ctx context.Context, tenantID uuid.UUI
 		// TOCTOU: if a concurrent request already created this user under a different
 		// auto-created tenant, ProvisionUser returns ErrUsernameTakenByOtherTenant.
 		// Retry the existing-user path.
+		// TOCTOU：若并发 request 已在另一个自动创建的租户下创建了该用户，
+		// ProvisionUser 会返回 ErrUsernameTakenByOtherTenant，此时 retry 已有用户路径。
 		if errors.Is(err, ErrUsernameTakenByOtherTenant) {
 			if retryErr := s.db.GetContext(ctx, &existing,
 				"SELECT id, tenant_id FROM auth.users WHERE username = $1", username); retryErr == nil {

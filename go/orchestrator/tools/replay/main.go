@@ -24,6 +24,7 @@ func main() {
 	}
 
 	// Create a replayer and register all known workflows.
+	// 创建 replayer 并注册所有已知 workflow。
 	replayer := worker.NewWorkflowReplayer()
 	replayer.RegisterWorkflow(workflows.OrchestratorWorkflow)
 	replayer.RegisterWorkflow(workflows.SimpleTaskWorkflow)
@@ -37,8 +38,10 @@ func main() {
 	replayer.RegisterWorkflow(strategies.ScientificWorkflow)
 	replayer.RegisterWorkflow(scheduled.ScheduledTaskWorkflow)
 	// Approval and budget are now middleware; no separate workflows to register
+	// approval 与 budget 已改为 middleware，无需单独注册 workflow
 
 	// Replay from file; this will error on any non-determinism between history and code.
+	// 从文件回放；history 与代码之间任何非确定性都会报错。
 	if err := replayer.ReplayWorkflowHistoryFromJSONFile(nil, *historyPath); err != nil {
 		log.Fatalf("Replay failed (non-deterministic change or invalid history): %v", err)
 	}

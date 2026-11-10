@@ -142,9 +142,11 @@ export default function RadarCanvas() {
       ctx.stroke();
 
       // Center: Lead gold pulse ring (swarm) or default green dot
+      // 中心：swarm 模式下是 Lead 的金色脉冲圆环，否则是默认绿色圆点
       const state = radarStore.getState();
       if (state.leadActive) {
         const LEAD_HUE = 38; // gold, matches agent-colors.ts LEAD_COLOR
+        // 金色，与 agent-colors.ts 中的 LEAD_COLOR 保持一致
         const baseRadius = Math.max(8, r * 0.05);
 
         // Static outer ring
@@ -161,6 +163,7 @@ export default function RadarCanvas() {
         ctx.fill();
 
         // Expanding pulse animation (800ms after LEAD_DECISION)
+        // 扩散脉冲动画（LEAD_DECISION 之后 800ms 内）
         const elapsed = Date.now() - state.leadLastPulse;
         if (elapsed < 800) {
           const progress = elapsed / 800;
@@ -381,6 +384,7 @@ export default function RadarCanvas() {
         const labelId = (item.agent_id as string) || agent.id;
 
         // Agent-specific color: swarm mode uses per-agent hue, non-swarm uses default green
+        // agent 专属颜色：swarm 模式按 agent 分配色相，非 swarm 模式用默认绿色
         const agentHue = item.agent_id ? state.agentColors[item.agent_id as string] : undefined;
         const arrowColor = agentHue !== undefined
           ? `hsl(${agentHue} 70% 55%)`
@@ -413,6 +417,7 @@ export default function RadarCanvas() {
           trails.set(agent.id, trail);
         }
         trail.color = arrowColor; // Update in case color was assigned after trail creation
+        // 更新颜色，处理 trail 创建之后才分配颜色的情况
         if (trail.segs.length === 0) {
           trail.segs.push({ x, y, dir, created: now });
           trail.lastEmit = now;

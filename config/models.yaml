@@ -1,22 +1,35 @@
 # Shannon Platform - Model Configuration
+# Shannon 平台 - 模型配置
 # GitHub: https://github.com/Kocoro-lab/Shannon
 # Updated: November 2025 with latest AI models and pricing
+# 更新：2025 年 11 月，包含最新的 AI 模型与定价
 #
 # NOTE: Model tier selection is driven by:
+# 注意：model tier 的选择取决于：
 #   1. Task complexity score (computed during decomposition)
+#   1. task 复杂度评分（在 task 分解时计算）
 #   2. Explicit tier requests from callers
+#   2. 调用方显式指定的 tier
 #   3. Budget constraints and token limits
+#   3. budget 约束与 Token 上限
 #   4. API payload override (e.g., provider_override, deep_research payload, etc.)
+#   4. API 载荷覆盖（例如 provider_override、deep_research 载荷等）
 #
 # The percentages below (50/40/10) are target distributions for reference,
+# 下面的百分比（50/40/10）是供参考的目标分布，
 # NOT enforced quotas. Actual usage depends on workload characteristics.
+# 而非强制配额。实际用量取决于负载特征。
 # Monitor real distribution via Prometheus metrics: llm_requests_total{tier="..."}
+# 通过 Prometheus 指标监控真实分布：llm_requests_total{tier="..."}
 # ATTENTION: ONLY openai, anthropic, xai and google MODELS ARE TESTED as of now.
+# 注意：截至目前，仅 openai、anthropic、xai 与 google 的模型经过测试。
 
 model_tiers:
   small:
     # Target allocation: 50% (not enforced - actual usage depends on complexity)
+    # 目标占比：50%（非强制 - 实际用量取决于复杂度）
     # Fast, cost-optimized models for basic tasks without reasoning capabilities
+    # 面向基础 task 的快速、成本优化模型，不具备推理能力
     providers:
       - provider: openai
         model: gpt-5-nano-2025-08-07
@@ -51,7 +64,9 @@ model_tiers:
 
   medium:
     # Target allocation: 40% (not enforced - actual usage depends on complexity)
+    # 目标占比：40%（非强制 - 实际用量取决于复杂度）
     # Standard models with good capability/cost balance, not heavy reasoning
+    # 具备良好能力/成本平衡的标准模型，不做重度推理
     providers:
       - provider: anthropic
         model: claude-sonnet-4-6
@@ -89,7 +104,9 @@ model_tiers:
 
   large:
     # Target allocation: 10% (not enforced - actual usage depends on complexity)
+    # 目标占比：10%（非强制 - 实际用量取决于复杂度）
     # Heavy thinking/reasoning models for complex tasks
+    # 面向复杂 task 的重度思考/推理模型
     providers:
       - provider: openai
         model: gpt-5.1
@@ -614,6 +631,7 @@ model_catalog:
       supports_functions: false
       supports_streaming: true
     # --- Small tier (12-35B Q4, cloud small~medium equivalent) ---
+    # --- Small tier（12-35B Q4，约等于云端 small~medium） ---
     qwen3:14b:
       model_id: qwen3:14b
       tier: small
@@ -679,6 +697,7 @@ model_catalog:
       supports_functions: false
       supports_streaming: true
     # --- Medium tier (70B Q4, cloud medium equivalent) ---
+    # --- Medium tier（70B Q4，约等于云端 medium） ---
     llama3.1:70b:
       model_id: llama3.1:70b
       tier: medium
@@ -702,8 +721,11 @@ model_catalog:
       supports_streaming: true
 
 # Centralized model pricing (USD per 1K tokens)
+# 集中式模型定价（美元 / 每 1K Token）
 # Updated: March 2026 — verified against current Anthropic/OpenAI/Google billing
+# 更新：2026 年 3 月 — 已对照 Anthropic/OpenAI/Google 当前计费核对
 # Used across Go/Rust/Python for consistent cost calculation.
+# 供 Go/Rust/Python 共用，以保证成本计算一致。
 pricing:
   defaults:
     combined_per_1k: 0.005  # Default cost per 1K tokens when model is unknown
@@ -877,11 +899,16 @@ pricing:
     # Ollama: local models are free. Zero-price lookup handled in Go pricing code
     # (CostForSplit returns 0 when input=0 && output=0 && combined=0).
     # No need to list individual models here.
+    # Ollama：本地模型免费。零价格查询由 Go 定价代码处理（input=0 && output=0 && combined=0 时 CostForSplit 返回 0），因此无需在此逐条列出模型。
 
     # Synthetic models for external tool cost attribution.
+    # 用于外部 tool 成本归因的合成模型。
     # Each tool call = 7500 synthetic output tokens (≈ $2/1M token billing rate).
+    # 每次 tool 调用 = 7500 个合成输出 Token（≈ 每百万 Token 2 美元的计费标准）。
     # combined_per_1k = actual_cost_per_call / 7.5
+    # combined_per_1k = 每次调用实际成本 / 7.5
     # Verify: (7500 / 1000) × combined_per_1k = cost_per_call
+    # 校验：(7500 / 1000) × combined_per_1k = 每次调用成本
     shannon-scraper:
       shannon_web_search:
         combined_per_1k: 0.002        # (7500/1000) × 0.002 = $0.015 (SerpAPI)
@@ -953,6 +980,9 @@ model_capabilities:
 # Per-provider RPM is disabled by default (0). The gateway layer handles
 # per-user rate limiting. Only set default_rpm > 0 if you need a global
 # backend safety net across all providers.
+# rate limit 配置。
+# 按 provider 的 RPM 默认关闭（0），按用户的 rate limit 由网关层处理。
+# 只有在需要对所有 provider 设置全局兜底保护时，才将 default_rpm 设为 > 0。
 rate_limits:
   default_rpm: 0
   default_tpm: 100000

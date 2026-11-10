@@ -17,6 +17,8 @@ export function isSafeUrl(url: string): boolean {
 /**
  * Opens an external URL in the system's default browser.
  * Works in both Tauri (desktop) and web contexts.
+ * 在系统默认浏览器中打开外部 URL。
+ * Tauri（桌面端）与 Web 环境下均可用。
  */
 export async function openExternalUrl(url: string): Promise<void> {
     if (typeof window === "undefined") {

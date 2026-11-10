@@ -60,6 +60,7 @@ func (rw *RedisWrapper) Get(ctx context.Context, key string) *redis.StringCmd {
 	err := rw.cb.Execute(ctx, func() error {
 		result = rw.client.Get(ctx, key)
 		// Redis Nil is not considered an error for circuit breaker
+		// Redis 的 Nil 不算错误，不计入 circuit breaker
 		if result.Err() == redis.Nil {
 			return nil
 		}

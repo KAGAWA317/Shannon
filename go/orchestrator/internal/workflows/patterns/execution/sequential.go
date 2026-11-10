@@ -272,6 +272,7 @@ func ExecuteSequential(
 
 		// Record token usage for this sequential task when not budgeted
 		// Avoid double-recording: budgeted path already records inside the activity
+		// 避免重复记录：budget 路径已在 activity 内部记录用量。
 		if budgetPerAgent <= 0 {
 			wid := workflow.GetInfo(ctx).WorkflowExecution.ID
 			if config.Context != nil {

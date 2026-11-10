@@ -13,6 +13,7 @@ const (
 	// ModeOff disables policy evaluation entirely
 	ModeOff Mode = "off"
 	// ModeDryRun evaluates policies but doesn't enforce them (log only)
+	// ModeDryRun 只评估策略但不强制执行（仅记录日志）
 	ModeDryRun Mode = "dry-run"
 	// ModeEnforce evaluates and enforces policies
 	ModeEnforce Mode = "enforce"
@@ -26,6 +27,7 @@ type CanaryConfig struct {
 	// EnforcePercentage controls what percentage of requests get enforce mode
 	// Remaining percentage will use dry-run mode for safety
 	// Range: 0-100, default: 0 (all dry-run)
+	// EnforcePercentage 控制进入 enforce 模式的 request 比例，其余 request 为安全起见走 dry-run；范围 0-100，默认 0（全部 dry-run）。
 	EnforcePercentage int
 
 	// EnforceUsers list of specific users who always get enforce mode
@@ -70,6 +72,7 @@ type Config struct {
 	// FailClosed determines behavior when policies can't be loaded
 	// true: deny all requests if policies fail to load
 	// false: allow all requests if policies fail to load (fail-open)
+	// FailClosed 决定策略加载失败时的行为：true 则拒绝所有 request，false 则放行所有 request（fail-open）。
 	FailClosed bool
 
 	// Environment context for policy evaluation
@@ -79,6 +82,7 @@ type Config struct {
 	Canary CanaryConfig
 
 	// EmergencyKillSwitch forces all requests to dry-run mode regardless of other settings
+	// EmergencyKillSwitch 无视其他配置，强制所有 request 走 dry-run
 	EmergencyKillSwitch bool
 }
 

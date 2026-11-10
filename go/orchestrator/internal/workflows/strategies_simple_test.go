@@ -88,6 +88,7 @@ func TestStrategiesBasicWorkflows(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// For now, we're just validating that the workflows are registered and can be called
 			// without actually executing them (which would require complex mocking)
+			// 这里不执行 workflow，只校验注册与入参前置条件；真正执行需要大量 activity stub。
 			require.NotNil(t, tc.workflow)
 
 			// Basic validation that we can check without execution

@@ -43,6 +43,7 @@ func NewModeManager(strategy DegradationStrategy, logger *zap.Logger) *ModeManag
 
 // DetermineFinalMode determines the final execution mode considering degradation
 // This must be deterministic for Temporal workflow replay
+// 该判定必须保持确定性，以满足 Temporal workflow 的 replay 要求
 func (mm *ModeManager) DetermineFinalMode(
 	ctx context.Context,
 	originalMode ExecutionMode,
@@ -91,6 +92,7 @@ func (mm *ModeManager) calculateDowngradedMode(
 
 	case LevelMinor:
 		// Minor degradation: Only downgrade Complex to Standard
+		// 轻度降级：仅将 Complex 降为 Standard
 		if originalMode == ModeComplex {
 			return ModeStandard, ReasonHighDegradation
 		}
@@ -98,6 +100,7 @@ func (mm *ModeManager) calculateDowngradedMode(
 
 	case LevelModerate:
 		// Moderate degradation: Downgrade Complex->Standard, Standard->Simple
+		// 中度降级：Complex → Standard，Standard → Simple
 		switch originalMode {
 		case ModeComplex:
 			return ModeStandard, ReasonHighDegradation
@@ -109,6 +112,7 @@ func (mm *ModeManager) calculateDowngradedMode(
 
 	case LevelSevere:
 		// Severe degradation: Everything goes to Simple
+		// 严重降级：一律降为 Simple
 		if originalMode != ModeSimple {
 			return ModeSimple, ReasonHighDegradation
 		}
@@ -131,6 +135,7 @@ func (mm *ModeManager) ShouldUsePartialResults(ctx context.Context, workflowType
 	}
 
 	// Use partial results for moderate or severe degradation
+	// 仅在中度或重度降级时启用 partial results
 	usePartial := degradationLevel >= LevelModerate
 
 	if usePartial {

@@ -23,6 +23,7 @@ func TestDetectCyclicDependencies_NoCycle(t *testing.T) {
 	}
 
 	// Verify topological order: A must come before B, B must come before C
+	// 校验拓扑顺序：A 必须在 B 之前，B 必须在 C 之前
 	aIdx, bIdx, cIdx := -1, -1, -1
 	for i, id := range result.SortedOrder {
 		switch id {
@@ -64,6 +65,7 @@ func TestDetectCyclicDependencies_SimpleCycle(t *testing.T) {
 
 func TestDetectCyclicDependencies_SelfDependency(t *testing.T) {
 	// Self-dependency should be skipped (not a cycle in our definition)
+	// 自依赖应被跳过（在我们的定义中不算循环）
 	subtasks := []SubtaskInfo{
 		{ID: "A", Dependencies: []string{"A"}}, // Self-reference
 		{ID: "B", Dependencies: []string{"A"}},
@@ -72,6 +74,7 @@ func TestDetectCyclicDependencies_SelfDependency(t *testing.T) {
 	result := DetectCyclicDependencies(subtasks)
 
 	// Self-dependencies are filtered out, so this should not be a cycle
+	// 自依赖已被过滤，因此此处不应判定为循环
 	if result.HasCycle {
 		t.Error("Self-dependency should be skipped, not treated as cycle")
 	}
@@ -84,6 +87,7 @@ func TestDetectCyclicDependencies_DiamondDependency(t *testing.T) {
 	//   B   C
 	//    \ /
 	//     D
+	// 菱形依赖：D 依赖 B 和 C，B、C 都依赖 A
 	subtasks := []SubtaskInfo{
 		{ID: "A", Dependencies: []string{}},
 		{ID: "B", Dependencies: []string{"A"}},
@@ -98,6 +102,7 @@ func TestDetectCyclicDependencies_DiamondDependency(t *testing.T) {
 	}
 
 	// Verify topological order: A before B,C; B,C before D
+	// 校验拓扑顺序：A 在 B、C 之前；B、C 在 D 之前
 	order := make(map[string]int)
 	for i, id := range result.SortedOrder {
 		order[id] = i
@@ -163,6 +168,7 @@ func TestDetectCyclicDependencies_UnknownDependency(t *testing.T) {
 	result := DetectCyclicDependencies(subtasks)
 
 	// Unknown dependencies are skipped, not treated as error
+	// 未知依赖被跳过，不视为错误
 	if result.HasCycle {
 		t.Error("Unknown dependency should be skipped, not cause cycle")
 	}

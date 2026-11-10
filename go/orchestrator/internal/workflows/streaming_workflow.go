@@ -190,6 +190,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 		if inTok == 0 && outTok == 0 {
 			// Token breakdown not provided by LLM provider - estimate 60/40 split
 			// This may cause billing inaccuracy; fix provider to return actual breakdown
+			// LLM provider 未返回 token 拆分，按 60/40 估算；这会造成计费不准，需修 provider 返回真实拆分。
 			inTok = streamRes.TokensUsed * 6 / 10
 			outTok = streamRes.TokensUsed - inTok
 			workflow.GetLogger(ctx).Warn("Token breakdown estimated (60/40 split)",
@@ -412,6 +413,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	// Record token usage for each streaming agent (non-budgeted path).
 	// This ensures parallel streaming tokens are captured in token_usage so
 	// orchestrator aggregation and quota/overage accounting see full costs.
+	// 把并行 stream 的 token 写入 token_usage，orchestrator 聚合与配额/超额核算才能看到完整成本。
 	if input.UserID != "" {
 		recCtx := opts.WithTokenRecordOptions(ctx)
 		for _, res := range results {
@@ -538,6 +540,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 
 	if input.BypassSingleResult && len(agentResults) == 1 && agentResults[0].Success {
 		// Avoid bypass if the single result looks like raw JSON or comes from web_search
+		// 若唯一结果是裸 JSON 或来自 web_search，则不要跳过合成。
 		shouldBypass := true
 		if len(agentResults[0].ToolsUsed) > 0 {
 			for _, t := range agentResults[0].ToolsUsed {

@@ -1,8 +1,11 @@
 """Role presets for roles_v1.
+roles_v1 的角色预设。
 
 Keep this minimal and deterministic. The orchestrator passes a role via
 context (e.g. context["role"]). We map that to a system prompt and a
 conservative tool allowlist. This file intentionally avoids dynamic I/O.
+保持精简与确定性。orchestrator 通过 context（例如 context["role"]）传入角色。
+我们将其映射为 system prompt 和一份保守的 tool 白名单。本文件刻意避免动态 I/O。
 """
 
 from typing import Dict
@@ -12,6 +15,7 @@ import re
 logger = logging.getLogger(__name__)
 
 # Import deep_research presets (deep_research_agent, research_refiner, domain_discovery, domain_prefetch)
+# 导入 deep_research preset（deep_research_agent、research_refiner、domain_discovery、domain_prefetch）
 try:
     from .deep_research import (
         DEEP_RESEARCH_AGENT_PRESET,
@@ -77,6 +81,7 @@ _PRESETS: Dict[str, Dict[str, object]] = {
         "caps": {"max_tokens": 16000, "temperature": 0.3},
     },
     # deep_research_agent: Moved to roles/deep_research/presets.py
+    # deep_research_agent：已移至 roles/deep_research/presets.py
     "writer": {
         "system_prompt": (
             "You are a technical writer. Produce clear, helpful, and organized prose."
@@ -92,12 +97,14 @@ _PRESETS: Dict[str, Dict[str, object]] = {
         "caps": {"max_tokens": 800, "temperature": 0.2},
     },
     # Default/generalist role
+    # 默认/通用角色
     "generalist": {
         "system_prompt": "You are a helpful AI assistant.",
         "allowed_tools": [],
         "caps": {"max_tokens": 8192, "temperature": 0.7},
     },
     # Developer role with filesystem access
+    # 具备文件系统访问权限的开发者角色
     "developer": {
         "system_prompt": """You are a developer assistant with filesystem access within a session workspace.
 
@@ -131,7 +138,9 @@ git, ls, pwd, rg, cat, head, tail, wc, grep, find, go, cargo, pytest, python, py
         "caps": {"max_tokens": 8192, "temperature": 0.2},
     },
     # research_refiner: Moved to roles/deep_research/presets.py
+    # research_refiner：已移至 roles/deep_research/presets.py
     # Browser automation role for web interaction tasks
+    # 用于网页交互 task 的浏览器自动化角色
     "browser_use": {
         "system_prompt": """You are a browser automation specialist. You EXECUTE browser actions to navigate websites, interact with elements, and extract information.
 
@@ -209,6 +218,7 @@ You have ONE tool: `browser` with an `action` parameter.
 }
 
 # Register deep_research presets if loaded successfully
+# 若加载成功，注册 deep_research preset
 if _DEEP_RESEARCH_PRESETS_LOADED:
     _PRESETS["deep_research_agent"] = DEEP_RESEARCH_AGENT_PRESET
     _PRESETS["quick_research_agent"] = QUICK_RESEARCH_AGENT_PRESET
@@ -217,6 +227,7 @@ if _DEEP_RESEARCH_PRESETS_LOADED:
     _PRESETS["domain_prefetch"] = DOMAIN_PREFETCH_PRESET
 
 # financial_news role for News Intelligence v2
+# News Intelligence v2 使用的 financial_news 角色
 _PRESETS["financial_news"] = {
     "system_prompt": """You are a financial news analyst specializing in stock market news and sentiment analysis.
 
@@ -262,11 +273,14 @@ _PRESETS["financial_news"] = {
 
 def get_role_preset(name: str) -> Dict[str, object]:
     """Return a role preset by name with safe default fallback.
+    按名称返回角色预设，并在找不到时安全回退到默认值。
 
     Names are matched case-insensitively; unknown names map to "generalist".
+    名称匹配不区分大小写；未知名称映射为 "generalist"。
     """
     key = (name or "").strip().lower() or "generalist"
     # Alias mapping for backward compatibility
+    # 向后兼容的别名映射
     alias_map = {
         "researcher": "research",  # Lightweight preset as safety net
         "research_supervisor": "deep_research_agent",  # Decomposition role uses supervisor prompt
@@ -279,27 +293,36 @@ def get_role_preset(name: str) -> Dict[str, object]:
 
 def render_system_prompt(prompt: str, context: Dict[str, object]) -> str:
     """Render a system prompt by substituting ${variable} placeholders from context.
+    通过从 context 中替换 ${variable} 占位符来渲染 system prompt。
 
     Variables are resolved from context["prompt_params"][key].
     Non-whitelisted context keys (like "role", "system_prompt") are ignored.
     Missing variables are replaced with empty strings.
+    变量从 context["prompt_params"][key] 中解析。
+    不在白名单内的 context 键（如 "role"、"system_prompt"）会被忽略。
+    缺失的变量替换为空字符串。
 
     Args:
         prompt: System prompt string with optional ${variable} placeholders
+            可能包含 ${variable} 占位符的 system prompt 字符串
         context: Context dictionary containing prompt_params
+            Context 字典，包含 prompt_params
 
     Returns:
         Rendered prompt with variables substituted
+        变量替换后的 prompt
     """
     from typing import Any
 
     # Build variable lookup from prompt_params only
+    # 仅使用 prompt_params 构建变量查找表
     variables: Dict[str, str] = {}
     if "prompt_params" in context and isinstance(context["prompt_params"], dict):
         for key, value in context["prompt_params"].items():
             variables[key] = str(value) if value is not None else ""
 
     # Substitute ${variable} patterns
+    # 替换 ${variable} 模式
     def substitute(match: Any) -> str:
         var_name = match.group(1)
         return variables.get(var_name, "")  # Missing variables -> empty string

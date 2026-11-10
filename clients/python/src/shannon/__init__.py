@@ -1,4 +1,7 @@
-"""Shannon SDK - Python client for Shannon multi-agent AI platform."""
+"""Shannon SDK - Python client for Shannon multi-agent AI platform.
+
+Shannon SDK —— Shannon 多 agent AI 平台的 Python 客户端。
+"""
 
 __version__ = "0.7.0"
 

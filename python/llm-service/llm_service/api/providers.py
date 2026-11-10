@@ -26,8 +26,12 @@ async def list_provider_models(
 ) -> Dict[str, List[Dict[str, Any]]]:
     """Return live model registries per provider.
 
+    返回各 provider 的实时 model registry。
+
     - Aggregates per configured provider using provider.list_models().
+      使用 provider.list_models() 按已配置的 provider 聚合。
     - Optional `tier` query filters to small|medium|large.
+      可选的 `tier` 查询参数可过滤 small|medium|large。
     """
     pm = getattr(request.app.state, "providers", None)
     if pm is None:

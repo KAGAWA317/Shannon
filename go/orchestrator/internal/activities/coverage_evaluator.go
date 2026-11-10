@@ -51,6 +51,7 @@ type CoverageGap struct {
 }
 
 // EvaluateCoverage assesses research coverage and identifies gaps
+// EvaluateCoverage 评估研究覆盖度并识别缺口。
 func (a *Activities) EvaluateCoverage(ctx context.Context, input CoverageEvaluationInput) (*CoverageEvaluationResult, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("EvaluateCoverage: starting",
@@ -71,6 +72,7 @@ func (a *Activities) EvaluateCoverage(ctx context.Context, input CoverageEvaluat
 	reqBody := map[string]interface{}{
 		"query":       userContent,
 		"max_tokens":  8192, // Extended for detailed coverage analysis JSON
+		// 加大到 8192，以容纳详细的 coverage 分析 JSON。
 		"temperature": 0.2,
 		"agent_id":    "coverage_evaluator",
 		"model_tier":  "small",
@@ -87,6 +89,7 @@ func (a *Activities) EvaluateCoverage(ctx context.Context, input CoverageEvaluat
 
 	client := &http.Client{
 		Timeout:   120 * time.Second, // Extended for LLM processing time
+		// 加长到 120s，覆盖 LLM 处理耗时。
 		Transport: interceptors.NewWorkflowHTTPRoundTripper(nil),
 	}
 
@@ -142,6 +145,7 @@ func (a *Activities) EvaluateCoverage(ctx context.Context, input CoverageEvaluat
 			"error", err,
 		)
 		// Fallback: determine based on iteration
+		// 兜底：按 iteration 判断是否继续。
 		result.OverallCoverage = 0.6
 		result.ShouldContinue = input.Iteration < input.MaxIterations
 		result.RecommendedAction = "continue"
@@ -151,10 +155,13 @@ func (a *Activities) EvaluateCoverage(ctx context.Context, input CoverageEvaluat
 
 	// === DETERMINISTIC GUARDRAILS ===
 	// Override LLM judgments with deterministic safety rules for replay consistency
+	// === 确定性护栏 ===
+	// 用确定性安全规则覆盖 LLM 判断，保证 replay 结果一致。
 	originalShouldContinue := result.ShouldContinue
 	originalReasoning := result.Reasoning
 
 	// Rule 1: First iteration with low coverage → always continue
+	// 规则 1：首轮 iteration 且覆盖度低 → 强制继续。
 	if input.Iteration == 1 && result.OverallCoverage < 0.5 {
 		result.ShouldContinue = true
 		result.RecommendedAction = "continue"
@@ -164,6 +171,7 @@ func (a *Activities) EvaluateCoverage(ctx context.Context, input CoverageEvaluat
 	}
 
 	// Rule 2: Critical gaps exist and iterations remain → always continue
+	// 规则 2：存在 critical gaps 且还有剩余 iteration → 强制继续。
 	if len(result.CriticalGaps) > 0 && input.Iteration < input.MaxIterations {
 		result.ShouldContinue = true
 		result.RecommendedAction = "continue"
@@ -174,6 +182,7 @@ func (a *Activities) EvaluateCoverage(ctx context.Context, input CoverageEvaluat
 	}
 
 	// Rule 3: Very low coverage → always continue (unless max iterations)
+	// 规则 3：覆盖度极低 → 强制继续（已达 max iterations 除外）。
 	if result.OverallCoverage < 0.3 && input.Iteration < input.MaxIterations {
 		result.ShouldContinue = true
 		result.RecommendedAction = "continue"
@@ -183,16 +192,19 @@ func (a *Activities) EvaluateCoverage(ctx context.Context, input CoverageEvaluat
 	}
 
 	// Rule 4: Suspiciously short synthesis → reduce coverage confidence
+	// 规则 4：synthesis 短得可疑 → 降低覆盖度置信度。
 	if len(input.CurrentSynthesis) < 500 && result.OverallCoverage > 0.7 {
 		logger.Warn("Guardrail: Synthesis too short for claimed high coverage",
 			"synthesis_length", len(input.CurrentSynthesis),
 			"claimed_coverage", result.OverallCoverage,
 		)
 		// Don't force continue, but flag low confidence
+		// 不强制继续，仅标记为低置信度。
 		result.ConfidenceLevel = "low"
 	}
 
 	// Rule 5: Max iterations reached → always stop
+	// 规则 5：已达 max iterations → 强制结束。
 	if input.Iteration >= input.MaxIterations {
 		result.ShouldContinue = false
 		result.RecommendedAction = "complete"

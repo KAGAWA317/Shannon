@@ -143,6 +143,7 @@ func resolveProviderFromContext(ctx map[string]interface{}) string {
 // CapBudgetAtQuotaRemaining is a no-op in the open source version.
 // Enterprise version caps agentMax for free-tier users based on remaining quota.
 // Returns agentMax unchanged.
+// 开源版为空操作：企业版会按免费用户剩余配额限制 agentMax，此处原样返回。
 func CapBudgetAtQuotaRemaining(ctx workflow.Context, tenantID string, agentMax int) int {
 	return agentMax
 }
@@ -150,6 +151,7 @@ func CapBudgetAtQuotaRemaining(ctx workflow.Context, tenantID string, agentMax i
 // inferProviderFromTier returns the most likely provider for a given tier.
 // Reads priority-1 provider from config/models.yaml to avoid config drift.
 // Falls back to hardcoded defaults if config unavailable.
+// 从 config/models.yaml 读取该档位 priority-1 的 provider，避免配置漂移；配置不可用时退回硬编码默认值。
 func inferProviderFromTier(tier string) string {
 	// Try to get from config first (data-driven)
 	if provider := pricing.GetPriorityOneProvider(tier); provider != "" {

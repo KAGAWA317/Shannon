@@ -8,6 +8,9 @@ Tests various edge cases including:
 - Large outputs
 - Session persistence
 - Security boundaries
+
+覆盖 OOM、死循环、语法错误、超大输出、session 持久化与安全边界等边界场景；
+gRPC 调用全部 mock，不依赖真实 sandbox。
 """
 
 import asyncio
@@ -256,6 +259,7 @@ for i in range(1000):
 
                 assert result.success is False
                 # WASI sandbox should prevent subprocess imports
+                # sandbox 拦截 subprocess 导入，fork bomb 无法执行
 
     @pytest.mark.asyncio
     async def test_session_cleanup_on_timeout(self, executor):
@@ -265,6 +269,7 @@ for i in range(1000):
         # Create multiple sessions
         for i in range(5):
             session = await executor._get_or_create_session(f"session_{i}")
+            # 把 last_accessed 推到 timeout 窗口之外，制造过期 session
             session.last_accessed = time.time() - (
                 executor._session_timeout + 100
             )  # Expired
@@ -273,6 +278,7 @@ for i in range(1000):
         await executor._get_or_create_session("active_session")
 
         # Trigger cleanup by creating another session
+        # 新建 session 时会顺带触发过期清理
         await executor._get_or_create_session("new_session")
 
         # Check that expired sessions are removed
@@ -283,10 +289,14 @@ for i in range(1000):
 
     @pytest.mark.asyncio
     async def test_concurrent_session_access(self, executor):
-        """Test thread-safe concurrent access to sessions"""
+        """Test thread-safe concurrent access to sessions
+
+    并发读写同一批 session 不应丢变量，execution_count 也要累加正确。
+    """
         import asyncio
 
         # Clear any existing sessions
+        # 先清空旧 session，保证后面的计数从 0 开始
         executor._sessions.clear()
 
         async def create_and_modify_session(session_id: str, value: int):
@@ -309,6 +319,7 @@ for i in range(1000):
         await asyncio.gather(*tasks)
 
         # Verify sessions were created correctly
+        # 10 个 task 映射到 3 个 session
         assert len(executor._sessions) == 3  # Only 3 unique sessions
 
         # Verify all variables were set (no race condition data loss)
@@ -317,6 +328,7 @@ for i in range(1000):
             all_vars.update(session.variables.keys())
 
         # Should have variables from all 10 tasks
+        # 并发写入没有丢变量：10 个 task 写入的 key 都在
         assert len(all_vars) == 10
 
         # Verify execution counts
@@ -369,6 +381,7 @@ print(f"The answer is {x}")
         session = ExecutionSession(session_id="test")
 
         # Simulate output with session state
+        # 模拟 WASI 在 stdout 里回传的 __SESSION_STATE__ 标记
         output_with_state = """
 Hello World
 Result: 42
@@ -383,6 +396,7 @@ __SESSION_STATE__:{"x": "42", "name": "'Alice'", "data": "[1, 2, 3]"}__END_SESSI
         assert session.variables["data"] == [1, 2, 3]
 
         # Check that output was cleaned
+        # 标记必须从返回给 LLM 的输出里剥掉
         assert "__SESSION_STATE__" not in clean_output
         assert "Hello World" in clean_output
         assert "Result: 42" in clean_output
@@ -408,6 +422,7 @@ __SESSION_STATE__:{"x": "42", "name": "'Alice'", "data": "[1, 2, 3]"}__END_SESSI
                     await executor._execute_impl(
                         code="print('test')",
                         timeout_seconds=300,  # Should be capped at 60
+                        # 上限 60 秒，传 300 应被截断
                     )
 
                     # Check that timeout was capped at 60

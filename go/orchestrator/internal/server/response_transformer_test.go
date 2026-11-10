@@ -60,6 +60,7 @@ func TestTruncateError(t *testing.T) {
 			name:  "long Japanese text gets truncated at rune boundary",
 			input: strings.Repeat("エラーが発生しました。", 60), // ~600 runes total
 			// Should truncate to 500 runes and remain valid UTF-8
+			// 应截断到 500 个 rune 且保持 UTF-8 合法
 			expected: "", // Will be verified by UTF-8 validity check below
 			wantLen:  -1, // Will check for reasonable length
 		},
@@ -67,6 +68,7 @@ func TestTruncateError(t *testing.T) {
 			name:  "mixed English and Chinese",
 			input: "Error: " + strings.Repeat("数据库错误 ", 100),
 			// Should truncate to 500 runes and remain valid UTF-8
+			// 应截断到 500 个 rune 且保持 UTF-8 合法
 			expected: "", // Will be verified by UTF-8 validity check below
 			wantLen:  -1, // Will check for reasonable length
 		},
@@ -77,6 +79,7 @@ func TestTruncateError(t *testing.T) {
 			result := truncateError(tt.input)
 
 			// For UTF-8 test cases (wantLen == -1), verify UTF-8 validity and reasonable bounds
+			// 对 UTF-8 测试用例（wantLen == -1），校验 UTF-8 合法性及合理长度区间
 			if tt.wantLen == -1 {
 				// Verify UTF-8 validity
 				runes := []rune(result)
@@ -91,6 +94,7 @@ func TestTruncateError(t *testing.T) {
 						t.Errorf("truncateError() should end with '... (truncated)' when truncated")
 					}
 					// Length should be around 500 runes + suffix
+					// 长度应在 500 个 rune 加后缀附近
 					if len(runes) < 500 || len(runes) > 520 {
 						t.Errorf("truncateError() length = %d runes, expected around 500-520", len(runes))
 					}
@@ -226,6 +230,7 @@ func TestExtractToolErrors(t *testing.T) {
 					t.Errorf("error[%d].Message = %q, want %q", i, result[i].Message, tt.expected[i].Message)
 				}
 				// Verify truncation happened if original was long
+				// 若原文较长则校验确实发生了截断
 				if len(result[i].Message) > 515 {
 					t.Errorf("error[%d].Message length = %d, should be truncated to ≤515", i, len(result[i].Message))
 				}
@@ -236,6 +241,7 @@ func TestExtractToolErrors(t *testing.T) {
 
 func TestExtractToolErrorsTruncation(t *testing.T) {
 	// Test that messages over 500 chars are properly truncated
+	// 测试超过 500 字符的消息会被正确截断
 	longError := strings.Repeat("ERROR ", 200) // 1200 chars
 	result := workflows.TaskResult{
 		Metadata: map[string]interface{}{
@@ -263,6 +269,7 @@ func TestExtractToolErrorsTruncation(t *testing.T) {
 	}
 
 	// Verify the first 500 chars match original
+	// 校验前 500 个字符与原文一致
 	if errors[0].Message[:500] != longError[:500] {
 		t.Errorf("truncated message doesn't match original first 500 chars")
 	}
@@ -270,6 +277,7 @@ func TestExtractToolErrorsTruncation(t *testing.T) {
 
 func TestTruncateError_UTF8Safety(t *testing.T) {
 	// Test that truncation never produces invalid UTF-8 sequences
+	// 测试截断不会产生非法的 UTF-8 序列
 	tests := []struct {
 		name  string
 		input string
@@ -301,6 +309,7 @@ func TestTruncateError_UTF8Safety(t *testing.T) {
 			result := truncateError(tt.input)
 
 			// Verify UTF-8 validity by rune roundtrip
+			// 通过 rune 往返校验 UTF-8 合法性
 			runes := []rune(result)
 			reconstructed := string(runes)
 
@@ -367,6 +376,7 @@ func TestUnifiedRespToJSONB(t *testing.T) {
 	}
 
 	// usage.total_tokens (JSON numbers unmarshal as float64)
+	// usage.total_tokens（JSON 数字反序列化为 float64）
 	usage, ok := jsonb["usage"].(map[string]interface{})
 	if !ok {
 		t.Fatalf("usage missing or wrong type: %T", jsonb["usage"])
@@ -439,6 +449,7 @@ func TestTruncateError_NoByteCutting(t *testing.T) {
 			}
 
 			// Should be truncated to 500 runes + suffix
+			// 应截断到 500 个 rune 加后缀
 			expectedRunes := 500 + len([]rune("... (truncated)"))
 			if len(runes) != expectedRunes {
 				t.Errorf("Expected %d runes, got %d", expectedRunes, len(runes))

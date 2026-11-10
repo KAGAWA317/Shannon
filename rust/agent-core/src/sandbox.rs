@@ -90,6 +90,7 @@ impl ModuleCache {
 }
 
 // Use tokio::sync::OnceCell for async-safe static initialization
+// 使用 tokio::sync::OnceCell 实现异步安全的静态初始化
 static MODULE_CACHE: std::sync::OnceLock<Arc<TokioRwLock<ModuleCache>>> =
     std::sync::OnceLock::new();
 
@@ -247,6 +248,7 @@ impl WasmSandbox {
         let mut cmd = Command::new(tool_path);
 
         // Clear environment and add only allowed vars
+        // 清空环境变量，只注入白名单中的变量
         cmd.env_clear();
         for (key, value) in &self.env_vars {
             cmd.env(key, value);
@@ -362,6 +364,7 @@ impl WasmSandbox {
                 .context("Failed to read WASM module")?;
 
             // Validate WASM module size (50MB limit to prevent memory exhaustion)
+            // 校验 WASM 模块大小（上限 50MB，防止内存耗尽）
             const MAX_WASM_SIZE: usize = 50 * 1024 * 1024;
             if wasm_bytes.len() > MAX_WASM_SIZE {
                 error!(
@@ -373,6 +376,7 @@ impl WasmSandbox {
             }
 
             // Additional validation: check for WASM magic number
+            // 额外校验：检查 WASM magic number
             if wasm_bytes.len() < 4 || &wasm_bytes[0..4] != b"\0asm" {
                 return Err(anyhow::anyhow!("Invalid WASM module format"));
             }
@@ -383,14 +387,19 @@ impl WasmSandbox {
         };
 
         // Simple execution approach without complex WASI for now
+        // 目前采用简单执行方式，未接入完整的 WASI；
         // This provides sandboxing through resource limits and fuel metering
+        // 隔离性由资源限制和 fuel 计量提供。
         let output_buffer: Vec<u8> = {
             // Create store
             let mut store = Store::new(&self.engine, ());
 
             // Set fuel limit based on CPU time (approximate)
+            // 根据 CPU 时间近似设置 fuel 上限
             // Use ~100K fuel units per second for better control
+            // 每秒约 100K fuel 单位，便于更精细地控制
             // This allows roughly 100M instructions per second
+            // 大致相当于每秒 1 亿条指令
             let fuel_limit = self.limits.cpu_time_ms * 100;
             store
                 .set_fuel(fuel_limit)
@@ -562,10 +571,12 @@ impl SandboxedFs {
     /// Map a path to the sandboxed filesystem
     pub fn map_path(&self, path: &Path) -> std::path::PathBuf {
         // Base directory inside sandbox is the work_dir relative to root
+        // sandbox 内的基准目录是相对 root 的 work_dir
         let base_rel = self.work_dir.strip_prefix("/").unwrap_or(&self.work_dir);
         let base = self.root.join(base_rel);
         if path.is_absolute() {
             // Absolute input path is mapped under base as a relative tail
+            // 绝对路径会去掉根前缀，作为相对路径映射到 base 之下
             let relative = path.strip_prefix("/").unwrap_or(path);
             base.join(relative)
         } else {
@@ -670,6 +681,7 @@ mod tests {
             .expect("Failed to create sandboxed filesystem for test");
 
         // Attempt to traverse upwards; mapping should keep under sandbox root
+        // 尝试向上穿越；路径映射后仍应位于 sandbox 根目录内
         let rel = Path::new("../../escape.txt");
         let mapped = fs.map_path(rel);
         // mapped must start with sandbox root

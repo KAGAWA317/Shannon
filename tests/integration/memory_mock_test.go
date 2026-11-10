@@ -12,6 +12,7 @@ import (
 )
 
 // Mock tests that can run without services
+// 无需依赖外部服务即可运行的 mock 测试
 
 // TestChunkingLogic tests chunking without external dependencies
 func TestChunkingLogic(t *testing.T) {
@@ -62,6 +63,7 @@ func TestChunkingLogic(t *testing.T) {
 			chunker := embeddings.NewChunker(config)
 
 			// Generate text of appropriate length (4 chars per token)
+			// 生成相应长度的文本（每个 token 按 4 个字符估算）
 			text := strings.Repeat("word ", tt.inputTokens)
 
 			chunks := chunker.ChunkText(text)
@@ -114,6 +116,7 @@ func TestChunkOverlap(t *testing.T) {
 		hasOverlap := false
 
 		// Check if part of current's end appears in next's beginning
+		// 检查当前分块结尾的一部分是否出现在下一分块开头
 		if strings.Contains(next[:100], currentEnd[:20]) {
 			hasOverlap = true
 		}
@@ -225,6 +228,7 @@ func TestMMRDiversityCalculation(t *testing.T) {
 		})
 	}
 	_ = ctx // Silence unused variable warning
+	// 消除未使用变量的编译告警
 }
 
 // TestStorageReduction verifies storage optimization calculations

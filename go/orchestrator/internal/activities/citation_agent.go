@@ -22,17 +22,21 @@ import (
 
 // citationNumberPattern matches inline citations like [1], [2], etc. with capture group.
 // Compiled once at package level for performance.
+// 匹配 [1]、[2] 这类带捕获组的行内 citation 标记；在 package 级别编译一次以提升性能。
 var citationNumberPattern = regexp.MustCompile(`\[(\d+)\]`)
 
 // citationMarkerPattern matches inline citations without capture group (for position finding).
+// 匹配不带捕获组的行内 citation 标记，仅用于定位。
 var citationMarkerPattern = regexp.MustCompile(`\[\d+\]`)
 
 // multiSpaceGapPattern detects 3+ consecutive whitespace between non-space content,
 // indicating space-aligned table columns.
+// 检测非空白内容之间 3 个以上连续空白，用于识别以空格对齐的表格列。
 var multiSpaceGapPattern = regexp.MustCompile(`\S\s{3,}\S`)
 
 // CitationForAgent is a simplified citation structure for the Citation Agent
 // (avoids import cycle with metadata package)
+// Citation Agent 使用的简化 citation 结构，避免与 metadata package 形成 import cycle。
 type CitationForAgent struct {
 	URL              string  `json:"url"`
 	Title            string  `json:"title"`
@@ -104,6 +108,8 @@ type PlacementCitation struct {
 	CitationID    int    `json:"citation_id"`    // Single citation number (1-based, must be in valid range)
 	// Removed: SupportingQuote - validation now done by checking citation_id range only
 	// Removed: Confidence - not needed in simplified version
+	// 已移除 SupportingQuote：校验改为只检查 citation_id 是否在有效范围内。
+	// 已移除 Confidence：简化版本不需要该字段。
 }
 
 // PlacementPlan2 is the LLM output structure for placement-based citation
@@ -112,10 +118,12 @@ type PlacementPlan2 struct {
 }
 
 // AddCitations adds inline citations to a report using LLM (placement-based with fallback to inline)
+// 用 LLM 为 report 添加行内 citation：优先 placement-based，零成功或报错时回退到 inline 方式。
 func (a *Activities) AddCitations(ctx context.Context, input CitationAgentInput) (*CitationAgentResult, error) {
 	logger := activity.GetLogger(ctx)
 
 	// Extract role for observability (default: citation_agent)
+	// 读取 role 用于 observability，缺省为 citation_agent。
 	role := "citation_agent"
 	if input.Context != nil {
 		if v, ok := input.Context["role"].(string); ok && strings.TrimSpace(v) != "" {
@@ -153,6 +161,7 @@ func (a *Activities) AddCitations(ctx context.Context, input CitationAgentInput)
 		applied := result.PlacementStats.Applied
 		total := result.PlacementStats.Total
 		// Fallback only if zero placements succeeded - use partial results otherwise
+		// 仅在没有任何 placement 成功时才回退；部分成功则直接沿用部分结果。
 		if applied == 0 {
 			needFallback = true
 			fallbackReason = fmt.Sprintf("placement zero success: applied=%d, total=%d", applied, total)
@@ -170,6 +179,7 @@ func (a *Activities) AddCitations(ctx context.Context, input CitationAgentInput)
 }
 
 // addCitationsInline adds citations using direct LLM output approach
+// 回退路径：让 LLM 直接输出带 citation 标记的全文。
 func (a *Activities) addCitationsInline(ctx context.Context, input CitationAgentInput, role string) (*CitationAgentResult, error) {
 	logger := activity.GetLogger(ctx)
 
@@ -206,6 +216,7 @@ func (a *Activities) addCitationsInline(ctx context.Context, input CitationAgent
 
 	// Dynamic max_tokens based on report length to prevent truncation
 	// Formula: reportLen/3 (chars to tokens ratio ~3:1) + 2000 (overhead for tags/formatting)
+	// 依据 report 长度动态计算 max_tokens 以防截断：reportLen/3（字符与 token 约 3:1）+ 2000（标签与格式开销）。
 	reportLen := len(input.Report)
 	minTokens := reportLen/3 + 2000
 
@@ -250,6 +261,7 @@ func (a *Activities) addCitationsInline(ctx context.Context, input CitationAgent
 	}
 
 	// Dynamic timeout based on report length: base 120s + 30s per 1000 chars, max 300s
+	// 依据 report 长度动态设置 timeout：基础 120s，每 1000 字符加 30s，上限 300s。
 	timeoutSec := 120 + (reportLen/1000)*30
 	if timeoutSec > 300 {
 		timeoutSec = 300
@@ -320,6 +332,7 @@ func (a *Activities) addCitationsInline(ctx context.Context, input CitationAgent
 	citedReport := extractCitedReport(llmResp.Response)
 	if citedReport == "" {
 		// Fallback: clean any partial tags from raw response
+		// 兜底：清掉原始 response 里可能残留的 <cited_report> 标签。
 		citedReport = strings.ReplaceAll(llmResp.Response, "<cited_report>", "")
 		citedReport = strings.ReplaceAll(citedReport, "</cited_report>", "")
 		citedReport = strings.TrimSpace(citedReport)
@@ -338,6 +351,7 @@ func (a *Activities) addCitationsInline(ctx context.Context, input CitationAgent
 
 	// If no citations were added, LLM may have made minor modifications
 	// In this case, just return the original report as "valid" (no citations needed)
+	// LLM 可能只做了轻微改写而没有加 citation；此时直接返回原始 report 并视为 valid，因为无需 citation。
 	if len(usedCitations) == 0 {
 		logger.Info("CitationAgent: no citations added by LLM, using original report")
 		result.Role = role
@@ -349,6 +363,7 @@ func (a *Activities) addCitationsInline(ctx context.Context, input CitationAgent
 	}
 
 	// Level 1 Validation: Content immutability (only if citations were added)
+	// Level 1 校验：正文不可变，仅在确有 citation 被加入时才执行。
 	if valid, err := validateContentImmutability(input.Report, citedReport); !valid {
 		logger.Warn("CitationAgent: content modified, using original report",
 			"error", err,
@@ -356,6 +371,7 @@ func (a *Activities) addCitationsInline(ctx context.Context, input CitationAgent
 		)
 		// Content was modified beyond just adding citations
 		// Return original report and mark validation as failed (citations were not added)
+		// 正文被改动超出“仅添加 citation”的范围，返回原始 report 并将校验标为失败（citation 未落地）。
 		result.Role = role
 		result.CitedReport = input.Report
 		result.CitationsUsed = nil
@@ -368,6 +384,7 @@ func (a *Activities) addCitationsInline(ctx context.Context, input CitationAgent
 	}
 
 	// Level 1 Validation: Citation number validity
+	// Level 1 校验：citation 编号必须落在有效范围内。
 	if invalid := validateCitationNumbers(citedReport, len(input.Citations)); len(invalid) > 0 {
 		logger.Warn("CitationAgent: invalid citation numbers, removing", "invalid", invalid)
 		citedReport = removeInvalidCitations(citedReport, invalid)
@@ -376,12 +393,14 @@ func (a *Activities) addCitationsInline(ctx context.Context, input CitationAgent
 	}
 
 	// Level 2 Validation: Placement warnings (non-blocking)
+	// Level 2 校验：placement 告警，仅记录，不阻断。
 	warnings := validateCitationPlacement(citedReport)
 	if len(warnings) > 0 {
 		logger.Info("CitationAgent: placement warnings", "count", len(warnings))
 	}
 
 	// Level 2 Validation: Redundancy detection
+	// Level 2 校验：检测同一句内的重复 citation。
 	redundant := detectRedundantCitations(citedReport)
 
 	result.Role = role
@@ -591,8 +610,10 @@ func extractCitedReport(response string) string {
 
 // validateContentImmutability checks that cited report only differs by [n] markers
 // Returns (valid, warning, error) - warning is non-empty if minor diffs were tolerated
+// 校验 cited report 相对原文是否只多了 [n] 标记；小比例编辑距离内的差异会被容忍。
 func validateContentImmutability(original, cited string) (bool, error) {
 	// Remove all citation markers [n] (with optional preceding space)
+	// 去掉所有 citation 标记 [n] 及其前面的空格。
 	citationPattern := regexp.MustCompile(`\s*\[\d{1,3}\]`)
 	stripped := citationPattern.ReplaceAllString(cited, "")
 
@@ -609,6 +630,7 @@ func validateContentImmutability(original, cited string) (bool, error) {
 	strippedRunes := []rune(strippedNorm)
 
 	// For very long texts, use sampled comparison to avoid O(n*m) complexity
+	// 文本过长时改用抽样比较，避免 O(n*m) 的复杂度。
 	const maxLenForFullEdit = 10000
 	var diffRatio float64
 
@@ -632,6 +654,7 @@ func validateContentImmutability(original, cited string) (bool, error) {
 
 	// Tolerate up to 15% difference (LLMs sometimes make minor changes or truncate long outputs)
 	// Increased from 5% to 15% to handle longer reports where some content modification is acceptable
+	// 容忍最多 15% 的差异：LLM 偶尔会轻微改写或截断长输出；阈值从 5% 放宽到 15% 以适配更长的 report。
 	if diffRatio < 0.15 {
 		return true, nil
 	}
@@ -659,6 +682,7 @@ func validateContentImmutability(original, cited string) (bool, error) {
 
 // levenshteinDistance calculates the true Levenshtein edit distance between two rune slices
 // Uses space-optimized O(min(m,n)) algorithm
+// 计算两个 rune 序列的真实 Levenshtein 编辑距离，使用空间优化的 O(min(m,n)) 算法。
 func levenshteinDistance(s1, s2 []rune) int {
 	// Ensure s1 is the shorter one for space optimization
 	if len(s1) > len(s2) {
@@ -674,6 +698,7 @@ func levenshteinDistance(s1, s2 []rune) int {
 	}
 
 	// Only need two rows: previous and current
+	// 只需保留上一行与当前行。
 	prev := make([]int, m+1)
 	curr := make([]int, m+1)
 
@@ -691,6 +716,7 @@ func levenshteinDistance(s1, s2 []rune) int {
 				cost = 0
 			}
 			// min of: delete, insert, replace
+			// 取 delete、insert、replace 三种操作的最小值。
 			curr[i] = min(min(prev[i]+1, curr[i-1]+1), prev[i-1]+cost)
 		}
 		// Swap rows
@@ -702,6 +728,7 @@ func levenshteinDistance(s1, s2 []rune) int {
 
 // sampledEditDistanceRatio calculates approximate edit distance ratio for long texts
 // by sampling multiple chunks and averaging the results
+// 对长文本抽样多个 chunk 求平均，得到近似的编辑距离比例。
 func sampledEditDistanceRatio(s1, s2 []rune) float64 {
 	const chunkSize = 500
 	const numSamples = 10
@@ -718,6 +745,7 @@ func sampledEditDistanceRatio(s1, s2 []rune) float64 {
 	validSamples := 0
 
 	// Sample from beginning, middle, and end
+	// 在文本的开头、中段与结尾均匀取样。
 	for i := 0; i < numSamples; i++ {
 		// Calculate sample position (spread across the text)
 		pos1 := (len1 - chunkSize) * i / (numSamples - 1)
@@ -758,6 +786,7 @@ func sampledEditDistanceRatio(s1, s2 []rune) float64 {
 	}
 
 	// Also factor in length difference
+	// 长度差异也计入比例，避免纯插入或删除被抽样漏掉。
 	lenDiff := len1 - len2
 	if lenDiff < 0 {
 		lenDiff = -lenDiff
@@ -771,6 +800,7 @@ func sampledEditDistanceRatio(s1, s2 []rune) float64 {
 	// Combine sampled edit ratio with length ratio
 	avgEditRatio := totalRatio / float64(validSamples)
 	// Weight: 80% edit distance, 20% length difference
+	// 权重：编辑距离 80%，长度差异 20%。
 	return avgEditRatio*0.8 + lenRatio*0.2
 }
 
@@ -790,8 +820,10 @@ func findFirstDifference(s1, s2 []rune) int {
 
 // normalizeForComparison normalizes a string for content comparison
 // by trimming whitespace, collapsing multiple spaces, and normalizing line endings
+// 为内容比对归一化字符串：去空白、折叠空格、统一换行，并把全角标点/数字/字母转成 ASCII。
 func normalizeForComparison(s string) string {
 	// Step 1: Remove zero-width and invisible characters that LLMs may add/remove
+	// 去掉 LLM 可能增删的零宽与不可见字符。
 	invisibleChars := []string{
 		"\u200B", // ZERO WIDTH SPACE
 		"\u200C", // ZERO WIDTH NON-JOINER
@@ -925,6 +957,7 @@ func normalizeForComparison(s string) string {
 }
 
 // validateCitationNumbers returns invalid citation numbers (out of range)
+// 返回越界的 citation 编号。
 func validateCitationNumbers(cited string, maxCitations int) []int {
 	matches := citationNumberPattern.FindAllStringSubmatch(cited, -1)
 
@@ -951,6 +984,7 @@ func removeInvalidCitations(cited string, invalid []int) string {
 }
 
 // validateCitationPlacement returns warnings about citation placement issues
+// 返回 citation 落位问题的告警，例如落在词中间或正文开头。
 func validateCitationPlacement(cited string) []string {
 	var warnings []string
 	matches := citationMarkerPattern.FindAllStringIndex(cited, -1)
@@ -959,11 +993,13 @@ func validateCitationPlacement(cited string) []string {
 		start := m[0]
 
 		// Check: Citation inside a word
+		// 检查 citation 是否插在单词中间。
 		if start > 0 && isAlphanumeric(cited[start-1]) {
 			warnings = append(warnings, fmt.Sprintf("citation inside word at position %d", start))
 		}
 
 		// Check: Citation at start of content (likely wrong)
+		// 检查 citation 是否出现在正文最开头，通常是错误位置。
 		if start == 0 {
 			warnings = append(warnings, "citation at very start of content")
 		}
@@ -973,6 +1009,7 @@ func validateCitationPlacement(cited string) []string {
 }
 
 // detectRedundantCitations finds same citation used multiple times in same sentence
+// 找出同一句中重复使用的 citation。
 func detectRedundantCitations(cited string) []string {
 	var redundant []string
 	sentences := splitIntoSentences(cited)
@@ -1014,6 +1051,7 @@ func isAlphanumeric(b byte) bool {
 }
 
 // splitIntoSentences splits text into sentences (simple implementation)
+// 按句末标点做简单切句，不处理缩写等边界情况。
 func splitIntoSentences(text string) []string {
 	// Simple split on sentence-ending punctuation
 	re := regexp.MustCompile(`[.!?]+\s+`)
@@ -1030,9 +1068,11 @@ func splitIntoSentences(text string) []string {
 // ============================================================================
 // V2 Citation Placement Functions (Indexed Placement Plan approach)
 // ============================================================================
+// V2 citation placement：索引化 placement plan——LLM 只输出 sentence index 与 hash，由代码确定性落位。
 
 // addCitationsV2 implements the indexed placement plan approach
 // LLM outputs JSON with sentence_index + hash, code applies deterministically
+// 索引化 placement：LLM 输出带 sentence_index 与 hash 的 JSON，由代码确定性地应用，避免模型改写正文。
 func (a *Activities) addCitationsV2(ctx context.Context, input CitationAgentInput, role string) (*CitationAgentResult, error) {
 	logger := activity.GetLogger(ctx)
 
@@ -1046,6 +1086,7 @@ func (a *Activities) addCitationsV2(ctx context.Context, input CitationAgentInpu
 
 	// Step 2: Build V2 prompt and call LLM
 	// Calculate max placements based on sentence count (roughly 30% of sentences, capped at 100)
+	// 依据 sentence 数量计算 max placements：约为 30%，并限制在 25 到 100 之间。
 	maxPlacements := len(sentences) * 30 / 100
 	if maxPlacements < 25 {
 		maxPlacements = 25
@@ -1068,6 +1109,7 @@ func (a *Activities) addCitationsV2(ctx context.Context, input CitationAgentInpu
 	url := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
 	// Use medium tier for V2 (better instruction following)
+	// V2 使用 medium tier，指令遵循更稳。
 	modelTier := input.ModelTier
 	if modelTier == "" {
 		modelTier = "medium"
@@ -1091,6 +1133,7 @@ func (a *Activities) addCitationsV2(ctx context.Context, input CitationAgentInpu
 	}
 
 	// Timeout: 90s for V2 (simpler output)
+	// V2 输出更简单，timeout 取 90s。
 	client := &http.Client{
 		Timeout:   90 * time.Second,
 		Transport: interceptors.NewWorkflowHTTPRoundTripper(nil),
@@ -1177,6 +1220,7 @@ func (a *Activities) addCitationsV2(ctx context.Context, input CitationAgentInpu
 
 	// Step 5: Determine validation status based on partial success strategy
 	// Accept if: ≥50% success rate OR ≥5 placements applied
+	// 部分成功策略：成功率 ≥50%，或成功应用 ≥5 个 placement，即视为通过。
 	validationPassed := successRate >= 0.5 || placementResult.Applied >= 5
 
 	var warnings []string
@@ -1207,6 +1251,7 @@ func (a *Activities) addCitationsV2(ctx context.Context, input CitationAgentInpu
 // splitSentencesV2 splits text into sentences preserving original format
 // Handles Chinese (。！？), English (.!?), and newlines
 // Preserves blank lines to maintain markdown structure
+// 切句但保留原始格式，拼接后仍能还原原文；兼容中英文标点与换行，并保留空行以维持 markdown 结构。
 func splitSentencesV2(text string) []string {
 	var sentences []string
 	var current strings.Builder
@@ -1224,6 +1269,7 @@ func splitSentencesV2(text string) []string {
 			// 1. Decimal point: digit.digit (e.g., "$30.8 billion", "3.14", "v1.2.3")
 			// 2. Domain/URL: letter.letter with no space (e.g., "example.com", "test.org")
 			// 3. Abbreviation: letter.digit (e.g., "No.1", "v1.0")
+			// 排除并非句界的句点：数字小数点、域名/URL 中的点，以及 "No.1" 这类缩写点。
 			prevIsDigit := i > 0 && unicode.IsDigit(runes[i-1])
 			nextIsDigit := i+1 < len(runes) && unicode.IsDigit(runes[i+1])
 			prevIsLetter := i > 0 && unicode.IsLetter(runes[i-1])
@@ -1252,6 +1298,7 @@ func splitSentencesV2(text string) []string {
 
 		if isSentenceEnd {
 			// Include trailing whitespace in the sentence (except newlines to preserve paragraph breaks)
+			// 句末空白并入当前 sentence，但不吃换行，以保留段落结构。
 			for i+1 < len(runes) && unicode.IsSpace(runes[i+1]) && runes[i+1] != '\n' {
 				i++
 				current.WriteRune(runes[i])
@@ -1260,6 +1307,7 @@ func splitSentencesV2(text string) []string {
 			s := current.String()
 			// Preserve blank lines (only newlines) for markdown formatting
 			// But skip truly empty strings
+			// 保留仅含换行的空行以维持 markdown 格式，但跳过真正的空串。
 			if len(s) > 0 {
 				sentences = append(sentences, s)
 			}
@@ -1279,6 +1327,7 @@ func splitSentencesV2(text string) []string {
 }
 
 // addSentenceNumbers adds [0], [1], etc. prefixes and computes hashes
+// 给每个 sentence 加 [0]、[1] 前缀，并计算对应的 hash。
 func addSentenceNumbers(sentences []string) (string, []string) {
 	var sb strings.Builder
 	hashes := make([]string, len(sentences))
@@ -1295,6 +1344,7 @@ func addSentenceNumbers(sentences []string) (string, []string) {
 }
 
 // computeSentenceHash returns first 6 chars of MD5(normalized_sentence)
+// 返回 MD5(normalized_sentence) 的前 6 位，作为 sentence 指纹。
 func computeSentenceHash(s string) string {
 	normalized := normalizeForHash(s)
 	hash := md5.Sum([]byte(normalized))
@@ -1302,6 +1352,7 @@ func computeSentenceHash(s string) string {
 }
 
 // normalizeForHash removes whitespace and punctuation for hash computation
+// 去掉空白与标点后再算 hash，避免格式差异影响匹配。
 func normalizeForHash(s string) string {
 	var sb strings.Builder
 	for _, r := range s {
@@ -1446,6 +1497,7 @@ func parsePlacementPlan(response string) (*PlacementPlan, error) {
 }
 
 // applyPlacementsV2 applies the placement plan to the original sentences
+// 把 placement plan 应用到原始 sentences，返回重建后的正文与统计。
 func applyPlacementsV2(sentences []string, plan *PlacementPlan, hashes []string, maxCitationNum int) (string, PlacementResult) {
 	result := PlacementResult{}
 
@@ -1454,6 +1506,7 @@ func applyPlacementsV2(sentences []string, plan *PlacementPlan, hashes []string,
 	copy(modified, sentences)
 
 	// Sort placements by sentence index (descending) to avoid index shifts
+	// 按 sentence index 倒序应用，避免前面的插入影响后面的位置。
 	placements := make([]CitationPlacement, len(plan.Placements))
 	copy(placements, plan.Placements)
 	sort.Slice(placements, func(i, j int) bool {
@@ -1477,9 +1530,11 @@ func applyPlacementsV2(sentences []string, plan *PlacementPlan, hashes []string,
 		}
 
 		// Hash verification with adjacent sentence fallback
+		// 用 hash 校验目标 sentence；不匹配时尝试相邻句。
 		targetIdx := p.SentenceIndex
 		if p.SentenceHash != "" && p.SentenceHash != hashes[targetIdx] {
 			// Try adjacent sentences (±1)
+			// 允许前后偏移 1 句作为兜底。
 			found := false
 			for _, offset := range []int{-1, 1} {
 				adjIdx := targetIdx + offset
@@ -1492,6 +1547,7 @@ func applyPlacementsV2(sentences []string, plan *PlacementPlan, hashes []string,
 			if !found {
 				// Hash mismatch and no adjacent match - record as FAILED to prevent wrong placement
 				// This is a P0 fix: lenient apply could insert citations at wrong positions
+				// hash 不匹配且相邻句也对不上，直接记为 FAILED，防止 citation 落到错误位置；这是修复宽松应用导致错位的 P0 改动。
 				result.Failed++
 				result.FailedIdxs = append(result.FailedIdxs, p.SentenceIndex)
 				continue
@@ -1527,6 +1583,7 @@ func appendCitationsToSentence(sentence string, citationIDs []int) string {
 	}
 
 	// Find the position to insert citations (before trailing whitespace/newline)
+	// 插在句末、行尾空白或换行之前。
 	trimmed := strings.TrimRight(sentence, " \t\n\r")
 	trailing := sentence[len(trimmed):]
 
@@ -1544,6 +1601,7 @@ func appendCitationsToSentence(sentence string, citationIDs []int) string {
 // ============================================================================
 
 // ClaimMappingInput represents a claim with its supporting citation IDs from Verify
+// Verify 阶段产出的 claim 及其支撑 citation IDs。
 type ClaimMappingInput struct {
 	Claim         string  `json:"claim"`
 	Verdict       string  `json:"verdict"` // "supported" | "unsupported" | "insufficient_evidence"
@@ -1563,6 +1621,7 @@ type CitationWithIDForAgent struct {
 }
 
 // CitationAgentInputV2 is the input for Citation Agent V2 (Deep Research)
+// Citations 仅用于行内 placement；AllCitations 供 Sources 段落输出；ClaimMappings 来自 Verify 的批量结果。
 type CitationAgentInputV2 struct {
 	Report           string                   `json:"report"`
 	Citations        []CitationWithIDForAgent `json:"citations"`      // Fetch-only citations for inline placement
@@ -1577,6 +1636,7 @@ type CitationAgentInputV2 struct {
 // This is used by Deep Research workflow for efficient citation placement.
 // Unlike AddCitations (V1), this function doesn't need the LLM to find claim-citation matches -
 // it just needs to place the citations at appropriate positions.
+// 与 V1 的 AddCitations 不同：claim 与 citation 的匹配已由 Verify 预先算好，LLM 只负责把 citation 放到合适位置，因此更快也更省 token。
 func (a *Activities) AddCitationsWithVerify(ctx context.Context, input CitationAgentInputV2) (*CitationAgentResult, error) {
 	logger := activity.GetLogger(ctx)
 
@@ -1604,6 +1664,7 @@ func (a *Activities) AddCitationsWithVerify(ctx context.Context, input CitationA
 	}
 
 	// Filter to only supported claims with supporting IDs
+	// 只保留 verdict 为 supported 且带 supporting IDs 的 claim。
 	supportedMappings := filterSupportedClaims(input.ClaimMappings)
 	if len(supportedMappings) == 0 {
 		logger.Info("CitationAgent V2: no supported claims found")
@@ -1642,10 +1703,12 @@ func (a *Activities) AddCitationsWithVerify(ctx context.Context, input CitationA
 	modelTier := input.ModelTier
 	if modelTier == "" {
 		modelTier = "small" // V2 is simpler, can use small tier
+		// V2 task 更简单，small tier 足够。
 	}
 
 	// Calculate max_tokens based on report length
 	// Chinese text: ~1.5 tokens per character; add 20% buffer for citations
+	// 按 report 长度估算 max_tokens：CJK 约 1.5 token/字符，再留出 citation 的余量；代码取的是字符数的 2 倍作为保守值。
 	reportLen := len(input.Report)
 	maxTokens := (reportLen * 2) // Conservative estimate for CJK text
 	if maxTokens < 8192 {
@@ -1653,6 +1716,7 @@ func (a *Activities) AddCitationsWithVerify(ctx context.Context, input CitationA
 	}
 	if maxTokens > 32000 {
 		maxTokens = 32000 // Cap at 32K to avoid excessive costs
+		// 上限 32K，避免成本失控。
 	}
 
 	logger.Info("CitationAgent V2: calculated max_tokens",
@@ -1785,6 +1849,7 @@ func (a *Activities) AddCitationsWithVerify(ctx context.Context, input CitationA
 	}
 
 	// Validate citation numbers (only allow IDs that were in supportedMappings)
+	// 只允许 supportedMappings 中出现过的 citation ID，其余视为无效并移除。
 	invalidCitations := validateCitationNumbersV2(citedReport, usedCitationIDs)
 	if len(invalidCitations) > 0 {
 		logger.Warn("CitationAgent V2: invalid citation numbers, removing", "invalid", invalidCitations)
@@ -1794,6 +1859,7 @@ func (a *Activities) AddCitationsWithVerify(ctx context.Context, input CitationA
 
 	// Build Sources section with used citations and additional sources (P1)
 	// Use AllCitations if provided, otherwise fall back to Citations
+	// 生成 Sources 段落：优先用 AllCitations，未提供时回退到 Citations。
 	allCitationsForSources := input.AllCitations
 	if len(allCitationsForSources) == 0 {
 		allCitationsForSources = input.Citations
@@ -1844,6 +1910,7 @@ func collectUsedCitationIDs(mappings []ClaimMappingInput) []int {
 }
 
 // validateCitationNumbersV2 returns citation numbers that are not in the allowed set
+// 返回不在允许集合内的 citation 编号。
 func validateCitationNumbersV2(cited string, allowedIDs []int) []int {
 	allowedSet := make(map[int]bool)
 	for _, id := range allowedIDs {
@@ -1930,6 +1997,7 @@ func buildCitationUserContentWithMappings(report string, citations []CitationWit
 // buildSourcesSectionV2 builds the Sources section with all citations
 // P1: All citations shown with [n] numbering, marked as "Used inline" or "Additional source"
 // Format matches V1: [n] Title (URL) - domain - Status
+// Sources 段落列出全部 citation，标注 "Used inline" 或 "Additional source"，格式与 V1 一致。
 func buildSourcesSectionV2(usedIDs []int, allCitations []CitationWithIDForAgent, citationMap map[int]CitationWithIDForAgent) string {
 	var sb strings.Builder
 	sb.WriteString("## Sources\n\n")
@@ -1980,6 +2048,7 @@ func buildSourcesSectionV2(usedIDs []int, allCitations []CitationWithIDForAgent,
 		}
 
 		// Decode URL for better readability (e.g., %E4%B8%AD%E6%96%87 → 中文)
+		// 解码 URL 中的百分号编码，便于阅读。
 		displayURL := c.URL
 		if decoded, err := url.PathUnescape(c.URL); err == nil {
 			displayURL = decoded
@@ -1995,8 +2064,10 @@ func buildSourcesSectionV2(usedIDs []int, allCitations []CitationWithIDForAgent,
 // ============================================================
 // Placement-based Citation Agent (Anthropic-style approach)
 // ============================================================
+// Placement-based Citation Agent（Anthropic 风格做法）
 
 // addCitationsPlacement adds citations using Anthropic-style approach with supporting_quote validation
+// addCitationsPlacement 使用 Anthropic 风格的做法添加 citation，并带有 supporting_quote 校验。
 func (a *Activities) addCitationsPlacement(ctx context.Context, input CitationAgentInput, role string) (*CitationAgentResult, error) {
 	logger := activity.GetLogger(ctx)
 
@@ -2021,6 +2092,7 @@ func (a *Activities) addCitationsPlacement(ctx context.Context, input CitationAg
 	reqURL := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
 	// Use medium tier for placement-based approach (better instruction following)
+	// placement-based 用 medium tier，指令遵循更好。
 	modelTier := input.ModelTier
 	if modelTier == "" {
 		modelTier = "medium"
@@ -2044,6 +2116,7 @@ func (a *Activities) addCitationsPlacement(ctx context.Context, input CitationAg
 	}
 
 	// Timeout: 120s for placement-based approach
+	// placement-based 的 timeout 取 120s。
 	client := &http.Client{
 		Timeout:   120 * time.Second,
 		Transport: interceptors.NewWorkflowHTTPRoundTripper(nil),
@@ -2114,6 +2187,7 @@ func (a *Activities) addCitationsPlacement(ctx context.Context, input CitationAg
 	}
 
 	// Step 4: Validate supporting quotes and apply placements
+	// Step 4：校验 supporting quotes 并应用 placements。
 	citedReport, placementResult := applyPlacements(sentences, placementPlan, sentenceHashes, input.Citations)
 
 	logger.Info("CitationAgent: applied placements",
@@ -2130,6 +2204,7 @@ func (a *Activities) addCitationsPlacement(ctx context.Context, input CitationAg
 
 	// Step 5: Determine validation status
 	// Placement-based is stricter: require ≥50% success rate
+	// placement-based 更严格：成功率 ≥50%，或成功应用 ≥3 个，才算通过。
 	validationPassed := successRate >= 0.5 || placementResult.Applied >= 3
 
 	var warnings []string
@@ -2403,6 +2478,7 @@ Reason: When in doubt, don't cite.
 }
 
 // buildPlacementUserContent builds the user content for placement-based citation (full snippets)
+// 直接使用收集阶段已按 MaxSnippetLength 截断的 snippet，这里不再二次截断。
 func buildPlacementUserContent(numberedReport string, citations []CitationForAgent, hashes []string) string {
 	var sb strings.Builder
 
@@ -2438,6 +2514,7 @@ func parsePlacementPlan2(response string) (*PlacementPlan2, error) {
 	response = strings.TrimSpace(response)
 
 	// Remove markdown code blocks if present
+	// 先剥掉 markdown code fence，再解析 JSON。
 	if strings.HasPrefix(response, "```json") {
 		response = strings.TrimPrefix(response, "```json")
 		if idx := strings.LastIndex(response, "```"); idx != -1 {
@@ -2468,6 +2545,7 @@ func parsePlacementPlan2(response string) (*PlacementPlan2, error) {
 }
 
 // validateSupportingQuote checks if the quote exists in the source snippet
+// validateSupportingQuote 检查 quote 是否存在于 source snippet 中。
 func validateSupportingQuote(quote string, snippet string) bool {
 	if len(quote) < 15 {
 		return false // Quote too short to be meaningful
@@ -2482,6 +2560,7 @@ func validateSupportingQuote(quote string, snippet string) bool {
 
 // normalizeForQuoteMatch normalizes a string for quote matching
 // Removes extra whitespace and lowercases for fuzzy matching
+// 为 quote 匹配做归一化：转小写并折叠空白，实现宽松匹配。
 func normalizeForQuoteMatch(s string) string {
 	// Convert to lowercase
 	s = strings.ToLower(s)
@@ -2498,18 +2577,22 @@ func normalizeForQuoteMatch(s string) string {
 
 // looksLikeTableRow detects sentences that are markdown table rows or space-aligned table rows.
 // Citations should never be placed on table rows.
+// 识别 markdown 表格行与以空格对齐的表格行；citation 不应落在表格行上。
 func looksLikeTableRow(sentence string) bool {
 	// Markdown table: 2+ pipe characters
+	// markdown 表格：出现 2 个以上管道符。
 	if strings.Count(sentence, "|") >= 2 {
 		return true
 	}
 	// Space/tab-aligned table: 2+ gaps of 3+ whitespace between content
+	// 空格/tab 对齐的表格：内容之间出现 2 处以上、每处 3 个以上空白。
 	normalized := strings.ReplaceAll(sentence, "\t", "   ")
 	gaps := multiSpaceGapPattern.FindAllStringIndex(normalized, -1)
 	return len(gaps) >= 2
 }
 
 // applyPlacements applies citation placements with ID range validation (no quote validation)
+// 应用 placements，只做 citation ID 范围校验，不做 supporting quote 校验。
 func applyPlacements(sentences []string, plan *PlacementPlan2, hashes []string, citations []CitationForAgent) (string, PlacementResult) {
 	result := PlacementResult{}
 
@@ -2525,6 +2608,7 @@ func applyPlacements(sentences []string, plan *PlacementPlan2, hashes []string, 
 		}
 
 		// Validate hash (OPTIONAL - warn but don't fail if mismatch)
+		// hash 校验是可选的：不匹配只记日志，不判失败。
 		expectedHash := ""
 		if p.SentenceIndex < len(hashes) {
 			expectedHash = hashes[p.SentenceIndex]
@@ -2533,9 +2617,11 @@ func applyPlacements(sentences []string, plan *PlacementPlan2, hashes []string, 
 		if !hashValid && len(p.SentenceHash) > 0 {
 			// Log warning but continue - hash mismatch could be due to minor text variations
 			// The sentence_index is the primary anchor
+			// hash 不匹配可能只是文本有细微差异，这里以 sentence_index 为主锚点继续处理。
 		}
 
 		// Validate citation ID (REQUIRED - this is our hard constraint against hallucination)
+		// citation ID 必须有效，这是防止模型编造引用的硬约束。
 		if p.CitationID < 1 || p.CitationID > len(citations) {
 			result.Failed++
 			result.FailedIdxs = append(result.FailedIdxs, p.SentenceIndex)
@@ -2543,6 +2629,7 @@ func applyPlacements(sentences []string, plan *PlacementPlan2, hashes []string, 
 		}
 
 		// Reject placements on table rows (markdown pipes or space-aligned columns)
+		// 拒绝对表格行落位，包括 markdown 管道符与空格对齐两种表格。
 		if looksLikeTableRow(sentences[p.SentenceIndex]) {
 			result.Failed++
 			result.FailedIdxs = append(result.FailedIdxs, p.SentenceIndex)
@@ -2559,6 +2646,7 @@ func applyPlacements(sentences []string, plan *PlacementPlan2, hashes []string, 
 	for i, sentence := range sentences {
 		if citationID, ok := validPlacements[i]; ok {
 			// Insert citation before trailing newline (for proper markdown table formatting)
+			// 插在行尾换行之前，避免破坏 markdown 表格格式。
 			trimmed := strings.TrimRight(sentence, "\n\r")
 			trailing := sentence[len(trimmed):]
 			sb.WriteString(trimmed)

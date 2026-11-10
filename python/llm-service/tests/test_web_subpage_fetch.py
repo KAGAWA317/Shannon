@@ -3,6 +3,8 @@ Tests for web_subpage_fetch keyword-based scoring
 
 Tests the scoring algorithm that selects URLs from Map results
 based on target_keywords and high-value path detection.
+
+验证评分算法：根据 target_keywords 和高价值路径特征，从 Map 结果中挑选 URL。
 """
 
 import pytest
@@ -10,7 +12,9 @@ from llm_service.tools.builtin.web_subpage_fetch import WebSubpageFetchTool
 
 
 class TestKeywordExpansion:
-    """Tests for keyword expansion with synonyms."""
+    """Tests for keyword expansion with synonyms.
+    关键词同义词扩展的测试。
+    """
 
     @pytest.fixture
     def tool(self):
@@ -53,7 +57,9 @@ class TestKeywordExpansion:
 
 
 class TestRelevanceScoring:
-    """Tests for URL relevance scoring."""
+    """Tests for URL relevance scoring.
+    URL 相关性评分的测试。
+    """
 
     @pytest.fixture
     def tool(self):
@@ -120,6 +126,7 @@ class TestRelevanceScoring:
     def test_combined_scoring(self, tool):
         """Test combined scoring with multiple factors."""
         # Best case: target keyword + high-value path + shallow
+        # 最佳情况：命中目标关键词 + 高价值路径 + 层级浅
         best = tool._calculate_relevance_score(
             "https://example.com/blog/funding-news",
             "funding news",
@@ -127,6 +134,7 @@ class TestRelevanceScoring:
         )
 
         # Worst case: no keywords, deep, generic
+        # 最差情况：无关键词命中、层级深、路径泛化
         worst = tool._calculate_relevance_score(
             "https://example.com/a/b/c/d/e/random-page",
             "funding news",
@@ -138,7 +146,9 @@ class TestRelevanceScoring:
 
 
 class TestScoringForCompanyResearch:
-    """Tests simulating company research scenario."""
+    """Tests simulating company research scenario.
+    模拟公司调研场景的测试。
+    """
 
     @pytest.fixture
     def tool(self):
@@ -216,7 +226,9 @@ class TestScoringForCompanyResearch:
 
 
 class TestEdgeCases:
-    """Edge case tests."""
+    """Edge case tests.
+    边界情况测试。
+    """
 
     @pytest.fixture
     def tool(self):
@@ -270,7 +282,9 @@ class TestEdgeCases:
 
 
 class TestHybridSelection:
-    """Tests for hybrid URL selection strategy."""
+    """Tests for hybrid URL selection strategy.
+    混合 URL 选取策略的测试。
+    """
 
     @pytest.fixture
     def tool(self):
@@ -314,6 +328,7 @@ class TestHybridSelection:
         assert "https://example.com/about" in keyword_urls
         assert "https://example.com/team" in keyword_urls
         # leadership is a synonym of team
+        # leadership 是 team 的同义词
         assert any("leadership" in u or "team" in u for u in keyword_urls)
 
         print(f"\nKeyword matched ({len(keyword_matched)}): {keyword_urls}")

@@ -64,6 +64,7 @@ def test_package_version():
 def test_sync_client_init():
     c = ShannonClient(base_url="http://localhost:8080")
     # Verify key methods exist (no network calls)
+    # 验证关键方法存在（不发起网络 request）
     for name in [
         "submit_task",
         "get_status",

@@ -17,6 +17,7 @@ import (
 // ReflectOnResult evaluates and potentially improves a result through iterative reflection.
 // It uses the EvaluateResult activity to score the response and re-synthesizes with feedback if needed.
 // Returns: improved result, final quality score, total tokens used, and any error.
+// 用 EvaluateResult activity 打分，不达标则带反馈重新合成；返回改进结果、最终质量分、总 token 消耗与错误。
 func ReflectOnResult(
 	ctx workflow.Context,
 	query string,

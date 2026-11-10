@@ -36,6 +36,7 @@ func TestHandleDaemonEvent_PublishesToStreaming(t *testing.T) {
 	logger := zap.NewNop()
 
 	// Claim must exist before HandleProgress (called inside handleDaemonEvent).
+	// 调用 HandleProgress（在 handleDaemonEvent 内部）之前 claim 必须已存在。
 	_, err := hub.HandleClaim(ctx, "conn-1", "msg-evt-1", ClaimMetadata{
 		ChannelType: ChannelSlack,
 		ThreadID:    "thread-1",
@@ -84,6 +85,7 @@ func TestHandleDaemonEvent_PublishesToStreaming(t *testing.T) {
 	}
 
 	// Verify OnWorkflowStarted was called on first event.
+	// 校验首个 event 时 OnWorkflowStarted 被调用。
 	if !workflowStarted {
 		t.Error("expected OnWorkflowStarted callback on first event")
 	}
@@ -119,6 +121,7 @@ func TestHandleDaemonEvent_SecondEventSkipsInit(t *testing.T) {
 	handleDaemonEvent(ctx, hub, "msg-evt-2", p1, mock, tracker, logger)
 
 	// Second event — should NOT re-trigger init.
+	// 第二个 event——不应再次触发初始化。
 	p2, _ := json.Marshal(DaemonEventPayload{EventType: "TOOL_COMPLETED", Seq: 2, Timestamp: "2026-03-23T10:00:01Z"})
 	handleDaemonEvent(ctx, hub, "msg-evt-2", p2, mock, tracker, logger)
 
@@ -148,6 +151,7 @@ func TestHandleDaemonReply_SuppressesDuplicateWhenStreamActive(t *testing.T) {
 	tracker := &daemonStreamTracker{initState: &sync.Map{}}
 
 	// Simulate first event (initializes stream via handleDaemonEvent).
+	// 模拟首个 event（通过 handleDaemonEvent 初始化 stream）。
 	payload, _ := json.Marshal(DaemonEventPayload{EventType: "TOOL_INVOKED", Message: "searching", Seq: 1})
 	handleDaemonEvent(ctx, hub, "msg-reply-1", payload, mock, tracker, nil)
 
@@ -157,6 +161,7 @@ func TestHandleDaemonReply_SuppressesDuplicateWhenStreamActive(t *testing.T) {
 	}
 
 	// Verify the TOOL_INVOKED event was published via the mock.
+	// 校验 TOOL_INVOKED event 已通过 mock 发布。
 	events := mock.getEvents()
 	if len(events) != 1 || events[0].Type != "TOOL_INVOKED" {
 		t.Fatalf("expected 1 TOOL_INVOKED event, got %d events", len(events))
@@ -165,6 +170,9 @@ func TestHandleDaemonReply_SuppressesDuplicateWhenStreamActive(t *testing.T) {
 	// Now send a MsgTypeReply via handleDaemonMessage.
 	// The MsgTypeReply handler calls streaming.Get() directly (not via mock),
 	// so we only verify: replyCalled, correct meta.WorkflowID, and tracker cleanup.
+	// 现在通过 handleDaemonMessage 发送 MsgTypeReply。
+	// MsgTypeReply 处理器直接调用 streaming.Get()（不走 mock），
+	// 因此这里只校验：replyCalled、meta.WorkflowID 正确、tracker 已清理。
 	replyPayload, _ := json.Marshal(ReplyPayload{Text: "final answer"})
 	s := &capturedSender{}
 	conn := makeConn("conn-1", "t", "u", s)
@@ -192,6 +200,7 @@ func TestHandleDaemonReply_SuppressesDuplicateWhenStreamActive(t *testing.T) {
 	}
 
 	// Verify tracker was cleaned up after reply.
+	// 校验回复后 tracker 已被清理。
 	if tracker.isInitialized("msg-reply-1") {
 		t.Error("expected stream tracker to be cleaned up after reply")
 	}
@@ -208,6 +217,7 @@ func TestHandleDaemonEvent_MessageIDRequired(t *testing.T) {
 	p, _ := json.Marshal(DaemonEventPayload{EventType: "TOOL_INVOKED", Seq: 1})
 
 	// Empty message_id should be dropped (no publish).
+	// 空 message_id 应被丢弃（不发布）。
 	handleDaemonEvent(ctx, hub, "", p, mock, tracker, logger)
 
 	events := mock.getEvents()

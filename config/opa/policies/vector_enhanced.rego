@@ -2,6 +2,8 @@ package shannon.task
 
 # Vector-enhanced policy decisions. These rules are additive and only apply
 # when vector context is present in input.
+# 向量增强的策略决策。这些规则是增量式的，
+# 仅在 input 中包含向量 context 时生效。
 
 decision := {
     "allow": true,

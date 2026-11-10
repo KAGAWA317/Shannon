@@ -50,6 +50,7 @@ func TestSwarmTaskSerialization(t *testing.T) {
 
 func TestSwarmTaskSerialization_CompletedAt(t *testing.T) {
 	// CompletedAt should be omitted when empty
+	// CompletedAt 为空时应被省略（omitempty）
 	task := SwarmTask{
 		ID:     "task-1",
 		Status: "pending",
@@ -62,6 +63,7 @@ func TestSwarmTaskSerialization_CompletedAt(t *testing.T) {
 	}
 
 	// CompletedAt should be present when set
+	// 设置 CompletedAt 后该字段应出现
 	task.CompletedAt = "2026-02-19T12:00:00Z"
 	b, _ = json.Marshal(task)
 	json.Unmarshal(b, &m)

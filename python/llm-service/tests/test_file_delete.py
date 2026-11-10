@@ -3,6 +3,8 @@ Test suite for FileDeleteTool with session isolation.
 
 Tests single-target deletion, glob batch deletion, access control,
 and idempotent behavior.
+
+覆盖单目标删除、glob 批量删除、访问控制与幂等行为。
 """
 
 import os
@@ -33,7 +35,10 @@ def session_context(workspace):
 
 @pytest.fixture
 def env_patch(workspace):
-    """Patch environment to use tmp workspace and disable sandbox."""
+    """Patch environment to use tmp workspace and disable sandbox.
+
+    把 workspace 根目录指到 tmp_path，并关掉 WASI sandbox，让删除走纯 Python 实现。
+    """
     parent = workspace.parent
     return patch.dict(os.environ, {
         "SHANNON_SESSION_WORKSPACES_DIR": str(parent),
@@ -59,7 +64,10 @@ class TestFileDeleteSingleTarget:
 
     @pytest.mark.asyncio
     async def test_delete_nonexistent_is_idempotent(self, tool, workspace, session_context, env_patch):
-        """Deleting a non-existent file returns success with count 0."""
+        """Deleting a non-existent file returns success with count 0.
+
+        幂等约定：删不存在的文件不算失败，deleted_count 为 0。
+        """
         with env_patch:
             result = await tool._execute_impl(session_context=session_context, path="does-not-exist.txt")
 

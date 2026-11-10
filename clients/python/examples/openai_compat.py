@@ -1,4 +1,7 @@
-"""Example of the OpenAI-compatible helpers in the Shannon SDK."""
+"""Example of the OpenAI-compatible helpers in the Shannon SDK.
+
+示例：Shannon SDK 中 OpenAI 兼容的辅助方法。
+"""
 
 import os
 

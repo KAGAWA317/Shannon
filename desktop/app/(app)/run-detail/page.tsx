@@ -198,14 +198,19 @@ function RunDetailContent() {
     };
 
     // Reset Redux state only when switching sessions or starting fresh
+    // 仅当切换 session 或全新开始时才重置 Redux 状态。
     useEffect(() => {
         // Skip if sessionId is not yet available (Suspense loading)
+        // sessionId 尚不可用时跳过（Suspense 加载中）。
         if (sessionId === null || sessionId === undefined) return;
         
         // Reset on initial mount or when session changes
+        // 首次挂载或 session 变化时重置。
         const sessionChanged = sessionId !== prevSessionIdRef.current;
         // Don't reset Redux state when transitioning from "new" to a real session ID (task creation flow)
         // This preserves streaming messages
+        // 从 "new" 过渡到真实 session ID（task 创建流程）时不要重置 Redux 状态，
+        // 以保留流式消息。
         const isNewToReal = prevSessionIdRef.current === "new" && sessionId && sessionId !== "new";
         const shouldResetRedux = !hasInitializedRef.current || (sessionChanged && !isNewToReal);
 
@@ -222,6 +227,8 @@ function RunDetailContent() {
 
             // Only reset message/history flags if NOT transitioning from "new" to real session
             // During new-to-real transition, handleTaskCreated already added the user message
+            // 仅在不是 new→real 过渡时才重置消息/历史标志；
+            // 该过渡期间 handleTaskCreated 已经添加了用户消息。
             if (!isNewToReal) {
                 hasLoadedMessagesRef.current = false;
                 hasFetchedHistoryRef.current = false;
@@ -364,6 +371,8 @@ function RunDetailContent() {
 
         // Don't fetch history if we're currently streaming a new task unless forced
         // Also skip if we have a currentTaskId but SSE hasn't connected yet (status still idle)
+        // 当前正在流式输出新 task 时不要拉取历史（除非强制）。
+        // 如果已有 currentTaskId 但 SSE 尚未连接（status 仍为 idle），也跳过。
         if (!forceReload && currentTaskId && (runStatus === "running" || runStatus === "idle")) {
             console.log("[RunDetail] Skipping history fetch while task is in progress or starting");
             return;
@@ -374,6 +383,8 @@ function RunDetailContent() {
         try {
             // Fetch events to build the timeline and conversation
             // Backend validation limits to 100 turns per request
+            // 拉取 event 以构建时间线和对话。
+            // 后端校验限制每次 request 100 个 turn。
             const eventsData = await getSessionEvents(sessionId, 100, 0, true);
 
             // Debug: Check if payload is being returned
@@ -393,6 +404,8 @@ function RunDetailContent() {
 
             // The API response might not have a top-level 'events' array if it's just returning turns with embedded events.
             // Let's collect all events from all turns if top-level events is missing.
+            // 如果 API response 只返回带内嵌 event 的 turns，可能没有顶层 'events' 数组。
+            // 顶层 events 缺失时，从所有 turn 中收集 event。
             const allEvents: Event[] = (eventsData as any).events || eventsData.turns.flatMap(t => t.events || []);
 
             setSessionData({ turns: eventsData.turns, events: allEvents });
@@ -435,6 +448,10 @@ function RunDetailContent() {
                 // For history: LLM_OUTPUT, TOOL_INVOKED, TOOL_OBSERVATION create messages - skip them
                 // We'll use turn.final_output for the conversation instead
                 // Also deduplicate excessive BUDGET_THRESHOLD events here to reduce Redux state size
+                // 把历史 event 加入 Redux（过滤掉会生成对话消息的 event）。
+                // 历史场景下：LLM_OUTPUT、TOOL_INVOKED、TOOL_OBSERVATION 会创建消息——跳过它们。
+                // 对话内容改用 turn.final_output。
+                // 同时在此对过多的 BUDGET_THRESHOLD event 去重，以减小 Redux 状态体积。
                 const eventsToAdd = allEvents
                     .filter((event: Event) => {
                         const type = (event as any).type;
@@ -447,6 +464,8 @@ function RunDetailContent() {
 
                 // Deduplicate BUDGET_THRESHOLD events before adding to Redux
                 // Only show first warning and then every 100% increase to minimize clutter
+                // 在加入 Redux 前对 BUDGET_THRESHOLD event 去重。
+                // 只显示首次告警，之后每增长 100% 才显示一次，以减少干扰。
                 const deduplicatedHistoricalEvents: Event[] = [];
                 let lastBudgetPercent = 0;
                 let budgetEventCount = 0;
@@ -525,6 +544,10 @@ function RunDetailContent() {
                 // We need to reconstruct messages from turns
                 // Fetch full task details in parallel to get citations
                 // Use workflow_id from events as the API expects workflow_id, not task_id
+                // 把历史消息（turns）加入 Redux。
+                // 需要从 turns 重建消息。
+                // 并行拉取 task 详情以获取引用信息。
+                // 使用 event 中的 workflow_id——该 API 期望 workflow_id 而非 task_id。
                 const taskDetailsPromises = eventsData.turns.map(turn => {
                     // Get workflow_id from the first event in the turn
                     const workflowId = turn.events.length > 0 ? turn.events[0].workflow_id : turn.task_id;
@@ -547,6 +570,8 @@ function RunDetailContent() {
 
                 // Merge model_breakdown from task details into session history
                 // This provides complete model usage data from token_usage table
+                // 把 task 详情中的 model_breakdown 合并进 session 历史。
+                // 这样可提供来自 token_usage 表的完整模型用量数据。
                 if (historyData?.tasks) {
                     const enrichedHistory = {
                         ...historyData,
@@ -595,6 +620,8 @@ function RunDetailContent() {
 
                     // Add research plan message (from RESEARCH_PLAN_READY event) AFTER user message
                     // This ensures correct ordering: user query → research plan (Round 1)
+                    // 在用户消息之后添加研究计划消息（来自 RESEARCH_PLAN_READY event）。
+                    // 以保证顺序正确：用户查询 → 研究计划（第 1 轮）。
                     if (planReadyEvent) {
                         const planMessage = (planReadyEvent as any).message;
                         if (planMessage) {
@@ -614,6 +641,9 @@ function RunDetailContent() {
                     // Add review feedback rounds (Round 2+) from stream events.
                     // These are user feedback + updated plan pairs, interleaved in order.
                     // Events are in chronological order already.
+                    // 从 stream event 中添加评审反馈轮次（第 2 轮及以后）。
+                    // 这些是用户反馈 + 更新后计划的成对消息，按顺序交错。
+                    // event 本身已按时间顺序排列。
                     const feedbackPairs = Math.min(reviewFeedbackEvents.length, planUpdatedEvents.length);
                     for (let ri = 0; ri < feedbackPairs; ri++) {
                         const fbEvent = reviewFeedbackEvents[ri];
@@ -672,6 +702,8 @@ function RunDetailContent() {
                                     if (pl?.intent) {
                                         // Map legacy "approve" to "ready", and "execute" to "ready" on reload
                                         // (if execute wasn't handled before reload, show button as fallback)
+                                        // 重新加载时把旧的 “approve” 映射为 “ready”，把 “execute” 也映射为 “ready”
+                                        // （若 execute 在重载前未被处理，则显示按钮作为兜底）。
                                         const rawIntent = pl.intent as string;
                                         reviewModeIntent = rawIntent === "approve" || rawIntent === "execute" ? "ready" : rawIntent as any;
                                     }
@@ -695,6 +727,9 @@ function RunDetailContent() {
                     // Add intermediate agent trace messages from events (for "Show Agent Trace" feature)
                     // These are LLM_OUTPUT and thread.message.completed events with agent_id
                     // Pre-compute final output to deduplicate lead events that match it
+                    // 从 event 中添加中间 Agent Trace 消息（用于 “Show Agent Trace” 功能）。
+                    // 这些是带 agent_id 的 LLM_OUTPUT 和 thread.message.completed event。
+                    // 预先计算最终输出，以去除与之匹配的 lead event。
                     const turnFinalOutput = turn.final_output || taskDetailsMap.get(workflowId)?.result || "";
                     const intermediateEvents = turn.events.filter((event: any) => {
                         if (!(event.type === 'LLM_OUTPUT' || event.type === 'thread.message.completed')) return false;
@@ -709,6 +744,8 @@ function RunDetailContent() {
 
                     // Deduplicate intermediate events by agent_id + content
                     // (backend may emit the same interim_reply via multiple SSE event paths)
+                    // 按 agent_id + content 对中间 event 去重
+                    // （后端可能通过多条 SSE event 路径发出相同的 interim_reply）。
                     const seenIntermediateContent = new Set<string>();
                     intermediateEvents.forEach((event: any, eventIndex: number) => {
                         const content = event.message || event.response || event.content || '';
@@ -736,6 +773,9 @@ function RunDetailContent() {
                     // Assistant message: Use final_output as the authoritative answer
                     // final_output comes from the task's result field (canonical value)
                     // Get full task details (includes citations, metadata, and result as fallback)
+                    // Assistant 消息：使用 final_output 作为权威答案。
+                    // final_output 来自 task 的 result 字段（规范值）。
+                    // 获取完整 task 详情（包含引用、metadata，以及作为兜底的 result）。
                     const fullTaskDetails = taskDetailsMap.get(workflowId);
                     
                     // Check if task was cancelled - don't display partial/irrelevant content
@@ -823,6 +863,8 @@ function RunDetailContent() {
 
     // Fetch session data on initial load
     // fetchSessionHistory handles agent type detection first, then history loading (if no active task)
+    // 初次加载时拉取 session 数据。
+    // fetchSessionHistory 会先处理 agent 类型检测，再加载历史（若无运行中的 task）。
     useEffect(() => {
         if (sessionId && sessionId !== "new" && !hasFetchedHistoryRef.current) {
             fetchSessionHistory();
@@ -837,6 +879,9 @@ function RunDetailContent() {
     // Refetch session history when a task completes to update the summary
     // Title updates via streaming title_generator events
     // Use actualSessionId (from task response) as it's more reliable than URL param for new sessions
+    // task 完成后重新拉取 session 历史以更新摘要。
+    // 标题通过流式的 title_generator event 更新。
+    // 使用 actualSessionId（来自 task response），对新 session 而言它比 URL 参数更可靠。
     useEffect(() => {
         const effectiveSessionId = actualSessionId || (sessionId !== "new" ? sessionId : null);
         
@@ -844,6 +889,9 @@ function RunDetailContent() {
             // Update both events (for timeline) and history (for costs in summary)
             // Don't trigger message reload - messages are already in Redux from streaming
             // Use progressive retry to handle backend persistence delays
+            // 同时更新 events（用于时间线）和 history（用于摘要中的成本）。
+            // 不要触发消息重新加载——消息已在 Redux 中（来自流式输出）。
+            // 使用渐进式 retry 来应对后端持久化延迟。
             let retryCount = 0;
             const maxRetries = 3;
             const delays = [1500, 3000, 5000]; // 1.5s, 3s, 5s
@@ -1007,6 +1055,8 @@ function RunDetailContent() {
 
             // Validate task is actually complete before trusting the result
             // This prevents showing partial results if completion was signaled prematurely
+            // 在信任结果前确认 task 确实已完成。
+            // 可防止在完成信号过早发出时显示不完整的结果。
             if (task.status !== "TASK_STATUS_COMPLETED") {
                 console.warn("[RunDetail] ⚠️ Task status is not COMPLETED:", task.status, "- SSE completion may be premature");
                 if (task.status === "TASK_STATUS_RUNNING" || task.status === "TASK_STATUS_QUEUED") {
@@ -1036,6 +1086,11 @@ function RunDetailContent() {
             // Exclude isResearchPlan messages — those are review plan rounds, not the final output
             // Also accept streaming messages with content — they will finalize on their own
             // Removing !m.isStreaming prevents creating a duplicate while stream is still active
+            // 检查本 task 是否已存在任意 assistant 消息（来自 SSE 流式输出）。
+            // 防止 SSE 与 fetchFinalOutput 都创建消息时产生重复。
+            // 排除 isResearchPlan 消息——那些是评审计划轮次，不是最终输出。
+            // 也接受带内容的流式消息——它们会自行完成收尾。
+            // 去掉 !m.isStreaming 判断可避免流仍活跃时创建重复消息。
             const hasExistingAssistantMessage = runMessagesRef.current?.some(m =>
                 m.role === "assistant" &&
                 m.taskId === currentTaskId &&
@@ -1060,6 +1115,8 @@ function RunDetailContent() {
 
             // Add the authoritative result from task.result (canonical value)
             // This only happens if SSE didn't create a message (fallback)
+            // 添加来自 task.result 的权威结果（规范值）。
+            // 仅在 SSE 未创建消息时执行（兜底）。
             
             // Ensure result is a string
             let resultContent = task.result;
@@ -1113,6 +1170,8 @@ function RunDetailContent() {
 
     // Watch for task completion and fetch authoritative final result
     // Per best practice: when WORKFLOW_COMPLETED or STREAM_END arrives, fetch task.result (authoritative)
+    // 监听 task 完成并获取权威最终结果。
+    // 最佳实践：收到 WORKFLOW_COMPLETED 或 STREAM_END 时，拉取 task.result（权威值）。
     useEffect(() => {
         const fetchTaskResult = async () => {
             console.log("[RunDetail] Completion check - status:", runStatus, "taskId:", currentTaskId, "messages:", runMessages.length);
@@ -1121,6 +1180,8 @@ function RunDetailContent() {
                 console.log("[RunDetail] ✓ Task completed! Fetching authoritative result from task API");
                 // Always fetch the authoritative result when completion is signaled
                 // The task.result field is the canonical value, not intermediate stream messages
+                // 完成信号出现时始终拉取权威结果。
+                // task.result 字段是规范值，而不是流中的中间消息。
                 await fetchFinalOutput();
             } else if (runStatus !== "completed") {
                 console.log("[RunDetail] Waiting for completion signal... current status:", runStatus);
@@ -1132,6 +1193,8 @@ function RunDetailContent() {
 
     // Fallback polling: If task is "running" but no events received for 30s, poll API to check status
     // This handles cases where STREAM_END is lost due to network issues
+    // 兜底轮询：task 处于 “running” 但 30 秒内没有收到 event 时，轮询 API 检查状态。
+    // 用于处理因网络问题丢失 STREAM_END 的情况。
     const lastEventCountRef = useRef(0);
     const pollingAttemptRef = useRef(0);
     useEffect(() => {
@@ -1190,6 +1253,7 @@ function RunDetailContent() {
     }, [runStatus, currentTaskId, runEvents.length, dispatch]);
 
     // Fetch control-state on page load when task is running
+    // task 运行中时，在页面加载时拉取 control-state。
     useEffect(() => {
         if (currentTaskId && runStatus === "running") {
             getTaskControlState(currentTaskId)
@@ -1209,6 +1273,7 @@ function RunDetailContent() {
     }, [currentTaskId, runStatus, dispatch]);
 
     // Periodic control-state refresh during pause (every 20s) in case SSE was missed
+    // 暂停期间每 20 秒刷新一次 control-state，以防漏掉 SSE event。
     useEffect(() => {
         if (!isPaused || !currentTaskId) return;
 
@@ -1234,6 +1299,7 @@ function RunDetailContent() {
     }, [isPaused, currentTaskId, dispatch]);
 
     // Periodic control-state refresh during cancelling (every 2s) - SSE often misses workflow.cancelled
+    // 取消过程中每 2 秒刷新一次 control-state——SSE 经常漏掉 workflow.cancelled。
     useEffect(() => {
         if (!isCancelling || !currentTaskId) return;
 
@@ -1271,6 +1337,10 @@ function RunDetailContent() {
         // When paused: reset pause loading (pause completed)
         // When not paused: reset resume loading (resume completed)
         // Always reset both to handle page load scenarios
+        // 暂停/恢复的 SSE event 更新 Redux 状态时，重置按钮的 loading 状态。
+        // 处于暂停时：重置 pause loading（暂停已完成）。
+        // 不处于暂停时：重置 resume loading（恢复已完成）。
+        // 始终同时重置两者，以兼容页面加载场景。
         if (isPaused) {
             setIsPauseLoading(false);
             // Also reset resume loading in case page loaded mid-transition
@@ -1329,6 +1399,8 @@ function RunDetailContent() {
 
     // Called immediately when user clicks Send in review mode (before API call).
     // Shows user message + generating placeholder instantly.
+    // 用户在评审模式下点击 Send 时立即调用（早于 API 调用）。
+    // 立刻显示用户消息 + 生成中占位消息。
     const handleReviewSending = (userMessage: string) => {
         // Use a temporary ID that will be replaced with the stable one once round is known
         dispatch(addMessage({
@@ -1381,6 +1453,8 @@ function RunDetailContent() {
 
         // intent=ready: LLM proposed a plan direction → Approve button appears, user clicks to confirm.
         // intent=execute: user said "do it" → auto-approve immediately.
+        // intent=ready：LLM 提出了计划方向 → 显示 Approve 按钮，由用户点击确认。
+        // intent=execute：用户说了 “do it” → 立即自动批准。
         if (intent === "execute" && reviewWorkflowId) {
             try {
                 await approveReviewPlan(reviewWorkflowId);
@@ -1396,6 +1470,8 @@ function RunDetailContent() {
 
     // Called when review feedback API fails (e.g. 409 max rounds reached).
     // Removes temporary messages so the UI doesn't show stale placeholders.
+    // 评审反馈 API 失败时调用（例如达到 409 最大轮次）。
+    // 移除临时消息，避免 UI 显示过期的占位内容。
     const handleReviewError = () => {
         dispatch(removeMessage(`review-feedback-${reviewWorkflowId}-pending`));
         dispatch(removeMessage(`review-generating-${reviewWorkflowId}`));
@@ -1540,6 +1616,7 @@ function RunDetailContent() {
     };
 
     // Only process timeline events when timeline is visible (performance optimization)
+    // 仅在时间线可见时处理时间线 event（性能优化）。
     const timelineEvents = useMemo(() => {
         if (!showTimeline) return [];
         
@@ -1607,6 +1684,8 @@ function RunDetailContent() {
 
             // If this workflow is completed, mark all its events as completed (static)
             // Otherwise, use the event's natural status (may be running/breathing)
+            // 若该 workflow 已完成，则把它的所有 event 标记为 completed（静态）。
+            // 否则使用 event 的自然状态（可能是 running/breathing）。
             const eventStatus = workflowCompleted
                 ? "completed"
                 : getEventStatus(event.type);
@@ -1634,6 +1713,9 @@ function RunDetailContent() {
     // Combine historical messages with streaming messages
     // Redux `runMessages` should now contain both if we populated it correctly
     // Use a stable reference to messages to prevent unnecessary re-renders
+    // 合并历史消息与流式消息。
+    // 如果填充正确，Redux 的 runMessages 现在应同时包含两者。
+    // 对 messages 使用稳定引用，避免不必要的重渲染。
     const messages = useMemo(() => runMessages, [runMessages]);
 
     // Debug logging to track message disappearance issue
@@ -2064,6 +2146,8 @@ function RunDetailContent() {
                                 {sessionHistory?.tasks && sessionHistory.tasks.length > 0 && (() => {
                                     // Aggregate model usage across all tasks for accurate multi-model tracking
                                     // Priority: agent_usages > model_breakdown > fallback to task-level model
+                                    // 跨所有 task 聚合模型用量，以准确追踪多模型使用情况。
+                                    // 优先级：agent_usages > model_breakdown > 回退到 task 级模型。
                                     const modelUsage = new Map<string, { 
                                         model: string;
                                         provider: string;

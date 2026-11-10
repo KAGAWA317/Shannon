@@ -1,4 +1,7 @@
-"""Agent API endpoints for HTTP communication with Agent-Core."""
+"""Agent API endpoints for HTTP communication with Agent-Core.
+
+与 Agent-Core 进行 HTTP 通信的 Agent API 端点.
+"""
 
 import logging
 import os
@@ -22,8 +25,17 @@ router = APIRouter()
 # MAX_PROMPT_CHARS) is enforced once at module load instead of left as a
 # human-maintained comment.
 #
+# MAX_TEXT_PER_FILE / MAX_TEXT_TOTAL 限制发送给 LLM 的文本附件负载. 旧值
+# (100K/200K) 是按 200K context 模型设定的 —— 如今 1M context 模型已是默认,
+# 一份长 PDF 文本就可能超过 100K 字符并被静默截断. 因此提升到模块级, 与
+# MAX_PROMPT_CHARS 放在一起, 使对齐不变量 (MAX_TEXT_TOTAL < MAX_PROMPT_CHARS)
+# 在模块加载时一次性校验, 而不是留给人工维护的注释.
+#
 # Symptom when raising further: query_text gets trimmed to 1_000 chars
 # minimum when (MAX_PROMPT_CHARS - attachment_text_chars) goes negative.
+#
+# 继续调大后的症状: 当 (MAX_PROMPT_CHARS - attachment_text_chars) 变为负数时,
+# query_text 会被裁剪到最小 1_000 字符.
 MAX_TEXT_PER_FILE = 400_000  # ~100K tokens per file
 MAX_TEXT_TOTAL = 800_000     # ~200K tokens total across all text attachments
 
@@ -34,10 +46,19 @@ MAX_TEXT_TOTAL = 800_000     # ~200K tokens total across all text attachments
 # fits the 1M-token context window with room for system prompt, tools, and
 # assistant turns.
 #
+# MAX_PROMPT_CHARS 是组装后 prompt 正文 (用户 query + 附件文本) 的软上限.
+# 与 MAX_TEXT_TOTAL 同步提高 (200K → 800K 字符), 使填满文本附件 budget 的 request
+# 仍能为用户实际问题留出余量. 1M 字符约等于 250K token —— 在 1M token context
+# 窗口中仍可为 system prompt, tool 与 assistant 轮次留出空间.
+#
 # Symptom when this binds: user's query gets silently truncated to ~1K chars,
 # or the conversation-history trim loop strips turns until empty trying to fit
 # under cap. Used at three call sites (query trim, history trim, deep-research
 # step trim).
+#
+# 触发该上限时的症状: 用户 query 被静默截断到约 1K 字符, 或对话历史裁剪循环
+# 为了塞进上限而逐轮删除直到为空. 共有三处调用点 (query 裁剪, 历史裁剪,
+# deep-research 步骤裁剪).
 MAX_PROMPT_CHARS = 1_000_000
 
 # Load-time invariant: the text-attachment budget must leave headroom for the
@@ -45,6 +66,11 @@ MAX_PROMPT_CHARS = 1_000_000
 # (MAX_PROMPT_CHARS - attachment_text_chars) computation in query/history trim
 # paths would go negative and clamp to the 1_000-char floor — silently
 # truncating every prompt to 1 KB.
+#
+# 加载期不变量: 文本附件 budget 必须为用户实际问题留出余量. 一旦 MAX_TEXT_TOTAL
+# 超过 MAX_PROMPT_CHARS, query/历史裁剪路径中的
+# (MAX_PROMPT_CHARS - attachment_text_chars) 计算就会变为负数并钳制到 1_000
+# 字符下限 —— 从而把每个 prompt 静默截断到 1 KB.
 assert MAX_TEXT_TOTAL < MAX_PROMPT_CHARS, (
     f"MAX_TEXT_TOTAL ({MAX_TEXT_TOTAL}) must stay strictly under "
     f"MAX_PROMPT_CHARS ({MAX_PROMPT_CHARS}); otherwise query trim clamps to 1_000 chars."
@@ -59,6 +85,14 @@ async def _resolve_attachments(context: Optional[Dict], redis_client, session_id
     Skips resolution when the agent has dependency_results — these downstream
     agents already have upstream conclusions in their LLM context (rendered by
     _format_dependency_results). Re-sending binary attachments wastes tokens.
+
+    从 Redis 解析附件引用.
+
+    由 /agent/query 与 /agent/loop 两个 handler 共用的辅助函数.
+
+    当 agent 带有 dependency_results 时跳过解析 —— 这些下游 agent 的 LLM context
+    中已包含上游结论 (由 _format_dependency_results 渲染). 重复发送二进制附件
+    只会浪费 token.
     """
     if not context or not isinstance(context, dict):
         return []
@@ -94,6 +128,13 @@ def strip_markdown_json_wrapper(text: str, *, expect_json: bool) -> str:
 
     Handles trailing text after the closing fence (e.g. LLM appending notes after
     the JSON block).
+
+    去除包裹 JSON 的 markdown 代码围栏.
+
+    仅对看起来像 JSON 的内容去除围栏 (```json ... ``` 或内容为 JSON 对象/数组的
+    ``` ... ```). 这样不会破坏正常的 markdown/代码输出.
+
+    同时处理闭合围栏之后的尾随文本 (例如 LLM 在 JSON 块之后追加的说明).
     """
     if not expect_json or not text or not isinstance(text, str):
         return text
@@ -114,10 +155,13 @@ def strip_markdown_json_wrapper(text: str, *, expect_json: bool) -> str:
     body = trimmed[first_newline + 1 :].strip()
     if body.endswith("```"):
         # Clean case: ```json ... ```
+        # 干净情形: ```json ... ```
         body = body[:-3].strip()
     else:
         # Trailing text after closing fence: ```json ... ``` \n **notes:** ...
         # Find the closing ``` and extract only the JSON block.
+        # 闭合围栏之后还有尾随文本: ```json ... ``` \n **notes:** ...
+        # 找到闭合 ``` 并只提取 JSON 块.
         closing_idx = body.find("\n```")
         if closing_idx == -1:
             return text
@@ -130,7 +174,10 @@ def strip_markdown_json_wrapper(text: str, *, expect_json: bool) -> str:
 
 
 def _parse_history_entries(raw_history: Any) -> List[Dict[str, str]]:
-    """Parse chat history from context."""
+    """Parse chat history from context.
+
+    从 context 中解析聊天历史.
+    """
 
     messages: List[Dict[str, str]] = []
 
@@ -145,6 +192,7 @@ def _parse_history_entries(raw_history: Any) -> List[Dict[str, str]]:
         return messages
 
     # New format: list of entries from Rust
+    # 新格式: 来自 Rust 的条目列表
     if isinstance(raw_history, list):
         for item in raw_history:
             if isinstance(item, dict):
@@ -163,6 +211,7 @@ def _parse_history_entries(raw_history: Any) -> List[Dict[str, str]]:
         return messages
 
     # Legacy format: multi-line "role: content" entries
+    # 旧格式: 多行 "role: content" 条目
     lines = raw_history.strip().split("\n")
     current_role: Optional[str] = None
     current_content: List[str] = []
@@ -201,18 +250,24 @@ def _response_format_expects_json(response_format: Any) -> bool:
 
 
 def calculate_relevance_score(query: str, result: Dict[str, Any]) -> float:
-    """Calculate relevance score for a search result based on query match."""
+    """Calculate relevance score for a search result based on query match.
+
+    根据 query 匹配度为搜索结果计算相关性得分.
+    """
     query_lower = query.lower()
 
     # Extract text fields
+    # 提取文本字段
     title = result.get("title", "").lower()
     content = result.get("content", "").lower()
     snippet = result.get("snippet", "").lower()
 
     # Calculate similarity scores
+    # 计算相似度得分
     title_score = SequenceMatcher(None, query_lower, title).ratio()
 
     # Check for exact query terms in content
+    # 检查 content 中是否出现 query 的精确词项
     query_terms = query_lower.split()
     content_text = content or snippet
     term_matches = (
@@ -222,9 +277,11 @@ def calculate_relevance_score(query: str, result: Dict[str, Any]) -> float:
     )
 
     # Weight the scores
+    # 对各项得分加权
     relevance = (title_score * 0.4) + (term_matches * 0.6)
 
     # Boost if source is official or highly relevant
+    # 若来源是官方站点或高度相关则加权提升
     url = result.get("url", "").lower()
     if any(term in url for term in query_terms):
         relevance += 0.2
@@ -235,11 +292,15 @@ def calculate_relevance_score(query: str, result: Dict[str, Any]) -> float:
 def filter_relevant_results(
     query: str, results: List[Dict[str, Any]], threshold: float = 0.3
 ) -> List[Dict[str, Any]]:
-    """Filter and rank search results by relevance to the query."""
+    """Filter and rank search results by relevance to the query.
+
+    按与 query 的相关性过滤并排序搜索结果.
+    """
     if not results:
         return results
 
     # Calculate relevance scores
+    # 计算相关性得分
     scored_results = []
     for result in results:
         score = calculate_relevance_score(query, result)
@@ -249,16 +310,20 @@ def filter_relevant_results(
             scored_results.append(result_copy)
 
     # Sort by relevance score
+    # 按相关性得分排序
     scored_results.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
 
     return scored_results[:5]  # Return top 5 most relevant
+    # 返回最相关的前 5 条
 
 
 # ============================================================================
 # Interpretation Pass Helper Functions (P0 Fix for content loss)
+# 解释阶段辅助函数 (针对内容丢失的 P0 修复)
 # ============================================================================
 
 # Interpretation prompts for summarizing tool results
+# 用于汇总 tool 结果的解释 prompt
 INTERPRETATION_PROMPT_SOURCES = """=== CRITICAL INSTRUCTION ===
 
 You MUST summarize the ACTUAL CONTENT from the tool results above.
@@ -359,7 +424,10 @@ SOURCE_FORMAT_ROLES = {"deep_research_agent", "research", "domain_prefetch"}
 
 
 def should_use_source_format(role: Optional[str]) -> bool:
-    """Only research roles use Source format output."""
+    """Only research roles use Source format output.
+
+    仅研究类 role 使用 Source 格式输出.
+    """
     if not role:
         return False
     return role.strip().lower() in SOURCE_FORMAT_ROLES
@@ -369,14 +437,24 @@ def should_use_source_format(role: Optional[str]) -> bool:
 # These tools return structured data (file listings, file content, search results, write confirmations)
 # that the next LLM call can process directly without an intermediate interpretation step.
 # For swarm agents, skipping interpretation saves ~10s per tool call.
+#
+# 输出无需 LLM 汇总的 tool —— 原始结果直接返回.
+# 这些 tool 返回结构化数据 (文件列表, 文件内容, 搜索结果, 写入确认),
+# 下一次 LLM 调用可直接处理, 无需中间的解释步骤.
+# 对 swarm agent 而言, 跳过解释可为每次 tool 调用节省约 10 秒.
 DATA_ONLY_TOOLS = frozenset({
     "file_list", "file_read", "file_search", "file_write",
     "publish_data",
     "web_search",  # Search snippets are short structured data
+    # 搜索片段是短小的结构化数据
     # web_fetch/web_subpage_fetch REMOVED: swarm_fast_path skips the LLM call,
     # so the agent never sees full fetch content — only a 2K history fragment.
     # Letting the agent process fetch results inline produces better decisions
     # and eliminates wasteful re-fetch cycles caused by truncated context.
+    # 已移除 web_fetch/web_subpage_fetch: swarm_fast_path 会跳过 LLM 调用,
+    # agent 看不到完整的抓取内容 —— 只有 2K 的历史片段.
+    # 让 agent 内联处理抓取结果能做出更好的决策, 并消除因 context 被截断
+    # 而导致的重复抓取浪费.
     "calculator",
 })
 
@@ -387,6 +465,11 @@ def generate_tool_digest(tool_results: str, tool_records: List[Dict[str, Any]], 
     Used as fallback when interpretation pass fails.
 
     This is NOT raw JSON - it extracts key information in readable format.
+
+    从 tool 结果生成人类可读的摘要.
+    在解释阶段失败时作为回退.
+
+    这不是原始 JSON —— 它以可读格式提取关键信息.
     """
     lines: List[str] = []
     failures: List[str] = []
@@ -412,6 +495,7 @@ def generate_tool_digest(tool_results: str, tool_records: List[Dict[str, Any]], 
         return f"- {tool_name} FAILED"
 
     # Process tool execution records for structured extraction
+    # 处理 tool 执行记录以进行结构化抽取
     for record in tool_records:
         tool_name = record.get("tool", "unknown")
         success = record.get("success", False)
@@ -425,6 +509,7 @@ def generate_tool_digest(tool_results: str, tool_records: List[Dict[str, Any]], 
             lines.append("## Search Results")
             results = output.get("results", []) if isinstance(output, dict) else []
             for i, r in enumerate(results[:5]):  # Top 5 results
+            # 前 5 条结果
                 title = r.get("title", "")
                 snippet = r.get("snippet", "")
                 url = r.get("url", "")
@@ -440,11 +525,13 @@ def generate_tool_digest(tool_results: str, tool_records: List[Dict[str, Any]], 
             if isinstance(output, dict):
                 pages = output.get("pages", []) if isinstance(output.get("pages"), list) else []
                 # Single-URL mode: {url, title, content, ...}
+                # 单 URL 模式: {url, title, content, ...}
                 if not pages and any(k in output for k in ("url", "title", "content")):
                     pages = [output]
 
             valid_pages = [p for p in (pages or [])[:3] if not (isinstance(p, dict) and p.get("success") is False)]
             # Budget per page: leave ~1000 chars for headers/other tools, divide rest among pages
+            # 每页 budget: 为标题/其他 tool 保留约 1000 字符, 其余在各页之间均分
             per_page_budget = max(2000, (max_chars - 1000) // max(len(valid_pages), 1))
             for page in valid_pages:
                 title = page.get("title", "Untitled") if isinstance(page, dict) else "Untitled"
@@ -457,6 +544,7 @@ def generate_tool_digest(tool_results: str, tool_records: List[Dict[str, Any]], 
                         lines.append(f"- **{title}** (PDF document)")
                     else:
                         # Quality signal: help agent decide whether to retry
+                        # 质量信号: 帮助 agent 判断是否需要 retry
                         if char_count < 500:
                             quality = f"[{char_count} chars, POOR QUALITY — skip this URL, try a different source]"
                         elif truncated:
@@ -504,8 +592,10 @@ def generate_tool_digest(tool_results: str, tool_records: List[Dict[str, Any]], 
         lines.append("")
 
     # Fallback: parse raw tool_results if no records
+    # 回退: 若没有记录则解析原始 tool_results
     if not lines and tool_results:
         # Prefer preserving escaped newlines (\\n) rather than stripping backslashes (which turns \\n into 'n')
+        # 优先保留转义的换行 (\\n), 而不是剥离反斜杠 (那会把 \\n 变成 'n')
         text = str(tool_results)
         text = text.replace("\\n", "\n").replace("\\t", "\t").replace("\\r", "\r")
         lines.append("## Tool Output Summary")
@@ -539,6 +629,22 @@ def build_interpretation_messages(
             stripped of tool-loop instructions (OODA, tool usage patterns, coverage tracking).
             When provided, this replaces system_prompt to prevent the LLM from
             following tool-planning instructions during synthesis.
+
+    为解释阶段构建干净的 messages.
+
+    P0 修复: 不复用完整的 messages 历史 (其中带有 "I'll execute..." 之类的模式),
+    而是用以下内容重建新 messages:
+    - System prompt (有解释专用 prompt 时优先使用)
+    - 原始 query
+    - 聚合后的 tool 结果
+    - 强约束的解释指令
+
+    参数:
+        system_prompt: tool 循环的 system prompt (无解释专用 prompt 时作为回退).
+        interpretation_prompt: 特定 role 的自定义 prompt (例如 domain_discovery 使用纯 JSON prompt).
+        interpretation_system_prompt: 解释阶段独立的 system prompt, 已剥离 tool 循环指令
+            (OODA, tool 使用模式, 覆盖度跟踪). 提供时替换 system_prompt,
+            避免 LLM 在综合阶段继续遵循 tool 规划指令.
     """
     effective_system = interpretation_system_prompt or system_prompt
     return [
@@ -560,6 +666,10 @@ def aggregate_tool_results(tool_records: List[Dict[str, Any]], max_chars: int = 
 
     This creates a clean summary of all tool outputs without the
     back-and-forth "I'll execute..." history.
+
+    将 tool 执行结果聚合为可读的摘要.
+
+    这样可以得到所有 tool 输出的干净摘要, 而不包含 "I'll execute..." 式的来回历史.
     """
     import json
 
@@ -796,14 +906,23 @@ def validate_interpretation_output(
 
     For source format (research roles): strict validation with format checks.
     For general format (other roles): lenient validation, only check basics.
+
+    校验解释阶段输出的质量.
+
+    返回 (is_valid, reason) 元组.
+
+    对 source 格式 (研究类 role): 严格校验, 包含格式检查.
+    对 general 格式 (其他 role): 宽松校验, 仅检查基本项.
     """
     stripped = output.strip()
 
     # Basic check: must have some content
+    # 基本检查: 必须有内容
     if not stripped or len(stripped) < 50:
         return False, "too_short"
 
     # Multi-language "continuation" pattern detection (all formats)
+    # 多语言 "继续执行" 模式检测 (适用于所有格式)
     continuation_patterns_en = ("I'll ", "I need to ", "Let me ", "I will ", "I should ")
     continuation_patterns_zh = ("我将", "我需要", "让我", "我要", "我继续")
     continuation_patterns_ja = ("私は", "必要が", "させて", "続けて", "取得します")
@@ -820,6 +939,9 @@ def validate_interpretation_output(
     # OODA loop pattern detection: interpretation output should be synthesis, not planning.
     # The OODA framework (Observe/Orient/Decide/Act) belongs to the tool loop phase.
     # If interpretation outputs OODA sections, the system prompt contaminated the synthesis.
+    # OODA 循环模式检测: 解释输出应当是综合, 而不是规划.
+    # OODA 框架 (Observe/Orient/Decide/Act) 属于 tool 循环阶段.
+    # 若解释输出中出现 OODA 章节, 说明 system prompt 污染了综合阶段.
     ooda_section_markers = ("## Observe", "## Orient", "## Decide", "## Act",
                             "# Observe", "# Orient", "# Decide", "# Act")
     ooda_section_count = sum(1 for marker in ooda_section_markers if marker in stripped)
@@ -827,19 +949,25 @@ def validate_interpretation_output(
         return False, "ooda_pattern"
 
     # Source format: strict validation
+    # Source 格式: 严格校验
     if expect_sources_format:
         # Lowered from 2000 to 500: when public info is scarce, LLM may honestly
         # produce shorter summaries. Previous threshold caused excessive fallbacks.
+        # 从 2000 下调到 500: 公开信息稀缺时, LLM 可能诚实地给出更短的摘要.
+        # 原先的阈值会导致过多回退.
         min_length = min(500, max(200, int(total_tool_output_chars * 0.1)))
         if len(stripped) < min_length:
             return False, f"too_short (len={len(stripped)} < min={min_length})"
         # Check format
+        # 检查格式
         has_correct_format = stripped.startswith(("# PART 1", "# PART", "## PART", "PART 1"))
         if not has_correct_format and len(stripped) < 500:
             return False, "no_format_and_short"
 
     # General format: lenient validation - no format or length ratio checks
     # Just ensure it's not a continuation pattern and has basic content
+    # General 格式: 宽松校验 —— 不做格式或长度比例检查
+    # 仅确保不是 "继续执行" 模式且具备基本内容
 
     return True, "valid"
 
@@ -850,6 +978,10 @@ def build_task_contract_instructions(context: Dict[str, Any]) -> str:
 
     Extracts task contract fields from context and returns instructions
     to append to the system prompt.
+
+    构建用于 agent 执行的 task 契约指令.
+
+    从 context 中提取 task 契约字段, 返回可追加到 system prompt 的指令.
     """
     if not isinstance(context, dict):
         return ""
@@ -857,6 +989,7 @@ def build_task_contract_instructions(context: Dict[str, Any]) -> str:
     instructions = []
 
     # Output format instructions
+    # 输出格式指令
     output_format = context.get("output_format")
     if output_format and isinstance(output_format, dict):
         format_type = output_format.get("type", "narrative")
@@ -870,6 +1003,7 @@ def build_task_contract_instructions(context: Dict[str, Any]) -> str:
             instructions.append(f"OPTIONAL fields: {', '.join(optional_fields)}")
 
     # Source guidance instructions
+    # 来源指引指令
     source_guidance = context.get("source_guidance")
     if source_guidance and isinstance(source_guidance, dict):
         required_sources = source_guidance.get("required", [])
@@ -885,6 +1019,7 @@ def build_task_contract_instructions(context: Dict[str, Any]) -> str:
             instructions.append(f"AVOID sources like: {', '.join(avoid_sources)}")
 
     # Search budget instructions
+    # 搜索 budget 指令
     search_budget = context.get("search_budget")
     if search_budget and isinstance(search_budget, dict):
         max_queries = search_budget.get("max_queries", 10)
@@ -895,6 +1030,7 @@ def build_task_contract_instructions(context: Dict[str, Any]) -> str:
         instructions.append("Be efficient - focus on high-value sources first")
 
     # Boundary instructions
+    # 范围边界指令
     boundaries = context.get("boundaries")
     if boundaries and isinstance(boundaries, dict):
         in_scope = boundaries.get("in_scope", [])
@@ -919,7 +1055,10 @@ class ForcedToolCall(BaseModel):
 
 
 class AgentQuery(BaseModel):
-    """Query from an agent."""
+    """Query from an agent.
+
+    来自 agent 的查询.
+    """
 
     query: str = Field(..., description="The query or task description")
     context: Optional[Dict[str, Any]] = Field(
@@ -962,7 +1101,10 @@ class AgentQuery(BaseModel):
 
 
 class AgentResponse(BaseModel):
-    """Response to an agent query."""
+    """Response to an agent query.
+
+    对 agent 查询的 response.
+    """
 
     success: bool = Field(
         ..., description="Whether the query was processed successfully"
@@ -978,7 +1120,10 @@ class AgentResponse(BaseModel):
 
 
 class MockProvider:
-    """Mock LLM provider for testing without API keys."""
+    """Mock LLM provider for testing without API keys.
+
+    用于在没有 API key 时测试的 Mock LLM provider.
+    """
 
     def __init__(self):
         self.responses = {
@@ -991,6 +1136,7 @@ class MockProvider:
     async def generate(self, query: str, **kwargs) -> Dict[str, Any]:
         """Generate a mock response."""
         # Simple keyword matching for deterministic responses
+        # 用简单的关键词匹配得到确定性 response
         response_text = self.responses.get("default")
         for keyword, response in self.responses.items():
             if keyword.lower() in query.lower():
@@ -1000,11 +1146,13 @@ class MockProvider:
         return {
             "response": response_text,
             "tokens_used": len(response_text.split()) * 2,  # Rough token estimate
+            # 粗略 token 估算
             "model_used": "mock-model-v1",
         }
 
 
 # Global mock provider instance
+# 全局 mock provider 实例
 mock_provider = MockProvider()
 
 
@@ -1015,16 +1163,25 @@ async def agent_query(request: Request, query: AgentQuery):
 
     This endpoint provides HTTP-based communication for Agent-Core,
     as an alternative to gRPC during development.
+
+    处理来自 agent 的查询.
+
+    该端点提供基于 HTTP 的 Agent-Core 通信, 作为开发期间 gRPC 的替代方案.
     """
     try:
         logger.info(f"Received agent query: {query.query[:100]}...")
         # Ensure allowed_tools metadata is always defined for responses
+        # 确保 response 中的 allowed_tools metadata 始终已定义
         effective_allowed_tools: List[str] = []
 
         # Resolve cache_source once: explicit request field > context > default.
         # Used both for provider TTL routing (short/long) and for the
         # message-level cache_control TTL chosen below in the tool loop, so
         # every cache_control block in the outgoing request agrees on one TTL.
+        # 只解析一次 cache_source: request 显式字段 > context > 默认值.
+        # 既用于 provider 的 TTL 路由 (short/long), 也用于 tool 循环中下面选择的
+        # message 级 cache_control TTL, 使外发 request 中的每个 cache_control 块
+        # 使用同一个 TTL.
         cache_source = "agent_execute"
         if isinstance(query.cache_source, str) and query.cache_source.strip():
             cache_source = query.cache_source.strip()
@@ -1034,12 +1191,15 @@ async def agent_query(request: Request, query: AgentQuery):
                 cache_source = ctx_src.strip()
 
         # Check if we have real providers configured
+        # 检查是否配置了真实 provider
         if (
             hasattr(request.app.state, "providers")
             and request.app.state.providers.is_configured()
         ):
             # Use real provider - convert query to messages format
             # Roles v1: choose system prompt from role preset if provided in context
+            # 使用真实 provider —— 将 query 转换为 messages 格式
+            # Roles v1: 若 context 中提供了 role preset, 则从中选择 system prompt
             try:
                 from ..roles.presets import get_role_preset, render_system_prompt
 
@@ -1052,6 +1212,7 @@ async def agent_query(request: Request, query: AgentQuery):
                     role_name = requested_role
 
                 # Default to deep_research_agent for research workflows
+                # 研究类 workflow 默认使用 deep_research_agent
                 if not role_name and isinstance(query.context, dict):
                     if query.context.get("force_research") or query.context.get("workflow_type") == "research":
                         role_name = "deep_research_agent"
@@ -1060,8 +1221,10 @@ async def agent_query(request: Request, query: AgentQuery):
                 preset = get_role_preset(effective_role)
 
                 # Check for system_prompt in context first, then fall back to preset
+                # 先检查 context 中的 system_prompt, 再回退到 preset
                 system_prompt = None
                 raw_system_prompt = None  # Track raw template for cache optimization
+                # 保留原始模板以优化 cache
                 if isinstance(query.context, dict) and "system_prompt" in query.context:
                     system_prompt = str(query.context.get("system_prompt"))
                     raw_system_prompt = system_prompt
@@ -1076,25 +1239,35 @@ async def agent_query(request: Request, query: AgentQuery):
                 # Check if preset uses ${variable} placeholders (templated presets).
                 # Templated presets have dynamic values (${current_date}, ${ticker}) baked
                 # in after rendering, so the "stable" part already differs per-request.
+                # 检查 preset 是否使用 ${variable} 占位符 (模板化 preset).
+                # 模板化 preset 在渲染后会写入动态值 (${current_date}, ${ticker}),
+                # 因此其 "稳定" 部分本身就会随 request 变化.
                 import re
                 _is_templated = bool(re.search(r'\$\{[^}]+\}', raw_system_prompt or ""))
 
                 # Render templated system prompt using context parameters
+                # 使用 context 参数渲染模板化的 system prompt
                 try:
                     system_prompt = render_system_prompt(
                         system_prompt, query.context or {}
                     )
                 except Exception as e:
                     # On any rendering issue, keep original system_prompt
+                    # 任何渲染问题都保留原始 system_prompt
                     logger.warning(f"System prompt rendering failed: {e}")
 
                 # Collect volatile parts (date, language) instead of prepending them.
                 # For non-templated presets, these go AFTER <!-- volatile --> marker
                 # to enable Anthropic prompt cache reuse on the stable base prompt.
+                # 收集易变部分 (日期, 语言) 而不是前置它们.
+                # 对非模板化 preset, 这些内容放在 <!-- volatile --> 标记之后,
+                # 以便 Anthropic prompt cache 能复用稳定的基础 prompt.
                 volatile_parts = []
 
                 # Date injection for time awareness
                 # Skip for citation_agent (it only inserts [n] markers, no reasoning needed)
+                # 注入日期以提供时间感知
+                # citation_agent 跳过 (它只插入 [n] 标记, 无需推理)
                 skip_date_injection = query.agent_id == "citation_agent"
                 if isinstance(query.context, dict) and query.context.get("agent_id") == "citation_agent":
                     skip_date_injection = True
@@ -1112,6 +1285,7 @@ async def agent_query(request: Request, query: AgentQuery):
                     volatile_parts.append(f"Current date: {current_date} (UTC).")
 
                 # Language instruction
+                # 语言指令
                 if isinstance(query.context, dict) and "target_language" in query.context:
                     target_lang = query.context.get("target_language")
                     if target_lang and target_lang != "English":
@@ -1121,16 +1295,21 @@ async def agent_query(request: Request, query: AgentQuery):
                         )
 
                 # Assemble with or without volatile marker
+                # 按是否有 volatile 标记组装
                 if not _is_templated and volatile_parts:
                     system_prompt = system_prompt + "\n<!-- volatile -->\n" + "\n\n".join(volatile_parts)
                 elif volatile_parts:
                     # Templated preset: prepend dynamic parts (old behavior, no marker)
+                    # 模板化 preset: 前置动态部分 (旧行为, 不使用标记)
                     system_prompt = "\n\n".join(volatile_parts) + "\n\n" + system_prompt
 
 
                 # Add research-mode instruction for deep content retrieval
                 # EXCEPTION: Do NOT inject for REASON steps (no tools, pure reasoning)
                 # EXCEPTION: Do NOT inject for specialized roles with strict output format
+                # 为深度内容获取添加 research-mode 指令
+                # 例外: REASON 步骤不注入 (无 tool, 纯推理)
+                # 例外: 输出格式严格的专用 role 不注入
                 is_reason_step = query.query.strip().startswith("REASON (")
                 skip_research_injection_roles = {"domain_discovery", "domain_prefetch", "citation_agent"}
                 role = query.context.get("role") if isinstance(query.context, dict) else None
@@ -1188,10 +1367,12 @@ async def agent_query(request: Request, query: AgentQuery):
                         logger.info("Applied RESEARCH MODE instruction to system prompt")
 
                 # Log when research_mode injection is skipped for specialized roles
+                # 记录专用 role 跳过 research_mode 注入的情况
                 if skip_research_injection and role:
                     logger.info(f"Skipped research_mode injection for specialized role: {role}")
 
                 # REASON step: Add explicit instruction to prevent stub output
+                # REASON 步骤: 添加显式指令以避免占位式输出
                 if is_reason_step:
                     reason_instruction = (
                         "\n\nIMPORTANT: This is a REASONING step. You have NO tools available."
@@ -1204,6 +1385,7 @@ async def agent_query(request: Request, query: AgentQuery):
                     logger.info("Applied REASON step instruction (no tools, no stubs)")
 
                 # Deep Research 2.0: Add task contract instructions if present in context
+                # Deep Research 2.0: 若 context 中存在 task 契约则追加相应指令
                 if isinstance(query.context, dict):
                     task_contract_instructions = build_task_contract_instructions(query.context)
                     if task_contract_instructions:
@@ -1212,9 +1394,12 @@ async def agent_query(request: Request, query: AgentQuery):
 
                 cap_overrides = preset.get("caps") or {}
                 # GPT-5 models need more tokens for reasoning + output (default 4096 instead of 2048)
+                # GPT-5 模型需要更多 token 用于推理 + 输出 (默认 4096 而非 2048)
                 default_max_tokens = 4096  # Increased for GPT-5 reasoning models
+                # 为 GPT-5 推理模型提高
                 try:
                     # Check query.max_tokens, then context.max_tokens (set by budget.go), then role caps
+                    # 依次检查 query.max_tokens, context.max_tokens (由 budget.go 设置), 最后是 role caps
                     if query.max_tokens is not None:
                         max_tokens = int(query.max_tokens)
                     elif isinstance(query.context, dict) and query.context.get("max_tokens"):
@@ -1238,6 +1423,7 @@ async def agent_query(request: Request, query: AgentQuery):
             messages = [{"role": "system", "content": system_prompt}]
 
             # Rehydrate history from context if present
+            # 若 context 中存在历史则重新注入
             history_rehydrated = False
             logger.info(
                 f"Context keys: {list(query.context.keys()) if isinstance(query.context, dict) else 'Invalid context type'}"
@@ -1251,6 +1437,7 @@ async def agent_query(request: Request, query: AgentQuery):
                     history_rehydrated = True
 
                 # Remove history from context to avoid duplication
+                # 从 context 中移除历史以避免重复
                 context_without_history = {
                     k: v for k, v in query.context.items() if k != "history"
                 }
@@ -1258,11 +1445,13 @@ async def agent_query(request: Request, query: AgentQuery):
                 context_without_history = query.context if query.context else {}
 
             # Pre-resolve attachments from Redis (if present in context).
+            # 预先从 Redis 解析附件 (若 context 中存在).
             raw_attachments = await _resolve_attachments(
                 query.context, getattr(request.app.state, "redis", None)
             )
 
             # Add current query as the final user message
+            # 将当前 query 作为最后一条 user message 加入
             if raw_attachments:
                 att_blocks = _build_attachment_blocks(raw_attachments)
                 attachment_text_chars = _count_text_block_chars(att_blocks)
@@ -1285,6 +1474,9 @@ async def agent_query(request: Request, query: AgentQuery):
             # Add semantic context to system prompt (WHITELIST approach for security)
             # Only include fields explicitly meant for LLM consumption.
             # Session-scoped fields are minimal; task-scoped fields are included only when a workflow/task marker is present.
+            # 将语义 context 加入 system prompt (出于安全采用白名单方式)
+            # 仅包含明确供 LLM 使用的字段.
+            # session 级字段保持最少; task 级字段仅在存在 workflow/task 标记时才会包含.
             if context_without_history:
                 def _truncate_text(text: str, max_chars: int) -> str:
                     if len(text) <= max_chars:
@@ -1361,6 +1553,7 @@ async def agent_query(request: Request, query: AgentQuery):
                 }
 
                 # Treat context as task-scoped if workflow metadata is present
+                # 若存在 workflow metadata, 则将 context 视为 task 级
                 is_task_scoped = any(
                     key in context_without_history
                     for key in (
@@ -1391,6 +1584,7 @@ async def agent_query(request: Request, query: AgentQuery):
                     messages[0]["content"] += f"\n\nContext:\n{context_str}"
 
             # Optional JSON enforcement passthrough: allow callers to request JSON via context
+            # 可选的 JSON 强制透传: 允许调用方通过 context request JSON 输出
             response_format = None
             try:
                 if isinstance(query.context, dict):
@@ -1402,6 +1596,7 @@ async def agent_query(request: Request, query: AgentQuery):
             expects_json_response = _response_format_expects_json(response_format)
 
             # Soft enforcement: if caller requests tool usage and tools are allowed, nudge the model
+            # 软性强制: 若调用方要求使用 tool 且 tool 可用, 则提示模型
             force_tools = False
             try:
                 if isinstance(query.context, dict):
@@ -1410,11 +1605,13 @@ async def agent_query(request: Request, query: AgentQuery):
                 force_tools = False
 
             # Log for debugging
+            # 记录日志便于排查
             logger.info(
                 f"Prepared {len(messages)} messages for LLM (history_rehydrated={history_rehydrated})"
             )
 
             # Get the appropriate model tier
+            # 获取合适的 model tier
             from ..providers.base import ModelTier
 
             tier_map = {
@@ -1424,9 +1621,12 @@ async def agent_query(request: Request, query: AgentQuery):
             }
             # Precedence: explicit top-level query.model_tier > context.model_tier > default
             # Always honor top-level, including "small" when explicitly provided
+            # 优先级: 顶层显式 query.model_tier > context.model_tier > 默认值
+            # 始终尊重顶层取值, 包括显式提供的 "small"
             tier = None
 
             # 1) Top-level override takes precedence when provided and valid
+            # 1) 顶层覆盖在提供且有效时优先
             if isinstance(query.model_tier, str):
                 top_level_tier = query.model_tier.lower().strip()
                 mapped_tier = tier_map.get(top_level_tier, None)
@@ -1434,6 +1634,7 @@ async def agent_query(request: Request, query: AgentQuery):
                     tier = mapped_tier
 
             # 2) Fallback to context if top-level not set/invalid
+            # 2) 顶层未设置或无效时回退到 context
             if tier is None and isinstance(query.context, dict):
                 ctx_tier_raw = query.context.get("model_tier")
                 if isinstance(ctx_tier_raw, str):
@@ -1441,14 +1642,17 @@ async def agent_query(request: Request, query: AgentQuery):
                     tier = tier_map.get(ctx_tier, None)
 
             # 3) Final fallback to default
+            # 3) 最终回退到默认值
             if tier is None:
                 tier = ModelTier.SMALL
 
             # Check for model override (from query field, context, or role preset)
+            # 检查 model override (来自 query 字段, context, 或 role preset)
             model_override = query.model_override or (
                 query.context.get("model_override") if query.context else None
             )
             # Optional provider override (from context or role preset)
+            # 可选的 provider override (来自 context 或 role preset)
             try:
                 provider_override = (
                     query.context.get("provider_override") if query.context else None
@@ -1456,12 +1660,14 @@ async def agent_query(request: Request, query: AgentQuery):
             except Exception:
                 provider_override = None
             # Allow role preset to specify provider preference when not explicitly set
+            # 未显式指定时, 允许 role preset 给出 provider 偏好
             if not provider_override and preset and "provider_override" in preset:
                 try:
                     provider_override = str(preset.get("provider_override")).strip() or None
                 except Exception:
                     provider_override = None
             # Apply role preset's preferred_model if no explicit override
+            # 无显式 override 时应用 role preset 的 preferred_model
             if not model_override and preset and "preferred_model" in preset:
                 model_override = preset.get("preferred_model")
                 logger.info(f"Using role preset preferred model: {model_override}")
@@ -1472,6 +1678,7 @@ async def agent_query(request: Request, query: AgentQuery):
                 logger.info(f"Using tier-based selection (top-level>context): {chosen or 'small'} -> {tier}")
 
             # Resolve effective allowed tools: request.allowed_tools (intersect with preset when present)
+            # 解析实际生效的可用 tool: request.allowed_tools (存在 preset 时与之取交集)
             effective_allowed_tools: List[str] = []
             try:
                 from ..tools import get_registry
@@ -1480,10 +1687,14 @@ async def agent_query(request: Request, query: AgentQuery):
                 # Use preset only if allowed_tools is None (not provided), not if it's [] (explicitly empty)
                 # IMPORTANT: allowed_tools=[] means "explicitly no tools" - do NOT override with preset
                 # This is critical for REASON steps in ReactLoop which must not have tools available
+                # 仅当 allowed_tools 为 None (未提供) 时使用 preset, 若为 [] (显式为空) 则不用
+                # 重要: allowed_tools=[] 表示 "明确不带 tool" —— 不要用 preset 覆盖
+                # 这对 ReactLoop 中的 REASON 步骤至关重要, 该步骤必须没有可用 tool
                 requested = query.allowed_tools
                 preset_allowed = list(preset.get("allowed_tools", []))
 
                 # Check for explicit "use preset tools" flag in context (opt-in bypass)
+                # 检查 context 中是否有显式的 "使用 preset tool" 标志 (选择性绕过)
                 use_preset_tools_override = (
                     isinstance(query.context, dict)
                     and query.context.get("use_preset_tools") is True
@@ -1492,18 +1703,23 @@ async def agent_query(request: Request, query: AgentQuery):
                 # Only use preset if:
                 # 1. requested is None (not provided), OR
                 # 2. explicit use_preset_tools=True override in context
+                # 仅在以下情况使用 preset:
+                # 1. requested 为 None (未提供), 或
+                # 2. context 中显式 use_preset_tools=True 覆盖
                 if requested is not None and len(requested) == 0:
                     if use_preset_tools_override and preset and len(preset_allowed) > 0:
                         logger.info(f"Explicit use_preset_tools override - using role preset tools: {preset_allowed}")
                         requested = None
                     else:
                         # allowed_tools=[] explicitly means NO tools - respect this
+                        # allowed_tools=[] 明确表示不使用 tool —— 尊重该设置
                         logger.info("allowed_tools=[] explicitly set - no tools will be available")
 
                 if requested is None:
                     base = preset_allowed
                 else:
                     # When the role preset defines an allowlist, cap requested tools by it
+                    # 当 role preset 定义了白名单时, 用其限制 request 的 tool
                     if preset_allowed:
                         base = [t for t in requested if t in preset_allowed]
                         dropped = [t for t in (requested or []) if t not in base]
@@ -1515,6 +1731,7 @@ async def agent_query(request: Request, query: AgentQuery):
                         base = requested
                 available = set(registry.list_tools())
                 # Intersect with registry; warn on unknown
+                # 与 registry 取交集; 对未知 tool 给出告警
                 unknown = [t for t in base if t not in available]
                 if unknown:
                     logger.warning(f"Dropping unknown tools from allowlist: {unknown}")
@@ -1523,6 +1740,9 @@ async def agent_query(request: Request, query: AgentQuery):
                 # Task-type based tool filtering (limit to 5 most relevant tools)
                 # This prevents LLM choice paralysis from too many tools
                 # Enable via context: tool_filtering_enabled=true, task_type=research|coding|analysis|browser|file
+                # 基于 task-type 的 tool 过滤 (限制为最相关的 5 个 tool)
+                # 避免 tool 过多导致 LLM 选择困难
+                # 通过 context 启用: tool_filtering_enabled=true, task_type=research|coding|analysis|browser|file
                 tool_filtering_enabled = (
                     query.context
                     and query.context.get("tool_filtering_enabled", False)
@@ -1545,6 +1765,7 @@ async def agent_query(request: Request, query: AgentQuery):
                 effective_allowed_tools = query.allowed_tools or []
 
             # Collect structured tool executions for upstream observability/persistence
+            # 收集结构化 tool 执行记录, 供上游可观测性与持久化使用
             tool_execution_records: List[Dict[str, Any]] = []
             all_tool_cost_entries: List[Dict[str, Any]] = []
             seed_raw_tool_results: List[Dict[str, Any]] = []
@@ -1554,6 +1775,7 @@ async def agent_query(request: Request, query: AgentQuery):
             seed_loop_function_call: Optional[str] = None
 
             # Detect research mode early so forced_tool_calls can check it (issue #43)
+            # 提前检测 research mode, 以便 forced_tool_calls 可以判断 (issue #43)
             research_mode = (
                 isinstance(query.context, dict)
                 and (
@@ -1567,16 +1789,22 @@ async def agent_query(request: Request, query: AgentQuery):
 
             # Inject research_mode into context so tools can check it (issue #43)
             # research_mode is already in safe_keys whitelist (~line 2532)
+            # 将 research_mode 注入 context, 以便 tool 可以判断 (issue #43)
+            # research_mode 已在 safe_keys 白名单中 (约第 2532 行)
             if research_mode and isinstance(query.context, dict):
                 query.context["research_mode"] = True
 
             # Swarm tool execution: inject research_mode into context so web_fetch
             # uses fast hard truncation (<1ms) instead of LLM extraction (15-20s).
             # We do NOT set the research_mode variable — OODA/iteration behavior stays off.
+            # Swarm tool 执行: 将 research_mode 注入 context, 使 web_fetch
+            # 使用快速硬截断 (<1ms) 而不是 LLM 抽取 (15-20 秒).
+            # 这里不设置 research_mode 变量 —— 因此不会启用 OODA/迭代行为.
             if not research_mode and isinstance(query.context, dict) and query.context.get("force_swarm"):
                 query.context["research_mode"] = True
 
             # Generate completion with tools if specified
+            # 若指定了 tool 则带 tool 生成补全
             if effective_allowed_tools:
                 logger.info(f"Allowed tools: {effective_allowed_tools}")
                 if force_tools:
@@ -1591,6 +1819,7 @@ async def agent_query(request: Request, query: AgentQuery):
             tools_param = None
             if effective_allowed_tools:
                 # Dynamically fetch tool schemas from registry for ALL tools (built-in and OpenAPI)
+                # 从 registry 动态获取所有 tool (内置与 OpenAPI) 的 schema
                 tools_param = []
                 for tool_name in effective_allowed_tools:
                     tool = registry.get_tool(tool_name)
@@ -1599,6 +1828,7 @@ async def agent_query(request: Request, query: AgentQuery):
                         continue
 
                     # Get schema from tool (works for both built-in and OpenAPI tools)
+                    # 从 tool 获取 schema (内置 tool 与 OpenAPI tool 均适用)
                     schema = tool.get_schema()
                     if schema:
                         tools_param.append({"type": "function", "function": schema})
@@ -1613,6 +1843,7 @@ async def agent_query(request: Request, query: AgentQuery):
                 )
 
             # If forced_tool_calls are provided, execute them sequentially then interpret
+            # 若提供了 forced_tool_calls, 先按顺序执行, 再进行解释
             if query.forced_tool_calls:
                 if query.stream:
                     raise HTTPException(
@@ -1620,6 +1851,7 @@ async def agent_query(request: Request, query: AgentQuery):
                         detail="forced_tool_calls are not supported with stream=true",
                     )
                 # Validate tools against effective allowlist
+                # 按实际生效的白名单校验 tool
                 forced_calls = []
                 for c in query.forced_tool_calls or []:
                     if (
@@ -1648,6 +1880,7 @@ async def agent_query(request: Request, query: AgentQuery):
                 all_tool_cost_entries.extend(cost_entries)
 
                 # Seed tool-loop context from forced tool executions (e.g., precomputed web_search)
+                # 用强制 tool 执行的结果初始化 tool 循环 context (例如预先算好的 web_search)
                 seed_raw_tool_results.extend(raw_records)
                 for rr in raw_records:
                     if rr.get("tool") == "web_search" and rr.get("success"):
@@ -1660,6 +1893,7 @@ async def agent_query(request: Request, query: AgentQuery):
                 seed_loop_function_call = "auto" if tools_param else None
 
                 # Add messages and continue with the normal tool loop (tools enabled)
+                # 追加 messages, 然后继续正常的 tool 循环 (tool 保持启用)
                 if forced_calls:
                     messages.append(
                         {
@@ -1669,6 +1903,7 @@ async def agent_query(request: Request, query: AgentQuery):
                     )
                 if research_mode:
                     # Research mode: keep tools for OODA loop, guide to continue research
+                    # 研究模式: 保留 tool 供 OODA 循环使用, 并引导继续研究
                     messages.append(
                         {
                             "role": "user",
@@ -1692,6 +1927,7 @@ async def agent_query(request: Request, query: AgentQuery):
                         }
                     )
                     # Non-research: disable further tool calls to prevent duplicates
+                    # 非研究模式: 关闭后续 tool 调用以避免重复
                     effective_allowed_tools = []
                     tools_param = None
                     loop_function_call = None  # Must clear — OpenAI rejects tool_choice without tools
@@ -1702,6 +1938,11 @@ async def agent_query(request: Request, query: AgentQuery):
                     # return raw results directly. The swarm agent's next /agent/loop
                     # iteration will process these results. This eliminates one redundant
                     # Haiku call per tool_call iteration (~40% token savings).
+                    # ── SWARM 快速路径 ───────────────────────────────────────
+                    # 当 forced_tool_calls 在研究模式之外执行了 data-only tool 时,
+                    # 直接返回原始结果. swarm agent 下一轮 /agent/loop 会处理这些结果.
+                    # 这样每次 tool_call 迭代可省掉一次多余的 Haiku 调用
+                    # (约节省 40% token).
                     is_swarm = isinstance(query.context, dict) and query.context.get("force_swarm")
                     all_forced_data_only = tool_execution_records and all(
                         r.get("tool") in DATA_ONLY_TOOLS for r in tool_execution_records
@@ -1709,6 +1950,8 @@ async def agent_query(request: Request, query: AgentQuery):
                     if all_forced_data_only and is_swarm:
                         # 10K is enough for swarm agents — results go into next /agent/loop
                         # context, so oversized digests inflate prompt tokens for little gain.
+                        # 对 swarm agent 而言 10K 足够 —— 结果会进入下一轮 /agent/loop
+                        # 的 context, 过大的摘要只会增加 prompt token 而收益很小.
                         digest = generate_tool_digest(
                             tool_results or "",
                             tool_execution_records,
@@ -1754,6 +1997,8 @@ async def agent_query(request: Request, query: AgentQuery):
 
             # When force_tools enabled and tools available, force model to use a tool
             # "any" forces the model to use at least one tool, "auto" only allows tools but doesn't force
+            # 启用 force_tools 且有可用 tool 时, 强制模型使用 tool
+            # "any" 强制模型至少用一个 tool, "auto" 仅允许 tool 但不强制
             function_call = (
                 "any"
                 if (force_tools and effective_allowed_tools)
@@ -1859,6 +2104,7 @@ async def agent_query(request: Request, query: AgentQuery):
             # -----------------------------
             # Non-stream: multi-tool loop
             # -----------------------------
+            # 非 streaming: 多 tool 循环
             def _get_budget(name: str, default_val: int) -> int:
                 try:
                     if isinstance(query.context, dict) and query.context.get(name) is not None:
@@ -1879,18 +2125,25 @@ async def agent_query(request: Request, query: AgentQuery):
                 return default_val
 
             # research_mode was detected early (before forced_tool_calls) — see above
+            # research_mode 已在前面 (forced_tool_calls 之前) 提前检测 —— 见上文
 
             # Base defaults for non-research mode
+            # 非研究模式的默认 budget
             default_iterations = 3
             default_total_calls = 5
             default_output_chars = 60000
 
             # Research mode: high limits to avoid premature truncation
             # LLM controls actual usage via research budget in prompt
+            # 研究模式: 使用较高的上限以避免过早截断
+            # LLM 通过 prompt 中的 research budget 控制实际用量
             if research_mode:
                 default_iterations = 20  # Sufficient headroom for OODA loop
+                # 为 OODA 循环留足余量
                 default_total_calls = 25  # Support parallel tool calls
+                # 支持并行 tool 调用
                 default_output_chars = 300000  # Rich tool outputs
+                # 丰富的 tool 输出
 
             max_tool_iterations = _get_budget("max_tool_iterations", default_iterations)
             max_total_tool_calls = _get_budget("max_total_tool_calls", default_total_calls)
@@ -1898,6 +2151,7 @@ async def agent_query(request: Request, query: AgentQuery):
             max_urls_to_fetch = _get_budget("max_urls_to_fetch", 10)
             max_consecutive_tool_failures = _get_budget("max_consecutive_tool_failures", 2)
             # Followup instruction for non-research mode (research mode builds dynamically in loop)
+            # 非研究模式的后续指令 (研究模式在循环中动态构建)
             base_followup_instruction = (
                 "If the information is insufficient, you may call another tool with a DIFFERENT strategy "
                 "(e.g., broader/narrower terms, different keywords, alternative sources). "
@@ -1928,11 +2182,16 @@ async def agent_query(request: Request, query: AgentQuery):
             followup_instruction = base_followup_instruction
 
             # P0 Fix: Track unique URLs for fetch ratio enforcement (Codex approved)
+            # P0 修复: 跟踪去重后的 URL, 用于强制抓取比例 (Codex 已确认)
             fetched_urls: set = set()  # Successfully fetched URLs
+            # 成功抓取的 URL
             failed_fetch_urls: set = set()  # Failed fetch URLs (exclude from retry)
+            # 抓取失败的 URL (不再 retry)
             search_count = 0  # Count of successful web_search calls
+            # 成功的 web_search 调用次数
 
             # Strategy-specific fetch ratios (Codex recommendation)
+            # 按策略区分抓取比例 (Codex 建议)
             strategy_ratios = {"deep": 0.7, "academic": 0.7, "standard": 0.5, "quick": 0.3}
             research_strategy = (
                 query.context.get("research_strategy", "standard")
@@ -1971,6 +2230,7 @@ async def agent_query(request: Request, query: AgentQuery):
                     pass
 
                 # Extract tool calls from function_call field (unified provider response format)
+                # 从 function_call 字段提取 tool 调用 (统一的 provider response 格式)
                 tool_calls_from_output = []
                 fc = result_data.get("function_call")
                 if fc and isinstance(fc, dict):
@@ -1994,6 +2254,8 @@ async def agent_query(request: Request, query: AgentQuery):
 
                 # Fallback: try to parse XML-style tool calls from output_text
                 # Some LLMs output <web_search> XML instead of native function calling
+                # 回退: 尝试从 output_text 中解析 XML 风格的 tool 调用
+                # 部分 LLM 会输出 <web_search> XML 而不是原生 function calling
                 if not tool_calls_from_output and response_text:
                     import re as _re
                     xml_tool_patterns = [
@@ -2010,6 +2272,7 @@ async def agent_query(request: Request, query: AgentQuery):
                                 tool_calls_from_output.append({"name": tool_name, "arguments": {"urls": [extracted_arg]}})
                             logger.info(f"🔧 Recovered XML tool call: {tool_name} from output_text")
                             break  # Only recover one tool call per iteration
+                            # 每轮只恢复一个 tool 调用
 
                 if not tool_calls_from_output or not effective_allowed_tools:
                     stop_reason = "no_tool_call"
@@ -2034,10 +2297,13 @@ async def agent_query(request: Request, query: AgentQuery):
                     if rr.get("tool") == "web_search" and rr.get("success"):
                         search_urls.extend(_extract_urls_from_search_output(rr.get("output")))
                         search_count += 1  # P0 Fix: Track search count for ratio
+                        # P0 修复: 记录搜索次数用于计算比例
 
                     # P0 Fix: Track unique fetched/failed URLs for ratio enforcement
+                    # P0 修复: 跟踪去重后的已抓取/失败 URL, 用于强制比例
                     if rr.get("tool") in fetch_tools:
                         # Extract URLs from fetch input
+                        # 从抓取输入中提取 URL
                         fetch_input = rr.get("input", {})
                         if isinstance(fetch_input, dict):
                             input_urls = fetch_input.get("urls", [])
@@ -2061,9 +2327,11 @@ async def agent_query(request: Request, query: AgentQuery):
                 loop_iterations += 1
 
                 # Build dynamic followup instruction for research mode
+                # 为研究模式构建动态的后续指令
                 if research_mode:
                     current_iteration = loop_iterations
                     # Simple, non-repetitive followup - system prompt has full OODA guidance
+                    # 简洁且不重复的后续指令 —— 完整的 OODA 指引在 system prompt 中
                     followup_instruction = (
                         f"**[ITERATION {current_iteration}/{max_tool_iterations}]**\n\n"
                         f"OODA: Observe results → Orient (check research_areas gaps) → Decide → Act\n"
@@ -2071,6 +2339,7 @@ async def agent_query(request: Request, query: AgentQuery):
                     )
                 else:
                     # Non-research mode: use base instruction
+                    # 非研究模式: 使用基础指令
                     followup_instruction = base_followup_instruction
 
                 # Move the single message-level cache breakpoint to the current
@@ -2078,8 +2347,14 @@ async def agent_query(request: Request, query: AgentQuery):
                 # 4 cache_control blocks total, and system+tools already use 2.
                 # We use exactly 1 message-level breakpoint (like Claude Code):
                 # remove previous one, add to current last user message.
+                # 将唯一的 message 级 cache 断点移动到当前最后一条 user message
+                # (即最新的 tool_result). Anthropic 最多允许 4 个 cache_control 块,
+                # 而 system+tools 已用掉 2 个.
+                # 我们只用 1 个 message 级断点 (与 Claude Code 做法相同):
+                # 移除前一个, 加到当前最后一条 user message 上.
                 if loop_iterations > 0:
                     # Remove any previous message-level cache_control
+                    # 移除之前所有的 message 级 cache_control
                     for msg in messages:
                         if msg["role"] == "user" and isinstance(msg["content"], list):
                             for block in msg["content"]:
@@ -2090,6 +2365,10 @@ async def agent_query(request: Request, query: AgentQuery):
                     # provider's resolved ttl_block for this request so the
                     # outgoing request has a single uniform TTL across
                     # tools/system/messages (Anthropic rejects 1h-after-5m).
+                    # 加到当前最后一条 user message 上. TTL 必须与该 request provider
+                    # 解析出的 ttl_block 一致, 使外发 request 在
+                    # tools/system/messages 上使用统一的 TTL (Anthropic 会拒绝
+                    # 5m 之后再出现 1h 的组合).
                     from llm_provider.anthropic_provider import resolve_prompt_cache_ttl_block
                     ttl_block = resolve_prompt_cache_ttl_block(cache_source)
                     if ttl_block is not None:
@@ -2141,10 +2420,14 @@ async def agent_query(request: Request, query: AgentQuery):
 
             # P0 Fix: DR forced fetch with ratio-based enforcement (Codex approved)
             # Calculate fetch ratio and determine if more fetches needed
+            # P0 修复: Deep Research 强制抓取, 按比例执行 (Codex 已确认)
+            # 计算抓取比例并判断是否还需要更多抓取
             unique_fetch_count = len(fetched_urls)
 
             # Guard: Only enforce ratio when search_count >= 3 (Codex recommendation)
             # Guard: Division by zero protection
+            # 保护: 仅当 search_count >= 3 时强制比例 (Codex 建议)
+            # 保护: 防止除零
             needs_more_fetch = (
                 search_count == 0 or  # Early guard per Codex
                 not fetch_success or
@@ -2159,6 +2442,7 @@ async def agent_query(request: Request, query: AgentQuery):
             ):
                 try:
                     # Dedupe and exclude already-fetched and failed URLs
+                    # 去重, 并排除已抓取与抓取失败的 URL
                     deduped_urls = []
                     seen = set()
                     for u in search_urls:
@@ -2167,6 +2451,7 @@ async def agent_query(request: Request, query: AgentQuery):
                             deduped_urls.append(u)
 
                     # Short-circuit: if all unfetched URLs have failed, exit early (Codex suggestion)
+                    # 短路: 若所有未抓取的 URL 都已失败, 则提前退出 (Codex 建议)
                     if not deduped_urls:
                         logger.info(f"DR policy: no eligible URLs to fetch (all fetched or failed)")
                     else:
@@ -2201,6 +2486,7 @@ async def agent_query(request: Request, query: AgentQuery):
                                 }
                             )
                         # P0 Fix: Update URL tracking for forced fetch results
+                        # P0 修复: 更新强制抓取结果的 URL 跟踪状态
                         for rr in policy_raw:
                             if rr.get("tool") in fetch_tools:
                                 if rr.get("success"):
@@ -2213,6 +2499,7 @@ async def agent_query(request: Request, query: AgentQuery):
                     failed_fetch_urls.update(urls_to_fetch if 'urls_to_fetch' in dir() else [])
 
             # P2 Telemetry: Log fetch ratio for observability (Codex requirement)
+            # P2 遥测: 记录抓取比例以便观测 (Codex 要求)
             import json as _json_telemetry
             final_fetch_count = len(fetched_urls)
             fetch_ratio = final_fetch_count / search_count if search_count > 0 else 0.0
@@ -2233,10 +2520,18 @@ async def agent_query(request: Request, query: AgentQuery):
             # This ensures tool results are summarized into Response, not just "I'll execute..."
             # NOTE: domain_discovery now uses interpretation_pass to generate final JSON
             # (previously skipped, causing "I'll execute..." output instead of JSON)
+            # 若执行过 tool 或触发 budget, 则进行最终解释阶段
+            # P0 修复: 只要有 tool 成功执行就始终运行解释阶段
+            # 这样 tool 结果才会被汇总进 Response, 而不是只留下 "I'll execute..."
+            # 注意: domain_discovery 现在也通过 interpretation_pass 生成最终 JSON
+            # (此前会跳过, 导致输出 "I'll execute..." 而不是 JSON)
             skip_interpretation_roles: set[str] = set()  # No roles skip interpretation
+            # 没有 role 跳过解释
             role = query.context.get("role") if isinstance(query.context, dict) else None
             # A3: Skip interpretation when ALL executed tools are data-only (file_list, file_read, etc.)
             # These tools return structured data that doesn't benefit from LLM summarization.
+            # A3: 当所有已执行 tool 都是 data-only (file_list, file_read 等) 时跳过解释
+            # 这些 tool 返回结构化数据, LLM 汇总没有收益.
             all_data_only_tools = tool_execution_records and all(
                 r.get("tool") in DATA_ONLY_TOOLS for r in tool_execution_records
             )
@@ -2244,6 +2539,10 @@ async def agent_query(request: Request, query: AgentQuery):
             # - Research roles: produce structured Key Findings / Analysis reports
             # - domain_discovery: produce JSON {"domains":[...]} from search results
             # (Originally added in 89442cd, accidentally removed in df8ad2e)
+            # 研究类与 domain_discovery role 即使只用了 data-only tool 也需要解释:
+            # - 研究类 role: 生成结构化的 Key Findings / Analysis 报告
+            # - domain_discovery: 从搜索结果生成 JSON {"domains":[...]}
+            # (最初在 89442cd 中加入, 后在 df8ad2e 中被误删)
             if all_data_only_tools and (
                 should_use_source_format(role) or role == "domain_discovery"
             ):
@@ -2264,10 +2563,19 @@ async def agent_query(request: Request, query: AgentQuery):
                 # - Original query (the task)
                 # - Aggregated tool results (what was retrieved)
                 # - Strong interpretation instruction (role-specific prompt)
+                # P0 修复 v4: 构建干净的、不含历史噪声的解释 messages
+                # 根因: 复用 `messages` 会把 "I'll execute..." 的模式带入, 污染 LLM 输出.
+                # 改为只用以下内容重建 messages:
+                # - System prompt (定义 role)
+                # - 原始 query (task 本身)
+                # - 聚合后的 tool 结果 (实际检索到的内容)
+                # - 强约束的解释指令 (role 专用 prompt)
                 tool_results_summary = aggregate_tool_results(tool_execution_records)
 
                 # Select interpretation prompt from role preset or use default
                 # Roles can define custom interpretation_prompt in their preset
+                # 从 role preset 选择解释 prompt, 否则使用默认值
+                # Role 可以在 preset 中定义自定义 interpretation_prompt
                 use_source_format = should_use_source_format(role)
                 interp_prompt = (
                     INTERPRETATION_PROMPT_SOURCES
@@ -2286,6 +2594,9 @@ async def agent_query(request: Request, query: AgentQuery):
                         # Use interpretation-specific system prompt if available.
                         # This strips tool-loop instructions (OODA, tool patterns) that
                         # can contaminate interpretation output with planning instead of synthesis.
+                        # 若有解释专用 system prompt 则使用它.
+                        # 它会剥离 tool 循环指令 (OODA, tool 模式), 避免解释输出
+                        # 变成规划而不是综合.
                         custom_sys = role_preset_for_interp.get("interpretation_system_prompt")
                         if custom_sys:
                             interp_system_prompt = custom_sys
@@ -2293,6 +2604,7 @@ async def agent_query(request: Request, query: AgentQuery):
                         pass
 
                 # Add iteration context to help LLM know it's time to synthesize
+                # 加入迭代 context, 让 LLM 知道该进入综合阶段了
                 iteration_context = ""
                 if research_mode and loop_iterations >= max_tool_iterations:
                     iteration_context = (
@@ -2327,6 +2639,9 @@ async def agent_query(request: Request, query: AgentQuery):
                 # P0 Fix v4: Validate interpretation output and fallback to digest if invalid
                 # Never fallback to raw JSON - use generate_tool_digest() for human-readable fallback
                 # Roles can set skip_output_validation=True in preset (e.g., domain_discovery for short JSON)
+                # P0 修复 v4: 校验解释输出, 无效时回退到 digest
+                # 绝不回退到原始 JSON —— 使用 generate_tool_digest() 作为人类可读的回退
+                # Role 可在 preset 中设置 skip_output_validation=True (例如 domain_discovery 输出短 JSON)
                 skip_validation = False
                 if role:
                     try:
@@ -2347,6 +2662,7 @@ async def agent_query(request: Request, query: AgentQuery):
                     response_text = raw_interpretation
                     logger.info(f"[interpretation_pass] VALID for agent={query.agent_id}, response_len={len(str(response_text))}, preview={str(response_text)[:200]}")
                     # Log compression metrics for analysis
+                    # 记录压缩指标用于分析
                     if total_tool_output_chars > 0:
                         compression_ratio = 1 - (len(response_text) / total_tool_output_chars)
                         research_strategy = query.context.get("research_strategy", "unknown") if isinstance(query.context, dict) else "unknown"
@@ -2357,10 +2673,12 @@ async def agent_query(request: Request, query: AgentQuery):
                         )
                 else:
                     # Fallback to human-readable digest (NOT raw JSON)
+                    # 回退到人类可读的 digest (而非原始 JSON)
                     fallback_digest = generate_tool_digest(
                         last_tool_results or "",
                         tool_execution_records,
                         max_chars=30000  # Increased from default 3000 to avoid truncation
+                        # 从默认 3000 提高以避免截断
                     )
                     response_text = fallback_digest if fallback_digest else raw_interpretation
                     logger.warning(
@@ -2382,6 +2700,7 @@ async def agent_query(request: Request, query: AgentQuery):
             else:
                 result_data = last_result_data or {}
                 # A3: When skipping due to data-only tools, use digest (no LLM call) as response
+                # A3: 因 data-only tool 而跳过时, 用 digest 作为 response (不调用 LLM)
                 if all_data_only_tools and tool_execution_records:
                     digest = generate_tool_digest(
                         last_tool_results or "",
@@ -2399,6 +2718,8 @@ async def agent_query(request: Request, query: AgentQuery):
 
             # Stub Guard: Clean any pseudo tool-call stubs from final output
             # These can appear when LLM outputs XML/JSON tool calls instead of native function calling
+            # Stub Guard: 清理最终输出中的伪 tool 调用占位片段
+            # 当 LLM 输出 XML/JSON tool 调用而不是原生 function calling 时会出现这些内容
             stub_patterns = [
                 r"<function_calls>",
                 r"<invoke\s",
@@ -2416,6 +2737,7 @@ async def agent_query(request: Request, query: AgentQuery):
                 logger.warning("Stub Guard: detected pseudo tool-call stub in response, running interpretation pass")
                 try:
                     # Run interpretation pass to get clean final answer
+                    # 再跑一次解释阶段以获得干净的最终答案
                     stub_cleanup_result = await request.app.state.providers.generate_completion(
                         messages=messages + [
                             {"role": "assistant", "content": str(response_text)},
@@ -2442,6 +2764,7 @@ async def agent_query(request: Request, query: AgentQuery):
                         response_text = cleaned_text
                         logger.info("Stub Guard: successfully cleaned response via interpretation pass")
                         # Update token counts
+                        # 更新 token 计数
                         cleanup_usage = stub_cleanup_result.get("usage", {}) or {}
                         try:
                             total_tokens += int(cleanup_usage.get("total_tokens") or 0)
@@ -2454,6 +2777,7 @@ async def agent_query(request: Request, query: AgentQuery):
                             pass
                     else:
                         # Fallback: strip stub patterns via regex
+                        # 回退: 用正则剥离占位片段
                         logger.warning("Stub Guard: interpretation pass still contains stubs, falling back to regex strip")
                         response_text = _re.sub(r"<function_calls>[\s\S]*?</function_calls>", "", str(response_text))
                         response_text = _re.sub(r"<invoke[\s\S]*?</invoke>", "", response_text)
@@ -2510,6 +2834,7 @@ async def agent_query(request: Request, query: AgentQuery):
             )
         else:
             # Use mock provider for testing
+            # 无可用 provider 时使用 mock provider 进行测试
             logger.info("Using mock provider (no API keys configured)")
             requested_role = None
             effective_role = "generalist"
@@ -2565,7 +2890,10 @@ async def _execute_and_format_tools(
     request=None,
     context: Optional[Dict[str, Any]] = None,
 ) -> Tuple[str, List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Execute tool calls and format results into natural language."""
+    """Execute tool calls and format results into natural language.
+
+    执行 tool 调用并将结果格式化为自然语言.
+    """
     if not tool_calls:
         return "", [], [], []
 
@@ -2579,6 +2907,7 @@ async def _execute_and_format_tools(
     tool_cost_entries: List[Dict[str, Any]] = []
 
     # Set up event emitter and workflow/agent IDs for tool events
+    # 为 tool event 准备 event emitter 以及 workflow/agent ID
     emitter = None
     try:
         providers = getattr(request.app.state, "providers", None) if request else None
@@ -2598,6 +2927,7 @@ async def _execute_and_format_tools(
             "x-agent-id"
         )
     # Fallback to context when headers are missing (e.g., forced tool execution)
+    # header 缺失时回退到 context (例如强制 tool 执行)
     if not wf_id and isinstance(context, dict):
         wf_id = context.get("workflow_id") or context.get("parent_workflow_id")
     if not agent_id and isinstance(context, dict):
@@ -2638,6 +2968,7 @@ async def _execute_and_format_tools(
 
     def _humanize_tool(tool_name: str, args: dict = None) -> str:
         """Convert raw tool name to user-friendly action text with context."""
+        # 将原始 tool 名转换为带 context、面向用户的操作描述.
         if args:
             if tool_name == "web_search":
                 query = args.get("query", "")
@@ -2649,6 +2980,7 @@ async def _execute_and_format_tools(
                 url = args.get("url", "")
                 if url:
                     # Truncate long URLs but keep domain visible
+                    # 截断过长的 URL, 但保留域名可见
                     if len(url) > 70:
                         url = url[:67] + "..."
                     return f"Fetching: {url}"
@@ -2672,6 +3004,7 @@ async def _execute_and_format_tools(
         redact_keys: Optional[List[str]] = None,
     ) -> Any:
         """Recursively sanitize payloads to avoid secret leaks and stream floods."""
+        # 递归清洗 payload, 避免密钥泄漏与 streaming 输出洪水.
         if redact_keys is None:
             redact_keys = ["api_key", "token", "secret", "password", "credential", "auth"]
 
@@ -2679,10 +3012,12 @@ async def _execute_and_format_tools(
             return "[TRUNCATED]"
 
         # Strings: truncate
+        # 字符串: 截断
         if isinstance(value, str):
             return value if len(value) <= max_str else value[:max_str] + "..."
 
         # Dicts: redact secret-looking keys, limit size, recurse
+        # 字典: 遮蔽疑似密钥的 key, 限制大小, 递归处理
         if isinstance(value, dict):
             out = {}
             for idx, (k, v) in enumerate(value.items()):
@@ -2703,6 +3038,7 @@ async def _execute_and_format_tools(
             return out
 
         # Lists/Tuples: cap length, recurse
+        # 列表/元组: 限制长度, 递归处理
         if isinstance(value, (list, tuple)):
             out_list = []
             for idx, item in enumerate(value):
@@ -2722,6 +3058,7 @@ async def _execute_and_format_tools(
             return out_list
 
         # Other primitives: return as-is
+        # 其他基本类型: 原样返回
         return value
 
     for call in tool_calls:
@@ -2735,6 +3072,7 @@ async def _execute_and_format_tools(
 
         try:
             # Execute the tool
+            # 执行 tool
             args = call.get("arguments", {})
             if isinstance(args, str):
                 import json
@@ -2742,10 +3080,13 @@ async def _execute_and_format_tools(
                 args = json.loads(args)
 
             # Special handling for code_executor - translate common mistakes
+            # code_executor 的特殊处理 —— 将常见误用转成明确错误
             if tool_name == "code_executor":
                 # Check if LLM mistakenly passed source code instead of WASM
+                # 检查 LLM 是否误传了源代码而不是 WASM
                 if "language" in args or "code" in args:
                     # LLM is trying to execute source code, not WASM
+                    # LLM 试图执行源代码, 而不是 WASM
                     lang = args.get("language", "unknown")
                     formatted_results.append(
                         f"Error: The code_executor tool only executes compiled WASM bytecode, not {lang} source code. "
@@ -2755,6 +3096,7 @@ async def _execute_and_format_tools(
                     continue
 
                 # Check if we have valid WASM parameters
+                # 检查是否提供了有效的 WASM 参数
                 if not args.get("wasm_base64") and not args.get("wasm_path"):
                     formatted_results.append(
                         "Error: code_executor requires either 'wasm_base64' (base64-encoded WASM) or 'wasm_path' (path to .wasm file)"
@@ -2762,6 +3104,7 @@ async def _execute_and_format_tools(
                     continue
 
             # Drop convenience/unknown parameters to avoid validation failures
+            # 丢弃便捷参数/未知参数, 避免校验失败
             if isinstance(args, dict):
                 allowed = {p.name for p in tool.parameters}
                 if "tool" in args and args.get("tool") == tool_name:
@@ -2775,10 +3118,13 @@ async def _execute_and_format_tools(
 
             # Merge tool_parameters from context (orchestrator hints) with LLM-provided args
             # This ensures critical parameters like target_paths are always included
+            # 将 context 中的 tool_parameters (orchestrator 提示) 与 LLM 提供的 args 合并
+            # 确保 target_paths 之类的关键参数始终带上
             if isinstance(context, dict) and isinstance(args, dict):
                 ctx_tool_params = context.get("tool_parameters", {})
                 if ctx_tool_params and ctx_tool_params.get("tool") == tool_name:
                     # For array parameters like target_paths, merge instead of replace
+                    # 对于 target_paths 之类的数组参数, 采用合并而不是替换
                     for key in ["target_paths", "target_keywords"]:
                         if key in ctx_tool_params and key in allowed:
                             ctx_value = ctx_tool_params.get(key)
@@ -2786,6 +3132,7 @@ async def _execute_and_format_tools(
                             if ctx_value:
                                 if key == "target_paths" and isinstance(ctx_value, list):
                                     # Merge: LLM paths first, then add orchestrator paths not already present
+                                    # 合并: 先放 LLM 给出的路径, 再补充 orchestrator 尚未包含的路径
                                     if isinstance(llm_value, list):
                                         merged = list(llm_value)
                                         for p in ctx_value:
@@ -2799,6 +3146,8 @@ async def _execute_and_format_tools(
                                     args[key] = ctx_value
                     # Handle query parameter: use orchestrator's query if LLM didn't provide one
                     # This ensures domain_discovery and similar agents use the intended search query
+                    # 处理 query 参数: LLM 未提供时使用 orchestrator 的 query
+                    # 确保 domain_discovery 等 agent 使用预期的搜索 query
                     if "query" in ctx_tool_params and "query" in allowed:
                         ctx_query = ctx_tool_params.get("query")
                         llm_query = args.get("query")
@@ -2807,6 +3156,7 @@ async def _execute_and_format_tools(
                             logger.info(f"Using orchestrator query for {tool_name}: {ctx_query}")
 
             # Emit TOOL_INVOKED event
+            # 发出 TOOL_INVOKED event
             if emitter and wf_id:
                 try:
                     sanitized_params = _sanitize_payload(args)
@@ -2821,22 +3171,27 @@ async def _execute_and_format_tools(
                     pass
 
             # Define observer for intermediate updates
+            # 定义用于中间状态更新的 observer
             def tool_observer(event_name: str, payload: Any):
                 if emitter and wf_id:
                     try:
                         # Ensure payload is a dict
+                        # 确保 payload 是 dict
                         if not isinstance(payload, dict):
                             payload = {"data": payload}
 
                         # Add tool name and phase to payload
+                        # 向 payload 中加入 tool 名与阶段标记
                         payload["tool"] = tool_name
                         payload["intermediate"] = True
                         payload["event"] = event_name
 
                         # Sanitize payload (redact secrets, truncate strings, cap collections)
+                        # 清洗 payload (遮蔽密钥, 截断字符串, 限制集合大小)
                         payload = _sanitize_payload(payload, max_str=2000, max_items=50)
 
                         # Truncate message for stream safety
+                        # 截断 message 以保证 streaming 输出安全
                         msg = str(payload.get("message", ""))
                         if len(msg) > 1000:
                             msg = msg[:1000] + "..."
@@ -2853,23 +3208,29 @@ async def _execute_and_format_tools(
                         pass
 
             # Sanitize session context before passing to tools
+            # 传给 tool 之前先清洗 session context
             if isinstance(context, dict):
                 safe_keys = {
                     "session_id",
                     "user_id",
                     "agent_id",  # For tool rate limiting fallback key
+                    # 作为 tool rate limit 的回退 key
                     "prompt_params",
                     "official_domains",
                     # Controls for auto-fetch in web_search
+                    # web_search 中自动抓取的控制项
                     "auto_fetch_k",
                     "auto_fetch_subpages",
                     "auto_fetch_max_length",
                     "auto_fetch_official_subpages",
                     # Lightweight research flag for tool-level gating
+                    # 供 tool 级门控使用的轻量 research 标志
                     "research_mode",
                     # Orchestrator-provided tool parameters for merging
+                    # orchestrator 提供的 tool 参数, 用于合并
                     "tool_parameters",
                     # Upstream node results from TemplateWorkflow
+                    # TemplateWorkflow 的上游节点结果
                     "template_results",
                     "dependency_results",
                 }
@@ -2897,6 +3258,7 @@ async def _execute_and_format_tools(
             )
 
             # Execute with observer
+            # 带 observer 执行
             start_time = __import__("time").time()
             result = await tool.execute(
                 session_context=sanitized_context, observer=tool_observer, **args
@@ -2912,10 +3274,13 @@ async def _execute_and_format_tools(
 
             if result.success:
                 # Format based on tool type
+                # 按 tool 类型格式化
                 if tool_name == "web_search":
                     # Format web search results with full content for AI consumption
+                    # 格式化 web 搜索结果, 保留完整内容供 AI 使用
                     if isinstance(result.output, list) and result.output:
                         # Filter results by relevance to the query
+                        # 按与 query 的相关性过滤结果
                         query = args.get("query", "")
                         filtered_results = (
                             filter_relevant_results(query, result.output)
@@ -2924,6 +3289,7 @@ async def _execute_and_format_tools(
                         )
 
                         # Include full content for AI to synthesize
+                        # 带上完整内容供 AI 综合
                         search_results = []
                         for i, item in enumerate(filtered_results, 1):
                             title = item.get("title", "")
@@ -2931,6 +3297,7 @@ async def _execute_and_format_tools(
                             url = item.get("url", "")
                             date = item.get("published_date", "")
                             # Prefer markdown when available (e.g., Firecrawl), else use content, else snippet
+                            # 优先使用 markdown (例如 Firecrawl), 其次 content, 最后 snippet
                             markdown = (
                                 item.get("markdown")
                                 if isinstance(item.get("markdown"), str)
@@ -2941,6 +3308,7 @@ async def _execute_and_format_tools(
                             )
 
                             # Clean HTML entities for title and text
+                            # 清理标题与文本中的 HTML 实体
                             title = html.unescape(title)
                             content_or_snippet = raw_content if raw_content else snippet
                             content_or_snippet = (
@@ -2951,6 +3319,7 @@ async def _execute_and_format_tools(
 
                             if title and url:
                                 # Use up to 1500 chars to give LLM enough context
+                                # 最多使用 1500 字符, 为 LLM 提供足够 context
                                 text_content = (
                                     content_or_snippet[:1500]
                                     if content_or_snippet
@@ -2974,6 +3343,8 @@ async def _execute_and_format_tools(
                         if search_results:
                             # Return formatted results with content for the orchestrator to synthesize
                             # The orchestrator's synthesis activity will handle creating the final answer
+                            # 返回带内容的格式化结果, 交由 orchestrator 综合
+                            # 最终答案的生成由 orchestrator 的 synthesis activity 负责
                             formatted = "Web Search Results:\n\n" + "\n---\n\n".join(
                                 search_results
                             )
@@ -2988,6 +3359,7 @@ async def _execute_and_format_tools(
                     formatted_results.append(f"Calculation result: {result.output}")
                 else:
                     # Generic formatting for other tools
+                    # 其他 tool 的通用格式化
                     import json as _json_fmt
 
                     if isinstance(result.output, dict):
@@ -2999,6 +3371,7 @@ async def _execute_and_format_tools(
                     formatted = f"{tool_name} result:\n{formatted_output}"
 
                     # Include concise metadata only when it affects epistemic confidence.
+                    # 仅在影响结论可信度时才附带精简 metadata.
                     if isinstance(result.metadata, dict) and result.metadata:
                         failed_count = None
                         try:
@@ -3052,6 +3425,7 @@ async def _execute_and_format_tools(
             )
 
             # Emit TOOL_OBSERVATION event (success or failure)
+            # 发出 TOOL_OBSERVATION event (成功或失败)
             if emitter and wf_id:
                 try:
                     msg = (
@@ -3080,6 +3454,9 @@ async def _execute_and_format_tools(
             # Record execution for upstream observability/persistence
             # Use higher max_str for content-rich tools (web_fetch, web_subpage_fetch)
             # to preserve multi-page content for citation extraction and storage
+            # 记录执行结果, 供上游可观测性与持久化使用
+            # 对内容丰富的 tool (web_fetch, web_subpage_fetch) 使用更大的 max_str,
+            # 以便保留多页内容用于引文抽取与存储
             content_rich_tools = {"web_fetch", "web_subpage_fetch", "web_crawl"}
             output_max_str = 100000 if tool_name in content_rich_tools else 2000
             tool_execution_records.append(
@@ -3121,6 +3498,7 @@ async def _execute_and_format_tools(
             formatted_results.append(f"Failed to execute {tool_name}")
             
             # Emit failure TOOL_OBSERVATION
+            # 发出失败状态的 TOOL_OBSERVATION
             if emitter and wf_id:
                 try:
                     emitter.emit(
@@ -3300,40 +3678,58 @@ class DecompositionResponse(BaseModel):
 
 
 # ── Swarm Agent Loop ────────────────────────────────────────────────────────────
+# ── Swarm agent 循环 ────────────────────────────────────────────────────────────
 
 class AgentLoopTurn(BaseModel):
-    """A previous turn in the agent's reasoning loop."""
+    """A previous turn in the agent's reasoning loop.
+
+    agent 推理循环中的上一轮记录.
+    """
     iteration: int = 0
     action: str = ""
     result: Optional[Any] = None
     decision_summary: str = ""
     assistant_replay: str = ""      # Compact deterministic JSON of LLM action (for multi-turn cache)
+    # LLM 动作的精简确定性 JSON (用于多轮 cache)
     observation_text: str = ""      # Frozen tool result digest (for multi-turn cache)
+    # 冻结的 tool 结果摘要 (用于多轮 cache)
 
 
 class AgentMailboxMsg(BaseModel):
-    """A message received from another agent."""
+    """A message received from another agent.
+
+    从其他 agent 收到的消息.
+    """
     from_agent: str = Field(default="", alias="from")
     type: str = ""
     payload: Dict[str, Any] = Field(default_factory=dict)
 
 
 class TeamMemberInfo(BaseModel):
-    """A teammate in the swarm."""
+    """A teammate in the swarm.
+
+    swarm 中的队友.
+    """
     agent_id: str = ""
     task: str = ""
     role: str = ""
 
 
 class WorkspaceSnippet(BaseModel):
-    """A truncated KV workspace entry from another agent."""
+    """A truncated KV workspace entry from another agent.
+
+    来自其他 agent 的截断版 KV workspace 条目.
+    """
     author: str = ""
     data: str = ""
     seq: int = 0
 
 
 class TeamKnowledgeEntry(BaseModel):
-    """A URL fetched by a swarm agent, for cross-agent dedup (L2)."""
+    """A URL fetched by a swarm agent, for cross-agent dedup (L2).
+
+    swarm agent 已抓取的 URL, 用于跨 agent 去重 (L2).
+    """
     url: str = ""
     agent: str = ""
     summary: str = ""
@@ -3341,7 +3737,10 @@ class TeamKnowledgeEntry(BaseModel):
 
 
 class AgentLoopStepRequest(BaseModel):
-    """Input for a single reason-act iteration of an autonomous agent."""
+    """Input for a single reason-act iteration of an autonomous agent.
+
+    自主 agent 单次 reason-act 迭代的输入.
+    """
     agent_id: str = Field(..., description="Unique agent identifier")
     workflow_id: str = Field(default="", description="Parent workflow ID")
     task: str = Field(..., description="The task this agent is working on")
@@ -3368,7 +3767,10 @@ class AgentLoopStepRequest(BaseModel):
 
 
 class AgentLoopStepResponse(BaseModel):
-    """LLM decision for one iteration of the agent loop."""
+    """LLM decision for one iteration of the agent loop.
+
+    单轮 agent 循环的 LLM 决策.
+    """
     action: str = Field(..., description="Action type: tool_call, send_message, publish_data, request_help, done")
     decision_summary: str = Field(default="", description="1-3 sentence reasoning for this action (max 500 chars)")
     # tool_call
@@ -3406,12 +3808,16 @@ class AgentLoopStepResponse(BaseModel):
 
 
 # Import swarm prompts from roles/swarm/ — single source of truth
+# 从 roles/swarm/ 导入 swarm prompts —— 唯一事实来源
 from ..roles.swarm.agent_protocol import get_work_protocol  # noqa: E402
 from ..roles.swarm.role_prompts import SWARM_ROLE_PROMPTS  # noqa: E402
 
 
 def _count_text_block_chars(blocks: list) -> int:
-    """Count characters contributed by text content blocks."""
+    """Count characters contributed by text content blocks.
+
+    统计 text content block 贡献的字符数.
+    """
     total = 0
     for block in blocks:
         if isinstance(block, dict) and block.get("type") == "text":
@@ -3420,7 +3826,10 @@ def _count_text_block_chars(blocks: list) -> int:
 
 
 def _truncate_middle(text: str, max_chars: int) -> str:
-    """Keep both ends of long text when enforcing a hard character cap."""
+    """Keep both ends of long text when enforcing a hard character cap.
+
+    在强制字符上限时保留长文本的首尾两端.
+    """
     if len(text) <= max_chars:
         return text
     marker = "\n...[TRUNCATED — prompt too large]\n"
@@ -3442,10 +3851,24 @@ def _build_attachment_blocks(raw_attachments: list) -> list:
     - "text": decoded text file → plain text block (universal across all providers)
     - "url": external URL → shannon_attachment with url field (provider converts)
     - "base64": binary file (image/PDF) → shannon_attachment with data field (provider converts)
+
+    将已解析的附件转换为 LLM messages 的 content block.
+
+    所有非文本附件都使用 shannon_attachment —— 这是一个 provider 中立的标记,
+    由各 provider 转换为自己的原生格式. 这样 URL 图片在 Gemini (file_data)
+    与 Anthropic (image block) 上都能正确工作, 而不只是 OpenAI.
+
+    按 source 类型分发:
+    - "text": 已解码的文本文件 → 纯文本 block (所有 provider 通用)
+    - "url": 外部 URL → 带 url 字段的 shannon_attachment (由 provider 转换)
+    - "base64": 二进制文件 (图片/PDF) → 带 data 字段的 shannon_attachment (由 provider 转换)
     """
     # MAX_TEXT_PER_FILE / MAX_TEXT_TOTAL are module-level (see top of file)
     # so the alignment invariant with MAX_PROMPT_CHARS is enforced at load
     # time, not left as a human-maintained comment across two functions.
+    # 说明: MAX_TEXT_PER_FILE / MAX_TEXT_TOTAL 定义在模块级 (见文件顶部),
+    # 因此与 MAX_PROMPT_CHARS 的对齐不变量在加载时即被校验,
+    # 而不是留作分散在两个函数之间的人工维护注释.
 
     blocks = []
     total_text_chars = 0
@@ -3455,9 +3878,11 @@ def _build_attachment_blocks(raw_attachments: list) -> list:
             fname = att.get("filename", "file")
             text = att.get("text_content", "")
             # Per-file cap
+            # 单文件上限
             if len(text) > MAX_TEXT_PER_FILE:
                 text = text[:MAX_TEXT_PER_FILE] + "\n...[TRUNCATED — file too large]"
             # Total budget cap across all text attachments
+            # 所有文本附件的总 budget 上限
             remaining = MAX_TEXT_TOTAL - total_text_chars
             if remaining <= 0:
                 blocks.append({"type": "text", "text": f"[File: {fname} — SKIPPED, text attachment budget exhausted]"})
@@ -3468,6 +3893,7 @@ def _build_attachment_blocks(raw_attachments: list) -> list:
             blocks.append({"type": "text", "text": f"[File: {fname}]\n{text}"})
         elif source == "url":
             # URL-based: provider layer fetches or references the URL natively
+            # 基于 URL: 由 provider 层原生抓取或引用该 URL
             blocks.append({
                 "type": "shannon_attachment",
                 "media_type": att.get("media_type", "image/png"),
@@ -3489,6 +3915,11 @@ def _build_volatile_sections(body: AgentLoopStepRequest) -> list:
 
     Used by multi-turn format only — these change every iteration and go in the
     last (non-cached) user message.
+
+    为最新一条 user message 构建易变章节 (Board, Knowledge, Notes, Inbox, Budget).
+
+    仅用于多轮格式 —— 这些内容每轮都会变化, 因此放在最后一条 (不 cache) 的
+    user message 中.
     """
     parts = []
 
@@ -3553,6 +3984,13 @@ def _resolve_loop_cache_source(body: "AgentLoopStepRequest") -> str:
     _force_uniform_cache_ttl in the provider would silently rewrite the
     message-level TTL, making any "preserve upstream cache_source" intent
     ineffective for interactive callers.
+
+    为 /agent/loop 的一次 step 选择 cache_source.
+
+    必须由 build_agent_messages() 与 agent_loop_step() 以完全相同的方式调用,
+    使冻结断点 (message 级) 上打的 TTL 与 provider 为外发 request 解析出的 TTL 一致.
+    否则 provider 中的 _force_uniform_cache_ttl 会静默改写 message 级 TTL,
+    使 "保留上游 cache_source" 的意图对交互式调用方失效.
     """
     ctx_src = body.context.get("cache_source") if isinstance(body.context, dict) else None
     if isinstance(ctx_src, str) and ctx_src.strip():
@@ -3589,6 +4027,7 @@ def _build_multi_turn_messages(
     messages = [{"role": "system", "content": system_prompt}]
 
     # --- Bootstrap (immutable across iterations) ---
+    # --- Bootstrap 部分 (跨迭代不可变) ---
     bootstrap_parts = []
     if body.original_query:
         bootstrap_parts.append(
@@ -3610,6 +4049,9 @@ def _build_multi_turn_messages(
     # session — putting them in the cached prefix avoids re-sending the same
     # PDF every iteration. List-form is byte-stable across iterations: same
     # set of attachments + same bootstrap text → identical bytes → cache hit.
+    # 附件放在 bootstrap 中, 因为它们在给定 session 内不变 —— 放进 cache 前缀可以避免
+    # 每轮重复发送同一个 PDF. 列表形式跨迭代字节稳定: 相同的附件集合 +
+    # 相同的 bootstrap 文本 → 字节一致 → 命中 cache.
     att_blocks = _build_attachment_blocks(raw_attachments) if raw_attachments else []
     if att_blocks:
         messages.append({
@@ -3620,6 +4062,7 @@ def _build_multi_turn_messages(
         messages.append({"role": "user", "content": bootstrap_text})
 
     # --- Observation 0 ---
+    # --- 第 0 次观测 ---
     messages.append({"role": "user", "content": "Begin your task. Return ONLY valid JSON for each action."})
 
     # --- Historical turns (frozen assistant/user pairs) ---
@@ -3632,27 +4075,36 @@ def _build_multi_turn_messages(
     # Resolve TTL dynamically from cache_source so the frozen breakpoint
     # matches whatever tools/system will get from the provider — avoids the
     # 1h-after-5m Anthropic 400 when upstream is a short cache_source.
+    # 依据 cache_source 动态解析 TTL, 使冻结断点与 tools/system 从 provider
+    # 得到的 TTL 一致 —— 当上游是短 TTL 的 cache_source 时, 可避免
+    # Anthropic 的 "5m 之后再出现 1h" 400 错误.
     from llm_provider.anthropic_provider import resolve_prompt_cache_ttl_block
     ttl_block = resolve_prompt_cache_ttl_block(cache_source)
     replay_turns = [t for t in body.history if t.assistant_replay]
     for i, turn in enumerate(replay_turns):
         # Frozen assistant replay (compact deterministic JSON)
+        # 冻结的 assistant replay (精简确定性 JSON)
         messages.append({"role": "assistant", "content": turn.assistant_replay.rstrip()})
         # Frozen observation
+        # 冻结的 observation
         obs_text = turn.observation_text or f"{turn.action} → {str(turn.result)[:3000]}"
         if i < len(replay_turns) - 1:
             # Frozen observation — always list format for byte-stable prefix.
             # Only the last frozen one (second-to-last user msg) gets cache_control.
+            # 冻结的 observation —— 始终使用列表格式以保证前缀字节稳定.
+            # 只有最后一个冻结项 (倒数第二条 user msg) 会打上 cache_control.
             block: dict = {"type": "text", "text": obs_text}
             if i == len(replay_turns) - 2 and ttl_block is not None:
                 block["cache_control"] = ttl_block
             messages.append({"role": "user", "content": [block]})
         else:
             # LATEST observation — volatile state, plain string (never cached)
+            # 最新一次 observation —— 易变状态, 使用纯字符串 (不 cache)
             volatile_parts = [obs_text] + _build_volatile_sections(body)
             messages.append({"role": "user", "content": "\n\n".join(volatile_parts)})
 
     # Edge case: first iteration (no replay turns yet)
+    # 边界情况: 第一轮迭代 (尚无 replay turn)
     if not replay_turns:
         volatile_parts = _build_volatile_sections(body)
         if volatile_parts:
@@ -3664,6 +4116,11 @@ def _build_multi_turn_messages(
     # previous sum only counted strings — making list-form observations
     # invisible to the trim, so a history of large tool results could push
     # the prompt well past MAX_PROMPT_CHARS without ever triggering eviction.
+    # context 裁剪: 内容过大时移除最旧的 turn 对.
+    # _measure_chars 同时处理纯字符串 content 和列表 block 形式的 content
+    # (后者由约第 3639 行为冻结历史观测生成). 此前只统计字符串,
+    # 导致列表形式的观测对裁剪不可见, 大量 tool 结果的历史可能把 prompt
+    # 推过 MAX_PROMPT_CHARS 却始终不触发淘汰.
     def _measure_chars(content) -> int:
         if isinstance(content, str):
             return len(content)
@@ -3703,10 +4160,21 @@ def build_agent_messages(body: AgentLoopStepRequest, raw_attachments=None) -> li
     - Legacy (Haiku or no replay): single [system, user] format.
 
     Returns a list of messages.
+
+    为 agent 循环构建 messages.
+
+    两种模式:
+    - 多轮 (Sonnet+ 且历史中带 assistant_replay): 为 Anthropic prompt cache
+      构建只追加的多轮 messages. 每条历史 turn 变成一对冻结的
+      assistant/user 消息. 只有最后一条 user message 带易变状态.
+    - Legacy (Haiku 或无 replay): 单一 [system, user] 格式.
+
+    返回 messages 列表.
     """
     from ..roles.presets import get_role_preset
 
     # --- System prompt ---
+    # --- System prompt 组装 ---
     role_key = body.role or ""
     role_methodology = ""
     if role_key:
@@ -3727,6 +4195,10 @@ def build_agent_messages(body: AgentLoopStepRequest, raw_attachments=None) -> li
     # Haiku had completion bias (2-3 iterations then idle) with multi-turn messages.
     # Only enable for medium/large tier models (Sonnet 4.6+, Opus).
     # Also activate when model_override explicitly selects a non-Haiku model.
+    # --- 多轮模式: Sonnet+ 且历史中有 assistant_replay ---
+    # Haiku 在多轮 messages 下存在补全偏好 (2-3 轮后就 idle).
+    # 因此仅对 medium/large tier 模型启用 (Sonnet 4.6+, Opus).
+    # 当 model_override 明确选择非 Haiku 模型时同样启用.
     has_replay = body.history and any(t.assistant_replay for t in body.history)
     model_override = body.context.get("model_override") if isinstance(body.context, dict) else None
     is_non_haiku_override = isinstance(model_override, str) and "haiku" not in model_override.lower()
@@ -3741,6 +4213,7 @@ def build_agent_messages(body: AgentLoopStepRequest, raw_attachments=None) -> li
         )
 
     # --- Legacy: single user message (original structure) ---
+    # --- Legacy: 单条 user message (原始结构) ---
     user_parts: list[str] = []
     if body.original_query:
         user_parts.append(f"## User's Original Question\n{body.original_query}\nWrite your deliverable in the same language as the user's question above.")
@@ -3765,6 +4238,15 @@ def build_agent_messages(body: AgentLoopStepRequest, raw_attachments=None) -> li
     # With Knowledge, user_stable ≈ 1250t+ → total ~3950t, sometimes > 4096 →
     # sawtooth pattern but at least 20-24% cache hit rate.
     # To fix the sawtooth: need multi-turn with native tool_use blocks (Issue #74 #4).
+    # L2 Team Knowledge: 队友已抓取的 URL —— 作为稳定 context 注入,
+    # 避免 agent 重复抓取并复用已有数据.
+    # 注意: 尽管该内容在 swarm 模式下会变化, 仍保留在 cache_break 之前.
+    # 原因: agent loop 不使用原生 tool calling (没有 tools= 参数), 所以唯一的
+    # cache 前缀是 system(~2700t) + user_stable. 没有 Knowledge 时
+    # user_stable ≈ 450t → 合计 3150t < Haiku 4096t 阈值 → 完全不 cache.
+    # 有 Knowledge 时 user_stable ≈ 1250t+ → 合计 ~3950t, 有时 > 4096 →
+    # 出现锯齿, 但至少能有 20-24% 的 cache 命中率.
+    # 要消除锯齿: 需要带原生 tool_use block 的多轮结构 (Issue #74 #4).
     if body.team_knowledge:
         tk_lines = [f"- {e.url} ({e.agent}): {e.summary}" for e in body.team_knowledge[-30:]]
         user_parts.append(
@@ -3778,13 +4260,23 @@ def build_agent_messages(body: AgentLoopStepRequest, raw_attachments=None) -> li
     # two content blocks, the first with cache_control. Combined with the system message,
     # the cacheable prefix (system ~2700t + stable user) can cross Haiku's 4096t threshold,
     # enabling prompt cache hits on iterations where stable section is large enough.
+    # cache 断点: 将 user message 拆成稳定部分 (Task/Team/Knowledge) 与易变部分
+    # (History/Board/Notes/Budget). anthropic_provider 会按该标记拆成两个
+    # content block, 第一个带 cache_control. 与 system message 合并后,
+    # 可 cache 前缀 (system ~2700t + 稳定 user 部分) 能越过 Haiku 的 4096t 阈值,
+    # 从而在稳定部分足够大的轮次命中 prompt cache.
     user_parts.append("<!-- cache_break -->")
     history_lines = []  # Initialized here so trimming loop below can reference it
+    # 在此初始化, 供下方裁剪循环引用
     if body.history:
         # Tool-type-aware truncation: file_read/file_edit results are the agent's
         # working memory — truncating them forces wasteful re-reads. Web results
         # are bulky but rarely need full content across iterations.
+        # 按 tool 类型区分截断: file_read/file_edit 的结果是 agent 的工作记忆,
+        # 截断它们会导致代价高昂的重复读取. Web 结果体积大, 但跨轮次
+        # 很少需要完整内容.
         HISTORY_FILE_MAX = 15000   # file_read, file_edit, file_list — working memory
+        # 工作记忆
         HISTORY_DEFAULT_MAX = 3000  # web_search, web_fetch, calculator, etc.
         _FILE_OPS = ("file_read", "file_edit", "file_list")
         for turn in body.history:
@@ -3796,6 +4288,7 @@ def build_agent_messages(body: AgentLoopStepRequest, raw_attachments=None) -> li
         user_parts.append("## Previous Actions\n" + "\n".join(history_lines))
 
     # TaskBoard here (volatile — status changes frequently in parallel swarms)
+    # TaskBoard 放在这里 (易变 —— 并行 swarm 中状态变化频繁)
     if body.task_list:
         tl_lines = []
         for t in body.task_list:
@@ -3819,8 +4312,10 @@ def build_agent_messages(body: AgentLoopStepRequest, raw_attachments=None) -> li
         user_parts.append("## Inbox Messages\n" + "\n".join(msg_lines))
 
     # Go passes cumulative_tool_calls; fallback counts from history (action format: "tool_call:web_search")
+    # Go 会传入 cumulative_tool_calls; 否则从历史计数 (action 格式: "tool_call:web_search")
     tool_call_count = body.cumulative_tool_calls if body.cumulative_tool_calls > 0 else sum(1 for t in body.history if (t.action or "").startswith("tool_call"))
     # Go history uses "tool_call:file_write" format for action field
+    # Go 历史的 action 字段使用 "tool_call:file_write" 格式
     has_file_write = any(
         "file_write" in (t.action or "")
         for t in body.history
@@ -3828,9 +4323,11 @@ def build_agent_messages(body: AgentLoopStepRequest, raw_attachments=None) -> li
     TOOL_CALL_TARGET = 15
     TOOL_CALL_NUDGE = 10
     TOOL_CALL_RESERVE = 13  # Reserve last 2 calls for file_write + idle
+    # 为 file_write + idle 保留最后 2 次调用
     budget_text = f"## Budget: {tool_call_count}/{TOOL_CALL_TARGET} tool calls used\n"
     if has_file_write:
         # Agent already wrote file — push toward idle, not another file_write
+        # agent 已写过文件 —— 引导其进入 idle, 而不是再写一次
         budget_text += "You already saved your findings via file_write. Go idle NOW with key_findings.\n"
     elif tool_call_count >= TOOL_CALL_TARGET + 3:
         budget_text += "OVER BUDGET: STOP all search/fetch. Your NEXT action MUST be file_write. Data not written to file is LOST.\n"
@@ -3854,6 +4351,8 @@ def build_agent_messages(body: AgentLoopStepRequest, raw_attachments=None) -> li
 
     # Token-aware context trimming: bound the final text payload, not just the
     # pre-attachment user content. Binary attachments do not consume this budget.
+    # 考虑 token 的 context 裁剪: 约束最终的文本负载, 而不只是附件之前的
+    # user 内容. 二进制附件不占用该 budget.
     max_prompt_chars = max(1_000, MAX_PROMPT_CHARS - attachment_text_chars)
     user_content = "\n\n".join(user_parts)
 
@@ -3868,6 +4367,7 @@ def build_agent_messages(body: AgentLoopStepRequest, raw_attachments=None) -> li
 
     while len(user_content) > max_prompt_chars and history_lines:
         # Remove oldest history entry
+        # 移除最旧的历史条目
         history_lines.pop(0)
         _sync_history_section()
         user_content = "\n\n".join(user_parts)
@@ -3886,6 +4386,9 @@ def build_agent_messages(body: AgentLoopStepRequest, raw_attachments=None) -> li
     # Inject attachments as provider-neutral shannon_attachment blocks.
     # When present, user content becomes a list: [attachments..., text].
     # Each LLM provider converts shannon_attachment to its native format.
+    # 以 provider 中立的 shannon_attachment block 注入附件.
+    # 存在附件时, user content 变成列表: [attachments..., text].
+    # 各 LLM provider 会把 shannon_attachment 转换为自己的原生格式.
     if att_blocks:
         user_message_content = att_blocks + [{"type": "text", "text": user_content}]
     else:
@@ -3899,18 +4402,23 @@ def build_agent_messages(body: AgentLoopStepRequest, raw_attachments=None) -> li
 
 @router.post("/agent/loop", response_model=AgentLoopStepResponse)
 async def agent_loop_step(request: Request, body: AgentLoopStepRequest) -> AgentLoopStepResponse:
-    """Process one iteration of an autonomous agent's reason-act loop."""
+    """Process one iteration of an autonomous agent's reason-act loop.
+
+    处理自主 agent reason-act 循环中的一次迭代.
+    """
     providers = getattr(request.app.state, "providers", None)
 
     if not providers or not providers.is_configured():
         raise HTTPException(status_code=503, detail="LLM providers not configured")
 
     # Pre-resolve attachments (async I/O) before building messages (sync).
+    # 在构建 messages (同步) 之前先预解析附件 (异步 I/O).
     raw_attachments = await _resolve_attachments(
         body.context, getattr(request.app.state, "redis", None)
     )
 
     # Build [system, user] messages with context trimming handled inside.
+    # 构建 [system, user] messages, context 裁剪在内部处理.
     messages = build_agent_messages(body, raw_attachments=raw_attachments)
 
     try:
@@ -3919,11 +4427,13 @@ async def agent_loop_step(request: Request, body: AgentLoopStepRequest) -> Agent
         from ..providers.base import ModelTier
 
         # Tier selection (explicit request > context > default)
+        # tier 选择 (显式 request > context > 默认)
         tier_map = {
             "small": ModelTier.SMALL,
             "medium": ModelTier.MEDIUM,
             "large": ModelTier.LARGE,
             # Be forgiving: some upstream components may emit xlarge; map it to large.
+            # 保持宽容: 某些上游组件可能发出 xlarge; 映射到 large.
             "xlarge": ModelTier.LARGE,
         }
         tier = ModelTier.MEDIUM
@@ -3936,6 +4446,7 @@ async def agent_loop_step(request: Request, body: AgentLoopStepRequest) -> Agent
                 tier = tier_map.get(ctx_tier_raw.lower().strip(), tier)
 
         # Check for model/provider override from context (set by swarm_workflow.go)
+        # 从 context 检查 model/provider override (由 swarm_workflow.go 设置)
         model_override = body.context.get("model_override") if isinstance(body.context, dict) else None
         provider_override = body.context.get("provider_override") if isinstance(body.context, dict) else None
 
@@ -3955,6 +4466,8 @@ async def agent_loop_step(request: Request, body: AgentLoopStepRequest) -> Agent
             logger.info(f"AgentLoop: using provider override {provider_override} (agent_id={body.agent_id})")
             # OpenAI-compatible providers (Kimi) support json_object to force valid JSON
             # Skip for providers that don't support this feature
+            # OpenAI 兼容的 provider (Kimi) 支持 json_object 以强制输出合法 JSON
+            # 对不支持该特性的 provider 跳过
             if provider_override not in ("anthropic", "minimax"):
                 gen_kwargs["response_format"] = {"type": "json_object"}
         if body.previous_response_id:
@@ -3962,6 +4475,9 @@ async def agent_loop_step(request: Request, body: AgentLoopStepRequest) -> Agent
         # Same helper used by build_agent_messages when it tagged the frozen
         # breakpoint — keeps message-level TTL and provider-resolved TTL in
         # lockstep so _force_uniform_cache_ttl has nothing to rewrite.
+        # 与 build_agent_messages 标记冻结断点时使用的同一个辅助函数 ——
+        # 使 message 级 TTL 与 provider 解析出的 TTL 保持同步,
+        # 让 _force_uniform_cache_ttl 无需改写任何内容.
         gen_kwargs.setdefault("cache_source", _resolve_loop_cache_source(body))
 
         result = await providers.generate_completion(
@@ -3972,6 +4488,8 @@ async def agent_loop_step(request: Request, body: AgentLoopStepRequest) -> Agent
         raw_text = result.get("output_text", "") or ""
         # Safety net: some models may wrap JSON in markdown code fences.
         # strip_markdown_json_wrapper handles this below (line ~3256).
+        # 兜底: 部分模型会用 markdown 代码围栏包裹 JSON.
+        # 下面 (约第 3256 行) 由 strip_markdown_json_wrapper 处理.
         usage = result.get("usage", {}) or {}
         tokens_used = int(usage.get("total_tokens") or 0)
         input_tokens = int(usage.get("input_tokens") or 0)
@@ -4152,7 +4670,10 @@ async def agent_loop_step(request: Request, body: AgentLoopStepRequest) -> Agent
 
 
 class ResearchPlanRequest(BaseModel):
-    """Request for generating a human-friendly research plan."""
+    """Request for generating a human-friendly research plan.
+
+    生成人类可读研究计划的 request.
+    """
     query: str = Field(..., description="The research query")
     context: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Task context")
     conversation: Optional[List[Dict[str, Any]]] = Field(
@@ -4168,7 +4689,10 @@ class ResearchPlanRequest(BaseModel):
 
 
 class ResearchPlanResponse(BaseModel):
-    """Response with the generated research plan."""
+    """Response with the generated research plan.
+
+    返回所生成研究计划的 response.
+    """
     message: str = Field(..., description="Human-friendly research plan text")
     intent: str = Field(default="feedback", description="LLM intent: 'feedback' (asking Qs), 'ready' (plan proposed), or 'execute' (user wants to proceed)")
     round: int = Field(default=1, description="Conversation round number")
@@ -4182,17 +4706,22 @@ class ResearchPlanResponse(BaseModel):
 async def generate_research_plan(
     request: Request, body: ResearchPlanRequest
 ) -> ResearchPlanResponse:
-    """Generate a human-friendly research plan for HITL review."""
+    """Generate a human-friendly research plan for HITL review.
+
+    为 HITL 评审生成人类可读的研究计划.
+    """
     providers = getattr(request.app.state, "providers", None)
 
     if not providers or not providers.is_configured():
         raise HTTPException(status_code=503, detail="LLM providers not configured")
 
     # Extract current date from context for temporal awareness
+    # 从 context 提取当前日期以提供时间感知
     current_date = body.context.get("current_date_human") or body.context.get("current_date", "") if body.context else ""
     date_line = f"The current date is {current_date}.\n\n" if current_date else ""
 
     # Build round awareness hint based on current progress
+    # 依据当前进度构建轮次感知提示
     round_info = f"ROUND INFO: You are on round {body.current_round} of {body.max_rounds}. "
     if body.current_round <= 2:
         round_info += "You have ample rounds — ask clarifying questions if genuinely needed.\n\n"
@@ -4202,6 +4731,7 @@ async def generate_research_plan(
         round_info += "Running low on rounds — prioritize proposing a concrete direction.\n\n"
 
     # Unified system prompt — covers all rounds (clarification, direction, approval)
+    # 统一的 system prompt —— 覆盖所有轮次 (澄清, 方向, 批准)
     system_prompt = (
         f"{date_line}"
         f"{round_info}"
@@ -4286,6 +4816,7 @@ async def generate_research_plan(
     )
 
     # Final round override: force a direction proposal, no more questions
+    # 最后一轮覆盖: 强制给出方向建议, 不再提问
     if body.is_final_round:
         system_prompt += (
             "\n\nFINAL ROUND: This is the last round of discussion. "
@@ -4294,6 +4825,7 @@ async def generate_research_plan(
         )
 
     # Build messages: system prompt + conversation history (or initial query)
+    # 构建 messages: system prompt + 对话历史 (或初始 query)
     messages = [{"role": "system", "content": system_prompt}]
 
     if body.conversation:
@@ -4304,6 +4836,7 @@ async def generate_research_plan(
             })
     else:
         # First round: user query + optional context
+        # 第一轮: 用户 query + 可选 context
         user_content = f"Research topic: {body.query}"
         if body.context:
             ctx_str = ", ".join(
@@ -4330,12 +4863,15 @@ async def generate_research_plan(
 
         # Parse intent tag from LLM response (all rounds — unified prompt may
         # output [INTENT:ready] even on round 1 if the query is specific enough)
+        # 从 LLM response 解析 intent 标记 (所有轮次 —— 统一 prompt 即使在第一轮,
+        # 只要 query 足够具体也可能输出 [INTENT:ready])
         import re
         detected_intent = "feedback"
         intent_match = re.search(r"\[INTENT:(feedback|ready|execute)\]", plan_text)
         if intent_match:
             detected_intent = intent_match.group(1)
             # Strip the intent tag from the displayed message
+            # 从展示的 message 中去掉 intent 标记
             plan_text = re.sub(r"\s*\[INTENT:(?:feedback|ready|execute)\]\s*$", "", plan_text).strip()
 
         return ResearchPlanResponse(
@@ -4360,11 +4896,17 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
     This endpoint analyzes a query and returns a task decomposition
     for the orchestrator to execute. Tool selection is entirely
     determined by the LLM without any pattern matching.
+
+    用纯 LLM 方式将复杂 task 分解为子 task.
+
+    该端点分析 query 并返回 task 分解, 交由 orchestrator 执行.
+    tool 选择完全由 LLM 决定, 不做任何模式匹配.
     """
     try:
         logger.info(f"Decomposing task: {query.query[:100]}...")
 
         # Get LLM providers
+        # 获取 LLM providers
         providers = getattr(request.app.state, "providers", None)
         settings = getattr(request.app.state, "settings", None)
 
@@ -4376,11 +4918,13 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
         from ..tools import get_registry
 
         # Load actual tool schemas from registry for precise parameter guidance
+        # 从 registry 加载真实 tool schema, 以便给出精确的参数指引
         registry = get_registry()
         available_tools = query.allowed_tools or []
         tool_schemas_text = ""
 
         # Respect role preset's allowed_tools if role is specified
+        # 若指定了 role, 则遵循其 preset 的 allowed_tools
         role_preset_tools = []
         if query.context and "role" in query.context:
             role_name = query.context.get("role")
@@ -4393,8 +4937,12 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
         # Auto-load all tools from registry when no specific tools provided
         # This ensures MCP and OpenAPI tools appear in decomposition even when
         # orchestrator doesn't pass AvailableTools (current limitation)
+        # 未提供具体 tool 时, 自动从 registry 加载全部 tool
+        # 这样即使 orchestrator 没有传 AvailableTools (当前限制),
+        # MCP 与 OpenAPI tool 也能出现在分解结果中
         if not available_tools:
             # If role preset defines allowed_tools, use those as base
+            # 若 role preset 定义了 allowed_tools, 则以其为基础
             if role_preset_tools:
                 available_tools = role_preset_tools
                 logger.info(
@@ -4403,6 +4951,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
             else:
                 all_tool_names = registry.list_tools()
                 # Filter out dangerous tools for safety
+                # 出于安全考虑过滤掉危险 tool
                 available_tools = []
                 for name in all_tool_names:
                     tool = registry.get_tool(name)
@@ -4413,6 +4962,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
                 )
         elif role_preset_tools:
             # Cap requested tools by role preset if preset defines restrictions
+            # 若 preset 定义了限制, 则按 role preset 限制 request 的 tool
             available_tools = [t for t in available_tools if t in role_preset_tools]
             logger.info(f"Decompose: Capped tools by role preset to: {available_tools}")
 
@@ -4449,6 +4999,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
         # ================================================================
 
         # Common decomposition instructions (appended to all identity prompts)
+        # 通用分解指令 (追加到所有 identity prompt 之后)
         COMMON_DECOMPOSITION_SUFFIX = (
             "CRITICAL: Each subtask MUST have these EXACT fields: id, description, dependencies, estimated_tokens, suggested_tools, tool_parameters\n"
             "NEVER return null for subtasks field - always provide at least one subtask.\n\n"
@@ -4611,6 +5162,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
         )
 
         # General planning identity (default for non-research tasks)
+        # 通用规划身份 (非研究 task 的默认值)
         GENERAL_PLANNING_IDENTITY = (
             "You are a planning assistant. Analyze the user's task and determine if it needs decomposition.\n"
             "IMPORTANT: Process queries in ANY language including English, Chinese, Japanese, Korean, etc.\n\n"
@@ -4620,6 +5172,8 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
 
         # Research supervisor identity (for deep research workflows)
         # Defined in roles/deep_research/research_supervisor.py
+        # 研究主管身份 (用于深度研究 workflow)
+        # 定义在 roles/deep_research/research_supervisor.py
         from ..roles.deep_research import RESEARCH_SUPERVISOR_IDENTITY, DOMAIN_ANALYSIS_HINT
 
         # ================================================================
@@ -4633,17 +5187,21 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
         #
         # All prompts follow the pattern: IDENTITY_PROMPT + COMMON_DECOMPOSITION_SUFFIX
         # This ensures all branches get the JSON schema and decomposition instructions.
+        # 所有 prompt 均遵循: IDENTITY_PROMPT + COMMON_DECOMPOSITION_SUFFIX
+        # 从而保证每个分支都能拿到 JSON schema 与分解指令.
 
         identity_prompt = None
         prompt_source = "default"
 
         # Check for explicit override (future-proofing)
+        # 检查显式覆盖 (为未来扩展预留)
         if isinstance(query.context, dict) and query.context.get("decomposition_prompt"):
             identity_prompt = query.context.get("decomposition_prompt")
             prompt_source = "explicit_override"
             logger.info("Decompose: Using explicit override prompt from context")
 
         # Check for deep research context
+        # 检查是否为深度研究 context
         elif isinstance(query.context, dict) and (
             query.context.get("force_research")
             or query.context.get("workflow_type") == "research"
@@ -4663,13 +5221,19 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
         # planning identity. Role information (allowed_tools) is still respected
         # via the available_tools filtering done earlier in this function.
 
+        # 因此这里跳过 role preset 选择, 直接落到通用规划身份.
+        # role 信息 (allowed_tools) 仍会通过本函数前面完成的 available_tools
+        # 过滤得到遵循.
+
         # Fallback to general planning identity
+        # 回退到通用规划身份
         if identity_prompt is None:
             identity_prompt = GENERAL_PLANNING_IDENTITY
             prompt_source = "general"
             logger.info("Decompose: Using general planning identity")
 
         # Extract current date for temporal awareness (enables time-sensitive query handling)
+        # 提取当前日期以提供时间感知 (便于处理对时间敏感的 query)
         current_date = ""
         if isinstance(query.context, dict):
             current_date = query.context.get("current_date_human") or query.context.get("current_date", "")
@@ -4678,12 +5242,18 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
         # The stable part (identity + suffix) goes BEFORE <!-- volatile -->;
         # all per-request dynamic content (date, tool hints, strategy) goes AFTER.
         # This enables Anthropic prompt cache reuse across decompose calls.
+        # 将 identity 与通用分解后缀组合.
+        # 稳定部分 (identity + suffix) 位于 <!-- volatile --> 之前;
+        # 所有按 request 变化的内容 (日期, tool 提示, 策略) 位于其后.
+        # 这样 decompose 调用之间可以复用 Anthropic prompt cache.
         decompose_system_prompt = identity_prompt + COMMON_DECOMPOSITION_SUFFIX + "\n<!-- volatile -->\n"
         if current_date:
             decompose_system_prompt += f"The current date is {current_date}.\n\n"
 
         # FIRST DECISION: Domain Analysis (for company queries)
         # This comes before tool hints because it's the first planning decision (task-1)
+        # 第一决策: Domain Analysis (针对公司类 query)
+        # 它排在 tool 提示之前, 因为这是第一个规划决策 (task-1)
         if isinstance(query.context, dict):
             query_type = query.context.get("query_type")
         else:
@@ -4692,6 +5262,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
             decompose_system_prompt = decompose_system_prompt + DOMAIN_ANALYSIS_HINT
 
         # If tools are available, add a generic tool-aware hint
+        # 若有可用 tool, 则追加通用的 tool 感知提示
         if available_tools:
             tool_hint = (
                 f"\n\nAVAILABLE TOOLS: {', '.join(available_tools)}\n"
@@ -4702,6 +5273,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
             decompose_system_prompt = decompose_system_prompt + tool_hint
 
         # Strategy-specific scaling for research workflows
+        # 为研究 workflow 按策略调整规模
         research_strategy = None
         if isinstance(query.context, dict):
             research_strategy = query.context.get("research_strategy")
@@ -4744,6 +5316,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
                 decompose_system_prompt = decompose_system_prompt + strategy_guidance[strategy_key]
 
         # If research_areas provided, instruct the planner to decompose 1→N per area and add parent_area
+        # 若提供了 research_areas, 则要求规划器每个领域分解出 1→N 个子 task, 并填写 parent_area
         if isinstance(query.context, dict) and query.context.get("research_areas"):
             areas = query.context.get("research_areas") or []
             if isinstance(areas, list) and areas:
@@ -4770,6 +5343,8 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
 
         # Dynamic HITL hint: only appended when a confirmed_plan exists from review.
         # When review is OFF, this section is skipped — zero impact on non-review flows.
+        # 动态 HITL 提示: 仅在评审产生了 confirmed_plan 时追加.
+        # 评审关闭时该段会被跳过 —— 对非评审流程零影响.
         if query.context and query.context.get("confirmed_plan"):
             hitl_hint = (
                 "\n\nUSER REVIEW CONTEXT (HITL):\n"
@@ -4800,17 +5375,24 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
         # Both date injections are now consolidated in the volatile section above
         # (after <!-- volatile --> marker). If current_date was not available from
         # context earlier, fall back to UTC now in the volatile section.
+        # 注意: 此前日期注入同时发生在这里和 prompt 顶部,
+        # 把动态内容放到开头, 破坏了 prompt cache.
+        # 现在两次日期注入都合并到上方的 volatile 段 (<!-- volatile --> 之后).
+        # 若前面未能从 context 取得 current_date, 此处以 UTC 兜底写入 volatile 段.
         if "<!-- volatile -->" in decompose_system_prompt and "current date" not in decompose_system_prompt.split("<!-- volatile -->")[1].lower():
             fallback_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             # Insert right after the volatile marker
+            # 紧跟在 volatile 标记之后插入
             parts = decompose_system_prompt.split("<!-- volatile -->\n", 1)
             decompose_system_prompt = parts[0] + "<!-- volatile -->\n" + f"Current date: {fallback_date} (UTC).\n\n" + parts[1]
 
         # Build messages with history rehydration for context awareness
+        # 构建 messages, 并重新注入历史以提供 context 感知
         messages = [{"role": "system", "content": decompose_system_prompt}]
 
 
         # Rehydrate history from context if present (same as agent_query endpoint)
+        # 若 context 中存在历史则重新注入 (与 agent_query 端点一致)
         history_rehydrated = False
         context_without_history = query.context if query.context else {}
         if query.context and "history" in query.context:
@@ -4823,6 +5405,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
             }
 
         # Add the current query
+        # 加入当前 query
         ctx_keys = list(context_without_history.keys())[:5] if isinstance(context_without_history, dict) else []
         tools = ",".join(query.allowed_tools or [])
         user = (
@@ -4833,8 +5416,12 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
         # HITL Phase 1: inject structured output from Refine (priority_focus is the switch)
         # When priority_focus exists, Refine has already parsed confirmed_plan into structured format.
         # Decompose consumes these structured fields directly for subtask allocation.
+        # HITL 第一阶段: 注入 Refine 的结构化输出 (以 priority_focus 作为开关)
+        # 存在 priority_focus 时, 说明 Refine 已将 confirmed_plan 解析为结构化格式.
+        # Decompose 直接消费这些结构化字段来分配子 task.
         if query.context and query.context.get("priority_focus"):
             # New path: consume Refine's structured HITL output
+            # 新路径: 消费 Refine 的结构化 HITL 输出
             priority_focus = query.context.get("priority_focus", [])
             secondary_focus = query.context.get("secondary_focus", [])
             skip_areas = query.context.get("skip_areas", [])
@@ -4842,6 +5429,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
             confirmed_plan = query.context.get("confirmed_plan", "")
 
             # Build structured brief section from Refine output
+            # 用 Refine 的输出构建结构化的 brief 段
             brief_parts = []
             if confirmed_plan:
                 brief_parts.append(f"Research Direction:\n{confirmed_plan}")
@@ -4876,10 +5464,13 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
         elif query.context and query.context.get("confirmed_plan"):
             # Legacy fallback: confirmed_plan exists but Refine hasn't structured it yet
             # This handles edge cases during migration or when Refine fails to parse
+            # Legacy 回退: 存在 confirmed_plan 但 Refine 尚未结构化
+            # 用于迁移期间的边界情况, 或 Refine 解析失败时
             confirmed_plan = query.context["confirmed_plan"]
 
             brief_section = f"Research Direction:\n{confirmed_plan}"
             # Fallback: extract user messages from raw conversation
+            # 回退: 从原始对话中提取 user 消息
             review_conv = query.context.get("review_conversation")
             if review_conv:
                 conv_list = review_conv if isinstance(review_conv, list) else []
@@ -4909,6 +5500,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
         )
 
         # Resolve decompose model tier from context (Go passes model_tier for research)
+        # 从 context 解析 decompose 的 model tier (Go 会为研究 task 传入 model_tier)
         decompose_tier = ModelTier.SMALL
         if isinstance(query.context, dict):
             _tier_map = {"small": ModelTier.SMALL, "medium": ModelTier.MEDIUM, "large": ModelTier.LARGE}
@@ -4922,6 +5514,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
                 messages=messages,
                 tier=decompose_tier,
                 max_tokens=8192,  # Increased from 4096 to prevent truncation on complex decompositions
+                # 从 4096 提高以避免复杂分解被截断
                 temperature=0.1,
                 response_format={"type": "json_object"},
                 specific_model=(

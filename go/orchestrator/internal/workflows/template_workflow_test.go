@@ -119,6 +119,7 @@ func TestTemplateCompilation_DAGNode(t *testing.T) {
 	assert.Equal(t, templates.NodeTypeDAG, dagNode.Type)
 
 	// The metadata.tasks are validated during compilation
+	// DAG 节点的 tasks 在编译期就已校验，这里只确认 metadata 被保留。
 	tasks, ok := dagNode.Metadata["tasks"]
 	assert.True(t, ok, "Tasks metadata should be present")
 	assert.NotNil(t, tasks, "Tasks should not be nil")

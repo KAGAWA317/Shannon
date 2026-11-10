@@ -11,6 +11,7 @@ import (
 )
 
 // UnifiedResponse represents the standardized API response format
+// UnifiedResponse 表示标准化的 API response 格式
 type UnifiedResponse struct {
 	TaskID      string              `json:"task_id"`
 	SessionID   string              `json:"session_id"`
@@ -26,6 +27,7 @@ type UnifiedResponse struct {
 }
 
 // ToolError represents a single tool failure surfaced to clients
+// ToolError 表示暴露给客户端的单条 tool 失败信息
 type ToolError struct {
 	AgentID string `json:"agent_id,omitempty"`
 	Tool    string `json:"tool"`
@@ -61,6 +63,7 @@ type ResponsePerformance struct {
 }
 
 // TransformToUnifiedResponse converts internal task result to unified API response
+// TransformToUnifiedResponse 把内部 task 结果转换为统一 API response
 func TransformToUnifiedResponse(result workflows.TaskResult, sessionID string, executionTime int64) UnifiedResponse {
 	status := "completed"
 	if !result.Success {
@@ -81,6 +84,7 @@ func TransformToUnifiedResponse(result workflows.TaskResult, sessionID string, e
 	}
 
 	// Extract tool errors from metadata (if present)
+	// 从 metadata 中提取 tool 错误（若存在）
 	toolErrors := extractToolErrors(result)
 
 	return UnifiedResponse{
@@ -101,6 +105,7 @@ func TransformToUnifiedResponse(result workflows.TaskResult, sessionID string, e
 }
 
 // extractToolErrors builds a client-friendly list of tool errors from result metadata
+// extractToolErrors 从结果 metadata 构建便于客户端使用的 tool 错误列表
 func extractToolErrors(result workflows.TaskResult) []ToolError {
 	if result.Metadata == nil {
 		return nil
@@ -147,6 +152,7 @@ func extractToolErrors(result workflows.TaskResult) []ToolError {
 }
 
 // truncateError limits error messages to 500 characters to prevent response bloat
+// truncateError 把错误信息限制为 500 字符，避免 response 膨胀
 func truncateError(msg string) string {
 	const maxLen = 500
 	runes := []rune(msg)
@@ -169,10 +175,13 @@ func extractMetadata(result workflows.TaskResult) ResponseMetadata {
 
 	// Process metadata (safe to access after nil check)
 	// Extract execution mode with fallbacks
+	// 处理 metadata（nil 检查之后可安全访问）
+	// 提取执行模式，带兜底
 	if mode, ok := result.Metadata["execution_mode"].(string); ok {
 		meta.ExecutionMode = mode
 	} else if mode, ok := result.Metadata["mode"].(string); ok {
 		// Fallback: workflows use "mode" instead of "execution_mode"
+		// 兜底：workflow 使用 "mode" 而非 "execution_mode"
 		meta.ExecutionMode = mode
 	}
 
@@ -187,6 +196,7 @@ func extractMetadata(result workflows.TaskResult) ResponseMetadata {
 	}
 
 	// Extract agent count with fallbacks (handle both int and float64)
+	// 提取 agent 数量，带兜底（同时处理 int 与 float64）
 	if agents, ok := result.Metadata["agents_used"].(int); ok {
 		meta.AgentsUsed = agents
 	} else if agents, ok := result.Metadata["agents_used"].(float64); ok {
@@ -234,6 +244,7 @@ func extractMetadata(result workflows.TaskResult) ResponseMetadata {
 	}
 
 	// Try to extract models from agent_usages if available
+	// 若 agent_usages 可用则尝试从中提取模型
 	if meta.Models == nil && meta.Model == "" {
 		if usages, ok := result.Metadata["agent_usages"].([]activities.AgentUsage); ok {
 			models := extractUniqueModelsFromUsages(usages)
@@ -255,6 +266,7 @@ func extractUsage(result workflows.TaskResult) ResponseUsage {
 
 	if result.Metadata != nil {
 		// Extract detailed token counts (handle both int and float64)
+		// 提取详细 token 数（同时处理 int 与 float64）
 		if input, ok := result.Metadata["input_tokens"].(int); ok {
 			usage.InputTokens = input
 		} else if input, ok := result.Metadata["input_tokens"].(float64); ok {
@@ -267,6 +279,7 @@ func extractUsage(result workflows.TaskResult) ResponseUsage {
 		}
 
 		// Try to aggregate from agent_usages if individual tokens not set
+		// 单项 token 未设置时尝试从 agent_usages 汇总
 		if usage.InputTokens == 0 && usage.OutputTokens == 0 {
 			if usages, ok := result.Metadata["agent_usages"].([]activities.AgentUsage); ok {
 				for _, u := range usages {
@@ -286,11 +299,13 @@ func extractUsage(result workflows.TaskResult) ResponseUsage {
 		}
 
 		// Prompt cache metrics (Anthropic cache read/creation tokens)
+		// prompt cache 指标（Anthropic cache read/creation token）
 		usage.CacheReadTokens = getIntFromMetadata(result.Metadata, "cache_read_tokens")
 		usage.CacheCreationTokens = getIntFromMetadata(result.Metadata, "cache_creation_tokens")
 		cacheCreation1hTokens := getIntFromMetadata(result.Metadata, "cache_creation_1h_tokens")
 
 		// Calculate cache savings: difference between full-price and cache-discounted cost
+		// 计算 cache 节省额：全价成本与 cache 折扣成本之差
 		if usage.CacheReadTokens > 0 || usage.CacheCreationTokens > 0 {
 			model := ""
 			provider := ""
@@ -308,6 +323,11 @@ func extractUsage(result workflows.TaskResult) ResponseUsage {
 				// the uncached cost requires adding them back. For OpenAI/xAI/Kimi,
 				// input_tokens already INCLUDES cached tokens, so CostForSplit on
 				// input_tokens alone is the correct uncached baseline.
+				// 单模型 workflow：精确计算。
+				// 对 Anthropic，input_tokens 不含 cache token，因此还原无 cache 成本
+				// 需把它们加回来。对 OpenAI/xAI/Kimi，input_tokens 已包含
+				// cache token，因此仅对 input_tokens 调用 CostForSplit 即为正确的
+				// 无 cache 基线。
 				costWithCache := pricing.CostForSplitWithCache(model, usage.InputTokens, usage.OutputTokens,
 					usage.CacheReadTokens, usage.CacheCreationTokens, cacheCreation1hTokens, provider)
 				var costWithoutCache float64
@@ -321,9 +341,11 @@ func extractUsage(result workflows.TaskResult) ResponseUsage {
 				}
 			} else if s, ok := result.Metadata["cache_savings_usd"].(float64); ok && s > 0 {
 				// Multi-model workflow: use pre-computed per-model savings from DB
+				// 多模型 workflow：使用 DB 中预先算好的按模型节省额
 				usage.CacheSavingsUSD = s
 			} else if usage.CostUSD > 0 {
 				// Multi-model workflow fallback: estimate savings from blended average
+				// 多模型 workflow 兜底：按混合平均价估算节省额
 				totalTokens := usage.InputTokens + usage.OutputTokens + usage.CacheReadTokens + usage.CacheCreationTokens
 				if totalTokens > 0 {
 					avgInputPricePerToken := usage.CostUSD / float64(totalTokens)
@@ -339,6 +361,7 @@ func extractUsage(result workflows.TaskResult) ResponseUsage {
 	}
 
 	// Ensure total matches sum if we have both
+	// 两者都有时确保 total 与 sum 一致
 	if usage.InputTokens > 0 && usage.OutputTokens > 0 {
 		usage.TotalTokens = usage.InputTokens + usage.OutputTokens
 	}
@@ -357,6 +380,7 @@ func determineStopReason(result workflows.TaskResult) string {
 	}
 
 	// Check for specific stop reasons in metadata
+	// 检查 metadata 中的具体停止原因
 	if result.Metadata != nil {
 		if reason, ok := result.Metadata["stop_reason"].(string); ok {
 			return reason
@@ -433,6 +457,8 @@ func extractUniqueModelsFromUsages(usages []activities.AgentUsage) []string {
 
 // getIntFromMetadata extracts an int from a metadata map, handling both int and float64
 // (Go JSON unmarshals numbers as float64 for interface{}).
+// getIntFromMetadata 从 metadata map 中提取 int，同时处理 int 与 float64
+// （Go 的 JSON 反序列化会把 interface{} 中的数字解析为 float64）。
 func getIntFromMetadata(m map[string]interface{}, key string) int {
 	if v, ok := m[key]; ok {
 		switch n := v.(type) {
@@ -446,6 +472,7 @@ func getIntFromMetadata(m map[string]interface{}, key string) int {
 }
 
 // unifiedRespToJSONB converts a UnifiedResponse to db.JSONB for persistence.
+// unifiedRespToJSONB 把 UnifiedResponse 转为 db.JSONB 以便持久化。
 func unifiedRespToJSONB(resp UnifiedResponse) db.JSONB {
 	data, err := json.Marshal(resp)
 	if err != nil {

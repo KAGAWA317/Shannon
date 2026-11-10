@@ -18,7 +18,9 @@ class TestAttachmentResolver:
 
     @pytest.mark.asyncio
     async def test_resolve_base64_attachment(self, resolver, mock_redis):
-        """Resolve an attachment ID to base64 data from Redis."""
+        """Resolve an attachment ID to base64 data from Redis.
+        从 Redis 把 attachment ID 解析为 base64 数据。
+        """
         att_data = {
             "id": "abc123",
             "session_id": "sess-1",
@@ -78,13 +80,18 @@ class TestAttachmentResolver:
 
 
 # ─── Task 5: build_agent_messages injection tests ───
+# ─── Task 5：build_agent_messages 注入测试 ───
 
 
 class TestBuildAgentMessagesAttachments:
-    """Test that build_agent_messages injects shannon_attachment blocks."""
+    """Test that build_agent_messages injects shannon_attachment blocks.
+    测试 build_agent_messages 会注入 shannon_attachment block。
+    """
 
     def _make_body(self, **overrides):
-        """Create a minimal AgentLoopStepRequest-like object."""
+        """Create a minimal AgentLoopStepRequest-like object.
+        构造一个最小的、类似 AgentLoopStepRequest 的对象。
+        """
         from llm_service.api.agent import AgentLoopStepRequest
         defaults = {
             "agent_id": "test-agent",
@@ -102,6 +109,7 @@ class TestBuildAgentMessagesAttachments:
         assert msgs[0]["role"] == "system"
         assert msgs[1]["role"] == "user"
         # Without attachments, content is a plain string
+        # 没有 attachment 时，content 是纯字符串
         assert isinstance(msgs[1]["content"], str)
 
     def test_with_attachments_returns_list_content(self):
@@ -114,6 +122,7 @@ class TestBuildAgentMessagesAttachments:
         user_content = msgs[1]["content"]
         assert isinstance(user_content, list)
         # First block is the attachment, last is the text
+        # 第一个 block 是 attachment，最后一个是 text
         assert user_content[0]["type"] == "shannon_attachment"
         assert user_content[0]["media_type"] == "image/png"
         assert user_content[0]["data"] == "iVBORw0KGgo="
@@ -132,6 +141,7 @@ class TestBuildAgentMessagesAttachments:
         user_content = msgs[1]["content"]
         assert isinstance(user_content, list)
         assert len(user_content) == 3  # 2 attachments + 1 text
+        # 2 个 attachment + 1 个 text
         assert user_content[0]["type"] == "shannon_attachment"
         assert user_content[1]["type"] == "shannon_attachment"
         assert user_content[2]["type"] == "text"
@@ -167,10 +177,13 @@ class TestBuildAgentMessagesAttachments:
 
 
 # ─── Task 6: Provider content block handling tests ───
+# ─── Task 6：各 provider 的 content block 处理测试 ───
 
 
 class TestTranslateContentForOpenAI:
-    """Test shannon_attachment conversion in translate_content_for_openai."""
+    """Test shannon_attachment conversion in translate_content_for_openai.
+    测试 translate_content_for_openai 中的 shannon_attachment 转换。
+    """
 
     def test_image_attachment_to_openai(self):
         content = [
@@ -209,7 +222,9 @@ class TestTranslateContentForOpenAI:
 
 
 class TestAnthropicAttachmentConversion:
-    """Test shannon_attachment conversion in Anthropic provider."""
+    """Test shannon_attachment conversion in Anthropic provider.
+    测试 Anthropic provider 中的 shannon_attachment 转换。
+    """
 
     def test_image_attachment_to_anthropic(self):
         from llm_provider.anthropic_provider import AnthropicProvider
@@ -245,6 +260,7 @@ class TestAnthropicAttachmentConversion:
             ]},
         ]
         # Create a mock provider instance to call the instance method
+        # 创建一个 mock provider 实例，以便调用实例方法
         with patch.object(AnthropicProvider, '__init__', lambda self, *a, **k: None):
             provider = AnthropicProvider.__new__(AnthropicProvider)
             result = provider._convert_attachments_for_anthropic(messages)
@@ -264,7 +280,9 @@ class TestAnthropicAttachmentConversion:
 
 
 class TestGeminiAttachmentConversion:
-    """Test shannon_attachment conversion in Google Gemini provider."""
+    """Test shannon_attachment conversion in Google Gemini provider.
+    测试 Google Gemini provider 中的 shannon_attachment 转换。
+    """
 
     def test_content_to_gemini_parts_with_attachment(self):
         from llm_provider.google_provider import GoogleProvider
@@ -328,19 +346,27 @@ class TestGeminiAttachmentConversion:
 
 
 class TestXAIAttachmentDegradation:
-    """Test shannon_attachment degradation to text in xAI provider."""
+    """Test shannon_attachment degradation to text in xAI provider.
+    测试 xAI provider 中 shannon_attachment 降级为文本的行为。
+    """
 
     def test_attachment_degrades_to_text(self):
-        """xAI doesn't support multimodal; attachments degrade to text descriptions."""
+        """xAI doesn't support multimodal; attachments degrade to text descriptions.
+        xAI 不支持多模态；attachment 会降级为文本描述。
+        """
         # Manually test the sanitization logic from _sanitize_messages
+        # 手动测试 _sanitize_messages 中的清洗逻辑
         from llm_provider.xai_provider import XAIProvider
         # Create a minimal instance for testing _sanitize_messages
+        # 构造一个最小实例来测试 _sanitize_messages
         # We can't instantiate without API key, so test the logic directly
+        # 没有 API key 无法正常实例化，所以直接测试这段逻辑
         content = [
             {"type": "shannon_attachment", "media_type": "image/png", "data": "abc=", "filename": "chart.png"},
             {"type": "text", "text": "What is in this chart?"},
         ]
         # Simulate what _sanitize_messages does for list content:
+        # 模拟 _sanitize_messages 对 list content 的处理：
         text_parts = []
         for part in content:
             if isinstance(part, dict) and part.get("type") == "shannon_attachment":
@@ -357,15 +383,20 @@ class TestXAIAttachmentDegradation:
 
 
 class TestGroqAttachmentDegradation:
-    """Test shannon_attachment degradation to text in Groq provider."""
+    """Test shannon_attachment degradation to text in Groq provider.
+    测试 Groq provider 中 shannon_attachment 降级为文本的行为。
+    """
 
     def test_attachment_degrades_to_text(self):
-        """Groq doesn't support multimodal; attachments degrade to text descriptions."""
+        """Groq doesn't support multimodal; attachments degrade to text descriptions.
+        Groq 不支持多模态；attachment 会降级为文本描述。
+        """
         content = [
             {"type": "shannon_attachment", "media_type": "application/pdf", "data": "pdf=", "filename": "report.pdf"},
             {"type": "text", "text": "Summarize this report"},
         ]
         # Simulate _sanitize_messages logic
+        # 模拟 _sanitize_messages 的逻辑
         text_parts = []
         for part in content:
             if isinstance(part, dict) and part.get("type") == "shannon_attachment":
@@ -382,11 +413,15 @@ class TestGroqAttachmentDegradation:
 
 
 class TestResolveAttachmentsSkip:
-    """Downstream agents with dependency_results should skip attachment resolution."""
+    """Downstream agents with dependency_results should skip attachment resolution.
+    下游 agent 在带有 dependency_results 时应跳过 attachment 解析。
+    """
 
     @pytest.mark.asyncio
     async def test_skip_when_dependency_results_present(self):
-        """Agent with dependency_results should NOT resolve attachments."""
+        """Agent with dependency_results should NOT resolve attachments.
+        带 dependency_results 的 agent 不应解析 attachment。
+        """
         context = {
             "attachments": [{"id": "att-1", "media_type": "image/png"}],
             "dependency_results": {"task-1": {"response": "It's a red pixel", "success": True}},
@@ -398,7 +433,9 @@ class TestResolveAttachmentsSkip:
 
     @pytest.mark.asyncio
     async def test_resolve_when_no_dependency_results(self):
-        """Root agent (no dependency_results) should resolve normally."""
+        """Root agent (no dependency_results) should resolve normally.
+        根 agent（没有 dependency_results）应正常解析。
+        """
         context = {
             "attachments": [{"id": "att-1", "media_type": "image/png"}],
         }
@@ -414,7 +451,9 @@ class TestResolveAttachmentsSkip:
 
     @pytest.mark.asyncio
     async def test_skip_with_empty_dependency_results(self):
-        """Empty dict dependency_results is falsy — should resolve normally."""
+        """Empty dict dependency_results is falsy — should resolve normally.
+        空的 dependency_results dict 为假值 —— 应正常解析。
+        """
         context = {
             "attachments": [{"id": "att-1", "media_type": "image/png"}],
             "dependency_results": {},

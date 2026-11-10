@@ -28,6 +28,8 @@ type Config struct {
 func Initialize(cfg Config, logger *zap.Logger) error {
 	// Always initialize a tracer handle, even if provider is disabled.
 	// This ensures Start* helpers never panic when tracing is disabled.
+	// 即使 provider 被禁用也始终初始化 tracer 句柄。
+	// 这可确保 tracing 禁用时 Start* 辅助函数不会 panic。
 	if cfg.ServiceName == "" {
 		cfg.ServiceName = "shannon-orchestrator"
 	}
@@ -74,6 +76,7 @@ func Initialize(cfg Config, logger *zap.Logger) error {
 	)
 
 	// Set global tracer provider and keep tracer handle
+	// 设置全局 tracer provider 并保留 tracer 句柄
 	otel.SetTracerProvider(tp)
 	tracer = otel.Tracer(cfg.ServiceName)
 
@@ -82,6 +85,7 @@ func Initialize(cfg Config, logger *zap.Logger) error {
 }
 
 // W3CTraceparent generates a W3C traceparent header value
+// W3CTraceparent 生成 W3C traceparent 头值
 func W3CTraceparent(ctx context.Context) string {
 	span := oteltrace.SpanFromContext(ctx)
 	if !span.SpanContext().IsValid() {
@@ -97,6 +101,7 @@ func W3CTraceparent(ctx context.Context) string {
 }
 
 // InjectTraceparent adds W3C traceparent header to HTTP request
+// InjectTraceparent 向 HTTP request 注入 W3C traceparent 头
 func InjectTraceparent(ctx context.Context, req *http.Request) {
 	if traceparent := W3CTraceparent(ctx); traceparent != "" {
 		req.Header.Set("traceparent", traceparent)
@@ -104,11 +109,13 @@ func InjectTraceparent(ctx context.Context, req *http.Request) {
 }
 
 // StartSpan creates a new span with the given name
+// StartSpan 用给定名称创建新 span
 func StartSpan(ctx context.Context, spanName string) (context.Context, oteltrace.Span) {
 	return tracer.Start(ctx, spanName)
 }
 
 // StartHTTPSpan creates a span for HTTP operations with method and URL
+// StartHTTPSpan 为 HTTP 操作创建带 method 与 URL 的 span
 func StartHTTPSpan(ctx context.Context, method, url string) (context.Context, oteltrace.Span) {
 	if tracer == nil {
 		tracer = otel.Tracer("shannon-orchestrator")

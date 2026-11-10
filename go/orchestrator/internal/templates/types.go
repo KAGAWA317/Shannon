@@ -11,6 +11,7 @@ const (
 )
 
 // StrategyType enumerates supported execution strategies within templates.
+// StrategyType 枚举模板中支持的执行策略。
 type StrategyType string
 
 const (
@@ -22,6 +23,7 @@ const (
 )
 
 // Template captures the raw user-defined workflow structure.
+// Template 捕获用户定义的原始 workflow 结构。
 type Template struct {
 	Name        string           `yaml:"name"`
 	Description string           `yaml:"description"`
@@ -34,6 +36,7 @@ type Template struct {
 }
 
 // TemplateDefaults define shared knobs applied to nodes when individual values are absent.
+// TemplateDefaults 定义节点未单独取值时应用的共享参数。
 type TemplateDefaults struct {
 	ModelTier       string `yaml:"model_tier"`
 	BudgetAgentMax  int    `yaml:"budget_agent_max"`
@@ -41,6 +44,7 @@ type TemplateDefaults struct {
 }
 
 // TemplateNodeFailure specifies backoff behaviour when a node fails.
+// TemplateNodeFailure 指定节点失败时的退避行为。
 type TemplateNodeFailure struct {
 	DegradeTo  StrategyType `yaml:"degrade_to"`
 	Retry      int          `yaml:"retry"`
@@ -48,6 +52,7 @@ type TemplateNodeFailure struct {
 }
 
 // TemplateNode defines a workflow node within a template.
+// TemplateNode 定义模板中的 workflow 节点。
 type TemplateNode struct {
 	ID             string               `yaml:"id"`
 	Type           NodeType             `yaml:"type"`
@@ -60,12 +65,14 @@ type TemplateNode struct {
 }
 
 // TemplateEdge expresses an explicit edge in the workflow graph.
+// TemplateEdge 表示 workflow 图中的显式边。
 type TemplateEdge struct {
 	From string `yaml:"from"`
 	To   string `yaml:"to"`
 }
 
 // NodeByID returns a pointer to the node with the supplied ID, if present.
+// NodeByID 返回指定 ID 节点的指针（若存在）。
 func (t *Template) NodeByID(id string) *TemplateNode {
 	for i := range t.Nodes {
 		if t.Nodes[i].ID == id {

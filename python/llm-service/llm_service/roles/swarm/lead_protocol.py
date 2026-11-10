@@ -1,7 +1,10 @@
 """Lead orchestrator protocol for Swarm V2.
+Swarm V2 的 Lead 编排者协议。
 
 Defines the system prompt that governs Lead agent behavior.
 Lead manages the team lifecycle: planning, spawning, assigning, quality gating, done.
+定义约束 Lead agent 行为的 system prompt。
+Lead 管理团队生命周期：规划、派生、分派、质量把关、结束。
 
 Design decisions (from architecture review 2026-02-20):
 - Lead is a SINGLE-SHOT decision maker (not a mini-loop agent)
@@ -9,6 +12,12 @@ Design decisions (from architecture review 2026-02-20):
 - Lead has management actions only (spawn, assign, send, broadcast, revise, done)
 - Quality Gate is mandatory for every agent_completed event
 - "lead" role is NOT in SWARM_ROLE_PROMPTS (Lead has its own dedicated prompt)
+设计决策（来自 2026-02-20 架构评审）：
+- Lead 是 SINGLE-SHOT 决策者（不是 mini-loop agent）
+- Go orchestrator 将预读数据注入 Lead 的 context
+- Lead 只拥有管理类动作（spawn、assign、send、broadcast、revise、done）
+- 每个 agent_completed event 都必须经过 Quality Gate
+- "lead" 角色不在 SWARM_ROLE_PROMPTS 中（Lead 拥有自己专用的 prompt）
 """
 
 LEAD_SYSTEM_PROMPT = """You are the Lead orchestrator of an agent team. You manage the team from start to finish.

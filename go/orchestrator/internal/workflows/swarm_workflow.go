@@ -21,6 +21,7 @@ import (
 
 // isTransientError classifies tool errors as transient (rate limit, timeout) vs permanent.
 // Transient errors warrant backoff and retry; permanent errors count toward abort threshold.
+// 瞬时错误（rate limit、timeout）退避 retry；永久错误计入中止阈值。
 func isTransientError(err error) bool {
 	if err == nil {
 		return false
@@ -86,6 +87,7 @@ func taskHasUnmetDeps(taskID string, taskList []activities.SwarmTask) bool {
 
 // hasAssignablePendingTask returns true if any pending task has all dependencies met.
 // Used by checkpoint skip to avoid waking Lead when only blocked tasks remain.
+// 用于 checkpoint 跳过逻辑：只剩被阻塞的 task 时不必唤醒 Lead。
 func hasAssignablePendingTask(taskList []activities.SwarmTask) bool {
 	for _, t := range taskList {
 		if t.Status == "pending" && !taskHasUnmetDeps(t.ID, taskList) {
@@ -97,6 +99,8 @@ func hasAssignablePendingTask(taskList []activities.SwarmTask) bool {
 
 // Only filters specific tool output patterns (file_write blobs, raw action JSON),
 // not arbitrary JSON which may contain valid structured results.
+// 只过滤特定 tool 输出形态（file_write 大块内容、裸 action JSON），
+// 不过滤任意 JSON，以免误删合法结构化结果。
 func looksLikeToolJSON(s string) bool {
 	trimmed := strings.TrimSpace(s)
 	if len(trimmed) == 0 {
@@ -176,6 +180,7 @@ func isSearchSaturated(queries []string, window int, minSimilarity float64) bool
 // Example output: "web_search(x3), file_read(x2), file_write(x1)"
 // This is included in idle signals so the parent can inject it on reassignment,
 // preventing agents from repeating the same searches/reads.
+// 该摘要随 idle 信号传给父 workflow，Lead 重新派活时可注入，避免 agent 重复相同的搜索/读取。
 func buildToolsUsedSummary(history []activities.AgentLoopTurn) string {
 	counts := make(map[string]int)
 	for _, turn := range history {
@@ -238,6 +243,7 @@ func convertHistoryForLead(messages []Message) []map[string]interface{} {
 // ── fetchTracker ────────────────────────────────────────────────────────────
 // Consolidates L1 fetch cache, L2 team knowledge, and L3 search overlap
 // into a single structure, eliminating duplicated check/write logic.
+// 把 L1 抓取 cache、L2 团队知识与 L3 搜索重叠合并到同一结构，消除重复的检查/写入逻辑。
 
 const fetchTrackerMaxEntries = 200 // cap to prevent unbounded memory growth
 
@@ -369,6 +375,7 @@ func mergeTeamKnowledge(global []activities.TeamKnowledgeEntry, incoming []activ
 // normalizeURL strips fragments and trailing slashes, lowercases scheme+host,
 // preserves path case and query parameters.
 // NOTE: Related but distinct from metadata.NormalizeURL (which also strips utm/www).
+// 注意与 metadata.NormalizeURL 不同：后者还会去掉 utm 参数与 www。
 func normalizeURL(raw string) string {
 	if raw == "" {
 		return raw
@@ -507,6 +514,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 
 	// Version gate for P2P activities (RegisterFile, SendAgentMessage, WorkspaceAppend).
 	// Old workflows in replay must not execute these new activity calls.
+	// P2P activity 的版本闸门：重放中的旧 workflow 不得执行这些新增 activity 调用。
 	p2pV := workflow.GetVersion(ctx, "agent_loop_p2p_v1", workflow.DefaultVersion, 1)
 
 	// Emit agent started event
@@ -579,6 +587,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 	for iteration := 0; iteration < input.MaxIterations; iteration++ {
 		// Non-blocking shutdown check: catches signals sent while the agent
 		// was blocked in a tool_call activity on the previous iteration.
+		// 非阻塞关停检查：捕获上一轮在 tool_call activity 阻塞期间收到的信号。
 		shutdownCh := workflow.GetSignalChannel(ctx, fmt.Sprintf("agent:%s:shutdown", input.AgentID))
 		shutdownSel := workflow.NewSelector(ctx)
 		shouldShutdown := false
@@ -793,6 +802,9 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 		// Only intercept if the LLM chose a non-tool action (idle/done).
 		// If the LLM returned a tool_call, let the tool execute first —
 		// shutting down mid-tool loses work (e.g., file_write never executes).
+		// LLM 调用后的关停检查：AgentLoopStep 可能因 LLM 调用阻塞 30-90 秒，期间到达的信号在此处理。
+		// 仅当 LLM 选择非 tool 动作（idle/done）时才拦截；若返回 tool_call，先让 tool 执行完，
+		// 中途关停会丢失工作（例如 file_write 根本没落盘）。
 		if stepResult.Action == "idle" || stepResult.Action == "done" {
 			postLLMShutdownCh := workflow.GetSignalChannel(ctx, fmt.Sprintf("agent:%s:shutdown", input.AgentID))
 			postLLMSel := workflow.NewSelector(ctx)
@@ -870,6 +882,8 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 		// Enforce Lead-controlled lifecycle: in swarm mode (has team roster),
 		// agents cannot self-exit with "done". Convert "done" → "idle".
 		// Non-swarm agents (no team roster) can exit normally.
+		// 强制 Lead 掌控生命周期：swarm mode（有 team roster）下 agent 不能用 "done" 自行退出，
+		// "done" 会被改写为 "idle"；无 roster 的普通 agent 可正常退出。
 		if stepResult.Action == "done" && len(input.TeamRoster) > 0 {
 			logger.Info("Agent tried done — converting to idle (Lead controls lifecycle)",
 				"agent_id", input.AgentID,
@@ -880,6 +894,9 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 			// Guard: LLMs sometimes stuff a raw tool_call JSON into the response
 			// field (e.g. the entire file_write action). Detect and fall back to
 			// DecisionSummary which is always a clean human-readable summary.
+			// 保留 agent 的 response 以免 idle timeout 后丢失；但 LLM 有时会把裸 tool_call JSON
+			// （例如整个 file_write 动作）塞进 response 字段，检测到就退回 DecisionSummary——
+			// 它始终是干净的可读摘要。
 			if stepResult.Response != "" {
 				resp := strings.TrimSpace(stepResult.Response)
 				if strings.HasPrefix(resp, "{") && strings.Contains(resp, `"action"`) && strings.Contains(resp, `"tool"`) {
@@ -941,6 +958,8 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 
 			// Auto-inject extract_prompt for web_fetch/web_crawl so extraction
 			// LLM focuses on data the agent actually needs (not generic extraction).
+			// 为 web_fetch/web_crawl 自动注入 extract_prompt，让抽取用的 LLM
+			// 聚焦 agent 真正需要的数据，而不是做通用抽取。
 			if (stepResult.Tool == "web_fetch" || stepResult.Tool == "web_crawl") && stepResult.ToolParams != nil {
 				if _, hasPrompt := stepResult.ToolParams["extract_prompt"]; !hasPrompt {
 					taskSnippet := input.Task
@@ -1038,6 +1057,8 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 						// Prevent double-write: inject system message reminding agent
 						// it already wrote its deliverable. This survives history truncation
 						// (unlike notes which may be too short after large file_write).
+						// 防止重复写入：注入系统消息提醒 agent 已交付过成果；
+						// 该提醒在历史被截断后仍保留（笔记类信息在大文件写入后往往太短而丢失）。
 						pendingSystemMessage = fmt.Sprintf(
 							"FILE ALREADY WRITTEN: You saved your deliverable to '%s' in the previous iteration. "+
 								"Do NOT write another file. Proceed to publish_data and then idle.",
@@ -1394,6 +1415,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 
 			// B1: Per-agent reassignment limit to prevent runaway iteration expansion.
 			// Each agent can be reassigned at most 2 times (3 total tasks including initial).
+			// 每个 agent 最多被重新派活 2 次（含初始 task 共 3 个），防止迭代规模失控。
 			const maxReassignments = 2
 			const iterationsPerReassign = 15
 			const maxTotalIterations = 80 // Lowered from 150
@@ -1642,6 +1664,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 
 		// History truncation: sliding window to prevent unbounded growth.
 		// Keep first 2 turns (initial context) + last 13 (recent context) = max 15.
+		// 历史滑动窗口：保留最初 2 轮（初始 context）+ 最近 13 轮，最多 15 轮。
 		const maxHistoryTurns = 15
 		if len(history) > maxHistoryTurns {
 			history = append(history[:2], history[len(history)-(maxHistoryTurns-2):]...)
@@ -1649,6 +1672,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 
 		// Convergence detection: if agent hasn't used tools for 3 consecutive iterations,
 		// it's likely stuck in a reasoning loop without making progress (Claude Code pattern)
+		// 连续 3 轮未使用 tool，说明 agent 很可能陷入无进展的推理循环（Claude Code 的做法）。
 		if consecutiveNonToolActions >= 3 {
 			logger.Warn("AgentLoop converged: no tool use for 3 consecutive iterations",
 				"agent_id", input.AgentID,
@@ -1802,6 +1826,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 
 	// Replay safety: keep legacy behavior for old runs, disable injected memory prompt
 	// for current/new runs. The injected context key is not consumed by /agent/loop.
+	// 为兼容重放，旧运行保留原行为；新运行禁用注入的记忆 prompt——该 context key 并不被 /agent/loop 消费。
 	memoryPromptVersion := workflow.GetVersion(ctx, "swarm_user_memory_prompt_v1", workflow.DefaultVersion, 1)
 	if memoryPromptVersion == workflow.DefaultVersion && input.UserID != "" {
 		if input.Context == nil {
@@ -1833,6 +1858,9 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	// budgetTotalTokens so SwarmMaxTotalTokens hard gate at L2780 enforces
 	// the true token cost. Pre-version replay paths keep the old cache-blind
 	// math to preserve workflow determinism.
+	// cache 感知的 budget 核算（v1+）：把 prompt cache token 计入 budgetTotalTokens，
+	// 使 SwarmMaxTotalTokens 硬闸门按真实 token 成本执行；
+	// 旧版本的 replay 路径保留不含 cache 的算法，以维持 workflow 确定性。
 	swarmCacheAwareBudgetV := workflow.GetVersion(ctx, "swarm_cache_aware_budget_v1", workflow.DefaultVersion, 1)
 	cacheAwareBudget := func(tokens, cacheRead, cacheCreation int) int {
 		if swarmCacheAwareBudgetV >= 1 {
@@ -2191,6 +2219,8 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		// Build per-agent context with model_tier.
 		// Swarm agents default to "medium" when Lead omits model_tier,
 		// preventing fallthrough to budget_agent_max which incorrectly maps to "small".
+		// swarm agent 在 Lead 未指定 model_tier 时默认 "medium"，
+		// 避免落到 budget_agent_max 而被错误映射为 "small"。
 		agentCtx := make(map[string]interface{}, len(input.Context)+1)
 		for k, v := range input.Context {
 			agentCtx[k] = v
@@ -2281,6 +2311,8 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 
 	// Phase 1: Process revise_plan first to ensure tasks exist in Redis before spawn_agent references them.
 	// Without this ordering, spawn_agent may call UpdateTaskStatus(T1, in_progress) before T1 is created.
+	// 先处理 revise_plan，确保 task 已写入 Redis 再处理 spawn_agent；
+	// 否则 spawn_agent 可能在 T1 创建前就调用 UpdateTaskStatus(T1, in_progress)。
 	for _, action := range planDecision.Actions {
 		if action.Type == "revise_plan" {
 			for _, newTask := range action.Create {
@@ -2361,6 +2393,8 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 
 	// Auto-link orphaned tasks to unlinked agents (defensive fix for Lead omitting task_id in spawn_agent).
 	// Without this, tasks stay "pending" forever and block all downstream depends_on chains.
+	// 把未被认领的 pending task 自动关联到未绑定的 agent（防御 Lead 在 spawn_agent 中漏写 task_id）；
+	// 否则 task 永远停在 pending，阻塞整条 depends_on 链。
 	autoLinkV := workflow.GetVersion(ctx, "swarm_auto_link_orphans_v1", workflow.DefaultVersion, 1)
 	if autoLinkV == 1 {
 		var unlinked []string
@@ -2431,6 +2465,8 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	// (i.e., Lead hasn't created tasks or revised plan in response).
 	// Prevents FORCED CLOSE from skipping deferred user requests.
 	// After 2 checkpoint rounds without action, give up to prevent infinite loop.
+	// 记录"已收到但尚未处理"的 HITL 消息，避免 FORCED CLOSE 跳过用户 request；
+	// 连续 2 轮 checkpoint 未处理则放弃，防止死循环。
 	hitlPendingAction := false
 	hitlReminderCount := 0
 	var hitlMessages []string // Accumulate all HITL messages for Lead context
@@ -2495,6 +2531,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			// Mark the agent's current task as completed in TaskList.
 			// This is critical for depends_on enforcement — downstream tasks check
 			// dep status in TaskList, not agentStates.
+			// 这是 depends_on 生效的关键：下游 task 检查的是 TaskList 中的依赖状态，而非 agentStates。
 			if taskID, ok := agentTaskMap[agentID]; ok && taskID != "" {
 				idleTaskErr := workflow.ExecuteActivity(p2pCtx, constants.UpdateTaskStatusActivity, activities.UpdateTaskStatusInput{
 					WorkflowID: workflowID,
@@ -2569,6 +2606,8 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			// Each AgentLoopStep iteration = exactly 1 LLM call.
 			// Tool execution tokens (web_search results, etc.) are NOT counted here
 			// because they're processed by agent-core, not the LLM service.
+			// 每次 AgentLoopStep 迭代恰好一次 LLM 调用；tool 执行的 token（web_search 结果等）
+			// 不在此计数，因为它们由 agent-core 而非 LLM 服务处理。
 			budgetTotalLLMCalls += result.Iterations
 			budgetTotalTokens += cacheAwareBudget(result.TokensUsed, result.CacheReadTokens, result.CacheCreationTokens)
 			// Note: per-step LLM tokens and per-tool Haiku tokens are already recorded
@@ -2662,6 +2701,8 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 
 		// P2P message forwarding: drain buffered "agent-message-sent" signals and
 		// forward wake-up signals to idle recipients. No Lead LLM call — pure Go routing.
+		// 排空已缓冲的 "agent-message-sent" 信号，向空闲接收方转发唤醒信号；
+		// 不调用 Lead LLM，纯 Go 路由。
 		for {
 			var msgInfo map[string]string
 			if !messageSentCh.ReceiveAsync(&msgInfo) {
@@ -2837,6 +2878,8 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			// Terminal state: all agents idle, none running, no pending tasks.
 			// Lead already had its chance during agent_idle events — force wrap-up.
 			// EXCEPTION: if there's an unresolved HITL message, give Lead another chance (max 2 rounds).
+			// 终态：所有 agent 空闲、无运行中 task、无待办 task——Lead 已在 agent_idle event 中有过机会，
+			// 此处强制收尾；例外：存在未处理的 HITL 消息时再给 Lead 一次机会（最多 2 轮）。
 			if hasIdleAgent && !hasRunningAgent && !hasPendingTask {
 				if hitlPendingAction && hitlReminderCount < 2 {
 					hitlReminderCount++
@@ -2919,6 +2962,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 
 		// Collect workspace file paths for Lead context — scan DISK so multi-turn
 		// conversations see files from previous swarm runs, not just current run.
+		// 扫描磁盘收集工作区文件路径，使多轮 session 能看到此前 swarm 运行留下的文件，而不只是本轮产物。
 		var wsFileList []string
 		{
 			var diskFiles activities.ListWorkspaceFilesResult
@@ -2947,6 +2991,8 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		// When Lead returns file_read or tool_call actions, Go executes them (zero LLM cost
 		// for file_read; direct tool invocation for tool_call) and calls LeadDecision again
 		// with results injected into the event.
+		// Lead 决策内循环：当 Lead 返回 file_read 或 tool_call 时由 Go 直接执行
+		// （file_read 零 LLM 成本，tool_call 直接调 tool），再把结果注入 event 后重新调用 LeadDecision。
 		const maxFileReadRounds = 3
 		var decision activities.LeadDecisionResult
 		var leadDecisionOK bool
@@ -3019,6 +3065,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			})
 			// Truncate leadHistory to prevent unbounded growth in long-running swarms.
 			// Keep last 20 entries (up from 5) for better Lead decision context.
+			// 截断 leadHistory 防止长跑 swarm 无限增长：保留最近 20 条（原为 5 条）以给 Lead 更多决策 context。
 			const maxLeadHistory = 20
 			if len(leadHistory) > maxLeadHistory {
 				leadHistory = leadHistory[len(leadHistory)-maxLeadHistory:]
@@ -3264,6 +3311,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 
 					// P1 fix: inject previous work context + tools-used summary
 					// so agent skips re-orientation and doesn't repeat tool calls
+					// 注入此前的工作 context 与已用 tool 摘要，让重新派活的 agent 免去重新摸索、避免重复 tool 调用。
 					if snap, ok := idleSnapshots[action.AgentID]; ok && snap.Response != "" {
 						prevContext := snap.Response
 						if len(prevContext) > 1500 {
@@ -3527,6 +3575,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			case "done", "reply":
 				// Guard: reject premature "done"/"reply" if any agent is still running.
 				// LLM sometimes returns done/reply action while its decision_summary says "wait".
+				// 防呆：仍有 agent 在运行时拒绝过早的 "done"/"reply"——LLM 有时 decision_summary 说"等待"却返回 done。
 				hasRunning := false
 				for _, s := range agentStates {
 					if s.Status == "running" {
@@ -3613,6 +3662,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 				"events", workflow.GetInfo(ctx).GetCurrentHistoryLength(),
 			)
 			// For now, break and synthesize — full ContinueAsNew with snapshot in Phase 3.4
+			// ContinueAsNew 检查：防止触发 Temporal event 数量上限；当前先跳出并合成。
 			historyTruncated = true
 			break
 		}
@@ -3695,6 +3745,7 @@ synthesis:
 
 	// Pre-synthesis guard: check if any agents produced usable results.
 	// Agents that timed out or were cancelled may still have useful output.
+	// 合成前检查是否有 agent 产出可用结果；timeout 或被取消的 agent 也可能留下有用输出。
 	successCount := 0
 	for i, r := range agentResults {
 		if r.Success {
@@ -4149,6 +4200,8 @@ func buildSwarmMetadata(results map[string]AgentLoopResult) map[string]interface
 	// Use flat keys only — nested structures (like agentSummaries) cause
 	// Temporal JSON codec to fail deserializing map[string]interface{},
 	// resulting in empty metadata and zero cost/tokens in persistence.
+	// 只用扁平 key：嵌套结构（如 agentSummaries）会让 Temporal JSON codec
+	// 反序列化 map[string]interface{} 失败，导致 metadata 为空、持久化的成本/token 归零。
 	meta := map[string]interface{}{
 		"workflow_type":          "swarm",
 		"total_agents":          len(results),

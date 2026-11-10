@@ -1,7 +1,9 @@
 """Deep research agent role preset.
+深度研究 agent 角色预设。
 
 Main subtask agent for deep research workflows. Conducts comprehensive
 investigation with source verification and epistemic honesty.
+深度研究 workflow 的主要 subtask agent。在来源核验与认知诚实的前提下开展全面调查。
 """
 
 from typing import Dict
@@ -287,6 +289,9 @@ Example table format:
     # Interpretation system prompt - used ONLY for the interpretation pass (synthesis phase).
     # Strips OODA loop, tool usage patterns, and coverage tracking that belong to the tool loop phase.
     # Keeps: role identity, source quality standards, attribution rules, conflict handling.
+    # 解释 system prompt —— 仅用于解释阶段（综合阶段）。
+    # 去掉属于 tool 循环阶段的 OODA 循环、tool 使用方式与覆盖度跟踪。
+    # 保留：角色身份、来源质量标准、标注规则、冲突处理。
     "interpretation_system_prompt": """You are a research analyst producing a final report from collected evidence.
 
 You are in the REPORTING PHASE — all research is complete. You have NO tools available.
@@ -326,6 +331,9 @@ When sources disagree:
     # Custom interpretation prompt - overrides INTERPRETATION_PROMPT_SOURCES
     # This ensures output format matches structured comprehensive report contract
     # Note: Language matching removed - this is intermediate step, final synthesis handles language
+    # 自定义解释 prompt —— 覆盖 INTERPRETATION_PROMPT_SOURCES
+    # 以确保输出格式与结构化综合报告的契约一致
+    # 说明：已移除语言匹配 —— 这是中间步骤，最终的语言处理由综合阶段负责
     "interpretation_prompt": """=== EVIDENCE SYNTHESIS ===
 
 This output feeds a synthesis LLM — optimize for INFORMATION DENSITY. Avoid filler phrases and rhetorical prose. Every sentence should carry data or insight.

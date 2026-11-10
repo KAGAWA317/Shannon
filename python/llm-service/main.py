@@ -27,6 +27,7 @@ from llm_service.events import EventEmitter, build_default_emitter_from_env
 import redis.asyncio as aioredis
 
 # OpenTelemetry (minimal) instrumentation
+# OpenTelemetry（最小化）埋点
 import os
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
@@ -38,18 +39,23 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
 # Configure logging
+# 配置日志
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 # Global instances
+# 全局实例
 settings = Settings()
 provider_manager = None
 
 
 def setup_tracing(app: FastAPI):
-    """Initialize OTLP exporter and instrument FastAPI + httpx."""
+    """Initialize OTLP exporter and instrument FastAPI + httpx.
+
+    初始化 OTLP exporter，并为 FastAPI + httpx 埋点。
+    """
     try:
         service_name = os.getenv("OTEL_SERVICE_NAME", "shannon-llm-service")
         endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4317")
@@ -73,17 +79,23 @@ def setup_tracing(app: FastAPI):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application lifecycle"""
+    """Manage application lifecycle
+
+    管理应用生命周期。
+    """
     global provider_manager
 
     logger.info("Starting Shannon LLM Service")
 
     # Initialize LLM providers and event emitter
     # Prefer Settings-derived URL; fall back to ADMIN_SERVER or default helper
+    # 初始化 LLM provider 与 event emitter
+    # 优先使用 Settings 派生的 URL；回退到 ADMIN_SERVER 或默认辅助函数
     emitter = None
     try:
         ingest_url = settings.events_ingest_url
         # If events_ingest_url not explicitly set and ADMIN_SERVER present, derive from it
+        # 若未显式设置 events_ingest_url 且存在 ADMIN_SERVER，则由其派生
         if not ingest_url or ingest_url.strip() == "":
             admin = os.getenv("ADMIN_SERVER", "").strip()
             if admin:
@@ -105,10 +117,12 @@ async def lifespan(app: FastAPI):
     await provider_manager.initialize()
 
     # Store in app state
+    # 存入 app state
     app.state.providers = provider_manager
     app.state.settings = settings
 
     # Initialize Redis for attachment resolution
+    # 初始化 Redis，用于附件解析
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
     app.state.redis = aioredis.from_url(redis_url, decode_responses=False)
     logger.info("Redis client initialized for attachments", extra={"redis_url": redis_url})
@@ -116,6 +130,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Cleanup
+    # 清理资源
     logger.info("Shutting down Shannon LLM Service")
     await provider_manager.close()
     await emitter.close()
@@ -124,6 +139,7 @@ async def lifespan(app: FastAPI):
 
 
 # Create FastAPI app
+# 创建 FastAPI app
 app = FastAPI(
     title="Shannon LLM Service",
     description="LLM integration service for Shannon platform",
@@ -132,10 +148,12 @@ app = FastAPI(
 )
 
 # Initialize tracing after app creation (only if explicitly enabled)
+# app 创建后初始化 tracing（仅在显式启用时）
 if os.getenv("OTEL_ENABLED", "false").lower() == "true":
     setup_tracing(app)
 
 # Add CORS middleware
+# 加入 CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -145,6 +163,7 @@ app.add_middleware(
 )
 
 # Include routers
+# 挂载各 router
 app.include_router(health.router, prefix="/health", tags=["health"])
 app.include_router(completions.router, prefix="/completions", tags=["completions"])
 app.include_router(embeddings.router, prefix="/embeddings", tags=["embeddings"])
@@ -160,13 +179,17 @@ app.include_router(memory.router, prefix="/memory", tags=["memory"])
 app.include_router(mcp_mock.router, tags=["mcp-mock"])
 
 # Mount Prometheus metrics
+# 挂载 Prometheus metrics
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
 
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
+    """Root endpoint
+
+    根端点。
+    """
     return {"service": "Shannon LLM Service", "version": "0.1.0", "status": "running"}
 
 

@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils";
 
 // Human-readable tool names for browser automation (9 core Playwright tools)
+// 浏览器自动化的可读 tool 名称映射（9 个核心 Playwright tool）
 const BROWSER_TOOL_DISPLAY: Record<string, { name: string; icon: React.ReactNode }> = {
     // Core navigation
     browser_navigate: { name: "Navigating", icon: <Globe className="h-3 w-3" /> },

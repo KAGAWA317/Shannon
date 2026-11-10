@@ -3,6 +3,10 @@
 Verifies that summary and key_findings truncation limits allow
 richer agent reports to reach the Lead (10000 / 500 chars).
 Also verifies agent→Lead mailbox messages are accepted and formatted.
+
+测试 Lead Agent 的截断上限与 mailbox 集成：summary / key_findings 的阈值放到
+10000 / 500 字符后，更完整的 agent 报告才能送到 Lead；同时验证 agent→Lead 的
+mailbox 消息可被接收并格式化。
 """
 
 import inspect
@@ -21,11 +25,17 @@ class TestTruncationLimitsInSource:
 
     This inspects the actual source to catch regressions — if someone
     changes the slicing constants, these tests will fail.
+
+    直接对 lead.py 源码做字符串 / regex 检查：一旦有人改动切片常量，这些用例就会失败。
     """
 
     def _get_lead_decide_source(self) -> str:
-        """Get source code of the lead_decide function."""
+        """Get source code of the lead_decide function.
+
+        返回 lead_decide 所在模块的完整源码。
+        """
         # The endpoint function is registered via router; find it by name
+        # endpoint 由 router 注册，按名字取不到函数对象，只能拿整个模块源码再搜索
         source = inspect.getsource(lead_module)
         return source
 
@@ -33,6 +43,7 @@ class TestTruncationLimitsInSource:
         """lead.py must truncate summary at 10000 chars, not 1500."""
         source = self._get_lead_decide_source()
         # Match the pattern: str(summary)[:NNNN]
+        # 在源码中匹配 str(summary)[:N] 形式的切片
         match = re.search(r'str\(summary\)\[:(\d+)\]', source)
         assert match is not None, "Could not find str(summary)[:N] pattern in lead.py"
         limit = int(match.group(1))
@@ -56,12 +67,16 @@ class TestTruncationLimitsInSource:
         """Ensure the old 200 finding limit is no longer in the source."""
         source = self._get_lead_decide_source()
         # Be careful: 200 might appear elsewhere, check in context of str(f)
+        # 200 可能在别处出现，只检查 key_findings 到 tools_used 之间的片段
         findings_section = source[source.index('key_findings'):source.index('tools_used')]
         assert '[:200]' not in findings_section, "Old 200-char finding limit still present in lead.py"
 
 
 class TestTruncationBehavior:
-    """Verify that text at the new limits is preserved correctly."""
+    """Verify that text at the new limits is preserved correctly.
+
+    边界情况：长度正好等于上限的文本不应被截断。
+    """
 
     def test_10000_char_summary_preserved(self):
         """A 10000-char summary should pass through without truncation."""
@@ -88,7 +103,10 @@ class TestTruncationBehavior:
         assert len(truncated) == 500
 
     def test_old_limits_would_lose_data(self):
-        """Confirm old limits (1500/200) would lose significant data."""
+        """Confirm old limits (1500/200) would lose significant data.
+
+        用旧上限切会丢数据、用新上限完整保留——这正是放宽阈值的理由。
+        """
         summary = "C" * 5000
         assert len(str(summary)[:1500]) == 1500, "Old limit loses data"
         assert len(str(summary)[:10000]) == 5000, "New limit preserves all"

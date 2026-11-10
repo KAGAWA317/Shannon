@@ -114,6 +114,7 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 		if !ok {
 			// If no user context, reject if require_tenant_id is enabled
+			// 没有用户 context 时，若开启了 require_tenant_id 就直接拒绝。
 			if true { // Require authenticated user context for rate limiting
 				rl.logger.Warn("Rate limit check: missing user context",
 					zap.String("path", r.URL.Path))

@@ -4,6 +4,7 @@ import "testing"
 
 func TestDegradeByBudget_DefaultThresholds(t *testing.T) {
 	// Updated test for new thresholds (ToT: 8000, CoT: 4000)
+	// 阈值是 pattern 降级的分界线：budget 低于它就退到更便宜的 pattern。
 	strategy, degraded := DegradeByBudget(PatternTreeOfThoughts, 6000, nil)
 	if !degraded {
 		t.Fatalf("expected degradation when budget below threshold")
@@ -23,6 +24,7 @@ func TestDegradeByBudget_DefaultThresholds(t *testing.T) {
 	}
 
 	// Verify no degradation when budget is sufficient
+	// 反向用例：budget 充足时必须原样保留，防止降级条件写得过宽。
 	strategy, degraded = DegradeByBudget(PatternTreeOfThoughts, 10000, nil)
 	if degraded {
 		t.Fatalf("should not degrade with sufficient budget")
@@ -35,6 +37,7 @@ func TestDegradeByBudget_DefaultThresholds(t *testing.T) {
 func TestDegradeByBudget_CustomThresholds(t *testing.T) {
 	thresholds := DegradationThresholds()
 	// Set custom threshold lower than default (6000)
+	// Debate 默认阈值 6000，这里压到 5000，用来证明传入的表确实覆盖默认值。
 	thresholds[PatternDebate] = 5000
 
 	// Budget below custom threshold should trigger degradation

@@ -1,8 +1,10 @@
 """
 Data Processing Tools - diff_files and json_query for swarm agents.
+数据处理 tool——供 swarm agent 使用的 diff_files 与 json_query。
 
 These tools help agents compare files and extract data from JSON without
 reading entire files into LLM context.
+这些 tool 帮助 agent 比较文件、从 JSON 中提取数据，而无需将整个文件读入 LLM context。
 """
 
 import difflib
@@ -19,6 +21,7 @@ from .file_ops import _get_session_workspace, _get_allowed_dirs, _is_allowed
 logger = logging.getLogger(__name__)
 
 # --- Safety limits ---
+# --- 安全限制 ---
 _MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
 _MAX_DIFF_OUTPUT_LINES = 500
 _MAX_JSON_RESULTS = 1000
@@ -29,13 +32,16 @@ def _resolve_and_check(
     session_context: Optional[Dict],
 ) -> tuple[Optional[Path], Optional[ToolResult]]:
     """Resolve a relative path within session workspace and check access.
+    解析 session workspace 内的相对路径并检查访问权限。
 
     Returns (resolved_path, None) on success or (None, error_result) on failure.
+    成功时返回 (resolved_path, None)，失败时返回 (None, error_result)。
     """
     workspace = _get_session_workspace(session_context)
     raw = workspace / file_path
 
     # Symlink escape check — must check BEFORE resolve() which follows symlinks
+    # symlink 逃逸检查——必须在 resolve() 之前检查，因为 resolve() 会跟随 symlink
     if raw.is_symlink():
         return None, ToolResult(
             success=False, output=None, error="Symlinks are not allowed"
@@ -135,6 +141,7 @@ class DiffFilesTool(Tool):
         context_lines = kwargs.get("context_lines", 3)
 
         # Resolve and validate both paths
+        # 解析并校验两个路径
         resolved_a, err_a = _resolve_and_check(path_a, session_context)
         if err_a:
             return err_a
@@ -175,11 +182,13 @@ class DiffFilesTool(Tool):
             )
 
         # Truncate very long diffs
+        # 截断过长的 diff
         truncated = len(diff) > _MAX_DIFF_OUTPUT_LINES
         if truncated:
             diff = diff[:_MAX_DIFF_OUTPUT_LINES]
 
         # Count additions and deletions
+        # 统计新增与删除行数
         additions = sum(1 for l in diff if l.startswith("+") and not l.startswith("+++"))
         deletions = sum(1 for l in diff if l.startswith("-") and not l.startswith("---"))
 
@@ -206,6 +215,7 @@ class DiffFilesTool(Tool):
 # ---------------------------------------------------------------------------
 
 # Regex for parsing dot-path expressions like ".results[0].name" or ".data[].id"
+# 用于解析 dot-path 表达式的正则，如 ".results[0].name" 或 ".data[].id"
 _PATH_TOKEN_RE = re.compile(
     r"""
     \.(\w+)          # .fieldName
@@ -220,27 +230,38 @@ _PATH_TOKEN_RE = re.compile(
 
 def _json_extract(data: Any, expression: str, max_results: int) -> list:
     """Walk *data* following a simple dot-path expression.
+    按简单的 dot-path 表达式遍历 *data*。
 
     Supported syntax:
+    支持的语法：
         .field          — object key lookup
+        .field          — 对象键查找
         [N]             — array index
+        [N]             — 数组下标
         []              — fan-out over array (produces multiple results)
+        []              — 对数组扇出（产生多个结果）
         .field1.field2  — chained access
+        .field1.field2  — 链式访问
 
     Returns a flat list of matched values (may be empty).
+    返回匹配值的扁平列表（可能为空）。
     """
     if not expression or expression == ".":
         return [data]
 
     # Tokenize
+    # 分词
     tokens: list[tuple[str, str | int | None]] = []
     pos = 0
     expr = expression
     # Allow leading dot or not
+    # 允许或省略前导点
     if expr.startswith("."):
         pass  # will be consumed by regex
+        # 将由正则消费
     else:
         expr = "." + expr  # normalise
+        # 规范化
 
     for m in _PATH_TOKEN_RE.finditer(expr):
         field = m.group(1)
@@ -256,6 +277,7 @@ def _json_extract(data: Any, expression: str, max_results: int) -> list:
         return [data]
 
     # Walk
+    # 遍历
     current: list = [data]
     for kind, key in tokens:
         next_level: list = []
@@ -339,11 +361,13 @@ class JsonQueryTool(Tool):
         max_results = kwargs.get("max_results", 100)
 
         # Resolve and validate path
+        # 解析并校验路径
         resolved, err = _resolve_and_check(file_path, session_context)
         if err:
             return err
 
         # Read and parse JSON
+        # 读取并解析 JSON
         try:
             raw = resolved.read_text(encoding="utf-8")
         except Exception as e:
@@ -359,6 +383,7 @@ class JsonQueryTool(Tool):
             )
 
         # Execute query
+        # 执行查询
         try:
             results = _json_extract(data, expression, max_results)
         except Exception as e:
@@ -380,6 +405,7 @@ class JsonQueryTool(Tool):
             )
 
         # Unwrap single result
+        # 单个结果时解包
         output = results[0] if len(results) == 1 else results
 
         return ToolResult(

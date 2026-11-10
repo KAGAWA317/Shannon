@@ -1,5 +1,6 @@
 """
 Built-in tools for Shannon platform
+Shannon 平台的内置 tool
 """
 
 from .web_search import WebSearchTool
@@ -14,6 +15,7 @@ from .bash_executor import BashExecutorTool
 from .x_search import XSearchTool
 
 # Browser automation tool
+# 浏览器自动化 tool
 try:
     from .browser_use import BrowserTool
     _HAS_BROWSER_TOOLS = True

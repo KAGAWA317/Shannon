@@ -13,6 +13,7 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin:     func(r *http.Request) bool { return true }, // Dev-friendly, secure via proxy in prod
+	// 便于开发，生产环境通过代理保证安全
 }
 
 // RegisterWebSocket registers /stream/ws endpoint.
@@ -44,6 +45,7 @@ func (h *StreamingHandler) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse Last-Event-ID for resume support (StreamID or seq)
+	// 解析 Last-Event-ID 以支持续传（StreamID 或 seq）
 	var lastSeq uint64
 	var lastStreamID string
 	var lastSentStreamID string
@@ -51,6 +53,7 @@ func (h *StreamingHandler) handleWS(w http.ResponseWriter, r *http.Request) {
 
 	if lastEventID != "" {
 		// Check if it's a Redis stream ID (contains "-")
+		// 判断是否为 Redis stream ID（含 "-"）
 		if strings.Contains(lastEventID, "-") {
 			lastStreamID = lastEventID
 		} else {
@@ -62,6 +65,7 @@ func (h *StreamingHandler) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Replay missed events based on resume point
+	// 按续传点回放遗漏的 event
 	if lastStreamID != "" {
 		// Resume from Redis stream ID
 		events := h.mgr.ReplayFromStreamID(wf, lastStreamID)
@@ -100,9 +104,12 @@ func (h *StreamingHandler) handleWS(w http.ResponseWriter, r *http.Request) {
 
 	// Subscribe to live events starting from where replay ended
 	// Use last stream ID if available to avoid gaps, otherwise start fresh
+	// 从回放结束处订阅实时 event
+	// 有 last stream ID 时用它以避免缺口，否则从头开始
 	startFrom := "$" // Default to new messages only
 	if lastSentStreamID != "" {
 		// Continue from last replayed message to avoid gaps
+		// 从最后回放的消息继续，避免缺口
 		startFrom = lastSentStreamID
 	} else if lastStreamID == "" && lastSeq == 0 {
 		// No resume point, start from beginning

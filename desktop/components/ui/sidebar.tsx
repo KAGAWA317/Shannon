@@ -71,6 +71,8 @@ function SidebarProvider({
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
+  // 这是 sidebar 的内部状态。
+  // 外部通过 openProp 与 setOpenProp 进行受控控制。
   const [_open, _setOpen] = React.useState(defaultOpen)
   const open = openProp ?? _open
   const setOpen = React.useCallback(
@@ -111,6 +113,8 @@ function SidebarProvider({
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
+  // 增加 state 以便输出 data-state="expanded" 或 "collapsed"。
+  // 这样便于用 Tailwind 类名给 sidebar 写样式。
   const state = open ? "expanded" : "collapsed"
 
   const contextValue = React.useMemo<SidebarContextProps>(
@@ -215,6 +219,7 @@ function Sidebar({
       data-slot="sidebar"
     >
       {/* This is what handles the sidebar gap on desktop */}
+      {/* 该元素负责桌面端 sidebar 占位的间距 */}
       <div
         data-slot="sidebar-gap"
         className={cn(
@@ -428,6 +433,7 @@ function SidebarGroupAction({
       className={cn(
         "text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute top-3.5 right-3 flex aspect-square w-5 items-center justify-center rounded-md p-0 outline-hidden transition-transform focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
         // Increases the hit area of the button on mobile.
+        // 扩大移动端按钮的点击热区。
         "after:absolute after:-inset-2 md:after:hidden",
         "group-data-[collapsible=icon]:hidden",
         className
@@ -563,6 +569,7 @@ function SidebarMenuAction({
       className={cn(
         "text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground peer-hover/menu-button:text-sidebar-accent-foreground absolute top-1.5 right-1 flex aspect-square w-5 items-center justify-center rounded-md p-0 outline-hidden transition-transform focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
         // Increases the hit area of the button on mobile.
+        // 扩大移动端按钮的点击热区。
         "after:absolute after:-inset-2 md:after:hidden",
         "peer-data-[size=sm]/menu-button:top-1",
         "peer-data-[size=default]/menu-button:top-1.5",
@@ -607,6 +614,7 @@ function SidebarMenuSkeleton({
   showIcon?: boolean
 }) {
   // Use a stable placeholder width to keep skeleton renders deterministic.
+  // 使用稳定的占位宽度，保证 skeleton 渲染结果确定。
   const width = "70%"
 
   return (

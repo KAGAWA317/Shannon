@@ -58,6 +58,7 @@ func (vm *ValidationMiddleware) Middleware(next http.Handler) http.Handler {
 
 		case strings.HasPrefix(path, "/api/v1/tasks/") && strings.HasSuffix(path, "/review"):
 			// /api/v1/tasks/{workflowID}/review — uses {workflowID}, not {id}
+			// /api/v1/tasks/{workflowID}/review 使用的是 {workflowID}，不是 {id}。
 			if !vm.validatePathWorkflowID(w, r) {
 				return
 			}
@@ -82,6 +83,7 @@ func (vm *ValidationMiddleware) Middleware(next http.Handler) http.Handler {
 		case method == http.MethodGet && strings.HasPrefix(path, "/api/v1/sessions/") && strings.HasSuffix(path, "/events"):
 			// Validate sessions events pagination (turns)
 			// Note: pathValue("sessionId") is validated in handler (dual ID allowed)
+			// 校验 session events 的分页参数（turns）；注意：pathValue("sessionId") 由 handler 校验（允许双 ID）。
 			if !vm.validatePagination(w, r, 1, 100) {
 				return
 			}
@@ -179,6 +181,8 @@ func (vm *ValidationMiddleware) validateOptionalTypes(w http.ResponseWriter, r *
 	// Do not enforce a static allowlist here.
 	// The orchestrator/admin server performs filtering; unknown types simply yield no events.
 	// Accept any non-empty comma-separated tokens and let downstream handle semantics.
+	// 这里不做静态白名单：由 orchestrator/admin server 负责过滤，未知类型自然取不到 event；
+	// 接受任意非空的逗号分隔 token，语义交给下游处理。
 	_ = r.URL.Query().Get("types")
 	return true
 }
@@ -189,6 +193,7 @@ func (vm *ValidationMiddleware) validateOptionalLastEventID(w http.ResponseWrite
 		return true
 	}
 	// Accept either a numeric sequence or a Redis stream ID (e.g., 1700000000000-0)
+	// 既接受数字序号，也接受 Redis stream ID（如 1700000000000-0）。
 	if strings.Contains(v, "-") {
 		parts := strings.SplitN(v, "-", 2)
 		if len(parts) != 2 {

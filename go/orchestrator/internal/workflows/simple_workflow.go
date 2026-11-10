@@ -159,6 +159,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 
 	// User persistent memory: prompt injection and extraction are swarm-only.
 	// Simple tasks generate too many low-value extractions that bloat /memory/.
+	// 用户长期记忆的注入与抽取仅限 swarm；simple task 会产生大量低价值抽取，撑大 /memory/。
 
 	// Context compression (version-gated for determinism)
 	compressionVersion := workflow.GetVersion(ctx, "context_compress_v1", workflow.DefaultVersion, 1)
@@ -241,6 +242,8 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	// add it to context and shape history to primers+recents
 	// Note: This piggybacks on the compression block above; we also re-check here in case
 	// no prior compression happened but history is still large.
+	// 若本次 workflow 早前做过压缩并产出摘要，则把它加入 context 并裁成 primers+recents；
+	// 这里再检查一次，以覆盖此前未压缩但历史仍然很大的情况。
 	if input.SessionID != "" && compressionVersion >= 1 {
 		// Estimate tokens and, if needed, perform on-the-fly compression for the middle section
 		estimatedTokens := activities.EstimateTokens(historyForAgent)
@@ -289,6 +292,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 
 	// Execute the consolidated simple task activity
 	// This single activity handles everything: agent execution, session update, etc.
+	// 单个 activity 完成全部工作：agent 执行、session 更新等。
 	var result activities.ExecuteSimpleTaskResult
 	err := workflow.ExecuteActivity(ctx, activities.ExecuteSimpleTask, activities.ExecuteSimpleTaskInput{
 		Query:            input.Query,
@@ -429,6 +433,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 
 		// Session title generation is now handled centrally in OrchestratorWorkflow
 		// Keep version gate for replay determinism (no-op for new executions)
+		// session 标题生成已统一由 OrchestratorWorkflow 负责；保留版本闸门以维持重放确定性（对新执行是空操作）。
 		_ = workflow.GetVersion(ctx, "session_title_v1", workflow.DefaultVersion, 1)
 	}
 
@@ -574,6 +579,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 
 	// Record token usage for SimpleTaskWorkflow (best-effort)
 	// Use a simple 60/40 split when detailed counts are unavailable
+	// 缺少细粒度计数时，按 60/40 估算 prompt/completion 拆分。
 	if input.UserID != "" && totalTokens > 0 {
 		recCtx := opts.WithTokenRecordOptions(ctx)
 		inTok := totalTokens * 6 / 10
@@ -598,6 +604,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 
 	// Memory extraction is swarm-only — removed from SimpleTaskWorkflow to avoid
 	// low-value extractions bloating /memory/ on every simple query.
+	// 记忆抽取仅限 swarm——已从 SimpleTaskWorkflow 移除，避免每次简单查询都产生低价值抽取。
 
 	// Check pause/cancel before completion
 	if err := controlHandler.CheckPausePoint(ctx, "pre_completion"); err != nil {
@@ -610,6 +617,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 
 	// Emit final clean LLM_OUTPUT for OpenAI-compatible streaming.
 	// Agent ID "final_output" signals the streamer to always show this content.
+	// Agent ID "final_output" 告诉 stream 层必须展示这段内容。
 	if finalResult != "" {
 		_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: workflowID,
@@ -695,6 +703,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 // detectProviderFromModel determines the provider based on the model name
 // deriveModelTier intelligently determines the model tier based on context
 // Priority: explicit model_tier > per-agent budget > default "medium"
+// 优先级：显式 model_tier > 单 agent budget > 默认 "medium"。
 func deriveModelTier(ctx map[string]interface{}) string {
 	if ctx == nil {
 		return "medium"

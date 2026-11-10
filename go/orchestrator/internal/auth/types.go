@@ -11,10 +11,13 @@ import (
 )
 
 // Sentinel errors for structured error handling across package boundaries.
+// 跨包结构化错误处理用的哨兵错误。
 var (
 	// ErrTenantNotFound is returned by ProvisionUser when the target tenant does not exist or is inactive.
+	// 目标租户不存在或未激活时，ProvisionUser 返回 ErrTenantNotFound。
 	ErrTenantNotFound = errors.New("tenant not found or inactive")
 	// ErrUsernameTakenByOtherTenant is returned when the username is already registered under a different tenant.
+	// username 已在其它租户下注册时返回 ErrUsernameTakenByOtherTenant。
 	ErrUsernameTakenByOtherTenant = errors.New("username already registered under a different tenant")
 )
 
@@ -78,6 +81,7 @@ type Tenant struct {
 }
 
 // APIKey represents an API key for programmatic access
+// APIKey 表示用于编程访问的 API key
 type APIKey struct {
 	ID               uuid.UUID      `json:"id" db:"id"`
 	KeyHash          string         `json:"-" db:"key_hash"`
@@ -95,6 +99,7 @@ type APIKey struct {
 }
 
 // RefreshToken represents an opaque refresh token (random string, not JWT)
+// RefreshToken 表示不透明的 refresh token（随机字符串，不是 JWT）
 type RefreshToken struct {
 	ID        uuid.UUID  `json:"id" db:"id"`
 	TokenHash string     `json:"-" db:"token_hash"`
@@ -109,6 +114,7 @@ type RefreshToken struct {
 }
 
 // UserContext represents the authenticated context for a request
+// UserContext 表示 request 的 authenticated context
 type UserContext struct {
 	UserID    uuid.UUID `json:"user_id"`
 	TenantID  uuid.UUID `json:"tenant_id"`
@@ -121,6 +127,7 @@ type UserContext struct {
 
 	// API key details
 	APIKeyID   uuid.UUID `json:"api_key_id,omitempty"`   // ID of the API key (if IsAPIKey)
+	// API key 的 ID（当 IsAPIKey 为 true）
 	APIKeyTier string    `json:"api_key_tier,omitempty"` // Tier: free, pro, enterprise
 	TenantPlan string    `json:"tenant_plan,omitempty"`  // Tenant plan for rate limiting
 
@@ -138,8 +145,11 @@ type TokenPair struct {
 
 // OAuthLoginResult represents the result of OAuth login/registration
 // Separates session tokens (for web UI) from API keys (for SDK/programmatic access)
+// OAuthLoginResult 表示 OAuth 登录/注册的结果
+// 将 session token（web UI 用）与 API key（SDK/编程访问用）分开
 type OAuthLoginResult struct {
 	Tokens    *TokenPair `json:"tokens"`            // JWT access + refresh tokens for web session
+	// web session 用的 JWT access + refresh token
 	User      *User      `json:"user"`              // User info
 	APIKey    string     `json:"api_key,omitempty"` // Only set for NEW registrations
 	IsNewUser bool       `json:"is_new_user"`       // True if user was just created
@@ -161,6 +171,7 @@ type RegisterRequest struct {
 }
 
 // CreateAPIKeyRequest represents a request to create an API key
+// CreateAPIKeyRequest 表示创建 API key 的 request
 type CreateAPIKeyRequest struct {
 	Name        string     `json:"name" validate:"required"`
 	Description string     `json:"description"`

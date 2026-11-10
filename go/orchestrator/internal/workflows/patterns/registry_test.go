@@ -7,6 +7,7 @@ import (
 func TestRegistryRegistersDefaultPatterns(t *testing.T) {
 	r := GetRegistry()
 	// Expect core patterns to be present
+	// 注册表在 init 时填充，这里守住默认 pattern 集合不被删漏。
 	types := []PatternType{PatternReflection, PatternReact, PatternChainOfThought, PatternDebate, PatternTreeOfThoughts}
 	for _, pt := range types {
 		if _, ok := r.Get(pt); !ok {

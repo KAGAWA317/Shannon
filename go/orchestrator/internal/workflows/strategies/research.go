@@ -54,9 +54,19 @@ import (
 //   - Phase 2: Soft rerank (multiply scores vs hard filter)
 //   - Phase 3: Verification entity coherence
 //   - Phase 4: Adaptive retry if coverage < target
+// 当检测到规范名称（canonical name）时，按实体相关性过滤引用。
+// 打分采用 OR 逻辑：官方域名匹配 +0.6；URL 含别名 +0.4；标题/摘要/来源含别名 +0.4；
+// 阈值 0.3，因此任意单项匹配即可通过。
+// 过滤策略：官方域名引用全部无条件保留；非官方引用保留得分 >= 阈值者；
+// 最后按「质量×可信度+实体分」回填至 minKeep（10 条）。
+// 这样可避免过度过滤：阈值偏低以放行标题/摘要匹配，minKeep 偏高以覆盖深度研究，
+// 官方站点必定入选。搜索结果本身的波动无法被过滤补偿：搜索没返回官网，过滤也造不出来。
+// 后续改进（见长期计划）：阶段 2 软重排（乘分而非硬过滤）、阶段 3 实体一致性校验、
+// 阶段 4 覆盖不足时自适应 retry。
 
 // containsAsWord checks if text contains term as a whole word (word boundary matching).
 // This prevents "mind" from matching "Minders.io" or "reminded".
+// 整词匹配（检查词边界），避免 "mind" 误命中 "Minders.io" 或 "reminded"。
 func containsAsWord(text, term string) bool {
 	if term == "" {
 		return false
@@ -153,6 +163,7 @@ func FilterCitationsByEntity(citations []metadata.Citation, canonicalName string
 		// Also check if URL contains any alias (broader domain matching)
 		// For URLs, we use substring matching since domains often contain the brand
 		// e.g., "acme.com" contains "acme"
+		// URL 用子串匹配，因为域名通常包含品牌名，例如 "acme.com" 含 "acme"。
 		hostLabels := []string{}
 		if parsedURL, err := url.Parse(c.URL); err == nil {
 			host := strings.ToLower(parsedURL.Hostname())
@@ -204,6 +215,8 @@ func FilterCitationsByEntity(citations []metadata.Citation, canonicalName string
 			// Use word boundary matching to prevent "mind" matching "Minders.io"
 			// For short aliases (<5 chars), require exact word match
 			// For longer aliases, allow partial matches (e.g., "acme" in "acme.com")
+			// 用词边界匹配避免 "mind" 命中 "Minders.io"；短别名（<5 字符）要求精确整词，
+			// 较长别名允许部分匹配。
 			if cleanAlias != "" {
 				if len(cleanAlias) < 5 {
 					// Short alias: require word boundary
@@ -333,6 +346,7 @@ func ApplyCitationFilterWithFallback(
 
 	// Apply filter only if results are reasonable (>=20 citations AND >=30% retention)
 	// Using AND ensures we don't apply aggressive filtering that removes too many citations
+	// 仅当结果数量合理（>=20 条且保留率 >=30%）时才应用过滤；用 AND 避免过度过滤。
 	if len(filtered) >= citationFilterMinCount && retention >= citationFilterMinRetention {
 		result.Citations = filtered
 		result.Applied = true
@@ -410,6 +424,9 @@ func hasSuccessfulToolExecutions(results []activities.AgentExecutionResult) bool
 //  3. Fallback to a simple canonical_name-based .com heuristic.
 //
 // All outputs are normalized to https://host form and deduplicated.
+// 为公司研究构造少量候选 URL，优先级：refinement 提供的 official_domains >
+// 配置化聚合站点（Crunchbase、LinkedIn 等）> 基于 canonical_name 的 .com 兜底猜测。
+// 输出统一规范为 https://host 形式并去重。
 func buildCompanyPrefetchURLs(canonicalName string, officialDomains []string) []string {
 	return buildCompanyPrefetchURLsWithLocale(canonicalName, officialDomains, "")
 }
@@ -439,6 +456,8 @@ func languageToCode(lang string) string {
 // extractRegionCodeFromTargetLanguages extracts regional language code from LLM-determined target_languages.
 // Returns the first regional code found (zh, ja, ko), or empty string if none.
 // This is used to determine locale-specific sources based on company region, not query language.
+// 从 LLM 判定的 target_languages 中提取区域语言码（zh/ja/ko），
+// 用于按公司所在地区而非查询语言选择本地化来源。
 func extractRegionCodeFromTargetLanguages(targetLanguages []string) string {
 	for _, lang := range targetLanguages {
 		code := languageToCode(lang)
@@ -1052,6 +1071,8 @@ func buildCompanyDomainDiscoverySearchQuery(canonicalName string, disambiguation
 	// or explanations that pollute search results and push official domains down.
 	// Example: "ExampleCorp 官网 官方网站" returns jp.example.com as #1 result,
 	// but "ExampleCorp 官网 官方网站 web optimization..." pushes it out of top 10.
+	// 域名发现只用公司名 + "official website" 关键词，不追加消歧词——
+	// LLM 生成的翻译或解释会污染搜索结果，把官网挤出前列。
 	q := fmt.Sprintf("%s official website", name)
 	switch regionCode {
 	case "zh":
@@ -1134,6 +1155,8 @@ func registrableDomain(host string) string {
 
 	// Minimal multi-label public suffix handling for common company research TLDs.
 	// This avoids collapsing e.g. sony.co.jp -> co.jp via naive last-2-labels logic.
+	// 对常见公司研究 TLD 做最小化的多级公共后缀处理，
+	// 避免按朴素的"最后两段"逻辑把 sony.co.jp 误判为 co.jp。
 	suffix2 := labels[len(labels)-2] + "." + labels[len(labels)-1]
 	suffix3 := ""
 	if len(labels) >= 3 {
@@ -1497,6 +1520,8 @@ func selectDomainsForPrefetch(discovered []string, requestedRegions []string, or
 
 // selectDomainsForPrefetchWithFocus extends selectDomainsForPrefetch with focus-aware scoring.
 // focusCategories are domain types to prioritize (e.g., "ir", "docs", "corporate").
+// 在 selectDomainsForPrefetch 基础上加入焦点感知打分，
+// focusCategories 为需要优先的域名类型（如 "ir"、"docs"、"corporate"）。
 func selectDomainsForPrefetchWithFocus(discovered []string, requestedRegions []string, originRegion string, max int, focusCategories []string) []string {
 	if max <= 0 || len(discovered) == 0 {
 		return nil
@@ -2474,6 +2499,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 		// Deep Research 2.0: Fallback - extract dimension names when research_areas is empty/generic
 		// LLM may return structured research_dimensions but leave research_areas sparse
+		// research_areas 为空或过于笼统时的兜底：从 research_dimensions 中提取维度名。
 		if len(refineResult.ResearchAreas) == 0 && len(refineResult.ResearchDimensions) > 0 {
 			for _, dim := range refineResult.ResearchDimensions {
 				refineResult.ResearchAreas = append(refineResult.ResearchAreas, dim.Dimension)
@@ -2603,6 +2629,8 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 	// Decompose needs a medium-tier model (Sonnet) for reliable domain_analysis detection.
 	// Strategy's agent_model_tier (e.g. "small") applies to research agents, not decompose.
+	// Decompose 需要 medium 档的 model（Sonnet）才能可靠识别 domain_analysis；
+	// strategy 的 agent_model_tier（如 "small"）只作用于研究 agent，不影响 decompose。
 	origTier, hadTier := baseContext["model_tier"]
 	baseContext["model_tier"] = "medium"
 
@@ -2673,6 +2701,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 	// Clean up HITL review fields from baseContext after decompose has consumed them.
 	// Subagents should NOT see raw review content — decompose encodes intent into subtask descriptions.
+	// 子 agent 不应看到原始复核内容——意图已由 decompose 编码进 subtask 描述。
 	delete(baseContext, "confirmed_plan")
 	delete(baseContext, "research_brief")
 	delete(baseContext, "review_conversation")
@@ -2942,6 +2971,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 						// === BATCH DOMAIN DISCOVERY (single LLM call) ===
 						// Collect all search queries and execute them in a single agent call
 						// This reduces N LLM calls to 1, significantly improving efficiency
+						// 把所有搜索查询收进一次 agent 调用，将 N 次 LLM 调用压缩为 1 次，显著提升效率。
 						var allQueries []string
 						for _, s := range searches {
 							allQueries = append(allQueries, s.Query)
@@ -3304,6 +3334,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 								// Only use LLM-selected domains (no subdomain expansion)
 								// Subdomain expansion was adding back unwanted domains like accounts.*, store.*
+								// 只采用 LLM 选中的域名，不做子域扩展——扩展会把 accounts.*、store.* 等无用域带回来。
 								for _, d := range llmDomains {
 									if isGrounded(d) && !seenDiscovered[d] {
 										seenDiscovered[d] = true
@@ -4137,6 +4168,8 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 				// Check if domain_analysis is running and some tasks depend on it
 				// If so, split tasks: run independent tasks first (in parallel with domain_analysis),
 				// wait for domain_analysis, then run dependent tasks with injected official_domains
+				// 当 domain_analysis 正在运行且部分 task 依赖它时，把 task 拆成两批：
+				// 先并行执行独立 task，等 domain_analysis 完成后再执行依赖 task 并注入 official_domains。
 				if domainAnalysisStarted && len(domainAnalysisSubtasks) > 0 {
 					domainAnalysisTaskID := domainAnalysisSubtasks[0].ID
 
@@ -4215,6 +4248,8 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 								// Note: We keep task.Dependencies intact so that hybrid.go can inject
 								// dependency_results properly. The dependency on task-1 will be satisfied
 								// via PrefilledResults which now contains domain_analysis result.
+								// 保留 task.Dependencies 不动，好让 hybrid.go 正常注入 dependency_results；
+								// 对 task-1 的依赖会通过已包含 domain_analysis 结果的 PrefilledResults 满足。
 							}
 							logger.Info("Injected official_domains into dependent tasks",
 								"domains", domains,
@@ -4676,6 +4711,8 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 	// Take a snapshot of all agent results BEFORE any filtering, so citation
 	// extraction can operate on complete tool outputs regardless of later
 	// entity filtering used for synthesis tightness.
+	// 在过滤前先对所有 agent 结果做快照，使引用提取基于完整 tool 输出，
+	// 不受后续用于收紧合成的实体过滤影响。
 	originalAgentResults := make([]activities.AgentExecutionResult, len(agentResults))
 	copy(originalAgentResults, agentResults)
 
@@ -4759,6 +4796,8 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 	// manager via agent.go's execution path. Cache stats are now backfilled from
 	// response metadata in runUnary (agent.go). Do NOT add a separate recording loop
 	// here — it causes duplicate DB records and double-counted costs.
+	// 每个 agent 的 token 用量（含 cache 统计）由 budget manager 在 agent.go 执行路径中记录，
+	// cache 统计已从 runUnary 的 response metadata 回填；此处不要再加记录循环，否则会重复写库、重复计费。
 
 	// Check pause/cancel before synthesis
 	if err := controlHandler.CheckPausePoint(ctx, "pre_synthesis"); err != nil {
@@ -5015,6 +5054,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 	// Step 3.5: Deep Research 2.0 Iterative Loop OR legacy gap-filling
 	// Check for iterative research mode first (new Deep Research 2.0 approach)
 	// Deep Research 2.0 is now enabled by default; set iterative_research_enabled=false in context to disable
+	// Deep Research 2.0 默认开启；在 context 中设 iterative_research_enabled=false 可关闭。
 	iterativeResearchVersion := workflow.GetVersion(ctx, "iterative_research_v1", workflow.DefaultVersion, 1)
 	iterativeEnabled := true // Default to true for Deep Research 2.0
 	iterativeEnabledExplicit := false
@@ -5794,6 +5834,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 							// Combine for synthesis (filtered) and for citations (unfiltered)
 							// Synthesis uses filtered agentResults to keep reasoning on-entity.
 							// Citations use the original (unfiltered) results to maximize evidence.
+							// 合成使用过滤后的结果，使推理聚焦实体；引用使用未过滤的原始结果，以最大化证据。
 							combinedAgentResults := append(allGapResults, agentResults...)
 							combinedForCitations := append(allGapResults, originalAgentResults...)
 
@@ -5944,6 +5985,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 	// Step 4: Apply reflection pattern for quality improvement
 	// NOTE: Reflection runs BEFORE citation agent to prevent re-synthesis from losing citations
+	// 反思必须在 Citation Agent 之前执行，否则重写会丢失引用。
 	reflectionConfig := patterns.ReflectionConfig{
 		Enabled:             true,
 		MaxRetries:          2,
@@ -5983,6 +6025,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 	// Citation Agent: add inline citations to synthesis result (when enabled)
 	// IMPORTANT: Runs AFTER reflection to ensure citations aren't lost during re-synthesis
+	// Citation Agent 在反思之后运行，确保重写过程不会丢掉引用。
 	citationAgentEnabled := true // Default: enabled
 	if v, ok := baseContext["enable_citation_agent"].(bool); ok {
 		citationAgentEnabled = v
@@ -6373,6 +6416,8 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 		// downstream consumer that compares against API responses;
 		// CacheAwareTokensUsed carries the true total (incl. prompt cache)
 		// for the session quota counter and pricing.
+		// TokensUsed 保持 OpenAI 口径（input + output），供与 API response 比对的消费方使用；
+		// CacheAwareTokensUsed 才是真实总量（含 prompt cache），用于 session 配额计数与计价。
 		finalCost := estCost
 		finalTokens := totalTokens
 		var finalCacheAware int
@@ -6780,6 +6825,8 @@ func persistAgentExecutionLocal(ctx workflow.Context, workflowID, agentID, input
 	// Truncate output for storage to avoid Temporal deadlock detection during JSON serialization.
 	// Large payloads (>50KB) can cause serialization to exceed 1 second, triggering TMPRL1101.
 	// This only affects database storage; in-memory data for LLM processing remains complete.
+	// 写库前截断输出，避免 JSON 序列化超过 1 秒触发 Temporal 死锁检测（TMPRL1101）；
+	// 仅影响数据库存储，供 LLM 使用的内存数据保持完整。
 	const maxOutputLen = 50000
 	outputForStorage := result.Response
 	if len(outputForStorage) > maxOutputLen {
@@ -6899,6 +6946,7 @@ func persistAgentExecutionLocalWithMeta(ctx workflow.Context, workflowID, agentI
 	// Truncate output for storage to avoid Temporal deadlock detection during JSON serialization.
 	// Large payloads (>50KB) can cause serialization to exceed 1 second, triggering TMPRL1101.
 	// This only affects database storage; in-memory data for LLM processing remains complete.
+	// 同上：仅为写库截断，内存中的完整输出不受影响。
 	const maxOutputLen = 50000
 	outputForStorage := result.Response
 	if len(outputForStorage) > maxOutputLen {
@@ -7047,6 +7095,8 @@ func validateTaskContracts(subtasks []activities.Subtask, logger simpleLogger) e
 // Note: Post-synthesis language validation was removed.
 // Language handling now occurs earlier (refine stage sets target_language),
 // and the synthesis activity embeds a language instruction.
+// 合成后的语言校验已移除：语言处理提前到 refine 阶段（设置 target_language），
+// 由合成 activity 内嵌语言指令。
 
 // ============================================================================
 // Gap-filling Value Gating (P1-1)
@@ -7125,6 +7175,7 @@ func evaluateGapFillValue(
 	}
 
 	// Value gate: accept if at least 2 new URLs OR 1 new domain
+	// 价值门槛：至少 2 个新 URL 或 1 个新域名才接受补洞结果。
 	accept := newURLs >= 2 || newDomains >= 1
 	return accept, newURLs, newDomains
 }

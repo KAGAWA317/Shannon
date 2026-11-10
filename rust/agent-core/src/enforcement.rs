@@ -15,10 +15,13 @@ use redis::Script;
 pub struct RequestEnforcer {
     cfg: EnforcementConfig,
     // Simple per-key token bucket for rate limiting
+    // 简单的每 key token 桶 rate limit
     buckets: Arc<Mutex<HashMap<String, TokenBucket>>>,
     // Simple per-key rolling window circuit breaker
+    // 简单的每 key 滚动窗口 circuit breaker
     breakers: Arc<Mutex<HashMap<String, RollingWindow>>>,
     // Optional distributed limiter
+    // 可选的分布式 rate limiter
     redis: Option<RedisLimiter>,
 }
 
@@ -86,6 +89,7 @@ impl RequestEnforcer {
         Fut: std::future::Future<Output = Result<T>>,
     {
         // token ceiling (estimation only)
+        // token 上限（仅按估算）
         if est_tokens > self.cfg.per_request_max_tokens {
             if let Some(c) = ENFORCEMENT_DROPS.get() {
                 c.with_label_values(&["token_limit"]).inc();
@@ -93,6 +97,7 @@ impl RequestEnforcer {
             return Err(anyhow!("token_limit_exceeded"));
         }
 
+        // rate limit
         // rate limit
         if self.rate_check(key).await.is_err() {
             if let Some(c) = ENFORCEMENT_DROPS.get() {
@@ -102,6 +107,7 @@ impl RequestEnforcer {
         }
 
         // circuit breaker
+        // circuit breaker
         if !self.cb_allow(key) {
             if let Some(c) = ENFORCEMENT_DROPS.get() {
                 c.with_label_values(&["circuit_open"]).inc();
@@ -110,6 +116,7 @@ impl RequestEnforcer {
         }
 
         // timeout wrapper
+        // timeout 包装
         let res = timeout(Duration::from_secs(self.cfg.per_request_timeout_secs), f()).await;
         match res {
             Err(_) => {
@@ -138,6 +145,7 @@ impl RequestEnforcer {
 }
 
 // --- helpers ---
+// --- 辅助实现 ---
 
 #[derive(Clone)]
 struct RedisLimiter {
@@ -223,6 +231,7 @@ impl TokenBucket {
     }
     fn try_take(&mut self, amount: f64) -> bool {
         // refill
+        // 补充 token
         let elapsed = self.last_refill.elapsed().as_secs_f64();
         let add = elapsed * self.refill_rate_per_sec;
         self.tokens = (self.tokens + add).min(self.capacity);

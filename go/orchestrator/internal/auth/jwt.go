@@ -43,6 +43,7 @@ type CustomClaims struct {
 }
 
 // GenerateTokenPair generates both access and refresh tokens
+// GenerateTokenPair 同时生成 access token 与 refresh token
 func (j *JWTManager) GenerateTokenPair(user *User) (*TokenPair, string, error) {
 	// Generate access token
 	accessToken, err := j.generateAccessToken(user)
@@ -51,6 +52,7 @@ func (j *JWTManager) GenerateTokenPair(user *User) (*TokenPair, string, error) {
 	}
 
 	// Generate refresh token (random string, not JWT)
+	// 生成 refresh token（随机字符串，不是 JWT）
 	refreshToken, refreshTokenHash, err := generateRefreshToken()
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to generate refresh token: %w", err)
@@ -65,6 +67,7 @@ func (j *JWTManager) GenerateTokenPair(user *User) (*TokenPair, string, error) {
 }
 
 // generateAccessToken creates a new JWT access token
+// generateAccessToken 创建新的 JWT access token
 func (j *JWTManager) generateAccessToken(user *User) (string, error) {
 	now := time.Now()
 
@@ -92,6 +95,7 @@ func (j *JWTManager) generateAccessToken(user *User) (string, error) {
 }
 
 // ValidateAccessToken validates and parses a JWT access token
+// ValidateAccessToken 校验并解析 JWT access token
 func (j *JWTManager) ValidateAccessToken(tokenString string) (*UserContext, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 		// Validate signing method
@@ -143,11 +147,13 @@ func (j *JWTManager) ValidateAccessToken(tokenString string) (*UserContext, erro
 }
 
 // RefreshAccessToken generates a new access token using a refresh token
+// RefreshAccessToken 使用 refresh token 生成新的 access token
 func (j *JWTManager) RefreshAccessToken(user *User) (string, error) {
 	return j.generateAccessToken(user)
 }
 
 // getScopesForRole returns the default scopes for a given role
+// getScopesForRole 返回指定角色的默认 scope
 func (j *JWTManager) getScopesForRole(role string) []string {
 	switch role {
 	case RoleOwner:
@@ -177,6 +183,7 @@ func (j *JWTManager) getScopesForRole(role string) []string {
 }
 
 // generateRefreshToken creates a secure random refresh token
+// generateRefreshToken 生成安全的随机 refresh token
 func generateRefreshToken() (token string, hash string, err error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
@@ -189,17 +196,20 @@ func generateRefreshToken() (token string, hash string, err error) {
 }
 
 // hashToken creates a SHA256 hash of a token
+// hashToken 计算 token 的 SHA256 哈希
 func hashToken(token string) string {
 	hash := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(hash[:])
 }
 
 // compareTokenHash performs constant-time comparison of token hashes
+// compareTokenHash 对 token 哈希做常量时间比较
 func compareTokenHash(hash1, hash2 string) bool {
 	return subtle.ConstantTimeCompare([]byte(hash1), []byte(hash2)) == 1
 }
 
 // ExtractBearerToken extracts the token from Authorization header
+// ExtractBearerToken 从 Authorization 头中提取 token
 func ExtractBearerToken(authHeader string) (string, error) {
 	authHeader = strings.TrimSpace(authHeader)
 	if len(authHeader) < 7 || !strings.EqualFold(authHeader[:6], "Bearer") || authHeader[6] != ' ' {

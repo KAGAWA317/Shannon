@@ -33,6 +33,7 @@ type Store struct {
 }
 
 // NewStore creates a new attachment store backed by Redis.
+// NewStore 创建一个由 Redis 支撑的附件存储。
 func NewStore(client *redis.Client, ttl time.Duration) *Store {
 	return &Store{client: client, ttl: ttl}
 }
@@ -42,6 +43,7 @@ func (s *Store) redisKey(id string) string {
 }
 
 // Put stores an attachment and returns its ID.
+// Put 存储附件并返回其 ID。
 func (s *Store) Put(ctx context.Context, sessionID string, data []byte, mediaType, filename string) (string, error) {
 	id := uuid.New().String()[:12]
 	att := Attachment{
@@ -65,6 +67,8 @@ func (s *Store) Put(ctx context.Context, sessionID string, data []byte, mediaTyp
 // Get retrieves an attachment and refreshes its TTL.
 // When sessionID is non-empty, it is validated against the stored record
 // to prevent cross-session attachment access.
+// Get 读取附件并刷新其 TTL。
+// sessionID 非空时会与存储记录校验，防止跨 session 访问附件。
 func (s *Store) Get(ctx context.Context, id string, sessionID ...string) (*Attachment, error) {
 	key := s.redisKey(id)
 	val, err := s.client.Get(ctx, key).Bytes()
@@ -87,6 +91,7 @@ func (s *Store) Get(ctx context.Context, id string, sessionID ...string) (*Attac
 	// Session isolation: when a sessionID is provided, it MUST match the stored record.
 	// Both sides must be non-empty for the check to apply — internal callers that
 	// legitimately need to bypass (e.g., admin/cleanup) simply omit the parameter.
+	// session 隔离：提供 sessionID 时必须与存储记录一致。仅当两侧都非空才执行校验——确实需要绕过的内部调用方（如 admin/cleanup）只需不传该参数。
 	if len(sessionID) > 0 && sessionID[0] != "" {
 		if att.SessionID != "" && att.SessionID != sessionID[0] {
 			return nil, ErrAttachmentNotFound // don't leak existence

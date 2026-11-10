@@ -6,6 +6,7 @@ import (
 )
 
 // AgentState represents the complete state of an agent execution
+// AgentState 表示 agent 执行的完整状态
 type AgentState struct {
 	Query               string                 `json:"query" validate:"required,min=1"`
 	Context             map[string]interface{} `json:"context"`
@@ -38,6 +39,7 @@ type ExecutionState struct {
 }
 
 // BeliefState represents the agent's belief and confidence state
+// BeliefState 表示 agent 的信念与置信度状态
 type BeliefState struct {
 	Confidence     float64                `json:"confidence" validate:"min=0,max=1"`
 	Assumptions    []string               `json:"assumptions"`
@@ -58,6 +60,7 @@ type Hypothesis struct {
 }
 
 // ToolResult represents the result of a tool execution
+// ToolResult 表示一次 tool 执行的结果
 type ToolResult struct {
 	ToolName      string    `json:"tool_name" validate:"required"`
 	Input         string    `json:"input"`
@@ -70,6 +73,7 @@ type ToolResult struct {
 }
 
 // ErrorRecord represents an error that occurred during execution
+// ErrorRecord 表示执行期间发生的错误
 type ErrorRecord struct {
 	Timestamp    time.Time              `json:"timestamp"`
 	ErrorType    string                 `json:"error_type"`
@@ -106,12 +110,14 @@ func (as *AgentState) Validate() error {
 }
 
 // IsComplete checks if the execution is complete
+// IsComplete 判断执行是否完成
 func (as *AgentState) IsComplete() bool {
 	return as.ExecutionState.Status == "completed" ||
 		as.ExecutionState.Status == "failed"
 }
 
 // CanRetry checks if the execution can be retried
+// CanRetry 判断执行是否可 retry
 func (as *AgentState) CanRetry() bool {
 	return as.ExecutionState.Status == "failed" &&
 		as.ExecutionState.RetryCount < 3
@@ -146,6 +152,7 @@ func (as *AgentState) UpdateStep(step int, completed bool) error {
 }
 
 // GetTotalTokensUsed calculates total tokens used across all tools
+// GetTotalTokensUsed 计算所有 tool 累计使用的 token 总数
 func (as *AgentState) GetTotalTokensUsed() int {
 	total := 0
 	for _, result := range as.ToolResults {
@@ -169,6 +176,7 @@ func (as *AgentState) GetExecutionDuration() time.Duration {
 }
 
 // Reset resets the state for a retry
+// Reset 重置状态以便 retry
 func (as *AgentState) Reset() {
 	as.ExecutionState.Status = "pending"
 	as.ExecutionState.ErrorCount = 0

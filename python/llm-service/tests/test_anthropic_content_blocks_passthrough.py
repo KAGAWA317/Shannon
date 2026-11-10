@@ -7,6 +7,15 @@ the model loses the native thinking context, which empirically caused empty
 `think({})` tool emissions and 14-minute agent-loop hangs.
 
 See plan 2026-05-14-thinking-blocks-cc-alignment.md Phase A.
+
+验证 Anthropic provider 端到端透传完整且有序的 content_blocks 列表，
+包括交错的 thinking 块及其 signature。
+
+这是改变 wire 格式的一步，让 ShanClaw（以及任何其他客户端）能在下一轮
+把 assistant 的轨迹原样回传给 Anthropic —— 缺少这一步，模型会丢失原生
+thinking context，实测会导致空的 think({}) tool 调用和 14 分钟的 agent loop 卡死。
+
+参见 plan 2026-05-14-thinking-blocks-cc-alignment.md Phase A。
 """
 
 import os
@@ -15,6 +24,7 @@ from types import SimpleNamespace
 import pytest
 
 # Set dummy key before import.
+# 导入前先设置 dummy key。
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-for-unit-tests")
 
 from llm_provider.anthropic_provider import _block_to_dict
@@ -22,6 +32,7 @@ from llm_provider.base import CompletionResponse, TokenUsage
 
 
 # ---------- CompletionResponse dataclass field ----------
+# ---------- CompletionResponse dataclass 字段 ----------
 
 def test_completion_response_carries_content_blocks():
     resp = CompletionResponse(
@@ -53,9 +64,12 @@ def test_completion_response_content_blocks_defaults_none():
 
 
 # ---------- _block_to_dict helper ----------
+# ---------- _block_to_dict 辅助函数 ----------
 
 def test_block_to_dict_pydantic_shape():
-    """SDK Pydantic objects (most common case) — use model_dump."""
+    """SDK Pydantic objects (most common case) — use model_dump.
+    SDK 的 Pydantic 对象（最常见情况）—— 使用 model_dump。
+    """
     class FakePydantic:
         def model_dump(self, exclude_none=True):
             return {"type": "thinking", "thinking": "x", "signature": "s"}
@@ -65,7 +79,9 @@ def test_block_to_dict_pydantic_shape():
 
 
 def test_block_to_dict_to_dict_shape():
-    """Older SDKs / compat providers expose .to_dict()."""
+    """Older SDKs / compat providers expose .to_dict().
+    较老的 SDK / 兼容 provider 暴露 .to_dict()。
+    """
     class FakeOldSdk:
         def to_dict(self):
             return {"type": "text", "text": "hello"}
@@ -75,23 +91,31 @@ def test_block_to_dict_to_dict_shape():
 
 
 def test_block_to_dict_plain_dict_input():
-    """MiniMax compat: input is already a plain dict."""
+    """MiniMax compat: input is already a plain dict.
+    MiniMax 兼容场景：输入本身已经是普通 dict。
+    """
     inp = {"type": "tool_use", "id": "t1", "name": "x", "input": {"a": 1}}
     out = _block_to_dict(inp, "tool_use")
     # Output is a copy, not the same reference.
+    # 输出是副本，不是同一个引用。
     assert out == inp
     assert out is not inp
     # Mutating output must not affect input.
+    # 修改输出不能影响输入。
     out["mutated"] = True
     assert "mutated" not in inp
 
 
 def test_block_to_dict_per_type_fallback_thinking():
-    """SDK shape with neither model_dump nor to_dict — falls back to per-type."""
+    """SDK shape with neither model_dump nor to_dict — falls back to per-type.
+    既没有 model_dump 也没有 to_dict 的 SDK 形态 —— 回退到按类型取值。
+    """
     block = SimpleNamespace(type="thinking", thinking="fallback-text", signature="sig-fallback")
     # Strip the model_dump shape so the helper exercises the fallback path.
+    # 去掉 model_dump 形态，让辅助函数走回退分支。
     out = _block_to_dict(block, "thinking")
     # SimpleNamespace has no model_dump/to_dict, so we hit the per-type branch.
+    # SimpleNamespace 没有 model_dump/to_dict，因此会进入按类型分支。
     assert out is not None
     assert out["type"] == "thinking"
     assert out["thinking"] == "fallback-text"
@@ -105,17 +129,22 @@ def test_block_to_dict_per_type_fallback_redacted_thinking():
 
 
 def test_block_to_dict_unknown_type_returns_none():
-    """Unknown / unsupported block types: emit None so caller skips them."""
+    """Unknown / unsupported block types: emit None so caller skips them.
+    未知 / 不支持的块类型：返回 None，由调用方跳过。
+    """
     block = SimpleNamespace(type="future_block_type")
     out = _block_to_dict(block, "future_block_type")
     # No model_dump, no to_dict, no per-type match → None.
+    # 没有 model_dump、没有 to_dict、也没有按类型匹配 → 返回 None。
     assert out is None
 
 
 # ---------- _serialize_completion wire shape ----------
+# ---------- _serialize_completion 的 wire 结构 ----------
 
 def test_serialize_completion_includes_content_blocks():
     # Lazy import to avoid loading the whole providers package at module top.
+    # 延迟导入，避免在模块顶层加载整个 providers 包。
     from llm_service.providers import ProviderManager
 
     resp = CompletionResponse(
@@ -136,13 +165,17 @@ def test_serialize_completion_includes_content_blocks():
     assert "content_blocks" in out
     assert out["content_blocks"][0] == {"type": "thinking", "thinking": "x", "signature": "s"}
     # Legacy fields still populated for older clients.
+    # 为老客户端保留 legacy 字段。
     assert out["output_text"] == "visible"
 
 
 def test_serialize_completion_omits_content_blocks_when_none():
     """Backward compat: when provider didn't populate the new field, the wire
     response must NOT carry an empty content_blocks key — that would force
-    older clients to handle a None / [] value they don't expect."""
+    older clients to handle a None / [] value they don't expect.
+    向后兼容：当 provider 没有填充这个新字段时，wire response 绝不能带上空的
+    content_blocks key —— 否则老客户端不得不处理它们并不预期的 None / [] 值。
+    """
     from llm_service.providers import ProviderManager
 
     resp = CompletionResponse(
@@ -159,11 +192,16 @@ def test_serialize_completion_omits_content_blocks_when_none():
 
 
 # ---------- Redis cache serialize/deserialize roundtrip ----------
+# ---------- Redis cache 序列化/反序列化往返 ----------
 
 def test_redis_cache_roundtrip_preserves_content_blocks():
     """A Redis cache hit must return content_blocks intact. Without this fix,
     every cached response silently reverted to {output_text, tool_calls} only
-    and the thinking trajectory broke for any cached upstream call."""
+    and the thinking trajectory broke for any cached upstream call.
+    Redis cache 命中时必须原样返回 content_blocks。没有这个修复，每个 cache response
+    都会悄悄退化成只剩 {output_text, tool_calls}，任何走 cache 的上游调用其 thinking
+    轨迹都会断掉。
+    """
     from llm_provider.manager import _serialize_response, _deserialize_response
 
     resp = CompletionResponse(
@@ -198,7 +236,10 @@ def test_redis_cache_roundtrip_preserves_content_blocks():
 
 def test_redis_cache_legacy_response_no_content_blocks():
     """Cache entries written before the new field exists must still deserialize
-    cleanly with content_blocks=None — no exception, no fabricated empty list."""
+    cleanly with content_blocks=None — no exception, no fabricated empty list.
+    新字段出现之前写入的 cache 条目，仍须能以 content_blocks=None 正常反序列化
+    —— 不抛 exception，也不伪造空列表。
+    """
     from llm_provider.manager import _deserialize_response
 
     legacy_payload = {
@@ -208,6 +249,7 @@ def test_redis_cache_legacy_response_no_content_blocks():
         "usage": {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2, "estimated_cost": 0.0},
         "finish_reason": "stop",
         # No content_blocks key — pre-2026-05 cache entry.
+        # 没有 content_blocks key —— 2026-05 之前的 cache 条目。
     }
     resp = _deserialize_response(legacy_payload)
     assert resp.content_blocks is None
@@ -215,6 +257,7 @@ def test_redis_cache_legacy_response_no_content_blocks():
 
 
 # ---------- Streaming path parity ----------
+# ---------- streaming 路径行为对齐 ----------
 
 @pytest.mark.asyncio
 async def test_stream_complete_yields_content_blocks():
@@ -223,7 +266,13 @@ async def test_stream_complete_yields_content_blocks():
     (TUI, future SSE consumers) lose thinking blocks while non-stream clients
     keep them — same asymmetric bug the Cloud-side reviewer flagged. The
     streaming SSE done event in completions.py then forwards this key to the
-    wire."""
+    wire.
+    stream_complete 的最终结果 dict 必须携带有序的 content_blocks 列表
+    （与非 stream complete() 保持一致）。否则 stream 客户端（TUI、未来的 SSE 消费方）
+    会丢失 thinking 块，而非 stream 客户端仍能拿到 —— 正是 Cloud 侧 reviewer 指出的
+    那种不对称 bug。随后 completions.py 的 streaming SSE done event 会把这个 key
+    转发到 wire 上。
+    """
     from unittest.mock import MagicMock
     from llm_provider.anthropic_provider import AnthropicProvider
 
@@ -243,6 +292,7 @@ async def test_stream_complete_yields_content_blocks():
     }
 
     # Build a final message with interleaved thinking + tool_use blocks.
+    # 构造一条包含交错 thinking + tool_use 块的最终 message。
     final_msg = SimpleNamespace(
         content=[
             SimpleNamespace(type="thinking", thinking="reasoning step 1", signature="sigA"),
@@ -296,6 +346,7 @@ async def test_stream_complete_yields_content_blocks():
         chunks.append(chunk)
 
     # The final dict carries content_blocks in original order.
+    # 最终 dict 按原始顺序携带 content_blocks。
     final = next(c for c in reversed(chunks) if isinstance(c, dict))
     assert "content_blocks" in final, f"streaming final dict missing content_blocks; keys={list(final)}"
     blocks = final["content_blocks"]
@@ -305,7 +356,9 @@ async def test_stream_complete_yields_content_blocks():
         f"order broken: {types_in_order} (Anthropic requires verbatim order)"
     )
     # Each thinking block keeps its own signature.
+    # 每个 thinking 块保留自己的 signature。
     assert blocks[0]["signature"] == "sigA"
     assert blocks[3]["signature"] == "sigB"
     # Legacy fields still populated for backward compat.
+    # 为向后兼容保留 legacy 字段。
     assert final.get("function_call") == {"id": "t1", "name": "f", "arguments": {"x": 1}}

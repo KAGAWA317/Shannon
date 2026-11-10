@@ -1,4 +1,7 @@
-"""Example of workspace and memory file access."""
+"""Example of workspace and memory file access.
+
+示例：workspace 与 memory 文件访问。
+"""
 
 import os
 

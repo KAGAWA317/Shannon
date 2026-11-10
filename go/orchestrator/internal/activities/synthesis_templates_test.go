@@ -147,9 +147,11 @@ func TestLoadSynthesisTemplate(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	// Clear cache before test
+	// 测试前先清空 cache
 	ClearSynthesisTemplateCache()
 
 	// Set env var to use temp dir
+	// 设置 env var 以使用临时目录
 	oldEnv := os.Getenv("SYNTHESIS_TEMPLATES_DIR")
 	os.Setenv("SYNTHESIS_TEMPLATES_DIR", tmpDir)
 	defer os.Setenv("SYNTHESIS_TEMPLATES_DIR", oldEnv)
@@ -213,12 +215,14 @@ func TestLoadSynthesisTemplate(t *testing.T) {
 		}
 
 		// Second load should return cached version
+		// 第二次加载应返回 cache 中的版本
 		tmpl2 := LoadSynthesisTemplate("cached", nil)
 		if tmpl2 == nil {
 			t.Fatal("expected cached template, got nil")
 		}
 
 		// Both should be the same pointer
+		// 两者应为同一个指针
 		if tmpl1 != tmpl2 {
 			t.Error("expected same cached template instance")
 		}
@@ -354,6 +358,7 @@ func TestClearSynthesisTemplateCache(t *testing.T) {
 	ClearSynthesisTemplateCache()
 
 	// Load template to populate cache
+	// 加载 template 以填充 cache
 	tmpl1 := LoadSynthesisTemplate("cache_test", nil)
 	if tmpl1 == nil {
 		t.Fatal("failed to load template")
@@ -369,12 +374,14 @@ func TestClearSynthesisTemplateCache(t *testing.T) {
 	}
 
 	// Load again - should get new version
+	// 再次加载——应获取新版本
 	tmpl2 := LoadSynthesisTemplate("cache_test", nil)
 	if tmpl2 == nil {
 		t.Fatal("failed to load modified template")
 	}
 
 	// Verify they are different instances (cache was cleared)
+	// 验证它们是不同实例（cache 已被清空）
 	if tmpl1 == tmpl2 {
 		t.Error("expected different template instances after cache clear")
 	}

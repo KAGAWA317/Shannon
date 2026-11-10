@@ -22,6 +22,7 @@ func (reactPattern) GetCapabilities() []PatternCapability {
 
 func (reactPattern) EstimateTokens(input PatternInput) int {
 	// Simple heuristic: base per-iteration budget
+	// 未指定 budget 时给固定经验值，仅用于选择 pattern 前的粗算，不是真实开销。
 	if input.BudgetMax > 0 {
 		return input.BudgetMax
 	}
@@ -213,6 +214,7 @@ func (reflectionPattern) Execute(ctx workflow.Context, input PatternInput) (*Pat
 		}
 
 		// Record initial reflection usage when not budgeted (avoid double-recording)
+		// 只有非 budget 路径需要手动记账；budget activity 已记过，重复会翻倍。
 		wid := workflow.GetInfo(ctx).WorkflowExecution.ID
 		if input.Context != nil {
 			if p, ok := input.Context["parent_workflow_id"].(string); ok && p != "" {
@@ -260,6 +262,7 @@ func (reflectionPattern) Execute(ctx workflow.Context, input PatternInput) (*Pat
 	improved, score, extraTokens, err := ReflectOnResult(ctx, input.Query, initial.Response, []activities.AgentExecutionResult{initial}, input.Context, rcfg, opts)
 	if err != nil {
 		// If reflection fails, return initial
+		// reflection 失败时降级返回初稿，不把整个 pattern 判为失败。
 		return &PatternResult{Result: initial.Response, TokensUsed: initial.TokensUsed, Confidence: 0.5}, nil
 	}
 	return &PatternResult{Result: improved, TokensUsed: initial.TokensUsed + extraTokens, Confidence: score}, nil

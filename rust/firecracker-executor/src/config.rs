@@ -49,10 +49,12 @@ impl Settings {
             .and_then(|v| v.parse::<u32>().ok())
             .unwrap_or(1024);
         // Boot args MUST include root device and init for the VM to boot
+        // 启动参数必须包含根设备和 init，否则 VM 无法启动
         let boot_args = std::env::var("FIRECRACKER_BOOT_ARGS").unwrap_or_else(|_| {
             "console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rw init=/init.sh".to_string()
         });
         // vsock_cid is now per-VM, this is just the base (VMs get base + index)
+        // vsock_cid 现在按 VM 独立，这里只是基准值（VM 取基准值 + 序号）
         let vsock_cid_base = std::env::var("FIRECRACKER_VSOCK_CID_BASE")
             .ok()
             .and_then(|v| v.parse::<u32>().ok())

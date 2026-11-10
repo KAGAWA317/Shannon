@@ -2,6 +2,8 @@
 Test suite for File Operation Tools with session isolation.
 
 Tests path validation, session workspace creation, and security boundaries.
+
+覆盖路径校验、session workspace 创建，以及「不能越出 workspace」的安全边界。
 """
 
 import asyncio
@@ -111,6 +113,7 @@ class TestIsAllowed:
     def test_path_traversal_is_rejected(self, tmp_path):
         """Test that path traversal attempts are rejected"""
         # Create a resolved path that would escape
+        # 构造一个 resolve 之后会逃出 base 的路径（tmp_path/../etc/passwd）
         target = (tmp_path / ".." / "etc" / "passwd").resolve()
         assert _is_allowed(target, tmp_path.resolve()) is False
 
@@ -197,6 +200,7 @@ class TestFileReadTool:
     async def test_read_file_in_tmp_with_legacy_flag(self, tool, tmp_path):
         """Test reading from /tmp when SHANNON_ALLOW_GLOBAL_TMP is enabled"""
         # Use /tmp explicitly (not tempfile which may use platform-specific dirs)
+        # 必须写死 /tmp：tempfile 在 macOS 上给的是 /var/folders/...，不在放行列表内
         tmp_file = Path("/tmp") / f"test_read_{os.getpid()}.txt"
         tmp_file.write_text("tmp content")
 
@@ -222,6 +226,7 @@ class TestFileReadTool:
     async def test_read_file_in_tmp_blocked_by_default(self, tool, tmp_path):
         """Test that reading from /tmp is blocked by default for session isolation"""
         # Use /tmp explicitly (not tempfile which may use platform-specific dirs)
+        # 必须写死 /tmp：tempfile 在 macOS 上给的是 /var/folders/...，不在放行列表内
         tmp_file = Path("/tmp") / f"test_blocked_{os.getpid()}.txt"
         tmp_file.write_text("tmp content")
 
@@ -443,6 +448,7 @@ class TestSessionIsolation:
 
             # Verify session A cannot write to session B's workspace
             # Cross-session access is now blocked by default for security
+            # 默认禁止跨 session 访问，这是安全约束，不是待修的 bug
             result_cross = await write_tool._execute_impl(
                 session_context={"session_id": "session-a"},
                 path=str(tmp_path / "session-b" / "intruder.txt"),
@@ -450,6 +456,7 @@ class TestSessionIsolation:
                 create_dirs=True,
             )
             # Session isolation is enforced: session-a cannot access session-b's workspace
+            # session 隔离生效：session-a 写不进 session-b 的目录
             assert result_cross.success is False
             assert "not allowed" in result_cross.error
 
@@ -476,9 +483,11 @@ class TestFileSearchTool:
         assert "path" in param_names
         assert "max_results" in param_names
         # query should be required
+        # query 必填，其余参数可选
         query_param = next(p for p in params if p.name == "query")
         assert query_param.required is True
         # path and max_results should be optional
+        # path / max_results 可选
         path_param = next(p for p in params if p.name == "path")
         assert path_param.required is False
         max_param = next(p for p in params if p.name == "max_results")
@@ -529,11 +538,13 @@ class TestFileSearchTool:
         assert result.success is True
         assert len(result.output) == 2
         # Check structure of match entries
+        # 每条结果都是 {file, line, content}
         for match in result.output:
             assert "file" in match
             assert "line" in match
             assert "content" in match
         # Verify case-insensitive match
+        # query 大小写不敏感
         contents = [m["content"] for m in result.output]
         assert "Hello World" in contents
         assert "Hello Again" in contents
@@ -791,6 +802,7 @@ class TestFileSearchTool:
         assert len(result.output) == 1
         match = result.output[0]
         # context should include before/after lines
+        # context 只装命中行的上下游，不含整文件
         assert "context" in match
         assert len(match["context"]) == 3  # 1 before + match + 1 after
         assert match["context"][0]["content"] == "line2"
@@ -837,6 +849,7 @@ class TestFileSearchTool:
         match = result.output[0]
         assert "context" in match
         # Should have match line + 1 after (no before since match is line 1)
+        # match 在第 1 行，前面没有内容，只带 1 行 after
         assert match["context"][0]["content"] == "MATCH"
         assert len(match["context"]) <= 3  # at most 2+1+0
 
@@ -845,6 +858,9 @@ class TestFileReadOffsetLimit:
     """Test FileReadTool offset/limit for line-range reads.
 
     Uses mock to bypass WASI sandbox so we test the Python implementation directly.
+
+    用 mock 关掉 WASI sandbox，直接验证 Python 实现的行号 / offset / limit 逻辑，
+    不经过 sandbox 协议。
     """
 
     @pytest.fixture
@@ -879,6 +895,7 @@ class TestFileReadOffsetLimit:
             )
         assert result.success is True
         # Lines 8-10 should appear, with line numbers
+        # 输出前缀是「行号 + 制表符 + 内容」
         assert "8\tLine 8" in result.output
         assert "9\tLine 9" in result.output
         assert "10\tLine 10" in result.output
@@ -1048,6 +1065,7 @@ class TestFileEditTool:
         assert result.success is False
         assert "matches 2 locations" in result.error
         # File should be unchanged
+        # 失败时文件必须原样保留，不能写一半
         assert f.read_text() == "foo\nbar\nfoo\nbaz\n"
 
     @pytest.mark.asyncio
@@ -1197,9 +1215,11 @@ class TestFileEditTool:
         assert "new_text" in param_names
         assert "replace_all" in param_names
         # path, old_text, new_text are required
+        # path / old_text / new_text 必填
         required = {p.name for p in params if p.required}
         assert required == {"path", "old_text", "new_text"}
         # replace_all is optional with default false
+        # replace_all 可选，默认 false
         ra = next(p for p in params if p.name == "replace_all")
         assert ra.required is False
         assert ra.default is False

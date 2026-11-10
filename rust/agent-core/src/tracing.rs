@@ -9,8 +9,10 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use crate::error::{AgentError, AgentResult};
 
 /// Initialize OpenTelemetry tracing with OTLP exporter
+/// 初始化 OpenTelemetry 追踪并配置 OTLP 导出器
 pub fn init_tracing() -> AgentResult<()> {
     // Get configuration from environment
+    // 从环境变量读取配置
     let service_name =
         env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "shannon-agent-core".to_string());
     let endpoint = env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
@@ -22,11 +24,13 @@ pub fn init_tracing() -> AgentResult<()> {
 
     if !enabled {
         // Just use basic tracing without OpenTelemetry
+        // 仅使用基础 tracing，不接入 OpenTelemetry
         init_basic_tracing()?;
         return Ok(());
     }
 
     // Create OTLP exporter
+    // 创建 OTLP 导出器
     let exporter = SpanExporter::builder()
         .with_tonic()
         .with_endpoint(endpoint.clone())
@@ -35,6 +39,7 @@ pub fn init_tracing() -> AgentResult<()> {
         .map_err(|e| AgentError::InternalError(format!("Failed to create exporter: {}", e)))?;
 
     // Build trace provider
+    // 构建 trace provider
     let tracer_provider = trace::TracerProvider::builder()
         .with_resource(Resource::new(vec![
             opentelemetry::KeyValue::new(SERVICE_NAME, service_name.clone()),
@@ -44,13 +49,16 @@ pub fn init_tracing() -> AgentResult<()> {
         .build();
 
     // Set global tracer provider
+    // 设置全局 tracer provider
     global::set_tracer_provider(tracer_provider.clone());
 
     // Create OpenTelemetry layer for tracing-subscriber
+    // 为 tracing-subscriber 创建 OpenTelemetry layer
     let otel_layer =
         tracing_opentelemetry::layer().with_tracer(tracer_provider.tracer("shannon-agent-core"));
 
     // Initialize tracing subscriber with OpenTelemetry layer
+    // 初始化带 OpenTelemetry layer 的 tracing subscriber
     let subscriber = tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -71,6 +79,7 @@ pub fn init_tracing() -> AgentResult<()> {
 }
 
 /// Initialize basic tracing without OpenTelemetry
+/// 初始化不接入 OpenTelemetry 的基础 tracing
 fn init_basic_tracing() -> AgentResult<()> {
     let subscriber = tracing_subscriber::registry().with(
         tracing_subscriber::EnvFilter::try_from_default_env()
@@ -89,11 +98,13 @@ fn init_basic_tracing() -> AgentResult<()> {
 }
 
 /// Shutdown OpenTelemetry tracing gracefully
+/// 优雅关闭 OpenTelemetry 追踪
 pub fn shutdown_tracing() {
     global::shutdown_tracer_provider();
 }
 
 /// Extract trace context from HTTP headers for cross-service tracing
+/// 从 HTTP 头提取 trace context，实现跨服务追踪
 pub fn extract_trace_context(headers: &http::HeaderMap) -> opentelemetry::Context {
     use opentelemetry::propagation::{Extractor, TextMapPropagator};
     use opentelemetry_sdk::propagation::TraceContextPropagator;
@@ -115,7 +126,9 @@ pub fn extract_trace_context(headers: &http::HeaderMap) -> opentelemetry::Contex
 }
 
 /// Inject trace context into HTTP headers for cross-service tracing
+/// 将 trace context 注入 HTTP 头，实现跨服务追踪
 /// Uses the provided context explicitly
+/// 显式使用传入的 context
 pub fn inject_trace_context(context: &opentelemetry::Context, headers: &mut http::HeaderMap) {
     use opentelemetry::propagation::{Injector, TextMapPropagator};
     use opentelemetry_sdk::propagation::TraceContextPropagator;
@@ -137,7 +150,9 @@ pub fn inject_trace_context(context: &opentelemetry::Context, headers: &mut http
 }
 
 /// Inject current active span's trace context into HTTP headers
+/// 将当前活跃 span 的 trace context 注入 HTTP 头
 /// This is the preferred method as it automatically uses the active span
+/// 这是首选方式，因为它会自动使用活跃 span
 pub fn inject_current_trace_context(headers: &mut http::HeaderMap) {
     use opentelemetry::propagation::{Injector, TextMapPropagator};
     use opentelemetry_sdk::propagation::TraceContextPropagator;
@@ -156,6 +171,7 @@ pub fn inject_current_trace_context(headers: &mut http::HeaderMap) {
     }
 
     // Get the current span's context
+    // 获取当前 span 的 context
     let current_span = tracing::Span::current();
     let context = current_span.context();
 
@@ -164,6 +180,7 @@ pub fn inject_current_trace_context(headers: &mut http::HeaderMap) {
 }
 
 /// Get the current trace ID from the active span
+/// 从活跃 span 获取当前 trace ID
 pub fn get_current_trace_id() -> Option<String> {
     use opentelemetry::trace::TraceContextExt;
     use tracing_opentelemetry::OpenTelemetrySpanExt;
@@ -181,6 +198,7 @@ pub fn get_current_trace_id() -> Option<String> {
 }
 
 /// Create a span that's properly linked to the current trace context
+/// 创建一个正确关联当前 trace context 的 span
 pub fn create_linked_span(name: &str) -> tracing::Span {
     use tracing_opentelemetry::OpenTelemetrySpanExt;
 
@@ -188,12 +206,14 @@ pub fn create_linked_span(name: &str) -> tracing::Span {
     let parent_context = current_span.context();
 
     // Create a new span with the parent context
+    // 基于父 context 创建新 span
     let span = tracing::info_span!("span", name = name);
     span.set_parent(parent_context);
     span
 }
 
 /// Create a new span with automatic context propagation
+/// 创建一个自动传播 context 的 span
 #[macro_export]
 macro_rules! span {
     ($name:expr) => {
@@ -205,6 +225,7 @@ macro_rules! span {
 }
 
 /// Instrument an async function with a span
+/// 为异步函数加上 span 埋点
 #[macro_export]
 macro_rules! instrument_async {
     ($name:expr, $future:expr) => {
@@ -239,5 +260,6 @@ mod tests {
 
         let _context = extract_trace_context(&headers);
         // Context extracted; no strict assertion necessary in this smoke test.
+        // 已提取 context；此冒烟测试无需严格断言。
     }
 }

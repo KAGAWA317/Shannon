@@ -6,6 +6,7 @@ import (
 )
 
 // ExecutableNode represents a compiled template node ready for execution.
+// ExecutableNode 表示已编译、可执行的模板节点。
 type ExecutableNode struct {
 	ID             string
 	Type           NodeType
@@ -18,6 +19,7 @@ type ExecutableNode struct {
 }
 
 // ExecutablePlan is a deterministic representation of a template ready for workflow execution.
+// ExecutablePlan 是模板的可执行确定性表示，供 workflow 执行。
 type ExecutablePlan struct {
 	TemplateName    string
 	TemplateVersion string
@@ -29,6 +31,7 @@ type ExecutablePlan struct {
 }
 
 // CompileTemplate converts a validated template into an ExecutablePlan.
+// CompileTemplate 把已校验的模板转换为 ExecutablePlan。
 func CompileTemplate(tpl *Template) (*ExecutablePlan, error) {
 	if tpl == nil {
 		return nil, fmt.Errorf("template is nil")
@@ -67,6 +70,7 @@ func CompileTemplate(tpl *Template) (*ExecutablePlan, error) {
 	}
 
 	// Build adjacency and in-degree using depends_on and explicit edges
+	// 用 depends_on 与显式边构建邻接表与入度
 	edgeSet := make(map[string]map[string]struct{}, len(plan.Nodes))
 	for id := range plan.Nodes {
 		edgeSet[id] = make(map[string]struct{})

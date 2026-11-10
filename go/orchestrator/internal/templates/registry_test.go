@@ -206,6 +206,7 @@ nodes:
 	}
 
 	// Check nodes merged: should have 3 nodes (discover overridden, analyze inherited, finalize added)
+	// 检查节点已合并：应有 3 个节点（discover 被覆盖、analyze 继承、finalize 新增）
 	if len(tpl.Nodes) != 3 {
 		t.Fatalf("expected 3 nodes after merge, got %d", len(tpl.Nodes))
 	}

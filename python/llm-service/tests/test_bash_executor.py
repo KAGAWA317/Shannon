@@ -2,6 +2,8 @@
 Test suite for Bash Executor Tool with security constraints.
 
 Tests command allowlist, metacharacter rejection, session isolation, and timeout handling.
+
+覆盖命令 allowlist、元字符拒绝、session 隔离与 timeout 处理。
 """
 
 import asyncio
@@ -14,7 +16,9 @@ from llm_service.tools.builtin.bash_executor import BashExecutorTool
 
 
 class TestBashExecutorMetadata:
-    """Test BashExecutorTool metadata"""
+    """Test BashExecutorTool metadata
+    BashExecutorTool metadata 的测试。
+    """
 
     @pytest.fixture
     def tool(self):
@@ -38,7 +42,9 @@ class TestBashExecutorMetadata:
 
 
 class TestCommandAllowlist:
-    """Test command allowlist enforcement"""
+    """Test command allowlist enforcement
+    命令 allowlist 强制执行的测试。
+    """
 
     @pytest.fixture
     def tool(self):
@@ -56,6 +62,7 @@ class TestCommandAllowlist:
             )
 
         # Should execute successfully (may have empty output if workspace is empty)
+        # 应能成功执行（若 workspace 为空，输出可能为空）
         assert result.success is True or "exit_code" in str(result.output)
 
     @pytest.mark.asyncio
@@ -102,7 +109,9 @@ class TestCommandAllowlist:
 
     @pytest.mark.asyncio
     async def test_disallowed_command_bash(self, tool, tmp_path):
-        """Test that bash itself is not in allowlist (prevent shell escape)"""
+        """Test that bash itself is not in allowlist (prevent shell escape)
+        bash 本身不在 allowlist 中（防止 shell 逃逸）。
+        """
         with patch.dict(
             os.environ, {"SHANNON_SESSION_WORKSPACES_DIR": str(tmp_path)}
         ):
@@ -116,7 +125,9 @@ class TestCommandAllowlist:
 
 
 class TestMetacharacterBlocking:
-    """Test shell metacharacter rejection"""
+    """Test shell metacharacter rejection
+    shell 元字符拒绝的测试。
+    """
 
     @pytest.fixture
     def tool(self):
@@ -250,7 +261,9 @@ class TestMetacharacterBlocking:
 
 
 class TestSessionWorkspace:
-    """Test session workspace isolation"""
+    """Test session workspace isolation
+    session workspace 隔离的测试。
+    """
 
     @pytest.fixture
     def tool(self):
@@ -291,7 +304,9 @@ class TestSessionWorkspace:
 
 
 class TestTimeoutHandling:
-    """Test timeout enforcement"""
+    """Test timeout enforcement
+    timeout 强制执行的测试。
+    """
 
     @pytest.fixture
     def tool(self):
@@ -301,6 +316,7 @@ class TestTimeoutHandling:
     async def test_timeout_is_enforced(self, tool, tmp_path):
         """Test that long-running commands are terminated"""
         # Create a Python script that sleeps in the session workspace
+        # 在 session workspace 里创建一个会 sleep 的 Python 脚本
         session_dir = tmp_path / "test"
         session_dir.mkdir(exist_ok=True)
         sleep_script = session_dir / "sleep.py"
@@ -321,7 +337,9 @@ class TestTimeoutHandling:
 
 
 class TestErrorHandling:
-    """Test error handling"""
+    """Test error handling
+    错误处理的测试。
+    """
 
     @pytest.fixture
     def tool(self):
@@ -360,6 +378,7 @@ class TestErrorHandling:
         """Test handling of commands that don't exist in PATH"""
         # First we need a command that's in our allowlist but doesn't exist
         # We'll patch the ALLOWED_BINARIES temporarily
+        # 临时替换 ALLOWED_BINARIES
         tool.ALLOWED_BINARIES = {"nonexistent_binary_xyz"}
 
         with patch.dict(
@@ -375,7 +394,9 @@ class TestErrorHandling:
 
 
 class TestOutputCapture:
-    """Test stdout/stderr capture"""
+    """Test stdout/stderr capture
+    stdout/stderr 捕获的测试。
+    """
 
     @pytest.fixture
     def tool(self):

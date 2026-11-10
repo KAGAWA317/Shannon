@@ -28,6 +28,7 @@ func CheckApprovalPolicyWith(policy activities.ApprovalPolicy, input TaskInput, 
 		"query":            input.Query,
 	}
 	// Aggregate suggested tools (best-effort)
+	// 从各 subtask 汇总 suggested tools，仅用于策略评估，缺失不影响主流程。
 	tools := []string{}
 	for _, st := range decomp.Subtasks {
 		if len(st.SuggestedTools) > 0 {
@@ -79,6 +80,7 @@ func RequestAndWaitApproval(ctx workflow.Context, input TaskInput, reason string
 	logger.Info("Waiting for human approval", "approval_id", approval.ApprovalID)
 
 	// Await either signal or timeout
+	// selector 同时等审批信号与 timer，谁先到用谁；timeout 按拒绝处理。
 	sigName := "human-approval-" + approval.ApprovalID
 	ch := workflow.GetSignalChannel(ctx, sigName)
 	sel := workflow.NewSelector(ctx)

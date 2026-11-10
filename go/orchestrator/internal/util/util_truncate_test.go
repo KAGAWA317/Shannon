@@ -143,6 +143,7 @@ func TestTruncateString_EdgeCases(t *testing.T) {
 			}
 
 			// Length should respect maxLen (unless maxLen is 0 or negative)
+			// 长度应符合 maxLen（除非 maxLen 为 0 或负数）
 			if tt.maxLen > 0 && len(runes) > tt.maxLen {
 				t.Errorf("TruncateString() length = %d, want <= %d", len(runes), tt.maxLen)
 			}
@@ -179,6 +180,7 @@ func TestTruncateString_WordPreservation(t *testing.T) {
 }
 
 // TestTruncateString_NoByteCutting verifies we never cut UTF-8 multi-byte sequences
+// TestTruncateString_NoByteCutting 验证绝不切断 UTF-8 多字节序列
 func TestTruncateString_NoByteCutting(t *testing.T) {
 	// Test with various Unicode characters
 	inputs := []string{
@@ -194,6 +196,7 @@ func TestTruncateString_NoByteCutting(t *testing.T) {
 			result := TruncateString(input, maxLen, false)
 
 			// Verify UTF-8 validity by rune roundtrip
+			// 通过 rune 往返校验 UTF-8 合法性
 			runes := []rune(result)
 			reconstructed := string(runes)
 

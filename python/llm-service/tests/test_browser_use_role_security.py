@@ -5,7 +5,9 @@ from llm_service.roles.presets import get_role_preset
 
 
 def test_browser_use_role_does_not_advertise_evaluate():
-    """Verify 'evaluate' is not exposed via role preset or tool schema."""
+    """Verify 'evaluate' is not exposed via role preset or tool schema.
+    验证 'evaluate' 未经由角色 preset 或 tool schema 暴露。
+    """
     from llm_service.tools.builtin.browser_use import BrowserTool, SAFE_ACTIONS
 
     preset = get_role_preset("browser_use")
@@ -19,7 +21,9 @@ def test_browser_use_role_does_not_advertise_evaluate():
 
 
 def test_browser_evaluate_action_rejected_without_permission():
-    """Verify evaluate action is rejected at runtime without explicit permission."""
+    """Verify evaluate action is rejected at runtime without explicit permission.
+    验证未显式授权时，evaluate 动作在运行期被拒绝。
+    """
     from llm_service.tools.builtin.browser_use import BrowserTool
 
     tool = BrowserTool()
@@ -35,7 +39,9 @@ def test_browser_evaluate_action_rejected_without_permission():
 
 
 def test_browser_evaluate_action_allowed_with_permission():
-    """Verify evaluate action proceeds when allow_browser_evaluate is set."""
+    """Verify evaluate action proceeds when allow_browser_evaluate is set.
+    验证设置 allow_browser_evaluate 后 evaluate 动作可正常执行。
+    """
     from llm_service.tools.builtin.browser_use import BrowserTool
 
     tool = BrowserTool()

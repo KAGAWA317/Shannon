@@ -3,9 +3,13 @@ Unit and integration tests for the MiniMax LLM provider.
 
 Unit tests run without external dependencies by mocking the OpenAI client.
 Integration tests are skipped unless MINIMAX_API_KEY is set in the environment.
+
+单元测试 mock 掉 OpenAI client，不产生真实网络 request；集成测试只在设置了
+MINIMAX_API_KEY 时运行，否则整个用例类被跳过。
 """
 
 from __future__ import annotations  # PEP 604 `X | None` syntax on Python 3.9
+# 让 Python 3.9 也能写 `X | None` 这类注解
 
 import asyncio
 import os
@@ -213,6 +217,7 @@ class TestMiniMaxProviderComplete(unittest.IsolatedAsyncioTestCase):
             messages=[{"role": "user", "content": "hi"}],
             model="MiniMax-M2.7",
             temperature=0.0,  # should be clamped
+            # 0.0 会被 clamp 到下限 0.01
         )
         await self.provider.complete(request)
 
@@ -278,12 +283,14 @@ class TestManagerMiniMaxRegistration(unittest.TestCase):
         import types as _types
 
         # Stub out heavy deps before importing manager
+        # 先把 anthropic / tiktoken 打桩，避免 import manager 时拉起重依赖
         anth = _types.ModuleType("anthropic")
         anth.AsyncAnthropic = MagicMock
         sys.modules.setdefault("anthropic", anth)
         sys.modules.setdefault("tiktoken", _types.ModuleType("tiktoken"))
 
         # Force fresh import so stubs take effect
+        # 清掉已 cache 的 llm_provider.manager，保证重新 import 时用上桩
         for mod in list(sys.modules.keys()):
             if "llm_provider.manager" in mod:
                 del sys.modules[mod]
@@ -331,6 +338,7 @@ INTEGRATION = os.getenv("MINIMAX_API_KEY") is not None
 class TestMiniMaxIntegration(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         # Create provider fresh so it uses real openai client
+        # 绕过 __init__ 直接组装 provider，挂上真实的 AsyncOpenAI client
         self.provider = MiniMaxProvider.__new__(MiniMaxProvider)
         self.provider.config = {
             "api_key": os.environ["MINIMAX_API_KEY"],

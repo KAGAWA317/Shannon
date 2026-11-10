@@ -64,6 +64,8 @@ func ScheduledTaskWorkflow(ctx workflow.Context, input schedules.ScheduledTaskIn
 	// 1b. Daemon dispatch path — if execution_target is "daemon", dispatch to
 	// a connected daemon instead of running the cloud OrchestratorWorkflow.
 	// Version-gated for Temporal replay compatibility.
+	// 当 execution_target 为 "daemon" 时，把 task 派发给已连接的 daemon，而不是走云端 OrchestratorWorkflow；
+	// 加版本闸门以保证 Temporal 重放兼容。
 	vDaemon := workflow.GetVersion(ctx, "scheduled_daemon_dispatch_v1", workflow.DefaultVersion, 1)
 	if vDaemon == 1 {
 		execTarget, _ := input.TaskContext["execution_target"].(string)
@@ -87,6 +89,7 @@ func ScheduledTaskWorkflow(ctx workflow.Context, input schedules.ScheduledTaskIn
 
 	// Mark as scheduled execution so downstream workflows know this is an
 	// automated run — not a user asking to "set up" a schedule.
+	// 标记为定时执行，让下游 workflow 知道这是自动运行，而非用户主动"设置"一个 schedule。
 	taskInput.Context["trigger_type"] = "schedule"
 	taskInput.Context["schedule_id"] = input.ScheduleID
 
@@ -189,6 +192,8 @@ func ScheduledTaskWorkflow(ctx workflow.Context, input schedules.ScheduledTaskIn
 	// Fallback: if metadata didn't contain total_tokens, use result.TokensUsed
 	// (the canonical field on TaskResult). Covers cases where metadata is nil
 	// or doesn't include token counts, and also FAILED runs that consumed tokens.
+	// 兜底：metadata 未含 total_tokens 时改用 result.TokensUsed（TaskResult 的规范字段），
+	// 覆盖 metadata 为空或缺失 token 的情况，也包括消耗了 token 的失败运行。
 	if totalTokens == 0 && result.TokensUsed > 0 {
 		totalTokens = result.TokensUsed
 	}
@@ -224,6 +229,8 @@ func ScheduledTaskWorkflow(ctx workflow.Context, input schedules.ScheduledTaskIn
 // executeDaemonPath dispatches a scheduled task to a connected daemon and waits
 // for a reply via Temporal signal. If no daemon is connected or the reply times
 // out, the run is recorded as FAILED (no cloud fallback).
+// 把定时 task 派发给已连接的 daemon，并通过 Temporal signal 等待回复；
+// 若无 daemon 连接或回复 timeout，该次运行记为 FAILED（不回退云端）。
 func executeDaemonPath(
 	ctx workflow.Context,
 	activityCtx workflow.Context,

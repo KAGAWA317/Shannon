@@ -6,6 +6,7 @@ import "testing"
 // attachment-format-parity plan §2 P0. Adding a new MIME case here is the
 // single source of truth for the gateway gate behavior — keep the table
 // dense and grouped so reviewers can spot misclassifications.
+// TestMimeClassification 固定 attachment-format-parity 计划 §2 P0 中记录的三分法。在此新增 MIME 用例是网关闸门行为的唯一事实来源——保持表密集且分组，便于评审发现误分类。
 func TestMimeClassification(t *testing.T) {
 	t.Parallel()
 
@@ -21,11 +22,13 @@ func TestMimeClassification(t *testing.T) {
 		want      expect
 	}{
 		// ── Native Anthropic image MIMEs: all extractable, never passthrough.
+		// ── Anthropic 原生图片 MIME：全部可提取，绝不 passthrough。
 		{"jpeg", "image/jpeg", expect{extractable: true}},
 		{"png", "image/png", expect{extractable: true}},
 		{"gif", "image/gif", expect{extractable: true}},
 		{"webp", "image/webp", expect{extractable: true}},
 		// ── Images cloud may transcode (HEIC/AVIF/TIFF/BMP).
+		// ── 云端可能转码的图片（HEIC/AVIF/TIFF/BMP）。
 		{"heic", "image/heic", expect{extractable: true}},
 		{"heif", "image/heif", expect{extractable: true}},
 		{"avif", "image/avif", expect{extractable: true}},
@@ -71,6 +74,7 @@ func TestMimeClassification(t *testing.T) {
 		{"shell", "application/x-sh", expect{dangerous: true}},
 		{"bat", "application/x-bat", expect{dangerous: true}},
 		// ── Whitespace / case-insensitivity (caller may pass raw HTTP headers).
+		// ── 空白与大小写不敏感（调用方可能传入原始 HTTP 头）。
 		{"pdf-mixed-case", "Application/PDF", expect{extractable: true}},
 		{"zip-whitespace", "  application/zip  ", expect{passthrough: true}},
 	}
@@ -96,6 +100,7 @@ func TestMimeClassification(t *testing.T) {
 // mutually exclusive — every MIME falls into at most one bucket. Anything
 // that's "neither" is intentional: the gateway treats it as default-
 // passthrough (URL-only ref, no extraction attempted).
+// TestMime_NoOverlap 固定三个分类器互斥的不变量——每个 MIME 最多落入一个桶。“都不属于”是有意为之：网关按默认 passthrough 处理（仅 URL 引用，不尝试提取）。
 func TestMime_NoOverlap(t *testing.T) {
 	t.Parallel()
 
@@ -131,6 +136,7 @@ func TestMime_NoOverlap(t *testing.T) {
 // TestIsSupportedMediaType_BackCompat keeps the deprecated wrapper aligned
 // with the new IsExtractable || IsPassthrough definition so callers that
 // haven't migrated still gate the same way.
+// TestIsSupportedMediaType_BackCompat 保证已废弃的封装与新的 IsExtractable || IsPassthrough 定义保持一致，使尚未迁移的调用方仍按同样方式放行。
 func TestIsSupportedMediaType_BackCompat(t *testing.T) {
 	t.Parallel()
 
@@ -148,6 +154,7 @@ func TestIsSupportedMediaType_BackCompat(t *testing.T) {
 		{"video/mp4", true},
 		{"application/octet-stream", true},
 		// Dangerous types rejected (neither extract nor passthrough).
+		// 危险类型被拒绝（既不可提取也不 passthrough）。
 		{"application/x-msdownload", false},
 		{"application/x-bat", false},
 		// Unknown image subtype → false (neither bucket).
@@ -170,6 +177,7 @@ func TestIsSupportedMediaType_BackCompat(t *testing.T) {
 // TestIsDangerousFilename covers the filename-based denylist used at
 // channel webhook layers (Slack delivers .exe as application/octet-stream
 // + .exe basename, so MIME-only IsDangerous is insufficient).
+// TestIsDangerousFilename 覆盖渠道 webhook 层使用的文件名拒绝列表（Slack 会把 .exe 投递为 application/octet-stream + .exe 文件名，因此仅靠 MIME 的 IsDangerous 不足）。
 func TestIsDangerousFilename(t *testing.T) {
 	tests := []struct {
 		name string
@@ -191,6 +199,7 @@ func TestIsDangerousFilename(t *testing.T) {
 		{"runner.jar", true},
 		{"settings.reg", true},
 		// Case-insensitive — Slack/Feishu may forward upper-case extensions.
+		// 大小写不敏感——Slack/Feishu 可能转发大写扩展名。
 		{"SETUP.EXE", true},
 		{"Loader.HtA", true},
 		// Safe formats stay safe.
@@ -208,6 +217,7 @@ func TestIsDangerousFilename(t *testing.T) {
 		{"noextension", false},
 		{".bashrc", false}, // hidden file, no real "ext" before a dot
 		{"a.b.exe", true},  // multi-dot, ext is the last token
+		// 多点文件名，扩展名是最后一段
 	}
 	for _, tc := range tests {
 		tc := tc

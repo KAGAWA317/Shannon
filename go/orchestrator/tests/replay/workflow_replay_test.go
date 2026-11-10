@@ -45,6 +45,8 @@ func TestDAGWorkflowReplay(t *testing.T) {
 
 			// Note: Activities don't need to be registered for replay testing
 			// The replayer only validates workflow determinism, not activity execution
+			// 注意：replay 测试无需注册 Activities
+			// replayer 只校验 workflow 的确定性，不执行 activity
 
 			// Attempt replay
 			err := replayer.ReplayWorkflowHistoryFromJSONFile(nil, tc.historyFile)
@@ -86,6 +88,8 @@ func TestReactWorkflowReplay(t *testing.T) {
 
 			// Note: Activities don't need to be registered for replay testing
 			// The replayer only validates workflow determinism, not activity execution
+			// 注意：replay 测试无需注册 Activities
+			// replayer 只校验 workflow 的确定性，不执行 activity
 
 			// Attempt replay
 			err := replayer.ReplayWorkflowHistoryFromJSONFile(nil, tc.historyFile)

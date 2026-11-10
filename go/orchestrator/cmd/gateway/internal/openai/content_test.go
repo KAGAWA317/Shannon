@@ -69,6 +69,9 @@ func TestParseContent_RequestSizeLimit(t *testing.T) {
 	// Create valid base64 data that decodes to > MaxDecodedAttachmentBytes
 	// (25 MB after attachment-format-parity §2 P0). Constant kept in sync via
 	// the attachments package — if the cap changes, this test follows.
+	// 构造解码后超过 MaxDecodedAttachmentBytes 的合法 base64 数据
+	// （attachment-format-parity §2 P0 之后为 25 MB）。该常量与 attachments package
+	// 保持一致——上限一变，本测试跟着变。
 	bigData := make([]byte, 26*1024*1024)
 	for i := range bigData {
 		bigData[i] = 'A'
@@ -85,6 +88,7 @@ func TestParseContent_RequestSizeLimit(t *testing.T) {
 
 func TestParseContent_DataURIEmptyMediaType(t *testing.T) {
 	// "data:;base64,..." has no media type — must be rejected
+	// "data:;base64,..." 没有 media type，必须拒绝。
 	raw := json.RawMessage(`[
 		{"type":"image_url","image_url":{"url":"data:;base64,aGVsbG8="}}
 	]`)
@@ -119,6 +123,7 @@ func TestParseContent_InvalidJSON(t *testing.T) {
 
 func TestChatMessage_UnmarshalJSON(t *testing.T) {
 	// Test backward compatibility: string content
+	// 测试向后兼容：字符串 content。
 	jsonStr := `{"role":"user","content":"hello"}`
 	var msg ChatMessage
 	err := json.Unmarshal([]byte(jsonStr), &msg)
@@ -137,6 +142,7 @@ func TestChatMessage_UnmarshalJSON(t *testing.T) {
 
 func TestChatMessage_MarshalJSON_BackwardCompatible(t *testing.T) {
 	// Ensure response marshalling still produces {"role":"...","content":"..."}
+	// 确保 response 序列化仍输出 {"role":"...","content":"..."}。
 	msg := ChatMessage{
 		Role:    "assistant",
 		Content: "Hello there!",

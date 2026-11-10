@@ -13,8 +13,10 @@ import (
 )
 
 // daemonStreamTracker tracks initialization state of daemon event streams.
+// daemonStreamTracker 跟踪 daemon event stream 的初始化状态。
 type daemonStreamTracker struct {
 	initState *sync.Map // Key: messageID, Value: bool (true=initialized, false=failed)
+	// 键为 messageID，值为 bool（true=已初始化，false=失败）
 }
 
 func (t *daemonStreamTracker) isInitialized(messageID string) bool {
@@ -30,6 +32,7 @@ func (t *daemonStreamTracker) cleanup(messageID string) {
 }
 
 // eventPublisher abstracts streaming.Manager.Publish for testability.
+// eventPublisher 抽象 streaming.Manager.Publish，便于测试。
 type eventPublisher interface {
 	Publish(workflowID string, evt streaming.Event)
 }
@@ -42,24 +45,32 @@ const (
 
 // ReplyCallback is called when a daemon sends a reply. The Hub calls this
 // to route replies back to the originating channel.
+// daemon 发送回复时调用 ReplyCallback。Hub 用它把回复路由回原渠道。
 type ReplyCallback func(ctx context.Context, meta ClaimMetadata, reply ReplyPayload)
 
 // ApprovalRequestCallback is called when a daemon sends an approval request
 // that needs to be broadcast to channels (Slack buttons, LINE flex).
+// daemon 发送需要广播到各渠道的审批 request 时调用 ApprovalRequestCallback
+// （Slack 按钮、LINE flex）。
 type ApprovalRequestCallback func(ctx context.Context, connID, tenantID, userID string, req DaemonApprovalRequest)
 
 // ApprovalResolvedCallback is called when a daemon reports that an approval
 // was resolved locally (e.g. by ShanClaw). Cloud should dismiss channel messages.
+// daemon 报告审批已在本地处理时调用 ApprovalResolvedCallback（如 ShanClaw），Cloud 应撤回渠道消息。
 type ApprovalResolvedCallback func(ctx context.Context, resolved DaemonApprovalResolved)
 
 // DisconnectCallback is called when a daemon connection is closed, with the conn ID.
+// daemon 连接关闭时调用 DisconnectCallback，携带连接 ID。
 type DisconnectCallback func(ctx context.Context, connID string)
 
 // ProactiveCallback is called when a daemon sends an unsolicited message
 // to be delivered to all channels mapped to the named agent.
+// daemon 发送非 request 消息时调用 ProactiveCallback，
+// 消息将投递给该 agent 映射到的所有渠道。
 type ProactiveCallback func(ctx context.Context, connID, tenantID, userID string, payload ProactivePayload) error
 
 // ConnCallbacks groups all callbacks for daemon message handling.
+// ConnCallbacks 汇总 daemon 消息处理的全部回调。
 type ConnCallbacks struct {
 	OnReply            ReplyCallback
 	OnApprovalRequest  ApprovalRequestCallback
@@ -71,6 +82,7 @@ type ConnCallbacks struct {
 
 // HandleConnection runs the read/write loop for a single daemon WebSocket connection.
 // Blocks until the connection is closed.
+// HandleConnection 运行单个 daemon WebSocket 连接的读写循环，阻塞直到连接关闭。
 func HandleConnection(ctx context.Context, hub *Hub, ws *websocket.Conn, tenantID, userID string, onReply ReplyCallback, logger *zap.Logger, opts ...func(*ConnCallbacks)) {
 	cbs := &ConnCallbacks{OnReply: onReply}
 	for _, opt := range opts {
@@ -146,6 +158,8 @@ func HandleConnection(ctx context.Context, hub *Hub, ws *websocket.Conn, tenantI
 		case <-ticker.C:
 			// Acquire conn mutex — gorilla/websocket requires single-writer serialization.
 			// Send() also holds this lock, so pings are serialized with data writes.
+			// 获取连接互斥锁——gorilla/websocket 要求单写者串行化。
+			// Send() 也持有该锁，因此 ping 与数据写入是串行的。
 			conn.mu.Lock()
 			ws.SetWriteDeadline(time.Now().Add(writeWait))
 			err := ws.WriteMessage(websocket.PingMessage, nil)
@@ -160,6 +174,7 @@ func HandleConnection(ctx context.Context, hub *Hub, ws *websocket.Conn, tenantI
 func handleDaemonMessage(ctx context.Context, hub *Hub, conn *DaemonConn, msg DaemonMessage, cbs *ConnCallbacks, logger *zap.Logger) {
 	if msg.Type == "" {
 		return // Ignore empty-type messages (e.g. keep-alive frames)
+		// 忽略无类型的消息（如 keep-alive 帧）
 	}
 
 	if msg.MessageID == "" && (msg.Type == MsgTypeClaim || msg.Type == MsgTypeReply || msg.Type == MsgTypeProgress || msg.Type == MsgTypeEvent) {
@@ -207,6 +222,8 @@ func handleDaemonMessage(ctx context.Context, hub *Hub, conn *DaemonConn, msg Da
 		// If streaming was initialized for this message, publish WORKFLOW_COMPLETED
 		// before HandleReply so StreamConsumer processes it before the reply callback
 		// tears down the channel context.
+		// 若该消息已初始化 stream，则在 HandleReply 之前发布 WORKFLOW_COMPLETED，
+		// 使 StreamConsumer 在回复回调拆掉 channel context 之前处理它。
 		if cbs.StreamTracker != nil {
 			streamID := "daemon:" + msg.MessageID
 			if cbs.StreamTracker.isInitialized(msg.MessageID) {
@@ -223,9 +240,11 @@ func handleDaemonMessage(ctx context.Context, hub *Hub, conn *DaemonConn, msg Da
 					})
 					// No sleep needed — RouteReply unconditionally suppresses plain-text
 					// replies for daemon streams (WorkflowID prefix "daemon:").
+					// 无需 sleep——RouteReply 会无条件抑制 daemon stream（WorkflowID 前缀 "daemon:"）的纯文本回复。
 				}
 			}
 			// Always cleanup to prevent sync.Map leak.
+			// 始终执行清理，避免 sync.Map 泄漏。
 			cbs.StreamTracker.cleanup(msg.MessageID)
 		}
 
@@ -255,6 +274,7 @@ func handleDaemonMessage(ctx context.Context, hub *Hub, conn *DaemonConn, msg Da
 			return
 		}
 		// Resolve thread context from the active claim for this message
+		// 从该消息的活跃 claim 解析 thread context
 		if msg.MessageID != "" {
 			if meta, err := hub.Claims().GetClaim(ctx, msg.MessageID); err == nil {
 				req.ThreadID = meta.ThreadID
@@ -317,6 +337,10 @@ func handleDaemonMessage(ctx context.Context, hub *Hub, conn *DaemonConn, msg Da
 // On the first event for a given messageID, it initializes the stream via HandleProgress
 // (which triggers OnWorkflowStarted for channel card creation). All events are published
 // to the streaming.Manager for progressive card updates.
+// handleDaemonEvent 处理 daemon 转发的单条 agent 循环 event。
+// 对某个 messageID 的首个 event，通过 HandleProgress 初始化 stream
+// （进而触发 OnWorkflowStarted 创建渠道卡片）。所有 event 都会发布到
+// streaming.Manager 以渐进更新卡片。
 func handleDaemonEvent(ctx context.Context, hub *Hub, messageID string, rawPayload json.RawMessage, publisher eventPublisher, tracker *daemonStreamTracker, logger *zap.Logger) {
 	if logger == nil {
 		logger = zap.NewNop()
@@ -334,6 +358,7 @@ func handleDaemonEvent(ctx context.Context, hub *Hub, messageID string, rawPaylo
 	streamID := "daemon:" + messageID
 
 	// Initialize stream on first event (or retry after previous failure).
+	// 在首个 event 时初始化 stream（或上次失败后 retry）。
 	if val, loaded := tracker.initState.Load(messageID); !loaded || !val.(bool) {
 		err := hub.HandleProgress(ctx, messageID, &ProgressPayload{WorkflowID: streamID})
 		if err != nil {
@@ -348,6 +373,7 @@ func handleDaemonEvent(ctx context.Context, hub *Hub, messageID string, rawPaylo
 	}
 
 	// Preserve daemon timestamp; fall back to now.
+	// 保留 daemon 时间戳；缺失时回退为当前时间。
 	ts := time.Now()
 	if payload.Timestamp != "" {
 		if parsed, err := time.Parse(time.RFC3339, payload.Timestamp); err == nil {
@@ -366,6 +392,7 @@ func handleDaemonEvent(ctx context.Context, hub *Hub, messageID string, rawPaylo
 		WorkflowID: streamID,
 		Type:       payload.EventType,
 		AgentID:    "", // Must be empty — StreamConsumer's isSynthesisAgent filter drops non-empty for LLM_OUTPUT/LLM_PARTIAL
+		// 必须为空——StreamConsumer 的 isSynthesisAgent 过滤会对 LLM_OUTPUT/LLM_PARTIAL 丢弃非空值
 		Message:    payload.Message,
 		Payload:    data,
 		Timestamp:  ts,

@@ -28,16 +28,22 @@ import (
 
 // sanitizeAgentOutput removes duplicate references from agent outputs
 // to avoid sending the same URLs/citations twice (once in agent output, once in Available Citations)
+// sanitizeAgentOutput 去掉 agent 输出里重复的引用，
+// 避免同一个 URL/citation 出现两次（agent 输出一次、Available Citations 再一次）。
 func sanitizeAgentOutput(text string) string {
 	// Filter out XML tool tags that may have leaked into agent responses
 	// Include all known tool-calling tag patterns: search, query, search_query, web_fetch, web_search, tool
 	// Use (?s) for dotall mode so .* matches across newlines (multi-line tool blocks)
+	// 清掉可能漏进 agent response 里的 XML tool 标签；
+	// 覆盖已知的各类 tool 调用标签：search、query、search_query、web_fetch、web_search、tool。
+	// 用 (?s) 开启 dotall，使 .* 能跨行匹配（tool 块可能是多行的）。
 	toolTagPattern := regexp.MustCompile(`(?s)<(search|query|search_query|web_fetch|web_search|tool)[^>]*>.*?</(search|query|search_query|web_fetch|web_search|tool)>`)
 	text = toolTagPattern.ReplaceAllString(text, "")
 	// Filter single/self-closing opening tags
 	singleTagPattern := regexp.MustCompile(`<(search|query|search_query|web_fetch|web_search|tool)[^>]*/?>`)
 	text = singleTagPattern.ReplaceAllString(text, "")
 	// Filter orphan closing tags (in case opening tag was already stripped or malformed)
+	// 清掉孤立的闭合标签（起始标签可能已被剥离或本身格式不对）。
 	closingTagPattern := regexp.MustCompile(`</(search|query|search_query|web_fetch|web_search|tool)>`)
 	text = closingTagPattern.ReplaceAllString(text, "")
 
@@ -96,6 +102,7 @@ func extractFirstJSONResponse(text string) string {
 	}
 
 	// If markdown fences wrap the payload, prefer the fenced body first.
+	// 若 payload 被 markdown 代码围栏包住，优先取围栏内的正文。
 	if strings.HasPrefix(trimmed, "```") {
 		parts := strings.SplitN(trimmed, "\n", 2)
 		if len(parts) == 2 {
@@ -161,6 +168,7 @@ func extractFirstJSONResponse(text string) string {
 }
 
 // normalizeLanguage maps language codes to the full language name used in prompts
+// normalizeLanguage 把语言代码映射成 prompt 里使用的完整语言名。
 func normalizeLanguage(lang string) string {
 	l := strings.ToLower(strings.TrimSpace(lang))
 	switch l {
@@ -188,9 +196,11 @@ func normalizeLanguage(lang string) string {
 }
 
 // --- Result preprocessing (Phase 1 dedup + basic filtering) ---
+// --- 结果预处理：第一阶段去重 + 基础过滤 ---
 var (
 	nonWordPattern = regexp.MustCompile(`[\p{P}\p{S}]+`)
 	// Precise patterns to avoid false positives (complete phrases only)
+	// 用精确的完整短语模式，避免误伤正常内容。
 	noInfoPatterns = []string{
 		// English: Access failures (complete phrases)
 		"unfortunately, i cannot access",
@@ -250,6 +260,8 @@ var (
 
 // similarityThresh is the Jaccard similarity threshold for deduplication.
 // Raised from 0.85 to 0.92 to preserve more unique content.
+// similarityThresh 是去重用的 Jaccard 相似度阈值；
+// 从 0.85 提高到 0.92，以保留更多不重复的内容。
 const similarityThresh = 0.92
 
 func preprocessAgentResults(results []AgentExecutionResult, logger interface{}) []AgentExecutionResult {
@@ -346,6 +358,8 @@ func jaccardSimilarity(a, b map[string]bool) float64 {
 
 // filterLowQuality removes low-quality content at LINE level (not entire response)
 // This preserves valuable content even when some lines contain error messages
+// filterLowQuality 以行为单位剔除低质量内容，而不是丢掉整个 response；
+// 这样即使部分行含报错信息，其余有价值内容仍能保留。
 func filterLowQuality(results []AgentExecutionResult) []AgentExecutionResult {
 	var filtered []AgentExecutionResult
 	for _, r := range results {
@@ -355,6 +369,7 @@ func filterLowQuality(results []AgentExecutionResult) []AgentExecutionResult {
 		}
 
 		// Clean at line level instead of discarding entire response
+		// 按行清理，而不是整段丢弃。
 		cleaned := cleanLowQualityLines(resp)
 		if strings.TrimSpace(cleaned) == "" {
 			continue // Only skip if ENTIRE content is low-quality
@@ -368,6 +383,8 @@ func filterLowQuality(results []AgentExecutionResult) []AgentExecutionResult {
 
 // cleanLowQualityLines removes lines that are PURELY error/no-info content
 // Preserves lines that have error phrases but also contain useful information
+// cleanLowQualityLines 只删掉纯粹是报错/无信息的行；
+// 含报错短语但同时有有效信息的行会保留。
 func cleanLowQualityLines(text string) string {
 	lines := strings.Split(text, "\n")
 	var cleanedLines []string
@@ -382,6 +399,7 @@ func cleanLowQualityLines(text string) string {
 		}
 
 		// Only filter if line is SHORT and PURELY an error message
+		// 只有又短、又纯粹是报错的行才过滤。
 		if isLinePurelyLowQuality(trimmed) {
 			continue // Skip this line only
 		}
@@ -396,8 +414,13 @@ func cleanLowQualityLines(text string) string {
 // 1. Short (< 200 chars) AND
 // 2. Contains error pattern AND
 // 3. Does NOT contain substantive content indicators
+// 仅当一行同时满足以下条件时，isLinePurelyLowQuality 才返回 true：
+// 1. 足够短（< 200 字符）；
+// 2. 命中报错模式；
+// 3. 不含实质内容特征。
 func isLinePurelyLowQuality(line string) bool {
 	// Long lines likely have useful content even with error phrases
+	// 长行即使含报错短语，也往往有可用内容。
 	if len(line) > 200 {
 		return false
 	}
@@ -419,6 +442,8 @@ func isLinePurelyLowQuality(line string) bool {
 
 	// Check for substantive content indicators (numbers, proper nouns, etc.)
 	// If line has these, keep it even with error phrase
+	// 检查是否存在实质内容特征（数字、专有名词等）。
+	// 有这些特征就保留，哪怕同时含报错短语。
 	substantiveIndicators := []string{
 		":", "：", // likely has key-value content
 		"$", "¥", "€", // currency
@@ -440,6 +465,7 @@ func isLinePurelyLowQuality(line string) bool {
 }
 
 // numbersPattern matches 2+ digit numbers (for dates, metrics, etc.)
+// numbersPattern 匹配两位及以上的数字（日期、指标等）。
 var numbersPattern = regexp.MustCompile(`\d{2,}`)
 
 func containsNoInfoPatterns(text string) bool {
@@ -453,6 +479,7 @@ func containsNoInfoPatterns(text string) bool {
 }
 
 // SynthesizeResults synthesizes results from multiple agents (baseline concatenation)
+// SynthesizeResults 汇总多个 agent 的结果（基线实现为直接拼接）。
 func SynthesizeResults(ctx context.Context, input SynthesisInput) (SynthesisResult, error) {
 	// Emit synthesis start once for the simple (non-LLM) path
 	wfID := input.ParentWorkflowID
@@ -477,6 +504,7 @@ func SynthesizeResults(ctx context.Context, input SynthesisInput) (SynthesisResu
 		})
 	}
 	// Compute result without emitting completion here, then emit once
+	// 先算出结果但不在此处发完成 event，最后统一发一次。
 	res, err := simpleSynthesisNoEvents(ctx, input)
 	if err != nil {
 		return res, err
@@ -486,6 +514,11 @@ func SynthesizeResults(ctx context.Context, input SynthesisInput) (SynthesisResu
 	// 2. DATA_PROCESSING (summary) - shows token usage metadata
 	// 3. DATA_PROCESSING (completion) - final status message "Final answer ready"
 	// This ordering ensures content is visible before status changes to "ready"
+	// synthesis 完成时按顺序发 3 个 event：
+	// 1. LLM_OUTPUT（content）：把汇总结果展示给用户；
+	// 2. DATA_PROCESSING（summary）：展示 token 用量等 metadata；
+	// 3. DATA_PROCESSING（completion）：最终状态 "Final answer ready"。
+	// 这个顺序保证内容先可见，状态再切到 "ready"。
 	if wfID != "" {
 		// Event 1: LLM_OUTPUT with final content (simple path)
 		payload := map[string]interface{}{
@@ -539,6 +572,7 @@ func SynthesizeResults(ctx context.Context, input SynthesisInput) (SynthesisResu
 }
 
 // WorkspaceMaterial represents a file read from the agent workspace.
+// WorkspaceMaterial 表示从 agent workspace 读到的一个文件。
 type WorkspaceMaterial struct {
 	Path      string `json:"path"`
 	Content   string `json:"content"`
@@ -546,6 +580,7 @@ type WorkspaceMaterial struct {
 }
 
 // binaryExtensions are file extensions to skip when reading workspace files.
+// binaryExtensions 列出读取 workspace 文件时需要跳过的二进制扩展名。
 var binaryExtensions = map[string]bool{
 	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".bmp": true,
 	".pdf": true, ".zip": true, ".tar": true, ".gz": true, ".bin": true,
@@ -555,6 +590,9 @@ var binaryExtensions = map[string]bool{
 // readWorkspaceFiles reads text files from a session workspace directory.
 // Returns sorted materials with per-file and total size caps.
 // Runs inside an activity (Go I/O) — NOT through Temporal history.
+// readWorkspaceFiles 从 session 的 workspace 目录读取文本文件；
+// 返回排序后的文件列表，并对单文件与总量做上限控制。
+// 在 activity 内直接做 Go I/O，不走 Temporal history。
 func readWorkspaceFiles(sessionDir string, maxTotalChars, maxPerFileChars int) []WorkspaceMaterial {
 	if _, err := os.Stat(sessionDir); os.IsNotExist(err) {
 		return nil
@@ -613,6 +651,7 @@ func readWorkspaceFiles(sessionDir string, maxTotalChars, maxPerFileChars int) [
 }
 
 // formatWorkspaceMaterials formats workspace files for inclusion in synthesis prompt.
+// formatWorkspaceMaterials 把 workspace 文件格式化成可插入 synthesis prompt 的文本。
 func formatWorkspaceMaterials(materials []WorkspaceMaterial) string {
 	if len(materials) == 0 {
 		return ""
@@ -630,6 +669,7 @@ func formatWorkspaceMaterials(materials []WorkspaceMaterial) string {
 }
 
 // SynthesizeResultsLLM synthesizes results using the LLM service, with fallback to simple synthesis
+// SynthesizeResultsLLM 调用 LLM service 做综合，失败时回退到简单拼接。
 func SynthesizeResultsLLM(ctx context.Context, input SynthesisInput) (SynthesisResult, error) {
 	// Use activity logger for Temporal correlation
 	activity.GetLogger(ctx).Info("Synthesizing results using LLM",
@@ -637,8 +677,10 @@ func SynthesizeResultsLLM(ctx context.Context, input SynthesisInput) (SynthesisR
 		"num_results", len(input.AgentResults),
 	)
 	// Use activity-scoped logger so logs appear in Temporal activity logs
+	// 用 activity 级 logger，保证日志出现在 Temporal activity 日志里。
 	logger := activity.GetLogger(ctx)
 	// Use direct zap logger for detailed diagnostic fields (Temporal adapter strips zap fields)
+	// 细节诊断字段改用原生 zap logger（Temporal adapter 会丢掉 zap 字段）。
 	diagLogger := zap.L().With(zap.String("activity", "SynthesizeResultsLLM"))
 
 	if len(input.AgentResults) == 0 {
@@ -665,6 +707,7 @@ func SynthesizeResultsLLM(ctx context.Context, input SynthesisInput) (SynthesisR
 	// LLM-first; fallback to simple synthesis on any failure
 
 	// Emit synthesis start once at the beginning of the LLM attempt
+	// 在 LLM 尝试开始时只发一次 synthesis 启动 event。
 	wfID := input.ParentWorkflowID
 	// Fallback to context-provided parent_workflow_id for correlation
 	if wfID == "" && input.Context != nil {
@@ -691,6 +734,7 @@ func SynthesizeResultsLLM(ctx context.Context, input SynthesisInput) (SynthesisR
 	role := ""
 	contextMap := make(map[string]interface{})
 	// Track citation payload size for diagnostics and save for later appending
+	// 记录 citation payload 大小便于诊断，并留存以便后面追加。
 	removedCitations := false
 	removedCitationsChars := 0
 	var savedCitations string // Save citations to append after synthesis
@@ -700,10 +744,12 @@ func SynthesizeResultsLLM(ctx context.Context, input SynthesisInput) (SynthesisR
 			role = r
 		}
 		// Copy all context (includes prompt_params, language, etc.)
+		// 复制全部 context（含 prompt_params、language 等）。
 		for k, v := range input.Context {
 			contextMap[k] = v
 		}
 		// Remove large duplicates from LLM prompt but save for post-processing
+		// 从 LLM prompt 里去掉体积大的重复内容，但保留下来供后处理使用。
 		if v, ok := contextMap["available_citations"]; ok {
 			if s, ok := v.(string); ok {
 				removedCitations = true
@@ -718,8 +764,12 @@ func SynthesizeResultsLLM(ctx context.Context, input SynthesisInput) (SynthesisR
 	// but allow override via context["model_tier"] or "synthesis_model_tier" for cost optimization.
 	// This centralized check ensures all workflows respect synthesis_model_tier without needing
 	// to individually translate it to model_tier.
+	// synthesis 默认用 "large" tier，因为直接面向用户、质量优先；
+	// 但允许通过 context["model_tier"] 或 "synthesis_model_tier" 覆盖以降成本。
+	// 这里集中判断一次，各 workflow 无需各自再把 synthesis_model_tier 翻译成 model_tier。
 	if _, exists := contextMap["model_tier"]; !exists {
 		// Check for synthesis_model_tier override (may be set by any workflow)
+		// 检查 synthesis_model_tier 覆盖值（任何 workflow 都可能设置）。
 		if tier, ok := contextMap["synthesis_model_tier"].(string); ok && strings.TrimSpace(tier) != "" {
 			contextMap["model_tier"] = strings.ToLower(strings.TrimSpace(tier))
 		} else {
@@ -730,6 +780,9 @@ func SynthesizeResultsLLM(ctx context.Context, input SynthesisInput) (SynthesisR
 	// Build synthesis query that includes agent results
 	// NOTE: This caps per-agent context included in the synthesis prompt.
 	// For deep research (research-style synthesis), we allow a higher cap to preserve more details.
+	// 构造包含各 agent 结果的 synthesis query。
+	// 注意：这里对进入 synthesis prompt 的单个 agent 内容做了截断上限；
+	// deep research 类综合会放宽上限，以保留更多细节。
 	maxPerAgentChars := 4000
 
 	var b strings.Builder
@@ -748,6 +801,8 @@ func SynthesizeResultsLLM(ctx context.Context, input SynthesisInput) (SynthesisR
 
 	// Add citation instructions for research workflows
 	// Calculate minimum citations required (default to 6, clamp by available citations)
+	// research 类 workflow 额外加 citation 指令；
+	// 计算最少 citation 数（默认 6，并受可用 citation 数量限制）。
 	minCitations := 6
 	availableCitations := 0
 	// Derive citation count from context if available
@@ -846,6 +901,7 @@ func SynthesizeResultsLLM(ctx context.Context, input SynthesisInput) (SynthesisR
 	}
 
 	// Prepare optional organization guidance from research_areas
+	// 按 research_areas 准备可选的报告组织指引。
 	areasInstruction := ""
 	var areas []string
 	if input.Context != nil {
@@ -863,6 +919,7 @@ func SynthesizeResultsLLM(ctx context.Context, input SynthesisInput) (SynthesisR
 			}
 			if len(areas) > 0 {
 				// Provide explicit heading skeleton for the model to follow
+				// 给出显式的标题骨架，让 model 照此组织内容。
 				var sb strings.Builder
 				sb.WriteString("## MANDATORY Research Area Coverage:\n")
 				sb.WriteString(fmt.Sprintf("You MUST create a subsection for EACH of the %d research areas below.\n", len(areas)))
@@ -906,6 +963,9 @@ func SynthesizeResultsLLM(ctx context.Context, input SynthesisInput) (SynthesisR
 	// Calculate target words for research synthesis
 	// Deep Research 2.0: Increased multiplier to capture more intermediate findings
 	// v2.1: Further increased to preserve more details from agent outputs
+	// 估算 research synthesis 的目标字数。
+	// Deep Research 2.0：放大系数，以纳入更多中间发现；
+	// v2.1：再次上调，以保留更多 agent 输出的细节。
 	targetWords := 2000
 	if len(areas) > 0 {
 		targetWords = len(areas) * 800 // 800 words per area for comprehensive coverage
@@ -926,6 +986,9 @@ func SynthesizeResultsLLM(ctx context.Context, input SynthesisInput) (SynthesisR
 	// Check if Citation Agent is enabled (citations will be added separately)
 	// Default: enabled - synthesis should NOT add inline citations, Citation Agent will handle it
 	// This check is at the top level so it applies to both template and fallback modes
+	// 检查 Citation Agent 是否启用（citation 由它单独补）。
+	// 默认启用：此时 synthesis 不应自己加行内 citation，交给 Citation Agent 处理。
+	// 该判断放在顶层，template 与 fallback 两种模式都受其约束。
 	citationAgentEnabled := true
 	if input.Context != nil {
 		if v, ok := input.Context["enable_citation_agent"].(bool); ok {
@@ -953,6 +1016,8 @@ func SynthesizeResultsLLM(ctx context.Context, input SynthesisInput) (SynthesisR
 		} else if tmpl := LoadSynthesisTemplate(templateName, nil); tmpl != nil {
 			// Try to render the template
 			// Extract current date from context for temporal awareness
+			// 尝试渲染 template；
+			// 从 context 里取当前日期，让 model 具备时间感知。
 			currentDate := ""
 			if input.Context != nil {
 				if d, ok := input.Context["current_date_human"].(string); ok && d != "" {
@@ -1012,20 +1077,26 @@ func SynthesizeResultsLLM(ctx context.Context, input SynthesisInput) (SynthesisR
 
 		// Define output structure based on synthesis style
 		// (citationAgentEnabled already defined at top level)
+		// 按 synthesis 风格定义输出结构；
+		// citationAgentEnabled 已在顶层定义。
 		outputStructure := ""
 		// Citation instructions depend on whether Citation Agent is enabled
+		// citation 指令取决于 Citation Agent 是否启用。
 		citationInstr := "include inline citations"
 		if citationAgentEnabled {
 			citationInstr = "cite sources naturally (e.g., 'According to...')"
 		}
 		if synthesisStyle == "comprehensive" {
 			// For deep research: comprehensive multi-section report (no Sources section; system appends it)
+			// deep research：输出多章节的完整报告；不写 Sources 章节，由系统统一追加。
 			targetWords := 1200
 			if len(areas) > 0 {
 				// Calculate target based on research areas (250-400 words per area)
+				// 按 research area 数量估算目标（每个 area 约 250-400 词）。
 				targetWords = len(areas) * 400
 			}
 			// Use explicit top-level headings and forbid copying instruction text into the answer
+			// 使用明确的顶层标题，并禁止把指令文字抄进最终答案。
 			outputStructure = fmt.Sprintf(`## Output Format (do NOT include this section in the final answer):
 
 Use exactly these top-level headings in your response, and start your answer directly with "## Executive Summary" (do NOT include any instruction text):
@@ -1041,6 +1112,7 @@ Section requirements:
 `, targetWords, targetWords+600, citationInstr)
 		} else {
 			// Default: concise synthesis (no Sources section; system appends it)
+			// 默认走精简综合；不写 Sources 章节，由系统统一追加。
 			outputStructure = fmt.Sprintf(`## Output Format (do NOT include this section in the final answer):
 
 Use exactly these top-level headings in your response, and start your answer directly with "## Executive Summary" (do NOT include any instruction text):
@@ -1079,6 +1151,9 @@ Section requirements:
 			// Build dynamic checklist and citation guidance
 			// When citationAgentEnabled=true, the Citation Agent will inject [n] markers after synthesis,
 			// so we should NOT instruct the LLM to add inline citations manually.
+			// 构造动态 checklist 与 citation 指引。
+			// citationAgentEnabled=true 时，Citation Agent 会在 synthesis 之后注入 [n] 标记，
+			// 因此不应再让 LLM 手工添加行内 citation。
 			coverageExtra := ""
 			if hasCitations && !citationAgentEnabled {
 				coverageExtra = "    ✓ Each subsection includes ≥2 inline citations [n]\\n" +
@@ -1161,6 +1236,7 @@ Section requirements:
     `, len(areas), coverageExtra, languageInstruction, queryLanguage, citationGuidance, outputStructure, areasInstruction)
 		} else {
 			// Lightweight summarizer (non-research): no heavy structure or checklists
+			// 轻量摘要（非 research）：不套重结构，也不给 checklist。
 			fmt.Fprintf(&b, "# Synthesis Requirements:\n\n")
 			fmt.Fprintf(&b, "%s\n", languageInstruction)
 			fmt.Fprintf(&b, "Produce a concise, directly helpful answer. Avoid unnecessary headings.\n")
@@ -1186,10 +1262,13 @@ Section requirements:
 	}
 
 	// Configure maxAgents based on workflow type (must be after isResearch is determined)
+	// 按 workflow 类型确定 maxAgents（必须在 isResearch 确定之后）。
 	maxAgents := 6
 	if isResearch || len(input.AgentResults) > 10 {
 		// For research workflows or many agents, include all agents (up to 50)
 		// to avoid losing intermediate synthesis results from React loops
+		// research 类 workflow 或 agent 数量较多时，尽量纳入全部 agent（上限 50），
+		// 避免丢掉 React 循环中产生的中间综合结果。
 		maxAgents = 50
 		logger.Info("Increased maxAgents for research synthesis",
 			zap.Int("maxAgents", maxAgents),
@@ -1198,6 +1277,7 @@ Section requirements:
 	}
 
 	// Read workspace files for swarm mode (Go I/O inside activity — not in Temporal history)
+	// swarm 模式下读取 workspace 文件；I/O 在 activity 内完成，不进入 Temporal history。
 	if input.SessionID != "" {
 		if err := validateSessionID(input.SessionID); err != nil {
 			diagLogger.Warn("Invalid session_id for workspace files, skipping", zap.Error(err))
@@ -1223,6 +1303,7 @@ Section requirements:
 	fmt.Fprintf(&b, "Agent results (%d total):\n\n", len(input.AgentResults))
 
 	// HITL: inject confirmed research plan if present (zero impact when absent)
+	// HITL：若已有确认过的 research plan 就注入；没有则完全不产生影响。
 	if input.Context != nil {
 		if confirmedPlan, ok := input.Context["confirmed_plan"].(string); ok && confirmedPlan != "" {
 			fmt.Fprintf(&b, "\n## User's Approved Research Direction:\n%s\n\n", confirmedPlan)
@@ -1234,6 +1315,10 @@ Section requirements:
 	// 1. Domain Evidence (role=domain_analysis) - treated as primary official evidence, NOT synthesis
 	// 2. Synthesis results (agent_id contains synthesis/synthesizer) - coverage guides
 	// 3. Other individual agent outputs
+	// 把 agent 结果分成三类：
+	// 1. Domain Evidence（role=domain_analysis）：当作一手官方证据，不算 synthesis；
+	// 2. synthesis 结果（agent_id 含 synthesis/synthesizer）：作为覆盖度参考；
+	// 3. 其余单个 agent 的输出。
 	var domainEvidenceResults []AgentExecutionResult
 	var synthesisResults []AgentExecutionResult
 	var otherResults []AgentExecutionResult
@@ -1243,6 +1328,7 @@ Section requirements:
 			continue
 		}
 		// Domain Analysis evidence gets special treatment - NOT marked as (Synthesis)
+		// Domain Analysis 证据单独处理，不打 (Synthesis) 标记。
 		if strings.EqualFold(strings.TrimSpace(r.Role), "domain_analysis") {
 			domainEvidenceResults = append(domainEvidenceResults, r)
 		} else if strings.Contains(strings.ToLower(r.AgentID), "synthesis") ||
@@ -1254,15 +1340,18 @@ Section requirements:
 	}
 
 	// Include Domain Evidence results FIRST (primary official evidence, NOT a coverage guide)
+	// Domain Evidence 放在最前：它是一手官方证据，不是覆盖度参考。
 	count := 0
 	for _, r := range domainEvidenceResults {
 		sanitized := sanitizeAgentOutput(r.Response)
 		// Domain evidence gets triple space (high-value official content)
+		// Domain evidence 给三倍篇幅：属高价值官方内容。
 		maxDomainEvidenceChars := maxPerAgentChars * 3
 		if len([]rune(sanitized)) > maxDomainEvidenceChars {
 			sanitized = string([]rune(sanitized)[:maxDomainEvidenceChars]) + "..."
 		}
 		// Use "Domain Evidence" header - explicitly NOT "(Synthesis)" to avoid research_comprehensive.tmpl downweighting
+		// 用 "Domain Evidence" 作为标题，刻意不写成 "(Synthesis)"，避免被 research_comprehensive.tmpl 降权。
 		fmt.Fprintf(&b, "=== Domain Evidence: %s (Official Sources) ===\n%s\n\n", r.AgentID, sanitized)
 		count++
 		if count >= maxAgents {
@@ -1271,6 +1360,7 @@ Section requirements:
 	}
 
 	// Include synthesis results second (these contain aggregated insights as coverage guides)
+	// synthesis 结果放第二：其中是聚合后的洞察，用作覆盖度参考。
 	for _, r := range synthesisResults {
 		if count >= maxAgents {
 			break
@@ -1278,6 +1368,7 @@ Section requirements:
 		// Sanitize agent output to remove duplicate sources/citations
 		sanitized := sanitizeAgentOutput(r.Response)
 		// Apply length cap after sanitization (synthesis results get more space)
+		// 清洗后再截断长度；synthesis 结果给的篇幅更大。
 		maxSynthesisChars := maxPerAgentChars * 2 // Double the space for synthesis results
 		if len([]rune(sanitized)) > maxSynthesisChars {
 			sanitized = string([]rune(sanitized)[:maxSynthesisChars]) + "..."
@@ -1304,6 +1395,7 @@ Section requirements:
 	if count == 0 {
 		logger.Warn("No successful agent results to synthesize")
 		// Fallback: simple synthesis without emitting completion here; emit below
+		// 兜底：走简单综合，完成 event 不在此处发，统一在下面发。
 		res, err := simpleSynthesisNoEvents(ctx, input)
 		if err != nil {
 			return res, err
@@ -1341,13 +1433,18 @@ Section requirements:
 	}
 
 	// Use /agent/query to leverage role presets and proper model selection
+	// 走 /agent/query，以复用 role preset 与正确的 model 选择逻辑。
 	base := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 
 	// Calculate max_tokens for synthesis without a hard ceiling.
 	// Increase allowance per agent to reduce risk of early stops.
 	// Base: 10240, plus 2048 per agent result.
+	// 估算 synthesis 的 max_tokens，不设硬上限；
+	// 每个 agent 结果都额外给额度，降低提前截断的风险。
+	// 基数 10240，每个 agent 结果再加 2048。
 	maxTokens := 10240 + (len(input.AgentResults) * 2048)
 	// For deep research (comprehensive style), enforce a 50k floor before provider headroom clamp.
+	// comprehensive 风格的 deep research 先保底 50k，再做 provider 的 headroom 收敛。
 	if strings.EqualFold(synthesisStyle, "comprehensive") && maxTokens < 50000 {
 		maxTokens = 50000
 	}
@@ -1365,6 +1462,7 @@ Section requirements:
 	}
 
 	// Explicitly set model_tier if present in context to avoid Python API defaulting to "small"
+	// context 里有 model_tier 就显式传，避免 Python API 默认落到 "small"。
 	if contextMap != nil {
 		if tierVal, ok := contextMap["model_tier"]; ok {
 			if tierStr, ok := tierVal.(string); ok && tierStr != "" {
@@ -1375,6 +1473,8 @@ Section requirements:
 
 	// Pass model/provider override from context to synthesis request
 	// (allows swarm experiments to use consistent model across all LLM calls)
+	// 把 context 里的 model/provider 覆盖值透传给 synthesis request；
+	// 便于 swarm 实验在所有 LLM 调用上保持同一 model。
 	if contextMap != nil {
 		if mo, ok := contextMap["agent_model_override"].(string); ok && mo != "" {
 			reqBody["model_override"] = mo
@@ -1408,6 +1508,7 @@ Section requirements:
 	url := base + "/agent/query"
 
 	// Timeout based on research mode: deep research needs more time for large context
+	// timeout 按研究模式区分：deep research context 大，需要更长时间。
 	timeout := 180 * time.Second // Default: 3 minutes (non-research)
 	if isResearch {
 		timeout = 420 * time.Second // 7 minutes for research syntheses (increased from 5 to reduce fallback rate)
@@ -1530,6 +1631,7 @@ Section requirements:
 	}
 
 	// Parse /agent/query response format (read body for diagnostics)
+	// 解析 /agent/query 的 response 格式；读原始 body 便于诊断。
 	rawBody, readErr := io.ReadAll(resp.Body)
 	if readErr != nil {
 		logger.Warn("LLM synthesis: read body failed, falling back", zap.Error(readErr))
@@ -1688,6 +1790,7 @@ Section requirements:
 	}
 
 	// Extract model info: prefer top-level model_used; fallback to metadata.model
+	// 取 model 信息：优先顶层 model_used，缺失时回退到 metadata.model。
 	model := out.ModelUsed
 	if model == "" && out.Metadata != nil {
 		if m, ok := out.Metadata["model"].(string); ok {
@@ -1707,6 +1810,8 @@ Section requirements:
 
 	// Apply report formatting to ensure all citations appear in Sources
 	// Use savedCitations (preserved before deletion) instead of input.Context
+	// 套用报告格式化，确保所有 citation 都出现在 Sources 里；
+	// 用删除前留存的 savedCitations，而不是 input.Context。
 	finalResponse := out.Response
 	if input.Context != nil {
 		if tmpl, ok := input.Context["synthesis_template"].(string); ok && tmpl == "custom_workflows" {
@@ -1722,6 +1827,9 @@ Section requirements:
 	// Continuation fallback: if model stopped early and output looks incomplete, ask it to continue
 	// This function is STRUCTURE-AGNOSTIC - it only checks for truncation signals,
 	// not specific heading formats or per-section requirements (those belong in templates).
+	// 续写兜底：model 提前停止且输出看起来不完整时，让它继续写。
+	// 该函数不依赖具体结构：只看截断信号，
+	// 不检查特定标题格式或分节要求（那些属于 template 的职责）。
 	looksComplete := func(s string) bool {
 		txt := strings.TrimSpace(s)
 		if txt == "" {
@@ -1747,10 +1855,14 @@ Section requirements:
 
 			// Style-aware minimum length check (structure-agnostic)
 			// Instead of checking specific headings, use total length thresholds
+			// 按风格设定最小长度（与结构无关）：
+			// 不检查具体标题，而是用总长度阈值判断。
 			minLength := 1000 // Default: ~250 words
 			if input.Context != nil {
 				// Allow explicit override via context for custom templates
 				// This takes highest precedence over style/area-based calculations
+				// 允许通过 context 显式覆盖，适配自定义 template；
+				// 其优先级高于按风格/area 推算的结果。
 				if explicitMin, ok := input.Context["synthesis_min_length"]; ok {
 					switch v := explicitMin.(type) {
 					case int:
@@ -1771,6 +1883,7 @@ Section requirements:
 						}
 					}
 					// If research areas are specified, scale minimum by area count
+					// 指定了 research areas 时，按 area 数量缩放最小长度。
 					if rawAreas, ok := input.Context["research_areas"]; ok && rawAreas != nil {
 						var areaCount int
 						switch t := rawAreas.(type) {
@@ -1781,6 +1894,7 @@ Section requirements:
 						}
 						if areaCount > 0 {
 							// ~800 chars per area minimum (~200 words, raised from 400)
+							// 每个 area 至少约 800 字符（约 200 词，从 400 上调）。
 							areaMin := areaCount * 800
 							if areaMin > minLength {
 								minLength = areaMin
@@ -1803,6 +1917,7 @@ Section requirements:
 	}
 
 	// Extract finish_reason and completion tokens (may be empty)
+	// 取 finish_reason 与 completion tokens（可能为空）。
 	finishReason := ""
 	outputTokens := 0
 	effectiveMaxCompletion := maxTokens
@@ -1834,6 +1949,8 @@ Section requirements:
 
 	// Trigger continuation if there's insufficient remaining capacity
 	// Use adaptive threshold: min(25% of effective_max, 300 tokens absolute margin)
+	// 剩余容量不足时触发续写；
+	// 阈值取 min(effective_max 的 25%, 绝对余量 300 tokens)。
 	minMargin := effectiveMaxCompletion / 4
 	if minMargin > 300 {
 		minMargin = 300
@@ -1924,6 +2041,7 @@ Section requirements:
 	}
 
 	// Extract usage metadata for event payload (finishReason, outputTokens, effectiveMaxCompletion already extracted above)
+	// 为 event payload 取 usage metadata（finishReason、outputTokens、effectiveMaxCompletion 上面已取）。
 	provider := ""
 	inputTokens := 0
 	costUsd := 0.0
@@ -1974,6 +2092,7 @@ Section requirements:
 			Timestamp:  time.Now(),
 		})
 		// Event 2: Synthesis summary with model and token usage (omit model if unknown)
+		// 第 2 个 event：synthesis 摘要，带 model 与 token 用量（model 未知则省略）。
 		summary := fmt.Sprintf("~%d tokens", out.TokensUsed)
 		if model != "" && model != "unknown" {
 			summary = fmt.Sprintf("Used %s (~%d tokens)", model, out.TokensUsed)
@@ -2001,6 +2120,7 @@ Section requirements:
 	}
 
 	// effectiveMaxCompletion, outputTokens already extracted above for continuation trigger
+	// effectiveMaxCompletion 与 outputTokens 已在上面为续写判断取过。
 
 	// Infer input tokens if not present in metadata
 	if inputTokens == 0 && out.TokensUsed > 0 && outputTokens > 0 {
@@ -2025,6 +2145,7 @@ Section requirements:
 }
 
 // truncateForLog returns s truncated to max characters for safe logging
+// truncateForLog 把字符串截到 max 字符，便于安全打日志。
 func truncateForLog(s string, max int) string {
 	runes := []rune(s)
 	if len(runes) <= max {
@@ -2035,8 +2156,11 @@ func truncateForLog(s string, max int) string {
 
 // simpleSynthesis concatenates successful agent outputs with light formatting
 // simpleSynthesisNoEvents performs simple synthesis without emitting streaming events
+// simpleSynthesis 把成功的 agent 输出做轻量格式化后拼接；
+// simpleSynthesisNoEvents 是同一逻辑，但不发 streaming event。
 func simpleSynthesisNoEvents(ctx context.Context, input SynthesisInput) (SynthesisResult, error) {
 	// Use activity-scoped logger for consistency with Temporal activity logging
+	// 用 activity 级 logger，与 Temporal activity 日志保持一致。
 	logger := activity.GetLogger(ctx)
 	logger.Info("Synthesizing results (simple)",
 		zap.String("query", input.Query),
@@ -2077,6 +2201,7 @@ func simpleSynthesisNoEvents(ctx context.Context, input SynthesisInput) (Synthes
 				totalCacheCreation1hTokens += result.CacheCreation1hTokens
 
 				// Capture model and provider from first successful agent
+				// 从第一个成功的 agent 上取 model 与 provider。
 				if modelUsed == "" && result.ModelUsed != "" {
 					modelUsed = result.ModelUsed
 				}
@@ -2093,6 +2218,8 @@ func simpleSynthesisNoEvents(ctx context.Context, input SynthesisInput) (Synthes
 
 	// Combine results and sanitize internal format markers
 	// This prevents exposing internal design patterns to end users
+	// 合并结果并清理内部格式标记；
+	// 避免把内部设计细节暴露给最终用户。
 	finalResult := strings.Join(resultParts, "\n\n")
 	finalResult = sanitizeInternalFormat(finalResult)
 
@@ -2125,6 +2252,7 @@ func simpleSynthesisNoEvents(ctx context.Context, input SynthesisInput) (Synthes
 }
 
 // simpleSynthesis wraps simpleSynthesisNoEvents and emits a completion event
+// simpleSynthesis 包装 simpleSynthesisNoEvents，并额外发出完成 event。
 func simpleSynthesis(ctx context.Context, input SynthesisInput) (SynthesisResult, error) {
 	res, err := simpleSynthesisNoEvents(ctx, input)
 	if err != nil {
@@ -2168,14 +2296,18 @@ func simpleSynthesis(ctx context.Context, input SynthesisInput) (SynthesisResult
 }
 
 // cleanAgentOutput processes raw agent outputs to be more user-friendly
+// cleanAgentOutput 把原始 agent 输出处理成更友好的形式。
 func cleanAgentOutput(response string) string {
 	// First, sanitize any leaked XML tool tags (covers fallback synthesis path)
+	// 先清掉泄漏的 XML tool 标签（兜底 synthesis 路径也覆盖到）。
 	response = sanitizeAgentOutput(response)
 
 	// Try to parse as JSON array (common for web_search results)
+	// 尝试按 JSON 数组解析（web_search 结果常见这种格式）。
 	var results []map[string]interface{}
 	if err := json.Unmarshal([]byte(response), &results); err == nil && len(results) > 0 {
 		// Format search results as a readable list (without header to avoid injection)
+		// 把检索结果格式化成可读列表；不加标题，避免注入式内容混入。
 		var formatted []string
 		for i, result := range results {
 			if i >= 5 { // Limit to top 5 results
@@ -2190,6 +2322,8 @@ func cleanAgentOutput(response string) string {
 		if len(formatted) > 0 {
 			// Return clean list without "Research findings:" header
 			// This prevents intermediate formatting from appearing in final synthesis
+			// 返回不带 "Research findings:" 标题的纯净列表；
+			// 防止中间过程的格式化痕迹出现在最终 synthesis 里。
 			return strings.Join(formatted, "\n")
 		}
 	}
@@ -2200,6 +2334,8 @@ func cleanAgentOutput(response string) string {
 
 // countInlineCitations counts unique inline citation references [n] in text.
 // Returns the number of distinct citation numbers found.
+// countInlineCitations 统计文本中不重复的行内 citation 标记 [n]；
+// 返回出现过的不同 citation 编号数量。
 func countInlineCitations(text string) int {
 	re := regexp.MustCompile(`\[\d+\]`)
 	matches := re.FindAllString(text, -1)
@@ -2214,6 +2350,9 @@ func countInlineCitations(text string) int {
 // sanitizeInternalFormat removes internal format markers from fallback synthesis output.
 // This prevents exposing internal design patterns (like "# PART 1 - RETRIEVED INFORMATION")
 // to end users when LLM synthesis fails and falls back to simple concatenation.
+// sanitizeInternalFormat 清理兜底 synthesis 输出里的内部格式标记；
+// 当 LLM 综合失败、退化为简单拼接时，
+// 避免把内部设计痕迹（如 "# PART 1 - RETRIEVED INFORMATION"）暴露给用户。
 func sanitizeInternalFormat(text string) string {
 	if text == "" {
 		return text
@@ -2253,6 +2392,7 @@ func sanitizeInternalFormat(text string) string {
 		}
 
 		// Transform "## Source N: URL - RELEVANCE" to cleaner format
+		// 把 "## Source N: URL - RELEVANCE" 转成更清爽的格式。
 		if sourcePattern.MatchString(trimmed) || sourceSimplePattern.MatchString(trimmed) {
 			// Remove relevance tags and simplify
 			cleaned := relevanceTagPattern.ReplaceAllString(trimmed, "")
@@ -2280,6 +2420,7 @@ func sanitizeInternalFormat(text string) string {
 	output = multiNewline.ReplaceAllString(output, "\n\n")
 
 	// Add a user-friendly header if the output doesn't start with a heading
+	// 输出不是以标题开头时，补一个面向用户的标题。
 	output = strings.TrimSpace(output)
 	if output != "" && !strings.HasPrefix(output, "#") {
 		// Detect language from content
@@ -2296,6 +2437,7 @@ func sanitizeInternalFormat(text string) string {
 }
 
 // containsChinese checks if text contains Chinese characters
+// containsChinese 判断文本中是否含中文字符。
 func containsChinese(text string) bool {
 	for _, r := range text {
 		if r >= 0x4E00 && r <= 0x9FFF {
@@ -2306,6 +2448,7 @@ func containsChinese(text string) bool {
 }
 
 // containsJapanese checks if text contains Japanese-specific characters (hiragana/katakana)
+// containsJapanese 判断文本中是否含日文假名等日文特有字符。
 func containsJapanese(text string) bool {
 	for _, r := range text {
 		// Hiragana: 0x3040-0x309F, Katakana: 0x30A0-0x30FF

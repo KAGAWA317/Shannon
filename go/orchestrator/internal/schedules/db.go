@@ -86,6 +86,7 @@ func (d *DBOperations) GetSchedule(ctx context.Context, id uuid.UUID) (*Schedule
 }
 
 // ListSchedules retrieves schedules for a user with pagination
+// ListSchedules 分页获取用户的定时任务
 func (d *DBOperations) ListSchedules(ctx context.Context, userID, tenantID uuid.UUID, page, pageSize int, statusFilter string) ([]*Schedule, int, error) {
 	offset := (page - 1) * pageSize
 
@@ -190,6 +191,8 @@ func (d *DBOperations) UpdateScheduleNextRun(ctx context.Context, id uuid.UUID, 
 func (d *DBOperations) UpdateSchedule(ctx context.Context, req *UpdateScheduleInput) error {
 	// Only marshal TaskContext if explicitly provided (non-nil)
 	// When nil, pass nil to SQL so COALESCE preserves existing value
+	// 仅在显式提供（非 nil）时才序列化 TaskContext
+	// 为 nil 时向 SQL 传 nil，使 COALESCE 保留原值
 	var contextJSON interface{}
 	if req.TaskContext != nil {
 		contextJSON, _ = json.Marshal(req.TaskContext)
@@ -215,6 +218,7 @@ func (d *DBOperations) UpdateSchedule(ctx context.Context, req *UpdateScheduleIn
 }
 
 // CountSchedulesByUser counts active schedules for a user
+// CountSchedulesByUser 统计用户的活跃定时任务数
 func (d *DBOperations) CountSchedulesByUser(ctx context.Context, userID, tenantID uuid.UUID) (int, error) {
 	var count int
 	err := d.db.QueryRowContext(ctx, `
@@ -226,6 +230,7 @@ func (d *DBOperations) CountSchedulesByUser(ctx context.Context, userID, tenantI
 }
 
 // CountSchedulesByTenant counts active schedules for a tenant (across all users)
+// CountSchedulesByTenant 统计租户（所有用户）的活跃定时任务数
 func (d *DBOperations) CountSchedulesByTenant(ctx context.Context, tenantID uuid.UUID) (int, error) {
 	var count int
 	err := d.db.QueryRowContext(ctx, `
@@ -236,6 +241,7 @@ func (d *DBOperations) CountSchedulesByTenant(ctx context.Context, tenantID uuid
 }
 
 // GetTenantMaxSchedules reads max_schedules from tenant metadata. Returns 0 (unlimited) if not set.
+// GetTenantMaxSchedules 从租户 metadata 读取 max_schedules。未设置时返回 0（不限制）。
 func (d *DBOperations) GetTenantMaxSchedules(ctx context.Context, tenantID uuid.UUID) (int, error) {
 	var maxSchedules sql.NullInt64
 	err := d.db.QueryRowContext(ctx, `
@@ -251,6 +257,7 @@ func (d *DBOperations) GetTenantMaxSchedules(ctx context.Context, tenantID uuid.
 }
 
 // GetAllActiveSchedules returns all active/paused schedules (for orphan detection)
+// GetAllActiveSchedules 返回全部活跃/暂停的定时任务（用于孤立检测）
 func (d *DBOperations) GetAllActiveSchedules(ctx context.Context) ([]*Schedule, error) {
 	rows, err := d.db.QueryContext(ctx, `
 		SELECT id, user_id, tenant_id, name, description, cron_expression, timezone,
@@ -298,6 +305,7 @@ func (d *DBOperations) GetAllActiveSchedules(ctx context.Context) ([]*Schedule, 
 }
 
 // RecordScheduleExecution logs a schedule execution to history
+// RecordScheduleExecution 把一次定时任务执行记入历史
 func (d *DBOperations) RecordScheduleExecution(ctx context.Context, scheduleID uuid.UUID, taskID string, status string, cost float64, errorMsg string) error {
 	var completedAt *time.Time
 	if status == "COMPLETED" || status == "FAILED" || status == "CANCELLED" {

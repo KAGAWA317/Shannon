@@ -1,6 +1,8 @@
 """
 OpenAPI tool loader for Shannon.
 Dynamically converts OpenAPI 3.x specifications into Shannon tools.
+Shannon 的 OpenAPI tool 加载器。
+将 OpenAPI 3.x 规范动态转换为 Shannon tool。
 """
 
 from __future__ import annotations
@@ -34,34 +36,43 @@ logger = logging.getLogger(__name__)
 def _resolve_env_var(value: str) -> str:
     """
     Resolve environment variable references in string values.
+    解析字符串值中的环境变量引用。
 
     Supports both ${VAR} and $VAR formats.
     Returns the environment variable value if found, otherwise empty string.
+    支持 ${VAR} 与 $VAR 两种格式。
+    找到时返回环境变量值，否则返回空字符串。
 
     Args:
         value: String that may contain env var reference
+            可能包含环境变量引用的字符串
 
     Returns:
         Resolved value or empty string if not found
+            解析后的值；未找到时返回空字符串
     """
     if not isinstance(value, str):
         return value
 
     # Handle ${VAR} format
+    # 处理 ${VAR} 格式
     if value.startswith("${") and value.endswith("}"):
         env_var = value[2:-1]
         return os.getenv(env_var, "")
 
     # Handle $VAR format
+    # 处理 $VAR 格式
     if value.startswith("$"):
         env_var = value[1:]
         return os.getenv(env_var, "")
 
     # Not an env var reference
+    # 不是环境变量引用
     return value
 
 
 # Simple circuit breaker (same as MCP)
+# 简单 circuit breaker（与 MCP 相同）
 class _SimpleBreaker:
     def __init__(self, failure_threshold: int = 5, recovery_timeout: float = 60.0):
         self.failure_threshold = failure_threshold
@@ -70,6 +81,7 @@ class _SimpleBreaker:
         self.open_until: float = 0.0
         self.half_open = False
         self._lock = threading.Lock()  # Protect state from concurrent access
+        # 保护状态免受并发访问
 
     def allow(self, now: float) -> bool:
         with self._lock:
@@ -77,6 +89,7 @@ class _SimpleBreaker:
                 return False
             if self.open_until != 0.0 and self.open_until <= now:
                 # move to half-open and allow one trial
+                # 进入半开状态并允许一次试探
                 self.half_open = True
                 self.open_until = 0.0
             return True
@@ -101,21 +114,27 @@ _breakers: Dict[str, _SimpleBreaker] = {}
 def _validate_domain(url: str, allowed_domains: List[str]) -> None:
     """
     Validate URL against allowed domains (mirrors MCP logic).
+    校验 URL 是否在允许域名内（与 MCP 逻辑一致）。
 
     Args:
         url: URL to validate
+            要校验的 URL
         allowed_domains: List of allowed domains or ["*"] for wildcard
+            允许的域名列表，或 ["*"] 表示通配
 
     Raises:
         ValueError: If domain not allowed
+        ValueError：域名不被允许时抛出
     """
     host = urlparse(url).hostname or ""
 
     # Wildcard bypasses validation
+    # 通配符跳过校验
     if "*" in allowed_domains:
         return
 
     # Check exact match or suffix match (subdomains)
+    # 检查精确匹配或后缀匹配（子域名）
     if not any(host == d or host.endswith("." + d) for d in allowed_domains):
         raise ValueError(
             f"OpenAPI URL host '{host}' not in allowed domains: {allowed_domains}"
@@ -125,6 +144,7 @@ def _validate_domain(url: str, allowed_domains: List[str]) -> None:
 class OpenAPILoader:
     """
     Loads OpenAPI spec and generates Shannon Tool classes for each operation.
+    加载 OpenAPI 规范并为每个操作生成 Shannon Tool 类。
     """
 
     def __init__(
@@ -147,23 +167,39 @@ class OpenAPILoader:
     ):
         """
         Initialize OpenAPI loader.
+        初始化 OpenAPI 加载器。
 
         Args:
             name: Tool collection name (used as prefix)
+                tool 集合名称（用作前缀）
             spec: OpenAPI specification dict
+                OpenAPI 规范字典
             auth_type: Authentication type (none|api_key|bearer|basic)
+                authentication 类型（none|api_key|bearer|basic）
             auth_config: Auth configuration dict
+                authentication 配置字典
             category: Tool category
+                tool 分类
             base_cost_per_use: Base cost per operation
+                每次操作的基础成本
             operations_filter: Optional list of operationIds to include
+                可选的要包含的 operationId 列表
             tags_filter: Optional list of tags to filter by
+                可选的用于过滤的标签列表
             base_url_override: Optional base URL override
+                可选的基础 URL 覆盖值
             rate_limit: Requests per minute (default: 30, enforceable)
+                每分钟 request 数（默认 30，可强制执行）
             timeout_seconds: Request timeout in seconds (default: 30)
+                request timeout 秒数（默认 30）
             max_response_bytes: Max response size (default: 10MB)
+                response 大小上限（默认 10MB）
             retries: Max retry attempts (default: 2, reduced to avoid circuit breaker)
+                最大 retry 次数（默认 2，已减少以避免触发 circuit breaker）
             spec_url: Optional URL where spec was fetched from (for relative server URLs)
+                抓取规范的可选来源 URL（用于解析相对 server URL）
             vendor_name: Optional vendor adapter name
+                可选的厂商适配器名称
         """
         self.name = name
         self.spec = spec
@@ -182,17 +218,21 @@ class OpenAPILoader:
         self.vendor_name = vendor_name
 
         # Load vendor adapter if specified
+        # 若指定了厂商适配器则加载
         self.vendor_adapter = get_vendor_adapter(vendor_name) if vendor_name else None
         if vendor_name and not self.vendor_adapter:
             logger.warning(f"Vendor adapter '{vendor_name}' not found, proceeding without adapter")
 
         # Validate spec
+        # 校验规范
         validate_spec(spec)
 
         # Extract base URL
+        # 提取基础 URL
         self.base_url = extract_base_url(spec, base_url_override, spec_url)
 
         # Validate domain - require explicit configuration for security
+        # 校验域名——出于安全考虑要求显式配置
         allowed_domains_str = os.getenv("OPENAPI_ALLOWED_DOMAINS")
         if not allowed_domains_str:
             raise ValueError(
@@ -207,6 +247,7 @@ class OpenAPILoader:
         _validate_domain(self.base_url, allowed_domains)
 
         # Extract operations
+        # 提取操作
         operations = extract_operations(spec, operations_filter, tags_filter)
         self.operations = deduplicate_operation_ids(operations)
 
@@ -217,18 +258,22 @@ class OpenAPILoader:
     def _build_auth_headers(self, session_context: Optional[Dict] = None) -> Dict[str, str]:
         """
         Build authentication headers based on auth_type and auth_config.
+        根据 auth_type 和 auth_config 构建 authentication 头。
 
         Args:
             session_context: Optional session context for dynamic header resolution
+                用于动态解析 request header 的可选 session context
 
         Returns:
             Dict of HTTP headers for authentication
+            用于 authentication 的 HTTP 头字典
         """
         headers = {}
 
         if self.auth_type == "bearer":
             token = self.auth_config.get("token", "")
             # Resolve environment variable references
+            # 解析环境变量引用
             token = _resolve_env_var(token)
             if token:
                 headers["Authorization"] = f"Bearer {token}"
@@ -239,17 +284,20 @@ class OpenAPILoader:
             api_key_value = self.auth_config.get("api_key_value", "")
 
             # Resolve environment variable references
+            # 解析环境变量引用
             api_key_value = _resolve_env_var(api_key_value)
 
             if api_key_location == "header" and api_key_value:
                 headers[api_key_name] = api_key_value
             # Note: query parameters are handled separately in tool execution
+            # 注意：查询参数在 tool 执行时单独处理
 
         elif self.auth_type == "basic":
             username = self.auth_config.get("username", "")
             password = self.auth_config.get("password", "")
 
             # Resolve environment variable references
+            # 解析环境变量引用
             username = _resolve_env_var(username)
             password = _resolve_env_var(password)
 
@@ -260,14 +308,18 @@ class OpenAPILoader:
                 headers["Authorization"] = f"Basic {encoded}"
 
         # Handle extra_headers if present
+        # 若存在 extra_headers 则处理
         extra_headers = self.auth_config.get("extra_headers", {})
         if isinstance(extra_headers, dict):
             for header_name, header_value in extra_headers.items():
                 # Resolve environment variable references
+                # 解析环境变量引用
                 header_value = _resolve_env_var(header_value)
 
                 # Only static and environment variable values are supported
                 # Dynamic body field references ({{body.field}}) are NOT supported
+                # 仅支持静态值和环境变量值
+                # 不支持动态 request body 字段引用（{{body.field}}）
                 if header_value:
                     headers[header_name] = str(header_value)
 
@@ -276,9 +328,11 @@ class OpenAPILoader:
     def generate_tools(self) -> List[Type[Tool]]:
         """
         Generate Tool classes for each operation.
+        为每个操作生成 Tool 类。
 
         Returns:
             List of Tool class types
+            Tool 类类型列表
         """
         tool_classes = []
 
@@ -291,12 +345,15 @@ class OpenAPILoader:
     def _create_tool_class(self, op_data: Dict[str, Any]) -> Type[Tool]:
         """
         Create a Tool class for a single OpenAPI operation.
+        为单个 OpenAPI 操作创建 Tool 类。
 
         Args:
             op_data: Operation data dict from parser
+                解析器输出的操作数据字典
 
         Returns:
             Tool class type
+            Tool 类类型
         """
         operation_id = op_data["operation_id"]
         method = op_data["method"]
@@ -304,12 +361,14 @@ class OpenAPILoader:
         operation = op_data["operation"]
 
         # Extract parameters (pass spec for $ref resolution)
+        # 提取参数（传入 spec 以解析 $ref）
         params = extract_parameters(operation, self.spec)
         body_param = extract_request_body(operation, self.spec)
         if body_param:
             params.extend(body_param)
 
         # Build tool parameters
+        # 构建 tool 参数
         tool_params = []
         for p in params:
             param_type_str = p["type"]
@@ -328,9 +387,11 @@ class OpenAPILoader:
             )
 
         # Human-readable summary for progress events (falls back to operationId)
+        # 用于进度 event 的易读摘要（回退到 operationId）
         op_summary = operation.get("summary", operation_id)
 
         # Capture variables for closure
+        # 为闭包捕获变量
         base_url = self.base_url
         auth_type = self.auth_type
         auth_config = self.auth_config
@@ -345,12 +406,14 @@ class OpenAPILoader:
         vendor_adapter = self.vendor_adapter
 
         # Get or create circuit breaker for this base_url
+        # 获取或创建此 base_url 的 circuit breaker
         breaker_key = f"openapi:{base_url}"
         if breaker_key not in _breakers:
             _breakers[breaker_key] = _SimpleBreaker()
         breaker = _breakers[breaker_key]
 
         # Create Tool class dynamically
+        # 动态创建 Tool 类
         class _OpenAPITool(Tool):
             def _get_metadata(self) -> ToolMetadata:
                 summary = operation.get("summary", "")
@@ -385,6 +448,7 @@ class OpenAPILoader:
                 logger.info(f"OpenAPI tool {operation_id} _execute_impl called with session_context: {session_context is not None}, kwargs keys: {list(kwargs.keys())}")
 
                 # Circuit breaker check
+                # circuit breaker 检查
                 if not breaker.allow(now):
                     return ToolResult(
                         success=False,
@@ -393,34 +457,41 @@ class OpenAPILoader:
                     )
 
                 # Build auth headers with session context for dynamic resolution
+                # 结合 session context 构建 authentication 头，以支持动态解析
                 headers = build_auth_headers(session_context)
 
                 # Build URL with path parameters (URL-encoded)
+                # 构建带路径参数的 URL（已 URL 编码）
                 url = base_url + path
                 for param in params:
                     if param["location"] == "path" and param["name"] in kwargs:
                         placeholder = "{" + param["name"] + "}"
                         # URL-encode path parameter value
+                        # 对路径参数值进行 URL 编码
                         encoded_value = quote(str(kwargs[param["name"]]), safe="")
                         url = url.replace(placeholder, encoded_value)
 
                 # Build query parameters
+                # 构建查询参数
                 query_params = {}
                 for param in params:
                     if param["location"] == "query" and param["name"] in kwargs:
                         query_params[param["name"]] = kwargs[param["name"]]
 
                 # Build request body
+                # 构建 request body
                 json_body = None
                 if body_param and "body" in kwargs:
                     json_body = kwargs["body"]
 
                 # Extract prompt_params from session_context
+                # 从 session_context 提取 prompt_params
                 prompt_params = None
                 if session_context and "prompt_params" in session_context:
                     prompt_params = session_context["prompt_params"]
 
                 # Apply vendor-specific body transformations if adapter is available
+                # 若有适配器，则应用厂商特定的 request body 转换
                 if vendor_adapter and json_body is not None:
                     try:
                         json_body = vendor_adapter.transform_body(
@@ -433,10 +504,12 @@ class OpenAPILoader:
                         logger.warning(f"OpenAPI tool {operation_id}: Vendor adapter body transform failed: {e}")
 
                 # Build request headers
+                # 构建 request header
                 request_headers = dict(headers)
                 request_headers["Accept"] = "application/json"
 
                 # Apply vendor-specific header transformations if adapter is available
+                # 若有适配器，则应用厂商特定的 request header 转换
                 if vendor_adapter and hasattr(vendor_adapter, 'transform_headers'):
                     try:
                         request_headers = vendor_adapter.transform_headers(
@@ -455,10 +528,12 @@ class OpenAPILoader:
                     api_key_name = auth_config.get("api_key_name", "api_key")
                     api_key_value = auth_config.get("api_key_value", "")
                     # Resolve environment variable references
+                    # 解析环境变量引用
                     api_key_value = _resolve_env_var(api_key_value)
                     query_params[api_key_name] = api_key_value
 
                 # Optional debug logging of the final outbound request (sanitized)
+                # 可选的最终出站 request 调试日志（已脱敏）
                 try:
                     log_requests = os.getenv("OPENAPI_LOG_REQUESTS", "0").lower() not in {"0", "false", "no", "off", ""}
                     if log_requests:
@@ -490,16 +565,20 @@ class OpenAPILoader:
                         )
                 except Exception:
                     # Never fail on logging
+                    # 日志记录绝不影响主流程
                     pass
 
                 # Retry logic with exponential backoff
                 # Allow env var override, otherwise use configured retries (default: 2)
+                # 指数退避 retry 逻辑
+                # 允许环境变量覆盖，否则使用配置的 retry 次数（默认 2）
                 retries = int(os.getenv("OPENAPI_RETRIES", str(default_retries)))
                 last_exception = None
 
                 for attempt in range(1, retries + 1):
                     try:
                         # Emit progress
+                        # 发送进度
                         observer = kwargs.get("observer")
                         if observer:
                             try:
@@ -511,6 +590,7 @@ class OpenAPILoader:
                                 pass
 
                         # Execute request with configured timeout
+                        # 以配置的 timeout 执行 request
                         start_time = time.time()
                         async with httpx.AsyncClient(timeout=timeout_seconds) as client:
                             response = await client.request(
@@ -523,6 +603,7 @@ class OpenAPILoader:
                             response.raise_for_status()
 
                             # Check response size
+                            # 检查 response 大小
                             content_length = len(response.content)
                             if content_length > max_response_bytes:
                                 breaker.on_failure(now)
@@ -533,20 +614,24 @@ class OpenAPILoader:
                                 )
 
                             # Parse response
+                            # 解析 response
                             content_type = response.headers.get("content-type", "")
                             if "application/json" in content_type:
                                 result = response.json()
                             else:
                                 # Plain text for MVP
+                                # MVP 阶段按纯文本处理
                                 result = response.text
 
                             # Log response if OPENAPI_LOG_REQUESTS is enabled
+                            # 若启用 OPENAPI_LOG_REQUESTS 则记录 response
                             if log_requests:
                                 logger.info(f"OpenAPI tool {operation_id}: Response status={response.status_code} body={result}")
 
                             duration_ms = int((time.time() - start_time) * 1000)
 
                             # Success: reset breaker
+                            # 成功：重置 circuit breaker
                             breaker.on_success()
 
                             return ToolResult(
@@ -581,6 +666,7 @@ class OpenAPILoader:
                                 error=f"HTTP {e.response.status_code}: {e.response.text[:200]}",
                             )
                         # Exponential backoff: 0.5s, 1s, 2s
+                        # 指数退避：0.5s、1s、2s
                         delay = min(2.0 ** (attempt - 1) * 0.5, 5.0)
                         await asyncio.sleep(delay)
 
@@ -590,10 +676,12 @@ class OpenAPILoader:
                         if attempt >= retries:
                             return ToolResult(success=False, output=None, error=str(e))
                         # Exponential backoff
+                        # 指数退避
                         delay = min(2.0 ** (attempt - 1) * 0.5, 5.0)
                         await asyncio.sleep(delay)
 
                 # Fallback (should never reach here)
+                # 兜底（正常不应到达此处）
                 return ToolResult(
                     success=False,
                     output=None,
@@ -607,17 +695,21 @@ class OpenAPILoader:
 def load_openapi_tools_from_config(config: Dict[str, Any]) -> List[Type[Tool]]:
     """
     Load OpenAPI tools from shannon.yaml configuration.
+    从 shannon.yaml 配置加载 OpenAPI tool。
 
     Args:
         config: Configuration dict from shannon.yaml
+        来自 shannon.yaml 的配置字典
 
     Returns:
         List of Tool class types
+        Tool 类类型列表
     """
     tool_classes = []
     openapi_tools_config = config.get("openapi_tools")
 
     # Handle None or empty config (all tools commented out)
+    # 处理 None 或空配置（所有 tool 均被注释掉）
     if not openapi_tools_config:
         return tool_classes
 
@@ -628,6 +720,7 @@ def load_openapi_tools_from_config(config: Dict[str, Any]) -> List[Type[Tool]]:
 
         try:
             # Get spec (URL or inline)
+            # 获取规范（URL 或内联）
             spec_url = tool_config.get("spec_url")
             spec_inline = tool_config.get("spec_inline")
 
@@ -646,6 +739,7 @@ def load_openapi_tools_from_config(config: Dict[str, Any]) -> List[Type[Tool]]:
                 continue
 
             # Create loader
+            # 创建加载器
             loader = OpenAPILoader(
                 name=tool_name,
                 spec=spec,
@@ -657,6 +751,7 @@ def load_openapi_tools_from_config(config: Dict[str, Any]) -> List[Type[Tool]]:
                 tags_filter=tool_config.get("tags"),
                 base_url_override=tool_config.get("base_url"),
                 # Default to 30 so Tool base rate limiting is enforced
+                # 默认 30，以启用 Tool 基类的 rate limit
                 rate_limit=tool_config.get("rate_limit", 30),
                 timeout_seconds=tool_config.get("timeout_seconds", 30.0),
                 max_response_bytes=tool_config.get(
@@ -667,6 +762,7 @@ def load_openapi_tools_from_config(config: Dict[str, Any]) -> List[Type[Tool]]:
             )
 
             # Generate tools
+            # 生成 tool
             tools = loader.generate_tools()
             tool_classes.extend(tools)
 
@@ -685,19 +781,24 @@ def load_openapi_tools_from_config(config: Dict[str, Any]) -> List[Type[Tool]]:
 def _fetch_spec_from_url(url: str) -> Dict[str, Any]:
     """
     Fetch OpenAPI spec from URL with size limit and domain validation.
+    从 URL 抓取 OpenAPI 规范，带大小限制与域名校验。
 
     Args:
         url: URL to OpenAPI spec (JSON or YAML), supports http://, https://, and file:// protocols
+            OpenAPI 规范的 URL（JSON 或 YAML），支持 http://、https:// 和 file:// 协议
 
     Returns:
         Parsed spec dict
+        解析后的规范字典
 
     Raises:
         ValueError: If fetch fails or spec too large
+        ValueError：抓取失败或规范过大时抛出
     """
     import yaml
 
     # Handle file:// URLs
+    # 处理 file:// URL
     if url.startswith("file://"):
         file_path = url.replace("file://", "")
         max_size = int(os.getenv("OPENAPI_MAX_SPEC_SIZE", str(5 * 1024 * 1024)))
@@ -713,6 +814,7 @@ def _fetch_spec_from_url(url: str) -> Dict[str, Any]:
                 content = f.read()
 
             # Try JSON first, fall back to YAML
+            # 先尝试 JSON，失败则回退到 YAML
             try:
                 import json
                 return json.loads(content)
@@ -723,6 +825,7 @@ def _fetch_spec_from_url(url: str) -> Dict[str, Any]:
             raise ValueError(f"Failed to load OpenAPI spec from file {file_path}: {e}")
 
     # Validate domain for HTTP(S) URLs - require explicit configuration (security fix)
+    # 校验 HTTP(S) URL 的域名——要求显式配置（安全修复）
     allowed_domains_str = os.getenv("OPENAPI_ALLOWED_DOMAINS")
     if not allowed_domains_str:
         raise ValueError(
@@ -732,6 +835,8 @@ def _fetch_spec_from_url(url: str) -> Dict[str, Any]:
     _validate_domain(url, allowed_domains)
 
     # Fetch with size limit
+    # 带大小限制地抓取
+    # 默认 5MB
     max_size = int(
         os.getenv("OPENAPI_MAX_SPEC_SIZE", str(5 * 1024 * 1024))
     )  # 5MB default
@@ -751,6 +856,7 @@ def _fetch_spec_from_url(url: str) -> Dict[str, Any]:
                 )
 
             # Try JSON first, fall back to YAML
+            # 先尝试 JSON，失败则回退到 YAML
             try:
                 return response.json()
             except Exception:

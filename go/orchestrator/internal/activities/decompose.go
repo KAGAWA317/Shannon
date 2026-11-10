@@ -33,6 +33,7 @@ type DecompositionResult struct {
     ConcurrencyLimit  int            `json:"concurrency_limit"`
     TokenEstimates    map[string]int `json:"token_estimates"`
     // Cognitive routing fields for intelligent strategy selection
+    // 认知路由字段，供智能选择执行策略使用。
     CognitiveStrategy string  `json:"cognitive_strategy"`
     Confidence        float64 `json:"confidence"`
     FallbackStrategy  string  `json:"fallback_strategy"`
@@ -48,6 +49,7 @@ type DecompositionResult struct {
 }
 
 // DecomposeTask calls the LLM service to decompose a task into subtasks
+// DecomposeTask 调用 LLM service 把 task 分解为 subtasks。
 func (a *Activities) DecomposeTask(ctx context.Context, in DecompositionInput) (DecompositionResult, error) {
 	base := os.Getenv("LLM_SERVICE_URL")
 	if base == "" {
@@ -65,6 +67,8 @@ func (a *Activities) DecomposeTask(ctx context.Context, in DecompositionInput) (
 	// HTTP client with workflow interceptor to inject headers
 	// In tests, this might not be in a Temporal context, so we handle it gracefully
 	// Timeout configurable via DECOMPOSE_TIMEOUT_SECONDS (default: 30s)
+	// 带 workflow interceptor 的 HTTP client，用于注入 headers；测试中可能不在 Temporal context 内，故做容错；
+	// timeout 由 DECOMPOSE_TIMEOUT_SECONDS 配置（默认 30s）。
 	timeoutSec := 30
 	if v := os.Getenv("DECOMPOSE_TIMEOUT_SECONDS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
@@ -72,6 +76,7 @@ func (a *Activities) DecomposeTask(ctx context.Context, in DecompositionInput) (
 		}
 	}
 	// Increased default timeout to 30s to accommodate complex system prompts and LLM planning
+	// 默认 timeout 提高到 30s，以容纳复杂的 system prompt 与 LLM 规划耗时。
 	client := &http.Client{
 		Timeout:   time.Duration(timeoutSec) * time.Second,
 		Transport: interceptors.NewWorkflowHTTPRoundTripper(nil),

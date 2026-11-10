@@ -1,15 +1,23 @@
 """
 Web Crawl Tool - Exploratory multi-page crawling
+Web Crawl tool——探索式多页爬取
 
 Uses Firecrawl Crawl API for automatic link discovery and content extraction.
 This is an async operation that may take 30-60 seconds.
+使用 Firecrawl Crawl API 自动发现链接并提取内容。
+这是异步操作，可能需要 30-60 秒。
 
 Use Cases:
 - Unknown website structure
 - Discovering what content exists
 - Sites with dynamic/nested navigation
+使用场景：
+- 网站结构未知
+- 需要发现存在哪些内容
+- 具有动态/嵌套导航的站点
 
 For targeted page extraction where you know the paths, use web_subpage_fetch instead.
+若已知具体路径、需要定向提取页面，请改用 web_subpage_fetch。
 """
 
 import aiohttp
@@ -22,35 +30,47 @@ from urllib.parse import urlparse
 from ..base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolResult
 from ..openapi_parser import _is_private_ip
 from .web_fetch import detect_blocked_reason, clean_markdown_noise, apply_extraction, EXTRACTION_INTERNAL_MAX  # P0-A: Reuse blocked detection and noise cleaning logic
+# P0-A：复用拦截检测与噪声清理逻辑
 
 logger = logging.getLogger(__name__)
 
 # Constants
+# 常量
 # MAX_LIMIT is the hard cap on crawled pages per call. 20 was sized for 200K-
 # context defaults; raising to 100 to support "crawl this small docs site"
 # workloads on 1M-context models. DEFAULT_LIMIT stays 10 (still a sane default
 # for typical use) — callers must opt in to higher values via the explicit
 # `limit` parameter.
+# MAX_LIMIT 是单次调用可爬取页面的硬上限。20 是按 200K context 默认值定的；
+# 提升到 100 以支持 1M context 模型上的“爬取这个小文档站”类工作负载。
+# DEFAULT_LIMIT 仍为 10（对典型使用仍是合理默认值）——调用方需通过显式
+# `limit` 参数主动选择更高值。
 MAX_LIMIT = 100
 DEFAULT_LIMIT = 10
 DEFAULT_MAX_LENGTH = 8000
 CRAWL_TIMEOUT = int(os.getenv("WEB_FETCH_CRAWL_TIMEOUT", "120"))
 POLL_INTERVAL = 2  # seconds between status checks
+# 状态检查间隔（秒）
 MAX_POLL_ATTEMPTS = 60  # 60 * 2s = 2 minutes max
+# 60 * 2s = 最多 2 分钟
 
 
 class WebCrawlTool(Tool):
     """
     Crawl a website to discover and extract content from multiple pages.
+    爬取网站以发现并提取多个页面的内容。
 
     Uses Firecrawl Crawl API for automatic link discovery.
     This is async and may take 30-60 seconds.
+    使用 Firecrawl Crawl API 自动发现链接。
+    这是异步操作，可能需要 30-60 秒。
     """
 
     def __init__(self):
         self.firecrawl_api_key = os.getenv("FIRECRAWL_API_KEY")
 
         # Validate Firecrawl key
+        # 校验 Firecrawl key
         self.firecrawl_available = bool(
             self.firecrawl_api_key and
             len(self.firecrawl_api_key.strip()) >= 10 and
@@ -95,11 +115,14 @@ class WebCrawlTool(Tool):
             author="Shannon",
             requires_auth=False,
             rate_limit=10,  # Lower rate limit due to resource intensive
+            # 资源消耗较大，因此 rate limit 更低
             timeout_seconds=180,  # 3 minutes max
+            # 最长 3 分钟
             memory_limit_mb=512,
             sandboxed=False,
             dangerous=False,
             cost_per_use=0.01,  # Higher cost for crawl
+            # crawl 成本更高
         )
 
     def _get_parameters(self) -> List[ToolParameter]:
@@ -143,15 +166,20 @@ class WebCrawlTool(Tool):
     async def _execute_impl(
         self, session_context: Optional[Dict] = None, **kwargs
     ) -> ToolResult:
-        """Execute exploratory crawl using Firecrawl Crawl API."""
+        """Execute exploratory crawl using Firecrawl Crawl API.
+        使用 Firecrawl Crawl API 执行探索式爬取。"""
         url = kwargs.get("url")
         limit = kwargs.get("limit", DEFAULT_LIMIT)
         max_length = kwargs.get("max_length", DEFAULT_MAX_LENGTH)
         extract_prompt = kwargs.get("extract_prompt")  # Optional: targeted extraction query
+        # 可选：定向提取查询
 
         # Skip auto-extraction in research mode (issue #43): OODA loop does many
         # fast fetches; LLM extraction adds ~40-60s latency per call, causing timeout.
         # Explicit extract_prompt always triggers extraction regardless of mode.
+        # research 模式下跳过自动提取（issue #43）：OODA 循环会做大量快速
+        # fetch；LLM 提取每次调用增加约 40-60s 延迟，导致 timeout。
+        # 显式传入 extract_prompt 时，无论何种模式都会触发提取。
         _research_mode = (
             isinstance(session_context, dict)
             and session_context.get("research_mode")
@@ -167,6 +195,7 @@ class WebCrawlTool(Tool):
             return ToolResult(success=False, output=None, error="URL parameter required")
 
         # Validate URL
+        # 校验 URL
         try:
             parsed = urlparse(url)
             if not parsed.scheme or not parsed.netloc:
@@ -174,6 +203,7 @@ class WebCrawlTool(Tool):
             if parsed.scheme not in ["http", "https"]:
                 return ToolResult(success=False, output=None, error="Only HTTP/HTTPS allowed")
             # SSRF protection: Block private/internal IPs
+            # SSRF 防护：拦截私有/内部 IP
             host = parsed.hostname
             if host and _is_private_ip(host):
                 return ToolResult(
@@ -244,19 +274,26 @@ class WebCrawlTool(Tool):
     async def _crawl(self, url: str, limit: int, max_length: int) -> Dict[str, Any]:
         """
         Execute async crawl using Firecrawl Crawl API.
+        使用 Firecrawl Crawl API 执行异步爬取。
 
         Steps:
         1. Start crawl job
         2. Poll for completion
         3. Collect and merge results
+        步骤：
+        1. 启动爬取任务
+        2. 轮询直到完成
+        3. 收集并合并结果
         """
         timeout = aiohttp.ClientTimeout(total=CRAWL_TIMEOUT)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             # Step 1: Start crawl
+            # 步骤 1：启动爬取
             crawl_id = await self._start_crawl(session, url, limit)
             logger.info(f"Started crawl job {crawl_id} for {url}")
 
             # Step 2: Poll for completion
+            # 步骤 2：轮询直到完成
             results = await self._poll_crawl(session, crawl_id)
             if not results:
                 raise Exception("Crawl returned no results")
@@ -264,10 +301,12 @@ class WebCrawlTool(Tool):
             logger.info(f"Crawl completed with {len(results)} pages")
 
             # Step 3: Merge results (enforce limit)
+            # 步骤 3：合并结果（强制 limit）
             return self._merge_results(results, url, max_length, limit)
 
     async def _start_crawl(self, session: aiohttp.ClientSession, url: str, limit: int) -> str:
-        """Start a crawl job and return the crawl ID."""
+        """Start a crawl job and return the crawl ID.
+        启动爬取任务并返回 crawl ID。"""
         headers = {
             "Authorization": f"Bearer {self.firecrawl_api_key}",
             "Content-Type": "application/json"
@@ -280,6 +319,7 @@ class WebCrawlTool(Tool):
                 "parsers": ["pdf"],
                 "onlyMainContent": True,
                 # Note: 'form' removed - some sites wrap main content in form tags
+                # 注意：已移除 'form'——部分站点会用 form 标签包裹主要内容
                 "excludeTags": ["nav", "footer", "aside", "svg", "script", "style", "noscript"],
                 "removeBase64Images": True,
                 "blockAds": True,
@@ -303,7 +343,8 @@ class WebCrawlTool(Tool):
             return crawl_id
 
     async def _poll_crawl(self, session: aiohttp.ClientSession, crawl_id: str) -> List[Dict]:
-        """Poll crawl status until completion."""
+        """Poll crawl status until completion.
+        轮询 crawl 状态直到完成。"""
         headers = {
             "Authorization": f"Bearer {self.firecrawl_api_key}"
         }
@@ -325,6 +366,7 @@ class WebCrawlTool(Tool):
                 status = data.get("status", "unknown")
 
                 # Collect results
+                # 收集结果
                 page_data = data.get("data", [])
                 if page_data:
                     all_results.extend(page_data)
@@ -335,13 +377,16 @@ class WebCrawlTool(Tool):
                     break
 
                 # Continue polling
+                # 继续轮询
                 await asyncio.sleep(POLL_INTERVAL)
 
         return all_results
 
     def _merge_results(self, results: List[Dict], original_url: str, max_length: int, limit: int) -> Dict:
-        """Merge crawl results into a single output."""
+        """Merge crawl results into a single output.
+        将 crawl 结果合并为单一输出。"""
         # Filter and deduplicate
+        # 过滤并去重
         seen_urls = set()
         unique_results = []
         for r in results:
@@ -354,6 +399,7 @@ class WebCrawlTool(Tool):
             raise Exception("No valid pages in crawl results")
 
         # Enforce limit to prevent excessive data processing
+        # 强制 limit，避免处理过多数据
         if len(unique_results) > limit:
             logger.info(f"Truncating {len(unique_results)} pages to limit={limit}")
             unique_results = unique_results[:limit]
@@ -362,9 +408,11 @@ class WebCrawlTool(Tool):
             r = unique_results[0]
             content = r.get("markdown", "")
             content = clean_markdown_noise(content)  # Clean noise before truncation
+            # 截断前先清理噪声
             if len(content) > max_length:
                 content = content[:max_length]
             # P0-A: Detect blocked content for Citation V2 filtering
+            # P0-A：为 Citation V2 过滤检测被拦截的内容
             blocked_reason = detect_blocked_reason(content, 200)
             return {
                 "url": r.get("metadata", {}).get("url", original_url),
@@ -375,14 +423,19 @@ class WebCrawlTool(Tool):
                 "word_count": len(content.split()),
                 "char_count": len(content),
                 "tool_source": "fetch",  # Citation V2: mark as fetch-origin
+                # Citation V2：标记为 fetch 来源
                 "status_code": 200,  # P0-A: Firecrawl crawl success = 200
+                # P0-A：Firecrawl crawl 成功即 200
                 "blocked_reason": blocked_reason,  # P0-A: Content-based detection
+                # P0-A：基于内容检测
             }
 
         # Multiple pages - merge with markdown separators
+        # 多页——用 markdown 分隔符合并
         merged_content = []
         total_chars = 0
         char_budget = max_length * len(unique_results)  # Total budget across pages
+        # 所有页面的总 budget
 
         for i, r in enumerate(unique_results):
             metadata = r.get("metadata", {})
@@ -390,8 +443,10 @@ class WebCrawlTool(Tool):
             page_title = metadata.get("title", "")
             page_content = r.get("markdown", "")
             page_content = clean_markdown_noise(page_content)  # Clean noise
+            # 清理噪声
 
             # Per-page truncation
+            # 单页截断
             if len(page_content) > max_length:
                 page_content = page_content[:max_length]
 
@@ -408,11 +463,13 @@ class WebCrawlTool(Tool):
             total_chars += len(page_content)
 
             # Stop if we've hit the char budget
+            # 达到字符 budget 即停止
             if total_chars >= char_budget:
                 break
 
         final_content = "".join(merged_content)
         # P0-A: Detect blocked content in merged result
+        # P0-A：在合并结果中检测被拦截的内容
         blocked_reason = detect_blocked_reason(final_content, 200)
 
         return {
@@ -424,8 +481,11 @@ class WebCrawlTool(Tool):
             "word_count": len(final_content.split()),
             "char_count": total_chars,
             "tool_source": "fetch",  # Citation V2: mark as fetch-origin
+            # Citation V2：标记为 fetch 来源
             "status_code": 200,  # P0-A: Firecrawl crawl success = 200
+            # P0-A：Firecrawl crawl 成功即 200
             "blocked_reason": blocked_reason,  # P0-A: Content-based detection
+            # P0-A：基于内容检测
             "metadata": {
                 "total_crawled": len(results),
                 "unique_pages": len(unique_results),

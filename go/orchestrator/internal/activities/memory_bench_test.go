@@ -259,9 +259,12 @@ func BenchmarkMetricsOverhead(b *testing.B) {
 	})
 
 	// Simulate without metrics (would need a flag to disable)
+	// 模拟不带 metrics 的情况（需要 feature flag 才能关闭）
 	b.Run("WithoutMetrics", func(b *testing.B) {
 		// This would require a feature flag to disable metrics
+		// 这需要 feature flag 才能关闭 metrics
 		// For now, just measure the baseline
+		// 目前仅测量 baseline
 		for i := 0; i < b.N; i++ {
 			input := RecordQueryInput{
 				SessionID: uuid.New().String(),

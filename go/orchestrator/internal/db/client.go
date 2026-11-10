@@ -58,6 +58,7 @@ const (
 )
 
 // String returns the string representation of WriteType
+// String 返回 WriteType 的字符串表示
 func (wt WriteType) String() string {
 	switch wt {
 	case WriteTypeTaskExecution:
@@ -78,6 +79,7 @@ func (wt WriteType) String() string {
 }
 
 // NewClient creates a new database client with connection pool
+// NewClient 创建带连接池的数据库客户端
 func NewClient(config *Config, logger *zap.Logger) (*Client, error) {
 	if config.MaxConnections == 0 {
 		config.MaxConnections = 25
@@ -146,6 +148,7 @@ func NewClient(config *Config, logger *zap.Logger) (*Client, error) {
 }
 
 // startWorkers initializes the worker pool for async writes
+// startWorkers 初始化异步写入的 worker 池
 func (c *Client) startWorkers() {
 	for i := 0; i < c.workers; i++ {
 		c.workerWg.Add(1)
@@ -154,6 +157,7 @@ func (c *Client) startWorkers() {
 }
 
 // writeWorker processes write requests from the queue
+// writeWorker 处理队列中的写 request
 func (c *Client) writeWorker(id int) {
 	c.logger.Debug("Write worker started", zap.Int("worker_id", id))
 
@@ -244,6 +248,7 @@ func (c *Client) processBatch(batch []WriteRequest) {
 	c.logger.Debug("Processing batch writes", zap.Int("count", len(batch)))
 
 	// Group by type for efficient batch inserts
+	// 按类型分组以便高效批量插入
 	taskExecutions := make([]*TaskExecution, 0)
 	agentExecutions := make([]*AgentExecution, 0)
 	toolExecutions := make([]*ToolExecution, 0)
@@ -264,6 +269,7 @@ func (c *Client) processBatch(batch []WriteRequest) {
 			}
 		case WriteTypeBatch:
 			// WriteTypeBatch should contain a slice of inner requests
+			// WriteTypeBatch 应包含一组内层 request
 			if innerReqs, ok := req.Data.([]WriteRequest); ok {
 				// Recursively process the inner requests
 				for _, innerReq := range innerReqs {
@@ -330,6 +336,7 @@ func (c *Client) drainQueue(batchBuffer []WriteRequest) {
 }
 
 // QueueWrite adds a write request to the async queue
+// QueueWrite 把写 request 加入异步队列
 func (c *Client) QueueWrite(writeType WriteType, data interface{}, callback func(error)) error {
 	select {
 	case c.writeQueue <- WriteRequest{
@@ -340,6 +347,7 @@ func (c *Client) QueueWrite(writeType WriteType, data interface{}, callback func
 		return nil
 	default:
 		// Queue is full - use synchronous fallback to avoid dropping writes
+		// 队列已满——改用同步写入，避免丢失
 		c.logger.Warn("Write queue is full, falling back to synchronous write",
 			zap.String("type", writeType.String()))
 
@@ -356,6 +364,7 @@ func (c *Client) QueueWrite(writeType WriteType, data interface{}, callback func
 }
 
 // QueueWriteWithRetry attempts to queue a write with limited retries before fallback
+// QueueWriteWithRetry 在回退前有限次 retry 入队
 func (c *Client) QueueWriteWithRetry(writeType WriteType, data interface{}, callback func(error)) error {
 	const maxRetries = 3
 	const retryDelay = 10 * time.Millisecond
@@ -374,6 +383,7 @@ func (c *Client) QueueWriteWithRetry(writeType WriteType, data interface{}, call
 				continue
 			}
 			// Final attempt failed, fall back to sync
+			// 最后一次尝试失败，回退为同步写入
 			c.logger.Warn("Write queue full after retries, using synchronous fallback",
 				zap.String("type", writeType.String()),
 				zap.Int("attempts", maxRetries))
@@ -410,6 +420,7 @@ func (c *Client) healthCheck() {
 }
 
 // Close gracefully shuts down the database client
+// Close 优雅关闭数据库客户端
 func (c *Client) Close() error {
 	c.logger.Info("Shutting down database client")
 
@@ -417,6 +428,7 @@ func (c *Client) Close() error {
 	close(c.stopCh)
 
 	// Wait for all workers to finish draining
+	// 等待所有 worker 排空
 	c.logger.Info("Waiting for write workers to finish")
 	c.workerWg.Wait()
 
@@ -430,11 +442,13 @@ func (c *Client) Close() error {
 }
 
 // GetDB returns the underlying database connection for direct queries
+// GetDB 返回底层数据库连接，供直接查询使用
 func (c *Client) GetDB() *sql.DB {
 	return c.db.GetDB()
 }
 
 // Transaction helper for transactional operations using circuit breaker protected transaction
+// 事务辅助函数，使用受 circuit breaker 保护的事务
 func (c *Client) WithTransactionCB(ctx context.Context, fn func(*circuitbreaker.TxWrapper) error) error {
 	tx, err := c.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -464,6 +478,8 @@ func (c *Client) WithTransactionCB(ctx context.Context, fn func(*circuitbreaker.
 
 // Transaction helper for transactional operations (legacy API, bypasses circuit breaker)
 // Deprecated: Use WithTransactionCB for circuit breaker protection
+// 事务辅助函数（旧接口，绕过 circuit breaker）
+// Deprecated: 使用 WithTransactionCB 以获得 circuit breaker 保护
 func (c *Client) WithTransaction(ctx context.Context, fn func(*sql.Tx) error) error {
 	rawTx, err := c.db.GetDB().BeginTx(ctx, nil)
 	if err != nil {
@@ -492,6 +508,7 @@ func (c *Client) WithTransaction(ctx context.Context, fn func(*sql.Tx) error) er
 }
 
 // Wrapper returns the underlying DatabaseWrapper for health checks and monitoring
+// Wrapper 返回底层 DatabaseWrapper，用于健康检查与监控
 func (c *Client) Wrapper() *circuitbreaker.DatabaseWrapper {
 	return c.db
 }

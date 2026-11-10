@@ -28,6 +28,17 @@ import "hash/fnv"
 // 271:     Sagasu synthesis agent
 // 272:     Sagasu ads monitor agent
 // 300+:    Swarm dynamically spawned agents (300+i)
+// 保留的 agent 索引区间（用于避免冲突）：
+// 0-49：主子 task agent（并行/顺序/混合执行）
+// 100-149：领域预取 agent
+// 200：最终汇总 agent；201：中间汇总 agent
+// 210-215：研究精炼 / 覆盖评估 / 子查询生成 / 事实抽取 / 实体定位 / 兜底搜索
+// 220-229：广告关键词抽取与落地页分析（221+i）
+// 230-233：广告汇总 / Yahoo JP 发现 / Meta Ad Library 发现 / 视频分析
+// 240-252：React 汇总 / DAG 汇总 / Supervisor 汇总 / streaming 汇总
+// 260-269：Sagasu 竞品快照 agent（260+i）
+// 270-272：Sagasu 研究 / 汇总 / 广告监控 agent
+// 300+：swarm 动态派生的 agent（300+i）
 const (
 	IdxSynthesis             = 200
 	IdxIntermediateSynthesis = 201
@@ -53,6 +64,8 @@ const (
 
 // stationNames is the pool of Japanese station-inspired agent names.
 // The list is fixed to maintain determinism for workflow replays.
+// stationNames 是受日本车站名启发的 agent 名称池。
+// 列表固定不变，以保证 workflow 重放时的确定性。
 var stationNames = []string{
 	// Classics with proper romanization
 	"Ōme", "Gora", "Maji", "Ebisu", "Ōsaki",
@@ -79,6 +92,8 @@ var stationNames = []string{
 // GetAgentName returns a deterministic agent name for a given workflow and index.
 // This is safe for Temporal workflow replays: the same workflowID and index
 // will always produce the same name.
+// GetAgentName 按 workflow 与索引返回确定性的 agent 名称。
+// 这对 Temporal workflow 重放是安全的：相同的 workflowID 与索引总会得到相同的名称。
 func GetAgentName(workflowID string, index int) string {
 	if len(stationNames) == 0 {
 		return ""

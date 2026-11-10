@@ -18,6 +18,7 @@ import (
 )
 
 // Manager handles session management with Redis backend
+// Manager 使用 Redis 后端处理 session 管理
 type Manager struct {
 	client      *circuitbreaker.RedisWrapper
 	logger      *zap.Logger
@@ -32,8 +33,10 @@ type Manager struct {
 // ManagerConfig contains configuration for session manager
 type ManagerConfig struct {
 	MaxHistory int           // Maximum messages to keep per session (default: 500)
+	// 每个 session 保留的最大消息数（默认 500）
 	TTL        time.Duration // Session expiry time (default: 30 days)
 	CacheSize  int           // Max sessions to keep in local cache (default: 10000)
+	// 本地 cache 保留的最大 session 数（默认 10000）
 }
 
 // NewManager creates a new session manager
@@ -42,6 +45,7 @@ func NewManager(redisAddr string, logger *zap.Logger) (*Manager, error) {
 }
 
 // NewManagerWithConfig creates a new session manager with specific config
+// NewManagerWithConfig 使用指定配置创建 session 管理器
 func NewManagerWithConfig(redisAddr string, logger *zap.Logger, config *ManagerConfig) (*Manager, error) {
 	// Get Redis password from environment variable
 	redisPassword := os.Getenv("REDIS_PASSWORD")
@@ -132,13 +136,17 @@ func (m *Manager) CreateSession(ctx context.Context, userID string, tenantID str
 }
 
 // CreateSessionWithID creates a new session with a specific ID
+// CreateSessionWithID 用指定 ID 创建新 session
 func (m *Manager) CreateSessionWithID(ctx context.Context, sessionID string, userID string, tenantID string, metadata map[string]interface{}) (*Session, error) {
 	// IMPORTANT: Check if session already exists to prevent hijacking
+	// 重要：先检查 session 是否已存在，防止 session 劫持
 	existing, _ := m.GetSession(ctx, sessionID)
 	if existing != nil {
 		if existing.UserID != userID {
 			// Session exists but belongs to different user - security violation
 			// Generate a new session ID instead
+			// session 已存在但属于其他用户——安全违规
+			// 改为生成新的 session ID
 			m.logger.Warn("Attempted to reuse session ID from different user, generating new ID",
 				zap.String("requested_session_id", sessionID),
 				zap.String("requesting_user", userID),
@@ -148,6 +156,7 @@ func (m *Manager) CreateSessionWithID(ctx context.Context, sessionID string, use
 			return m.CreateSession(ctx, userID, tenantID, metadata)
 		}
 		// Session exists and belongs to same user - return existing
+		// session 已存在且属于同一用户——返回现有 session
 		return existing, nil
 	}
 
@@ -224,6 +233,7 @@ func (m *Manager) GetSession(ctx context.Context, sessionID string) (*Session, e
 	}
 
 	// Enforce tenant isolation if auth context is present
+	// 有 auth context 时强制租户隔离
 	if userCtx, err := authFromContext(ctx); err == nil && userCtx.TenantID != "" {
 		if session.TenantID != "" && session.TenantID != userCtx.TenantID {
 			// Do not leak existence
@@ -232,6 +242,7 @@ func (m *Manager) GetSession(ctx context.Context, sessionID string) (*Session, e
 	}
 
 	// Update local cache and track access time
+	// 更新本地 cache 并记录访问时间
 	m.mu.Lock()
 	m.localCache[sessionID] = &session
 	m.cacheAccess[sessionID] = time.Now()
@@ -275,6 +286,7 @@ func (m *Manager) DeleteSession(ctx context.Context, sessionID string) error {
 	m.mu.Lock()
 	delete(m.localCache, sessionID)
 	// Update cache size metric while holding the lock to avoid races
+	// 持锁时更新 cache 大小指标，避免竞态
 	metrics.SessionCacheSize.Set(float64(len(m.localCache)))
 	m.mu.Unlock()
 
@@ -283,6 +295,7 @@ func (m *Manager) DeleteSession(ctx context.Context, sessionID string) error {
 }
 
 // ExtendSession extends the TTL of a session
+// ExtendSession 延长 session 的 TTL
 func (m *Manager) ExtendSession(ctx context.Context, sessionID string, duration time.Duration) error {
 	session, err := m.GetSession(ctx, sessionID)
 	if err != nil {
@@ -294,6 +307,7 @@ func (m *Manager) ExtendSession(ctx context.Context, sessionID string, duration 
 }
 
 // AddMessage adds a message to session history
+// AddMessage 把消息加入 session 历史
 func (m *Manager) AddMessage(ctx context.Context, sessionID string, msg Message) error {
 	session, err := m.GetSession(ctx, sessionID)
 	if err != nil {
@@ -326,6 +340,7 @@ func (m *Manager) UpdateContext(ctx context.Context, sessionID string, key strin
 }
 
 // GetUserSessions gets all sessions for a user
+// GetUserSessions 获取用户的全部 session
 func (m *Manager) GetUserSessions(ctx context.Context, userID string) ([]*Session, error) {
 	pattern := fmt.Sprintf("session:*")
 	keys, err := m.client.Keys(ctx, pattern).Result()
@@ -414,6 +429,7 @@ func (m *Manager) saveSession(ctx context.Context, session *Session) error {
 
 func (m *Manager) cleanupLocalCache() {
 	// Remove oldest entries if cache is too large using LRU
+	// cache 过大时按 LRU 移除最旧的条目
 	if len(m.localCache) > m.maxSessions {
 		// Find the oldest accessed sessions
 		type accessEntry struct {
@@ -426,6 +442,7 @@ func (m *Manager) cleanupLocalCache() {
 			accessTime, exists := m.cacheAccess[id]
 			if !exists {
 				// If no access time tracked, consider it very old
+				// 未记录访问时间的条目按很久未访问处理
 				accessTime = time.Time{}
 			}
 			entries = append(entries, accessEntry{id: id, time: accessTime})
@@ -456,12 +473,15 @@ func (m *Manager) Close() error {
 }
 
 // RedisWrapper returns the underlying Redis circuit breaker wrapper for health checks and monitoring
+// RedisWrapper 返回底层 Redis circuit breaker 包装，用于健康检查与监控
 func (m *Manager) RedisWrapper() *circuitbreaker.RedisWrapper {
 	return m.client
 }
 
 // authFromContext extracts a minimal subset of auth context without hard coupling
 // to the entire auth package surface in this file.
+// authFromContext 只提取 auth context 的最小子集，避免本文件
+// 与整个 auth 包表面强耦合。
 type minimalUserCtx struct {
 	TenantID string
 }

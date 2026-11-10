@@ -1,15 +1,24 @@
 # Citation Credibility Scoring Configuration
+# 引用可信度评分配置
 # Used by go/orchestrator/internal/metadata/citations.go
+# 供 go/orchestrator/internal/metadata/citations.go 使用
 #
 # Scoring guidelines:
+# 评分指南：
 # - 0.85+: Highly authoritative (academic, government)
+# - 0.85+：高度权威（学术、政府）
 # - 0.70-0.80: Professional/reputable (major news, tech documentation)
+# - 0.70-0.80：专业/可信（主流新闻、技术文档）
 # - 0.60-0.70: General web content
+# - 0.60-0.70：一般网页内容
 # - 0.50-0.60: Social media, user-generated content
+# - 0.50-0.60：社交媒体、用户生成内容
 # - Below 0.50: Low credibility (use with caution)
+# - 低于 0.50：可信度低（谨慎使用）
 
 credibility_rules:
   # TLD-based rules (highest priority)
+  # 基于 TLD 的规则（最高优先级）
   tld_patterns:
     - suffix: ".edu"
       score: 0.85
@@ -28,6 +37,7 @@ credibility_rules:
       description: "Australian educational institutions"
 
   # Domain-based rules (checked after TLD)
+  # 基于域名的规则（在 TLD 之后检查）
   domain_groups:
     - category: "academic"
       score: 0.85

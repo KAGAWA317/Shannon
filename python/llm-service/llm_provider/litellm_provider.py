@@ -1,4 +1,7 @@
-"""LiteLLM AI Gateway provider; embedded SDK, no proxy server."""
+"""LiteLLM AI Gateway provider; embedded SDK, no proxy server.
+
+LiteLLM AI Gateway 的 provider；使用内嵌 SDK，无需 proxy server。
+"""
 
 import logging
 import time
@@ -18,7 +21,10 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_text(message: Any) -> str:
-    """Pull text from a chat message, falling back to reasoning fields when content is empty."""
+    """Pull text from a chat message, falling back to reasoning fields when content is empty.
+
+    从 chat 消息中提取文本；content 为空时回退到 reasoning 相关字段。
+    """
     content = getattr(message, "content", None)
     if isinstance(content, str) and content.strip():
         return content
@@ -55,6 +61,13 @@ def _cache_tokens(usage: Any) -> Tuple[int, int, int, int]:
     plus the per-TTL ``cache_creation.ephemeral_*`` split) take priority. Falls
     back to OpenAI's ``prompt_tokens_details.cached_tokens`` when the
     Anthropic-side read field is zero.
+
+    从 litellm 的 response.usage 对象返回 ``(read, creation, 5m, 1h)``。
+
+    优先使用 Anthropic 形状的字段（``cache_read_input_tokens`` /
+    ``cache_creation_input_tokens``，以及按 TTL 拆分的
+    ``cache_creation.ephemeral_*``）。当 Anthropic 侧的 read 字段为 0 时，
+    回退到 OpenAI 的 ``prompt_tokens_details.cached_tokens``。
     """
     if usage is None:
         return 0, 0, 0, 0
@@ -75,7 +88,10 @@ def _cache_tokens(usage: Any) -> Tuple[int, int, int, int]:
 
 
 class LiteLLMProvider(LLMProvider):
-    """One Shannon provider, 100+ upstream backends via ``litellm.acompletion``."""
+    """One Shannon provider, 100+ upstream backends via ``litellm.acompletion``.
+
+    一个 Shannon provider，通过 ``litellm.acompletion`` 接入 100+ 上游后端。
+    """
 
     def __init__(self, config: Dict[str, Any]):
         try:
@@ -99,7 +115,10 @@ class LiteLLMProvider(LLMProvider):
         self._load_models_from_config(allow_empty=False)
 
     def _resolve_alias(self, model_id: str) -> str:
-        """Return the configured alias whose model_id matches, else passthrough."""
+        """Return the configured alias whose model_id matches, else passthrough.
+
+        返回 model_id 匹配的已配置别名；没有匹配时原样返回。
+        """
         for alias, cfg in self.models.items():
             if getattr(cfg, "model_id", None) == model_id:
                 return alias

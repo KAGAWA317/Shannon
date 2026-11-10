@@ -40,6 +40,7 @@ func Initialize(cfg Config, cache EmbeddingCache) {
 		c.MaxLRU = 2048
 	}
 	// Set default chunking config only if enabled but incomplete
+	// 仅在启用但配置不完整时填充默认分块配置
 	if c.Chunking.Enabled && c.Chunking.MaxTokens == 0 {
 		c.Chunking = DefaultChunkingConfig()
 	}
@@ -59,6 +60,7 @@ func Get() *Service { return globalSvc }
 func (s *Service) GetConfig() Config {
 	if s == nil {
 		// Return default config if service not initialized
+		// 服务未初始化时返回默认配置
 		return Config{
 			DefaultModel: "text-embedding-3-small",
 			Chunking:     DefaultChunkingConfig(),
@@ -79,6 +81,7 @@ type embedResponse struct {
 }
 
 // GenerateEmbedding returns the vector for a single text using the configured provider
+// GenerateEmbedding 使用配置的 provider 返回单条文本的向量
 func (s *Service) GenerateEmbedding(ctx context.Context, text string, model string) ([]float32, error) {
 	if s == nil {
 		return nil, fmt.Errorf("embedding service not initialized")
@@ -158,6 +161,8 @@ func (s *Service) GenerateEmbedding(ctx context.Context, text string, model stri
 
 // GenerateBatchEmbeddings generates embeddings for multiple texts in a single request
 // This is more efficient than calling GenerateEmbedding multiple times
+// GenerateBatchEmbeddings 在单次 request 中为多条文本生成 embedding
+// 比多次调用 GenerateEmbedding 更高效
 func (s *Service) GenerateBatchEmbeddings(ctx context.Context, texts []string, model string) ([][]float32, error) {
 	if s == nil {
 		return nil, fmt.Errorf("embedding service not initialized")
@@ -201,6 +206,7 @@ func (s *Service) GenerateBatchEmbeddings(ctx context.Context, texts []string, m
 	}
 
 	// If all texts were cached, return early
+	// 若所有文本都命中 cache，提前返回
 	if len(uncachedTexts) == 0 {
 		return results, nil
 	}
@@ -208,6 +214,7 @@ func (s *Service) GenerateBatchEmbeddings(ctx context.Context, texts []string, m
 	start := time.Now()
 
 	// Start tracing span for batch embedding request
+	// 为批量 embedding request 启动 tracing span
 	ctx, span := tracing.StartHTTPSpan(ctx, "POST", fmt.Sprintf("%s/embeddings/", s.cfg.BaseURL))
 	defer span.End()
 
@@ -249,6 +256,7 @@ func (s *Service) GenerateBatchEmbeddings(ctx context.Context, texts []string, m
 	}
 
 	// Convert float64 to float32 and cache results
+	// 把 float64 转为 float32 并 cache 结果
 	for i, embedding := range er.Embeddings {
 		out := make([]float32, len(embedding))
 		for j, f := range embedding {
@@ -256,6 +264,7 @@ func (s *Service) GenerateBatchEmbeddings(ctx context.Context, texts []string, m
 		}
 
 		// Store in results at the correct index
+		// 把结果写入正确的索引位置
 		idx := uncachedIndices[i]
 		results[idx] = out
 

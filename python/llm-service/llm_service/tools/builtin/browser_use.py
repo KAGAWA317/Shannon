@@ -1,11 +1,16 @@
 """
 Browser Tool for Shannon
+Browser tool——Shannon 的浏览器自动化 tool
 
 Single unified tool for browser automation via Playwright.
 Uses an `action` parameter to dispatch: navigate, click, type,
 screenshot, extract, scroll, wait, close.
+通过 Playwright 实现浏览器自动化的单一统一 tool。
+使用 `action` 参数进行分发：navigate、click、type、
+screenshot、extract、scroll、wait、close。
 
 Sessions are tied to Shannon session_id and auto-cleanup after TTL.
+session 与 Shannon 的 session_id 绑定，并在 TTL 之后自动清理。
 """
 
 import base64
@@ -24,14 +29,18 @@ logger = logging.getLogger(__name__)
 
 def _persist_screenshot(session_id: str, b64_data: str, index: int = 0) -> Optional[str]:
     """Persist base64 PNG screenshot to session workspace.
+    将 base64 的 PNG 截图持久化到 session workspace。
 
     Returns relative path from session root (e.g. 'screenshots/1709312345_0.png'),
     or None on any failure. All errors are non-fatal.
+    返回相对于 session 根目录的路径（例如 'screenshots/1709312345_0.png'），
+    任何失败时返回 None。所有错误均为非致命错误。
     """
     if not session_id or not b64_data or len(b64_data) < 100:
         return None
 
     # Validate session_id (prevent path traversal)
+    # 校验 session_id（防止路径穿越）
     if ".." in session_id or session_id.startswith(".") or len(session_id) > 128:
         logger.warning("_persist_screenshot: invalid session_id")
         return None
@@ -62,15 +71,19 @@ def _persist_screenshot(session_id: str, b64_data: str, index: int = 0) -> Optio
         return None
 
 # Playwright service URL (internal k8s service or local)
+# Playwright service 的 URL（集群内部 k8s service 或本地）
 PLAYWRIGHT_SERVICE_URL = os.getenv("PLAYWRIGHT_SERVICE_URL", "")
 
 # Timeout for playwright service calls
+# playwright service 调用的 timeout
 PLAYWRIGHT_TIMEOUT = int(os.getenv("PLAYWRIGHT_TIMEOUT", "60"))
 
 # Actions advertised to the LLM (safe actions only)
+# 向 LLM 声明的 action（仅安全 action）
 SAFE_ACTIONS = ("navigate", "click", "type", "screenshot", "extract", "scroll", "wait", "close")
 
 # Actions that require special runtime permission
+# 需要特殊运行时权限的 action
 GATED_ACTIONS = {"evaluate"}
 
 
@@ -81,14 +94,19 @@ async def _call_playwright_action(
 ) -> Dict[str, Any]:
     """
     Call the playwright service browser action endpoint.
+    调用 playwright service 的浏览器 action 端点。
 
     Args:
         session_id: Browser session identifier
+            浏览器 session 标识
         action: Action type (navigate, click, type, etc.)
+            action 类型（navigate、click、type 等）
         **kwargs: Action-specific parameters
+            action 特定的参数
 
     Returns:
         Response dict from playwright service
+        playwright service 返回的 response dict
     """
     if not PLAYWRIGHT_SERVICE_URL:
         return {"success": False, "error": "PLAYWRIGHT_SERVICE_URL not configured"}
@@ -122,7 +140,8 @@ async def _call_playwright_action(
 
 
 async def _close_playwright_session(session_id: str) -> Dict[str, Any]:
-    """Close a playwright browser session."""
+    """Close a playwright browser session.
+    关闭 playwright 浏览器 session。"""
     if not PLAYWRIGHT_SERVICE_URL:
         return {"success": False, "error": "PLAYWRIGHT_SERVICE_URL not configured"}
 
@@ -139,7 +158,8 @@ async def _close_playwright_session(session_id: str) -> Dict[str, Any]:
 
 
 def _get_session_id(session_context: Optional[Dict], kwargs: Dict) -> str:
-    """Extract session_id from session_context."""
+    """Extract session_id from session_context.
+    从 session_context 中提取 session_id。"""
     if session_context and isinstance(session_context, dict):
         session_id = session_context.get("session_id")
         if session_id:
@@ -152,6 +172,7 @@ def _get_session_id(session_context: Optional[Dict], kwargs: Dict) -> str:
 
 
 # Required parameters per action (runtime validation)
+# 每个 action 的必填参数（运行时校验）
 _ACTION_REQUIRED_PARAMS: Dict[str, List[str]] = {
     "navigate": ["url"],
     "click": ["selector"],
@@ -166,7 +187,8 @@ _ACTION_REQUIRED_PARAMS: Dict[str, List[str]] = {
 
 
 class BrowserTool(Tool):
-    """Unified browser automation tool with action-based dispatch."""
+    """Unified browser automation tool with action-based dispatch.
+    基于 action 分发的统一浏览器自动化 tool。"""
 
     def _get_metadata(self) -> ToolMetadata:
         return ToolMetadata(
@@ -293,6 +315,7 @@ class BrowserTool(Tool):
                 default=5000,
             ),
             # --- evaluate (hidden, not in enum) ---
+            # --- evaluate（隐藏，不在 enum 中） ---
             ToolParameter(
                 name="script",
                 type=ToolParameterType.STRING,
@@ -307,6 +330,7 @@ class BrowserTool(Tool):
         action = kwargs.get("action", "").lower().strip()
 
         # --- Validate action ---
+        # --- 校验 action ---
         all_actions = set(SAFE_ACTIONS) | GATED_ACTIONS
         if action not in all_actions:
             return ToolResult(
@@ -315,6 +339,7 @@ class BrowserTool(Tool):
             )
 
         # --- Gate dangerous actions ---
+        # --- 拦截需要授权的高危 action ---
         if action in GATED_ACTIONS:
             allow = (
                 session_context
@@ -328,6 +353,7 @@ class BrowserTool(Tool):
                 )
 
         # --- Validate required params for this action ---
+        # --- 校验该 action 的必填参数 ---
         required = _ACTION_REQUIRED_PARAMS.get(action, [])
         missing = [p for p in required if not kwargs.get(p)]
         if missing:
@@ -339,6 +365,7 @@ class BrowserTool(Tool):
         session_id = _get_session_id(session_context, kwargs)
 
         # --- Dispatch ---
+        # --- 分发 ---
         if action == "close":
             result = await _close_playwright_session(session_id)
             return ToolResult(
@@ -348,6 +375,7 @@ class BrowserTool(Tool):
             )
 
         # Build action-specific kwargs for playwright
+        # 为 playwright 构建 action 特定的 kwargs
         action_kwargs: Dict[str, Any] = {}
 
         if action == "navigate":
@@ -396,6 +424,7 @@ class BrowserTool(Tool):
             )
 
         # --- Format output per action ---
+        # --- 按 action 格式化输出 ---
         output: Dict[str, Any] = {"action": action}
 
         if action == "navigate":
@@ -410,6 +439,7 @@ class BrowserTool(Tool):
             output["url"] = result.get("url")
             output["title"] = result.get("title")
             # Persist to session workspace and replace base64 with path reference
+            # 持久化到 session workspace，并将 base64 替换为路径引用
             screenshot_path = None
             if b64_screenshot and session_id:
                 screenshot_path = _persist_screenshot(session_id, b64_screenshot)

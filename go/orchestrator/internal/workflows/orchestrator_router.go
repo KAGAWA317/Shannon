@@ -29,6 +29,7 @@ const (
 // OrchestratorWorkflow is a thin entrypoint that routes to specialized workflows.
 // It performs a single decomposition step, decides the strategy, then delegates
 // to an appropriate child workflow. It does not execute agents directly.
+// 这是薄入口：只做一次分解、决定策略，然后委派给相应的子 workflow，本身不直接执行 agent。
 func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	logger := workflow.GetLogger(ctx)
 	workflowID := workflow.GetInfo(ctx).WorkflowExecution.ID
@@ -238,6 +239,8 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	// Early route: skip_synthesis forces SimpleTaskWorkflow, bypassing decomposition.
 	// Used by Sagasu NL workflow setup and other flows that produce structured JSON
 	// and must not be rewritten by a synthesis LLM call.
+	// skip_synthesis 强制走 SimpleTaskWorkflow 并跳过分解，
+	// 用于 Sagasu NL 等已产出结构化 JSON、不能被合成 LLM 改写的流程。
 	skipSynthesisVersion := workflow.GetVersion(ctx, "skip_synthesis_early_route_v1", workflow.DefaultVersion, 1)
 	if skipSynthesisVersion >= 1 && GetContextBool(input.Context, "skip_synthesis") {
 		logger.Info("Early route: skip_synthesis forces SimpleTaskWorkflow")
@@ -269,6 +272,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	// Early route: Force SwarmWorkflow bypasses decomposition entirely
 	// SwarmWorkflow has its own Lead Agent that does initial planning, so orchestrator-level
 	// decomposition is redundant and wastes LLM tokens.
+	// SwarmWorkflow 有自己的 Lead Agent 做初始规划，再做一层 orchestrator 分解既冗余又浪费 token。
 	forceSwarmVersion := workflow.GetVersion(ctx, "force_swarm_early_route_v1", workflow.DefaultVersion, 1)
 	if forceSwarmVersion >= 1 && GetContextBool(input.Context, "force_swarm") {
 		logger.Info("Force swarm detected - bypassing orchestrator decomposition, Lead Agent will plan")
@@ -297,6 +301,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 		// HITL: forward human-input signals from parent to SwarmWorkflow child.
 		// Uses blocking Receive — goroutine sleeps until a signal arrives (zero polling).
 		// Goroutine exits naturally when the workflow context is cancelled (child completes).
+		// 用阻塞式 Receive 转发人类输入信号，无轮询；workflow context 取消（子 workflow 结束）时 goroutine 自然退出。
 		humanInputCh := workflow.GetSignalChannel(ctx, "human-input")
 		workflow.Go(ctx, func(gCtx workflow.Context) {
 			for {
@@ -319,11 +324,13 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	// Early route: Force ResearchWorkflow bypasses decomposition entirely
 	// ResearchWorkflow has its own query refinement + decompose pipeline, so orchestrator-level
 	// decomposition is redundant and wastes LLM tokens.
+	// ResearchWorkflow 自带查询精炼 + 分解流水线，再做 orchestrator 分解既冗余又浪费 token。
 	if GetContextBool(input.Context, "force_research") {
 		logger.Info("Force research detected - bypassing orchestrator decomposition")
 
 		// Inject current date for time awareness (use workflow.Now for Temporal determinism).
 		// Version-gated to preserve replay for workflows started before this behavior existed.
+		// 用 workflow.Now 保证 Temporal 确定性；加版本闸门，使该行为出现之前启动的 workflow 仍可重放。
 		forceResearchDateVersion := workflow.GetVersion(ctx, "force_research_current_date_v1", workflow.DefaultVersion, 1)
 		if forceResearchDateVersion >= 1 {
 			if _, hasDate := input.Context["current_date"]; !hasDate {
@@ -335,6 +342,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 
 		// ── HITL: Research Plan Review (optional) ──
 		// Check both "require_review: true" (legacy) and "review_plan: manual" (frontend)
+		// 同时兼容 "require_review: true"（旧版）与 "review_plan: manual"（前端）两种开关。
 		requireReview := GetContextBool(input.Context, "require_review") ||
 			GetContextString(input.Context, "review_plan") == "manual"
 		if requireReview {
@@ -461,6 +469,8 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 		// pattern calls use budgeted execution paths and record tool costs.
 		// Version-gated: in-flight workflows started before this code must not
 		// encounter the new BudgetPreflight activity during replay.
+		// 强制研究路径仍需 budget 预检，使下游 pattern 调用走 budget 执行路径并记录 tool 成本；
+		// 版本闸门：新代码上线前启动的 workflow 重放时不得遇到新增的 BudgetPreflight activity。
 		forceResearchBudgetVersion := workflow.GetVersion(ctx, "force_research_budget_v1", workflow.DefaultVersion, 1)
 		if forceResearchBudgetVersion >= 1 && input.UserID != "" {
 			est := EstimateTokensWithConfig(activities.DecompositionResult{
@@ -871,6 +881,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 
 	// 2) Routing rules (simple, cognitive, supervisor, dag)
 	// Treat as simple ONLY when truly one-shot (no tools, no deps) AND below threshold
+	// 仅当真正是一次性 task（无 tool、无依赖）且低于阈值时，才按 simple 处理。
 	needsTools := false
 	for _, st := range decomp.Subtasks {
 		if len(st.SuggestedTools) > 0 || len(st.Dependencies) > 0 || len(st.Consumes) > 0 || len(st.Produces) > 0 {
@@ -947,6 +958,8 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	// Auto-detect browser intent and assign browser_use role if not already set
 	// IMPORTANT: detectBrowserIntent behavior changed significantly (simplified to JS-required domains only)
 	// Use a separate changeID to track this behavior change independently from workflow routing
+	// detectBrowserIntent 的行为已大幅简化（仅 JS 必需域名），
+	// 故用独立 changeID 跟踪，与 workflow 路由解耦。
 	autoDetectVersion := workflow.GetVersion(ctx, "browser_auto_detect_v2", workflow.DefaultVersion, 1)
 	if autoDetectVersion >= 1 && !rolePresent && detectBrowserIntent(input.Query) {
 		logger.Info("Auto-detected browser intent, assigning browser_use role")
@@ -1155,6 +1168,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 // startAsyncTitleGeneration fires off title generation at workflow start (non-blocking).
 // This runs in parallel with the main workflow so users see titles immediately.
 // The activity is best-effort with a short timeout and no retries.
+// workflow 启动时并行触发标题生成（非阻塞），让用户尽快看到标题；该 activity 尽力而为，timeout 短、无 retry。
 func startAsyncTitleGeneration(ctx workflow.Context, sessionID, query string) {
 	// Version gate for deterministic replay - new version for async behavior
 	titleVersion := workflow.GetVersion(ctx, "session_title_async_v1", workflow.DefaultVersion, 1)
@@ -1470,6 +1484,8 @@ func recommendStrategy(ctx workflow.Context, input TaskInput) (*activities.Recom
 // Only returns true for sites that REQUIRE JavaScript rendering.
 // Normal URLs go through decomposition which chooses web_fetch/web_search.
 // Users can explicitly set role=browser_use for interactive tasks.
+// 仅对必须 JS 渲染的站点返回 true；普通 URL 交给分解流程选择 web_fetch/web_search；
+// 用户也可显式设置 role=browser_use 做交互式 task。
 func detectBrowserIntent(query string) bool {
 	q := strings.ToLower(query)
 

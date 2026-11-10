@@ -1,17 +1,27 @@
 """
 Web Subpage Fetch Tool - Intelligent multi-page extraction from a website
+Web Subpage Fetch tool——从网站智能提取多个页面
 
 Uses Firecrawl Map + Scrape strategy:
 1. Map API: Get all URLs on the website (fast, up to 200 URLs)
 2. Score URLs by relevance (path matching, depth, keywords)
 3. Batch scrape top N most relevant pages
+采用 Firecrawl Map + Scrape 策略：
+1. Map API：获取网站上的所有 URL（快速，最多 200 个 URL）
+2. 按相关性给 URL 打分（路径匹配、深度、关键词）
+3. 批量 scrape 相关性最高的前 N 个页面
 
 Use Cases:
 - Company research: /about, /team, /ir, /products
 - Documentation: /docs, /api, /guides
 - Known domain with specific target pages
+使用场景：
+- 公司调研：/about、/team、/ir、/products
+- 文档：/docs、/api、/guides
+- 已知域名且目标页面明确
 
 For exploratory crawling where structure is unknown, use web_crawl instead.
+若结构未知、需要探索式爬取，请改用 web_crawl。
 """
 
 import aiohttp
@@ -25,14 +35,19 @@ from urllib.parse import urlparse
 from ..base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolResult
 from ..openapi_parser import _is_private_ip
 from .web_fetch import detect_blocked_reason, clean_markdown_noise, apply_extraction, EXTRACTION_INTERNAL_MAX  # P0-A: Reuse blocked detection and noise cleaning logic
+# P0-A：复用拦截检测与噪声清理逻辑
 
 logger = logging.getLogger(__name__)
 
 # Constants
+# 常量
 # MAX_LIMIT cap on pages per web_subpage_fetch call. Parallel sibling to
 # web_crawl's MAX_LIMIT — keep them aligned. See web_crawl.py for rationale.
+# MAX_LIMIT 是单次 web_subpage_fetch 调用可获取页面的上限。与
+# web_crawl 的 MAX_LIMIT 是平行对应关系——请保持两者一致。理由见 web_crawl.py。
 MAX_LIMIT = 100
 MAP_URL_LIMIT = 200  # Max URLs from map API
+# map API 返回的最大 URL 数
 DEFAULT_LIMIT = 5
 DEFAULT_MAX_LENGTH = 10000
 BATCH_CONCURRENCY = int(os.getenv("WEB_FETCH_BATCH_CONCURRENCY", "3"))  
@@ -40,15 +55,22 @@ SCRAPE_TIMEOUT = int(os.getenv("WEB_FETCH_SCRAPE_TIMEOUT", "30"))
 MAP_TIMEOUT = int(os.getenv("WEB_FETCH_MAP_TIMEOUT", "45"))
 
 # Retry configuration
+# retry 配置
 RETRY_CONFIG = {
     408: {"max_retries": 3, "delays": [2, 4, 8]},      # Timeout: exponential backoff
+    # timeout：指数退避
     429: {"max_retries": 2, "delays": [5, 10]},       # Rate limit: reduced retries
+    # rate limit：减少 retry 次数
     500: {"max_retries": 2, "delays": [1, 2]},         # Server error: quick retry
+    # 服务端错误：快速 retry
     502: {"max_retries": 2, "delays": [2, 4]},         # Bad gateway
+    # 网关错误
     503: {"max_retries": 2, "delays": [3, 6]},         # Service unavailable
+    # 服务不可用
 }
 
 # Base keywords for relevance scoring (always applied)
+# 相关性打分的基础关键词（始终生效）
 BASE_KEYWORDS = [
     "about", "team", "company", "product", "pricing", "docs", "api",
     "contact", "careers", "leadership", "services", "features", "solutions", "overview"
@@ -56,6 +78,8 @@ BASE_KEYWORDS = [
 
 # High-value content paths - these often contain important announcements/updates
 # Boosted because they may have deeper depth but high information value
+# 高价值内容路径——这些路径常包含重要公告/更新
+# 因其深度可能更大，但信息价值高，故给予加权
 HIGH_VALUE_PATHS = [
     "blog", "news", "press", "ir", "investors", "investor-relations",
     "announcements", "updates", "releases", "articles", "insights"
@@ -63,6 +87,8 @@ HIGH_VALUE_PATHS = [
 
 # Keyword to path mappings for semantic expansion
 # When user provides a keyword, we also match related path patterns
+# 关键词到路径的映射，用于语义扩展
+# 用户提供关键词时，我们也会匹配相关的路径 pattern
 KEYWORD_SYNONYMS = {
     "api": ["api", "api-reference", "reference", "api-docs", "developer"],
     "doc": ["docs", "documentation", "guide", "guides", "manual", "help"],
@@ -81,9 +107,11 @@ KEYWORD_SYNONYMS = {
 class WebSubpageFetchTool(Tool):
     """
     Fetch multiple pages from a website using intelligent selection.
+    从网站智能选择并获取多个页面。
 
     Uses Map + Scrape strategy with relevance scoring to select
     the most important pages from a website.
+    使用 Map + Scrape 策略，结合相关性打分选出网站中最重要的页面。
     """
 
     def __init__(self):
@@ -92,6 +120,7 @@ class WebSubpageFetchTool(Tool):
         self.preferred_provider = os.getenv("WEB_FETCH_PROVIDER", "firecrawl").lower()
 
         # Validate Firecrawl key
+        # 校验 Firecrawl key
         self.firecrawl_available = bool(
             self.firecrawl_api_key and
             len(self.firecrawl_api_key.strip()) >= 10 and
@@ -141,6 +170,7 @@ class WebSubpageFetchTool(Tool):
             sandboxed=False,
             dangerous=False,
             cost_per_use=0.005,  # Multiple pages
+            # 多个页面
         )
 
     def _get_parameters(self) -> List[ToolParameter]:
@@ -205,7 +235,8 @@ class WebSubpageFetchTool(Tool):
     async def _execute_impl(
         self, session_context: Optional[Dict] = None, **kwargs
     ) -> ToolResult:
-        """Execute multi-page fetch using Map + Scrape strategy."""
+        """Execute multi-page fetch using Map + Scrape strategy.
+        使用 Map + Scrape 策略执行多页获取。"""
         url = kwargs.get("url")
         limit = kwargs.get("limit", DEFAULT_LIMIT)
         target_keywords = kwargs.get("target_keywords", "")
@@ -219,12 +250,18 @@ class WebSubpageFetchTool(Tool):
         target_paths = [p for p in target_paths if isinstance(p, str)]
         max_length = kwargs.get("max_length", DEFAULT_MAX_LENGTH)
         extract_prompt = kwargs.get("extract_prompt")  # Optional: targeted extraction query
+        # 可选：定向提取查询
 
         # Skip ALL LLM extraction in research mode (issue #43): OODA loop does many
         # fast fetches; extraction adds ~40-60s latency per call and 40%+ of total cost.
         # OODA's Observe/Orient steps handle raw content analysis — small-model
         # pre-filtering undermines the agent's own judgment loop.
         # extract_prompt from LLM is also ignored in research mode.
+        # research mode 下跳过所有 LLM 提取（issue #43）：OODA 循环会做大量快速
+        # fetch；提取每次调用增加约 40-60s 延迟，并占总成本的 40%+。
+        # OODA 的 Observe/Orient 步骤会自行分析原始内容——小模型预过滤
+        # 会削弱 agent 自身的判断循环。
+        # research mode 下也会忽略 LLM 传入的 extract_prompt。
         _research_mode = (
             isinstance(session_context, dict)
             and bool(session_context.get("research_mode"))
@@ -239,6 +276,7 @@ class WebSubpageFetchTool(Tool):
             return ToolResult(success=False, output=None, error="URL parameter required")
 
         # Validate URL
+        # 校验 URL
         try:
             parsed = urlparse(url)
             if not parsed.scheme or not parsed.netloc:
@@ -246,10 +284,12 @@ class WebSubpageFetchTool(Tool):
             if parsed.scheme not in ["http", "https"]:
                 return ToolResult(success=False, output=None, error="Only HTTP/HTTPS allowed")
             # DNS resolution guard to avoid wasted provider calls
+            # DNS 解析预检，避免浪费 provider 调用
             host = parsed.hostname
             if not host:
                 return ToolResult(success=False, output=None, error="Invalid host in URL")
             # SSRF protection: Block private/internal IPs
+            # SSRF 防护：拦截私有/内部 IP
             if _is_private_ip(host):
                 return ToolResult(
                     success=False,
@@ -270,6 +310,7 @@ class WebSubpageFetchTool(Tool):
         last_error = ""
 
         # Execute with Firecrawl (primary) or fallback
+        # 优先使用 Firecrawl 执行，否则走回退
         if self.firecrawl_available:
             try:
                 result, scrape_meta = await self._map_and_scrape(
@@ -297,8 +338,10 @@ class WebSubpageFetchTool(Tool):
                 last_error = f"Firecrawl map+scrape failed: {e}"
                 logger.error(last_error)
                 # Fall through to Exa or error
+                # 继续落到 Exa 或返回错误
 
         # Fallback: Exa with subpages (if available)
+        # 回退：使用 Exa 的 subpages 能力（若可用）
         if self.exa_api_key:
             try:
                 result = await self._fetch_with_exa(
@@ -355,16 +398,19 @@ class WebSubpageFetchTool(Tool):
         )
 
     def _infer_paths_from_keywords(self, keywords: str) -> List[str]:
-        """Infer URL paths from keyword string."""
+        """Infer URL paths from keyword string.
+        从关键词字符串推断 URL 路径。"""
         paths = []
         keywords_lower = keywords.lower()
         for keyword, keyword_paths in KEYWORD_PATH_MAP.items():
             if keyword in keywords_lower:
                 paths.extend(keyword_paths)
         return list(dict.fromkeys(paths))  # Deduplicate while preserving order
+        # 去重并保持顺序
 
     def _expand_keywords(self, target_keywords: str) -> set:
-        """Expand target keywords using synonym mappings."""
+        """Expand target keywords using synonym mappings.
+        使用同义词映射扩展目标关键词。"""
         if not target_keywords:
             return set()
 
@@ -374,9 +420,11 @@ class WebSubpageFetchTool(Tool):
         for word in words:
             expanded.add(word)
             # Add synonyms if this word is a key in KEYWORD_SYNONYMS
+            # 若该词是 KEYWORD_SYNONYMS 的键，则加入其同义词
             if word in KEYWORD_SYNONYMS:
                 expanded.update(KEYWORD_SYNONYMS[word])
             # Also check if word matches any synonym values
+            # 同时检查该词是否匹配某个同义词值
             for key, synonyms in KEYWORD_SYNONYMS.items():
                 if word in synonyms:
                     expanded.add(key)
@@ -385,7 +433,8 @@ class WebSubpageFetchTool(Tool):
         return expanded
 
     def _normalize_target_paths(self, target_paths: List[str]) -> List[str]:
-        """Normalize target paths for matching."""
+        """Normalize target paths for matching.
+        规范化用于匹配的目标路径。"""
         if not target_paths:
             return []
 
@@ -439,6 +488,7 @@ class WebSubpageFetchTool(Tool):
     ) -> float:
         """
         Calculate relevance score for a URL (0.0-1.0).
+        计算 URL 的相关性分数（0.0-1.0）。
 
         Scoring factors:
         - Target paths match: 0.5 weight (explicit path priority)
@@ -447,6 +497,13 @@ class WebSubpageFetchTool(Tool):
         - Base keywords match: 0.15 weight (common important pages)
         - URL depth: 0.15 weight (shallow = better, but less important now)
         - URL length: 0.05 weight (shorter = slightly better)
+        打分因素：
+        - 命中目标路径：权重 0.5（显式路径优先）
+        - 命中目标关键词：权重 0.4（用户指定优先）
+        - 高价值路径（blog/news/press）：权重 0.25（内容丰富的页面）
+        - 命中基础关键词：权重 0.15（常见的重要页面）
+        - URL 深度：权重 0.15（越浅越好，但如今重要性已降低）
+        - URL 长度：权重 0.05（越短略优）
         """
         score = 0.0
         parsed = urlparse(url)
@@ -460,6 +517,7 @@ class WebSubpageFetchTool(Tool):
             score += 0.5
 
         # 1. Target keywords match (0.4 weight) - highest priority
+        # 1. 命中目标关键词（权重 0.4）——最高优先级
         if target_keywords:
             expanded_keywords = self._expand_keywords(target_keywords)
             matched_keywords = []
@@ -468,15 +526,18 @@ class WebSubpageFetchTool(Tool):
                     matched_keywords.append(keyword)
             if matched_keywords:
                 # More matches = higher score, up to 0.4
+                # 命中越多分数越高，最多 0.4
                 score += min(0.4, 0.15 * len(matched_keywords))
 
         # 2. High-value paths (0.25 weight) - blog/news/press are content-rich
+        # 2. 高价值路径（权重 0.25）——blog/news/press 内容丰富
         for hv_path in HIGH_VALUE_PATHS:
             if hv_path in path:
                 score += 0.25
                 break
 
         # 3. Base keywords match (0.15 weight)
+        # 3. 命中基础关键词（权重 0.15）
         for keyword in BASE_KEYWORDS:
             if keyword in path:
                 score += 0.05
@@ -484,6 +545,7 @@ class WebSubpageFetchTool(Tool):
                     break
 
         # 4. URL depth (0.15 weight) - shallow pages often important
+        # 4. URL 深度（权重 0.15）——浅层页面往往重要
         depth = path.count("/") if path else 0
         if depth <= 1:
             score += 0.15
@@ -492,14 +554,17 @@ class WebSubpageFetchTool(Tool):
         elif depth == 3:
             score += 0.03
         # depth > 3: no bonus, but not penalized (may have good content)
+        # 深度 > 3：不加分，但也不惩罚（可能有优质内容）
 
         # 5. URL length (0.05 weight) - minor factor
+        # 5. URL 长度（权重 0.05）——次要因素
         if len(url) < 60:
             score += 0.05
         elif len(url) < 100:
             score += 0.02
 
         # Boost for large sites: top-level pages are more likely important
+        # 大型站点加权：顶层页面更可能重要
         if total_pages > 50 and depth <= 1:
             score *= 1.1
 
@@ -507,9 +572,12 @@ class WebSubpageFetchTool(Tool):
 
     def _is_error_page(self, content: str) -> Tuple[bool, str]:
         """Detect if page content indicates an error page.
+        检测页面内容是否表明这是一个错误页。
 
         Returns:
             (is_error, reason): True if error page, with reason string
+        返回：
+            (is_error, reason)：若为错误页则为 True，并附带原因字符串
         """
         if not content:
             return True, "empty content"

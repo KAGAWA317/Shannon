@@ -23,6 +23,7 @@ func TestRecordUsage_Idempotency(t *testing.T) {
 	bm := NewBudgetManager(db, logger)
 
 	// Setup the first usage record with an idempotency key
+	// 第一条 usage 记录，带 idempotency key
 	usage1 := &BudgetTokenUsage{
 		UserID:         "user-123",
 		SessionID:      "session-456",
@@ -43,12 +44,14 @@ func TestRecordUsage_Idempotency(t *testing.T) {
 		SessionTokensUsed: 0,
 	}
 	// User-level daily/monthly budgets removed; no user budget initialization required
+	// 用户级日/月 budget 已移除，无需初始化用户 budget
 
 	// Expect user lookup/creation first
 	userID := uuid.New()
 	mock.ExpectQuery("SELECT id FROM users WHERE external_id").
 		WithArgs("user-123").
 		WillReturnError(sql.ErrNoRows) // User doesn't exist
+		// 用户不存在，走创建分支
 
 	mock.ExpectQuery("INSERT INTO users").
 		WithArgs(sqlmock.AnyArg(), "user-123").
@@ -103,12 +106,14 @@ func TestRecordUsage_Idempotency(t *testing.T) {
 	}
 
 	// Second call with same idempotency key should be skipped (no database call expected)
+	// 相同 idempotency key 的第二次调用应被跳过（不会再访问数据库）
 	err = bm.RecordUsage(context.Background(), usage2)
 	if err != nil {
 		t.Fatalf("Second RecordUsage failed: %v", err)
 	}
 
 	// Verify tokens were NOT double-counted
+	// 校验 token 没有被重复计数
 	if sessionBudget.TaskTokensUsed != 150 {
 		t.Errorf("Expected TaskTokensUsed to remain 150 (not double-counted), got %d", sessionBudget.TaskTokensUsed)
 	}
@@ -138,6 +143,7 @@ func TestRecordUsage_DifferentIdempotencyKeys(t *testing.T) {
 		SessionTokensUsed: 0,
 	}
 	// User-level daily/monthly budgets removed; no user budget initialization required
+	// 用户级日/月 budget 已移除，无需初始化用户 budget
 
 	// First usage record
 	usage1 := &BudgetTokenUsage{
@@ -210,10 +216,12 @@ func TestIdempotencyKeyTTLCleanup(t *testing.T) {
 	logger := zap.NewNop()
 
 	// Create budget manager with very short TTL for testing
+	// 用极短的 TTL 便于测试过期逻辑
 	bm := NewBudgetManager(nil, logger)
 	bm.idempotencyTTL = 100 * time.Millisecond // Very short TTL for testing
 
 	// Manually add some expired and non-expired keys
+	// 手工写入若干已过期与未过期的 key
 	now := time.Now()
 	bm.idempotencyMu.Lock()
 	bm.processedUsage["expired-key-1"] = now.Add(-200 * time.Millisecond) // Expired
@@ -281,6 +289,7 @@ func TestIdempotencyKeyExpiration(t *testing.T) {
 	}
 
 	// Record usage - since the key expired, it should be processed again
+	// key 已过期，因此这条 usage 应被重新处理
 	err := bm.RecordUsage(context.Background(), usage)
 	if err != nil {
 		t.Fatalf("RecordUsage failed: %v", err)
@@ -301,6 +310,8 @@ func TestStopIdempotencyCleanup(t *testing.T) {
 	bm.startIdempotencyCleanup()
 
 	// Stop should not panic, even when called multiple times
+	// 重复调用 Stop 也不应 panic
 	bm.StopIdempotencyCleanup()
 	bm.StopIdempotencyCleanup() // Second call should be safe
+	// 第二次调用应是安全的
 }

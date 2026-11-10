@@ -12,6 +12,10 @@
 //   - domain_prefetch_max_urls: Maximum domains to prefetch (default: 8)
 //   - enable_domain_prefetch: Enable/disable domain analysis (default: true)
 //   - domain_analysis_mode: off/auto/force (default: auto)
+//
+// 分三阶段：① 发现（web 搜索找官方域名）；② 预取（并行抓取 5-15 个相关子页）；
+// ③ 归纳（LLM 合成结构化证据）。作为 ResearchWorkflow 的子 workflow 运行，
+// 通过 RegisterChildWorkflow/UnregisterChildWorkflow 支持父 workflow 的暂停/恢复/取消。
 package strategies
 
 import (
@@ -1146,6 +1150,8 @@ func persistAgentExecutionSyncWithMeta(ctx workflow.Context, workflowID, agentID
 // other directives (Search, Answer, Include, Exclude, Tools). The "Start:" URLs
 // from decompose are often misleading for domain prefetch agents since prefetch
 // targets specific company URLs, not external aggregator URLs.
+// 移除 PlanHints 中的 "Start:" 指令，保留其他指令（Search/Answer/Include/Exclude/Tools）；
+// decompose 给出的 "Start:" URL 对域名预取 agent 常具误导性——预取目标是公司自身 URL，而非外部聚合站。
 func stripHintDirectives(hints []string) []string {
 	out := make([]string, 0, len(hints))
 	for _, h := range hints {

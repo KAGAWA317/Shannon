@@ -20,6 +20,7 @@ import (
 )
 
 // ToolsHandler proxies tool operations to the Python LLM-service.
+// ToolsHandler 把 tool 操作代理到 Python LLM-service。
 type ToolsHandler struct {
 	llmServiceURL string
 	db            *sqlx.DB
@@ -112,6 +113,8 @@ func NewToolsHandler(db *sqlx.DB, logger *zap.Logger) *ToolsHandler {
 // ListTools handles GET /api/v1/tools
 // Returns tool schemas (name + description + parameters) from Python /tools/schemas.
 // Always excludes dangerous tools at gateway level.
+// ListTools 处理 GET /api/v1/tools：从 Python /tools/schemas 返回 tool schema（名称 + 描述 + 参数），
+// 并在 gateway 层始终排除危险 tool。
 func (h *ToolsHandler) ListTools(w http.ResponseWriter, r *http.Request) {
 	category := r.URL.Query().Get("category")
 
@@ -149,6 +152,7 @@ func (h *ToolsHandler) ListTools(w http.ResponseWriter, r *http.Request) {
 }
 
 // fetchToolMetadata returns cached metadata, fetching from Python if stale.
+// fetchToolMetadata 返回 cache 的 metadata，过期时从 Python 重新拉取。
 func (h *ToolsHandler) fetchToolMetadata(ctx context.Context, toolName string) (*toolMetadataResponse, error) {
 	h.metaCacheMu.RLock()
 	entry := h.metaCache[toolName]
@@ -191,6 +195,7 @@ func (h *ToolsHandler) fetchToolMetadata(ctx context.Context, toolName string) (
 
 // GetTool handles GET /api/v1/tools/{name}
 // Returns merged metadata + schema. Returns 403 for dangerous tools.
+// GetTool 处理 GET /api/v1/tools/{name}：返回合并后的 metadata + schema；危险 tool 返回 403。
 func (h *ToolsHandler) GetTool(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
@@ -298,6 +303,8 @@ func (h *ToolsHandler) ExecuteTool(w http.ResponseWriter, r *http.Request) {
 
 	// Build session_context -- only pass keys that Python _sanitize_session_context allows:
 	// session_id, user_id (tenant_id is stripped by Python sanitizer)
+	// 构建 session_context，只传 Python _sanitize_session_context 允许的键：
+	// session_id、user_id（tenant_id 会被 Python 的 sanitizer 去掉）。
 	sessionCtx := map[string]interface{}{
 		"user_id": userCtx.UserID.String(),
 	}
@@ -347,6 +354,7 @@ func (h *ToolsHandler) ExecuteTool(w http.ResponseWriter, r *http.Request) {
 
 	// Parse response for usage recording.
 	// Only record usage if we can parse the upstream response envelope.
+	// 解析 response 以记录用量；只有能解析上游 response 封装时才记录。
 	var proxyResp toolExecuteProxyResponse
 	parseErr := json.Unmarshal(respBody, &proxyResp)
 	if parseErr != nil {
@@ -361,6 +369,7 @@ func (h *ToolsHandler) ExecuteTool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Compute usage: cost_usd from response metadata, or cost_per_use from tool metadata
+	// 计算用量：优先取 response metadata 中的 cost_usd，否则用 tool metadata 里的 cost_per_use。
 	costUSD := meta.CostPerUse
 	if proxyResp.Metadata != nil {
 		if c, ok := proxyResp.Metadata["cost_usd"].(float64); ok && c > 0 {
@@ -406,6 +415,7 @@ func (h *ToolsHandler) ExecuteTool(w http.ResponseWriter, r *http.Request) {
 }
 
 // recordToolUsage writes tool usage to DB and updates tenant quota.
+// recordToolUsage 把 tool 用量写入 DB，并更新 tenant 配额。
 func (h *ToolsHandler) recordToolUsage(
 	userID, tenantID uuid.UUID,
 	requestID, toolName string,
@@ -419,6 +429,9 @@ func (h *ToolsHandler) recordToolUsage(
 	// invariant
 	//   cache_aware_total_tokens == prompt + completion + cache_read + cache_creation
 	// holds without requiring tools to fabricate cache fields.
+	// 与 BudgetManager 的 tool 路径保持 schema 一致（activities/budget.go：OutputTokens=syntheticTokens）：
+	// 把合成的 token 数存入 completion_tokens，从而无需 tool 伪造 cache 字段即可满足不变式
+	// cache_aware_total_tokens == prompt + completion + cache_read + cache_creation。
 	_, err := h.db.ExecContext(ctx, `
 		INSERT INTO token_usage (
 			user_id, task_id, agent_id, provider, model,

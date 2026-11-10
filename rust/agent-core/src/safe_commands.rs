@@ -1,61 +1,82 @@
 //! Safe command implementations for WASI sandbox.
+//! WASI sandbox 的安全命令实现。
 //!
 //! These commands are implemented natively in Rust instead of spawning
+//! 这些命令用 Rust 原生实现，而非启动
 //! shell processes, eliminating shell injection risks entirely.
+//! shell 进程，从而彻底消除 shell 注入风险。
 
 use anyhow::{anyhow, Result};
 use std::path::{Path, PathBuf};
 use tracing::debug;
 
 /// Safe commands that can be executed in the sandbox.
+/// 可在 sandbox 中执行的安全命令。
 #[derive(Debug, Clone)]
 pub enum SafeCommand {
     /// List directory contents
+    /// 列出目录内容
     Ls {
         path: String,
         all: bool,  // -a: show hidden
         long: bool, // -l: long format
     },
     /// Print file contents
+    /// 输出文件内容
     Cat { path: String },
     /// Print first N lines
+    /// 输出前 N 行
     Head { path: String, lines: usize },
     /// Print last N lines
+    /// 输出后 N 行
     Tail { path: String, lines: usize },
     /// Count lines/words/bytes
+    /// 统计行数/词数/字节数
     Wc { path: String },
     /// Create directory
+    /// 创建目录
     Mkdir { path: String, parents: bool },
     /// Remove file or directory
+    /// 删除文件或目录
     Rm { path: String, recursive: bool },
     /// Copy file
+    /// 复制文件
     Cp { src: String, dst: String },
     /// Move/rename file
+    /// 移动/重命名文件
     Mv { src: String, dst: String },
     /// Create empty file
+    /// 创建空文件
     Touch { path: String },
     /// Print working directory
+    /// 输出当前工作目录
     Pwd,
     /// Print text
+    /// 输出文本
     Echo { text: String },
     /// Search for pattern in files
+    /// 在文件中搜索模式
     Grep {
         pattern: String,
         path: String,
         ignore_case: bool,
     },
     /// Find files by name
+    /// 按名称查找文件
     Find { path: String, name: String },
 }
 
 impl SafeCommand {
     /// Shell metacharacters that indicate command injection attempts
+    /// 可能表示命令注入尝试的 shell 元字符
     const DANGEROUS_PATTERNS: &'static [&'static str] =
         &["|", ";", "&&", "||", ">", "<", ">>", "$(", "`", "\n", "\r"];
 
     /// Parse a command string into a SafeCommand.
+    /// 将命令字符串解析为 SafeCommand。
     pub fn parse(input: &str) -> Result<SafeCommand> {
         // First, reject any dangerous shell metacharacters
+        // 先拒绝任何危险的 shell 元字符
         for pattern in Self::DANGEROUS_PATTERNS {
             if input.contains(pattern) {
                 return Err(anyhow!("Shell metacharacter not allowed: {}", pattern));
@@ -306,11 +327,13 @@ impl SafeCommand {
     }
 
     /// Execute the command within a workspace directory.
+    /// 在工作区目录内执行命令。
     pub fn execute(&self, workspace: &Path) -> Result<CommandOutput> {
         self.execute_with_memory(workspace, None)
     }
 
     /// Execute the command with optional memory workspace access for /memory paths.
+    /// 执行命令，可选提供记忆工作区以访问 /memory 路径。
     pub fn execute_with_memory(
         &self,
         workspace: &Path,
@@ -355,6 +378,7 @@ impl SafeCommand {
     }
 
     /// Check if the command touches the /memory mount.
+    /// 判断命令是否涉及 /memory 挂载点。
     pub fn uses_memory(&self) -> bool {
         match self {
             Self::Ls { path, .. }
@@ -389,12 +413,14 @@ impl SafeCommand {
             .unwrap_or_else(|_| workspace.to_path_buf());
 
         // Support paths that explicitly target the Firecracker mount.
+        // 支持显式指向 Firecracker 挂载点的路径。
         let normalized = relative
             .strip_prefix("/workspace/")
             .or_else(|| relative.strip_prefix("/workspace"))
             .unwrap_or(relative);
 
         // Support memory mount when explicitly requested.
+        // 显式 request 时支持记忆挂载点。
         if Self::is_memory_path(normalized) {
             if memory_workspace.is_none() {
                 return Err(anyhow!("Cannot resolve /memory path without user_id"));
@@ -439,10 +465,12 @@ impl SafeCommand {
         }
 
         // Canonicalize workspace first to handle symlinks (e.g., /var -> /private/var on macOS)
+        // 先规范化工作区以处理符号链接（例如 macOS 上 /var -> /private/var）
         let target = if normalized.is_empty() {
             canonical_workspace.clone()
         } else {
             // Security: Reject absolute paths in the workspace namespace after normalization.
+            // 安全：归一化后拒绝工作区命名空间中的绝对路径。
             let req_path = Path::new(normalized);
             if req_path.is_absolute() {
                 return Err(anyhow!("Absolute paths are not allowed"));
@@ -452,6 +480,7 @@ impl SafeCommand {
         };
 
         // For existing paths, canonicalize
+        // 对已存在的路径执行规范化
         if target.exists() {
             let canonical = target.canonicalize()?;
             if !canonical.starts_with(&canonical_workspace) {
@@ -461,6 +490,7 @@ impl SafeCommand {
         }
 
         // For non-existing paths, validate parent
+        // 对不存在的路径，校验其父目录
         if let Some(parent) = target.parent() {
             if parent.exists() {
                 let canonical_parent = parent.canonicalize()?;
@@ -493,6 +523,7 @@ impl SafeCommand {
             let name = entry.file_name().to_string_lossy().to_string();
 
             // Skip hidden files unless -a
+            // 除非指定 -a，否则跳过隐藏文件
             if !all && name.starts_with('.') {
                 continue;
             }
@@ -707,6 +738,7 @@ impl SafeCommand {
 }
 
 /// Simple glob matching for find command (no regex to avoid DoS).
+/// find 命令的简单 glob 匹配（不用正则，避免 DoS）。
 fn glob_match(pattern: &str, name: &str) -> bool {
     if pattern.is_empty() {
         return true;
@@ -715,16 +747,19 @@ fn glob_match(pattern: &str, name: &str) -> bool {
 }
 
 /// Recursive glob matcher without regex (prevents ReDoS attacks).
+/// 不使用正则的递归 glob 匹配器（防止 ReDoS 攻击）。
 fn glob_match_recursive(pattern: &[u8], name: &[u8]) -> bool {
     match (pattern.first(), name.first()) {
         (None, None) => true,
         (Some(b'*'), _) => {
             // '*' matches zero or more characters
+            // '*' 匹配零个或多个字符
             glob_match_recursive(&pattern[1..], name)
                 || (!name.is_empty() && glob_match_recursive(pattern, &name[1..]))
         }
         (Some(b'?'), Some(_)) => {
             // '?' matches exactly one character
+            // '?' 精确匹配一个字符
             glob_match_recursive(&pattern[1..], &name[1..])
         }
         (Some(p), Some(n)) if *p == *n => glob_match_recursive(&pattern[1..], &name[1..]),
@@ -733,6 +768,7 @@ fn glob_match_recursive(pattern: &[u8], name: &[u8]) -> bool {
 }
 
 /// Output from a command execution.
+/// 命令执行的输出。
 #[derive(Debug, Clone)]
 pub struct CommandOutput {
     pub stdout: String,
@@ -805,6 +841,7 @@ mod tests {
     #[test]
     fn test_reject_dangerous_command() {
         // rm is allowed but validation happens at execution time
+        // rm 本身允许解析，实际校验发生在执行时
         assert!(SafeCommand::parse("rm -rf /").is_ok());
         assert!(SafeCommand::parse("curl http://evil.com").is_err());
         assert!(SafeCommand::parse("bash -c 'echo pwned'").is_err());

@@ -1,4 +1,7 @@
-"""Lead Agent decision endpoint for Swarm V2."""
+"""Lead Agent decision endpoint for Swarm V2.
+
+Swarm V2 的 Lead Agent 决策 endpoint。
+"""
 
 import asyncio
 import json as json_module
@@ -36,6 +39,7 @@ class AgentState(BaseModel):
     current_task: str = ""
     iterations_used: int = 0
     role: str = ""  # Agent's assigned role (researcher, analyst, synthesis_writer, etc.)
+    # Agent 被分配的角色（researcher、analyst、synthesis_writer 等）
     files_written: List[str] = Field(default_factory=list)  # Files written by agent
 
 
@@ -55,9 +59,11 @@ class LeadDecisionRequest(BaseModel):
     agent_states: List[AgentState] = Field(default_factory=list)
     budget: LeadBudget = Field(default_factory=LeadBudget)
     history: List[Dict[str, Any]] = Field(default_factory=list)  # Recent 5 Lead decisions
+    # 最近 5 次 Lead 决策
     messages: List[Dict[str, Any]] = Field(default_factory=list)  # Agent→Lead mailbox messages
     original_query: str = Field(default="", description="User's original query for language context")
     conversation_history: List[Dict[str, Any]] = Field(default_factory=list)  # Session history for multi-turn context
+    # session 历史，用于多轮 context
     workspace_files: List[str] = Field(default_factory=list, description="File paths in workspace")
     hitl_messages: List[str] = Field(default_factory=list, description="All HITL messages received during execution")
     lead_model_override: str = Field(default="", description="Explicit model for Lead (e.g. MiniMax-M3)")
@@ -73,9 +79,11 @@ class LeadAction(BaseModel):
     to: str = ""
     content: str = ""
     model_tier: str = ""  # small, medium, large — Lead can specify per agent
+    # small、medium、large —— Lead 可为每个 agent 指定
     create: List[Dict[str, Any]] = Field(default_factory=list)
     cancel: List[str] = Field(default_factory=list)
     update: List[Dict[str, Any]] = Field(default_factory=list)  # revise_plan: update existing task descriptions
+    # revise_plan：更新现有 task 描述
     path: str = ""  # file_read target path
     tool: str = ""  # tool_call: web_search, web_fetch, calculator
     tool_params: Dict[str, Any] = Field(default_factory=dict)  # tool_call: tool arguments
@@ -83,6 +91,8 @@ class LeadAction(BaseModel):
 
 # JSON Schema for Anthropic structured output (output_config.format).
 # Defined for future use — currently disabled due to Anthropic grammar compilation timeout (~30s on first request).
+# 用于 Anthropic 结构化输出（output_config.format）的 JSON Schema。
+# 为将来使用而定义 —— 目前因 Anthropic 语法编译 timeout（首次 request 约 30s）而关闭。
 LEAD_DECISION_SCHEMA = {
     "format": {
         "type": "json_schema",
@@ -149,6 +159,9 @@ LEAD_DECISION_SCHEMA = {
                             # Intentionally "string" — forces LLM to output JSON-encoded string
                             # which _parse_tool_params() converts to Dict. Nested "object" type
                             # degrades constrained decoding quality for complex tool arguments.
+                            # 有意使用 "string" —— 强制 LLM 输出 JSON 编码的字符串，
+                            # 再由 _parse_tool_params() 转为 Dict。嵌套的 "object" 类型
+                            # 会降低复杂 tool 参数下受约束解码的质量。
                             "tool_params": {"type": "string"},
                         },
                         "required": ["type", "task_id", "agent_id", "role", "task_description", "to", "content", "model_tier", "create", "cancel", "update", "path", "tool", "tool_params"],
@@ -187,10 +200,16 @@ from llm_service.roles.swarm.lead_protocol import LEAD_SYSTEM_PROMPT
 # constrained decoding favors keys with trivial values (cancel:[], path:"")
 # over keys needing cross-action reasoning (task_id requires referencing
 # revise_plan's create array). This function matches by description instead.
+# Anthropic 结构化输出会在 spawn_agent action 中跳过 task_id，因为受约束解码
+# 偏好取值简单的 key（cancel:[]、path:""），而非需要跨 action 推理的 key
+# （task_id 需要引用 revise_plan 的 create 数组）。因此本函数改为按描述匹配。
 
 
 def _parse_tool_params(raw) -> Dict[str, Any]:
-    """Parse tool_params from string (schema) or dict (fallback)."""
+    """Parse tool_params from string (schema) or dict (fallback).
+
+    解析 tool_params：来自 schema 的字符串，或回退的 dict。
+    """
     if isinstance(raw, dict):
         return raw
     if isinstance(raw, str) and raw.strip():
@@ -207,8 +226,12 @@ def _auto_link_task_ids(
     actions: List["LeadAction"],
     task_list_from_body: List[Dict[str, Any]],
 ) -> None:
-    """Inject task_id into spawn_agent actions missing it, by matching descriptions."""
+    """Inject task_id into spawn_agent actions missing it, by matching descriptions.
+
+    为缺少 task_id 的 spawn_agent action 按描述匹配注入 task_id。
+    """
     # 1. Collect available tasks: from revise_plan in this response + pending in task_list
+    # 1. 收集可用 task：本次 response 中 revise_plan 的 create，加上 task_list 中待处理的 task
     available: Dict[str, str] = {}  # task_id → description
 
     for a in actions:
@@ -231,6 +254,7 @@ def _auto_link_task_ids(
         return
 
     # 2. Match each spawn_agent (missing task_id) to best task by description overlap
+    # 2. 按描述词重叠度为每个缺少 task_id 的 spawn_agent 匹配最佳 task
     claimed: set = set()
     for a in actions:
         if a.type == "spawn_agent" and not a.task_id and a.task_description:
@@ -257,7 +281,10 @@ def _best_match(
     available: Dict[str, str],
     claimed: set,
 ) -> str:
-    """Find the best matching task_id for a spawn_agent description."""
+    """Find the best matching task_id for a spawn_agent description.
+
+    为 spawn_agent 的描述找到最匹配的 task_id。
+    """
     spawn_lower = spawn_desc.lower()
     spawn_words = set(re.findall(r'\w+', spawn_lower))
 
@@ -270,10 +297,12 @@ def _best_match(
         task_lower = task_desc.lower()
 
         # Exact substring match (strongest signal — LLM often copies description)
+        # 精确子串匹配（最强信号 —— LLM 常直接复制描述）
         if task_lower in spawn_lower or spawn_lower.startswith(task_lower):
             return tid
 
         # Word overlap ratio (strip punctuation via \w+ regex)
+        # 词重叠比例（通过 \w+ 正则去掉标点）
         task_words = set(re.findall(r'\w+', task_lower))
         if not task_words:
             continue
@@ -285,6 +314,7 @@ def _best_match(
             best_tid = tid
 
     # Require at least 60% word overlap (raised from 50% to reduce false positives on short descriptions)
+    # 要求至少 60% 词重叠（从 50% 提高，以减少短描述上的误匹配）
     return best_tid if best_score >= 0.6 else ""
 
 
@@ -292,20 +322,26 @@ def _best_match(
 
 
 def _build_lead_user_prompt(body: LeadDecisionRequest) -> str:
-    """Build the user prompt for Lead decision. Extracted for testability."""
+    """Build the user prompt for Lead decision. Extracted for testability.
+
+    构建 Lead 决策所需的 user prompt。抽出以便测试。
+    """
     from datetime import datetime, timezone
 
     user_parts: List[str] = []
 
     # Inject current date for temporal awareness (search quality + freshness judgment)
+    # 注入当前日期以提供时间感知（影响搜索质量与时效性判断）
     current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     user_parts.append(f"The current date is {current_date} (UTC).")
 
     # Inject original query so Lead always knows the user's language
+    # 注入原始查询，使 Lead 始终知道用户使用的语言
     if body.original_query and body.event.type != "initial_plan":
         user_parts.append(f"## Original User Query\n{body.original_query}\n\n⚠ IMPORTANT: Reply in the SAME LANGUAGE as the query above.")
 
     # Inject session conversation history for multi-turn context
+    # 注入 session 历史，提供多轮 context
     if body.conversation_history:
         conv_lines = []
         for msg in body.conversation_history:
@@ -321,6 +357,7 @@ def _build_lead_user_prompt(body: LeadDecisionRequest) -> str:
         )
 
     # Inject accumulated HITL messages so Lead never forgets user requests
+    # 注入累积的 HITL 消息，避免 Lead 遗漏用户 request
     if body.hitl_messages and body.event.type != "human_input":
         hitl_section = "## User Requests During Execution\n"
         for i, msg in enumerate(body.hitl_messages, 1):
@@ -338,6 +375,7 @@ def _build_lead_user_prompt(body: LeadDecisionRequest) -> str:
         summary = report.get("summary") or body.event.result_summary
         if summary:
             # closing_checkpoint includes workspace file contents — needs higher limit
+            # closing_checkpoint 包含工作区文件内容 —— 需要更高的上限
             summary_limit = 30000 if body.event.type == "closing_checkpoint" else 10000
             event_lines.append(f"  Summary: {str(summary)[:summary_limit]}")
         files = report.get("files_written", [])
@@ -353,6 +391,7 @@ def _build_lead_user_prompt(body: LeadDecisionRequest) -> str:
         user_parts.append("## Event\n" + "\n".join(event_lines))
 
     # File contents from Lead's file_read actions (independent verification)
+    # Lead 通过 file_read action 读取的文件内容（用于独立核验）
     if body.event.file_contents:
         fc_lines = []
         for fc in body.event.file_contents[:5]:
@@ -369,6 +408,7 @@ def _build_lead_user_prompt(body: LeadDecisionRequest) -> str:
         user_parts.append("## File Preview (from your file_read)\n" + "\n".join(fc_lines))
 
     # Tool results from Lead's direct tool_call actions
+    # Lead 直接 tool_call action 返回的 tool 结果
     if body.event.tool_results:
         tr_lines = []
         for tr in body.event.tool_results[:5]:
@@ -393,6 +433,7 @@ def _build_lead_user_prompt(body: LeadDecisionRequest) -> str:
         user_parts.append("## Task Board\n" + "\n".join(tl_lines))
 
     # Agent States — with explicit running count to prevent premature done
+    # Agent 状态 —— 显式统计 running 数量，避免过早调用 done
     if body.agent_states:
         running_agents = [a for a in body.agent_states if a.status == "running"]
         idle_agents = [a for a in body.agent_states if a.status == "idle"]
@@ -409,6 +450,7 @@ def _build_lead_user_prompt(body: LeadDecisionRequest) -> str:
         user_parts.append("## Agent States\n" + summary_line + "\n" + "\n".join(as_lines))
 
     # Workspace file inventory (helps Lead plan file-level operations)
+    # 工作区文件清单（帮助 Lead 规划文件级操作）
     if body.workspace_files:
         ws_lines = [f"## Workspace Files ({len(body.workspace_files)} files)"]
         for fp in body.workspace_files[:30]:  # Cap display at 30 files
@@ -436,6 +478,7 @@ def _build_lead_user_prompt(body: LeadDecisionRequest) -> str:
     ]
 
     # Time phase alert — matches TIME MANAGEMENT thresholds in system prompt
+    # 时间阶段提醒 —— 与 system prompt 中 TIME MANAGEMENT 的阈值保持一致
     if time_pct >= 80:
         budget_lines.append("EMERGENCY: >80% time used — call done ASAP once no agents running")
     elif time_pct >= 60:
@@ -446,6 +489,7 @@ def _build_lead_user_prompt(body: LeadDecisionRequest) -> str:
     user_parts.append("\n".join(budget_lines))
 
     # Agent->Lead messages (escalations, requests from agents)
+    # Agent 发给 Lead 的消息（升级 request、来自 agent 的 request）
     if body.messages:
         msg_lines = []
         for msg in body.messages[:10]:  # Cap at 10 messages
@@ -472,7 +516,10 @@ def _build_lead_user_prompt(body: LeadDecisionRequest) -> str:
 
 @router.post("/lead/decide", response_model=LeadDecisionResponse)
 async def lead_decide(request: Request, body: LeadDecisionRequest) -> LeadDecisionResponse:
-    """LLM-powered Lead decision for Swarm V2 orchestration."""
+    """LLM-powered Lead decision for Swarm V2 orchestration.
+
+    由 LLM 驱动的 Lead 决策，用于 Swarm V2 编排。
+    """
     logger.info(f"Lead decide called: workflow={body.workflow_id} event={body.event.type}")
 
     providers = getattr(request.app.state, "providers", None)
@@ -485,6 +532,9 @@ async def lead_decide(request: Request, body: LeadDecisionRequest) -> LeadDecisi
         # Call LLM using the same pattern as agent_loop_step
         # closing_checkpoint may produce a long reply (full synthesis report),
         # so give it more output budget to avoid JSON truncation.
+        # 复用 agent_loop_step 的调用方式。
+        # closing_checkpoint 可能产生很长的回复（完整综合报告），
+        # 因此给予更多输出 budget 以避免 JSON 被截断。
         lead_max_tokens = 16000 if body.event.type == "closing_checkpoint" else 4096
         lead_messages = [
             {"role": "system", "content": LEAD_SYSTEM_PROMPT},
@@ -492,6 +542,7 @@ async def lead_decide(request: Request, body: LeadDecisionRequest) -> LeadDecisi
         ]
 
         # Lead model/provider override: use explicit values if specified, otherwise tier-based
+        # Lead 模型/provider 覆盖：显式指定时优先使用，否则按 tier 选择
         lead_specific_model = body.lead_model_override or None
         lead_provider_override = body.lead_provider_override or None
         lead_kwargs = {
@@ -511,6 +562,8 @@ async def lead_decide(request: Request, body: LeadDecisionRequest) -> LeadDecisi
 
         # Try structured output first; fall back to prompt-based on failure or timeout.
         # Only attempt structured output for Anthropic provider — MiniMax/Kimi don't support output_config.
+        # 优先尝试结构化输出；失败或 timeout 则回退到基于 prompt 的方式。
+        # 仅对 Anthropic provider 尝试结构化输出 —— MiniMax/Kimi 不支持 output_config。
         use_structured = lead_provider_override in (None, "", "anthropic")
         if use_structured:
             try:
@@ -536,6 +589,7 @@ async def lead_decide(request: Request, body: LeadDecisionRequest) -> LeadDecisi
         else:
             logger.info(f"Skipping structured output for non-Anthropic provider: {lead_provider_override}")
             # OpenAI-compatible providers (Kimi) support json_object mode to force valid JSON
+            # OpenAI 兼容 provider（Kimi）支持 json_object 模式以强制输出合法 JSON
             non_anthropic_kwargs = dict(lead_kwargs)
             if lead_provider_override not in ("minimax",):
                 non_anthropic_kwargs["response_format"] = {"type": "json_object"}
@@ -562,6 +616,8 @@ async def lead_decide(request: Request, body: LeadDecisionRequest) -> LeadDecisi
         except json_module.JSONDecodeError:
             # Fallback: extract outermost JSON object from prose text
             # Non-Claude models often wrap JSON in reasoning/markdown text
+            # 回退方案：从散文式文本中提取最外层的 JSON 对象
+            # 非 Claude 模型常把 JSON 包在推理过程或 markdown 文本里
             data = None
             first_brace = raw_text.find("{")
             last_brace = raw_text.rfind("}")
@@ -592,6 +648,7 @@ async def lead_decide(request: Request, body: LeadDecisionRequest) -> LeadDecisi
                 )
 
         # Guard: some providers may return a list instead of dict
+        # 防御：部分 provider 可能返回 list 而非 dict
         if isinstance(data, list):
             data = {"decision_summary": "", "user_summary": "", "actions": data}
 
@@ -623,9 +680,13 @@ async def lead_decide(request: Request, body: LeadDecisionRequest) -> LeadDecisi
         # ── Auto-link: inject task_id into spawn_agent by description matching ──
         # Structured output's constrained decoding skips task_id (requires cross-action
         # reasoning to reference revise_plan task IDs). We match descriptions instead.
+        # ── 自动关联：按描述匹配为 spawn_agent 注入 task_id ──
+        # 结构化输出的受约束解码会跳过 task_id（需要跨 action 推理来引用
+        # revise_plan 的 task ID）。因此改为匹配描述。
         _auto_link_task_ids(actions, body.task_list)
 
         # Diagnostic: log what Lead actually returned
+        # 诊断：记录 Lead 实际返回的内容
         action_types = [a.type for a in actions]
         agent_state_summary = [(a.agent_id, a.status) for a in body.agent_states]
         logger.info(

@@ -66,6 +66,7 @@ func (h *HealthHandler) Readiness(w http.ResponseWriter, r *http.Request) {
 
 	// Try to get task status for a non-existent task to test connection
 	// Treat NotFound and Unauthenticated as "orchestrator reachable"
+	// 用一个不存在的 task 查询状态来测试连通性；NotFound 与 Unauthenticated 都视为 orchestrator 可达。
 	_, err := h.orchClient.GetTaskStatus(ctx, &orchpb.GetTaskStatusRequest{
 		TaskId: "health-check-test",
 	})

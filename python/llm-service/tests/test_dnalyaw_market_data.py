@@ -1,4 +1,8 @@
-"""Tests for Dnalyaw Market Data API OpenAPI tool integration."""
+"""Tests for Dnalyaw Market Data API OpenAPI tool integration.
+
+验证 Dnalyaw Market Data 的 OpenAPI spec 能加载并生成正确的 tool 定义；
+loader 会校验 OPENAPI_ALLOWED_DOMAINS，因此每个用例都先放开所有 domain。
+"""
 
 import os
 import pytest
@@ -27,7 +31,11 @@ def dnalyaw_spec():
 
 
 def _make_loader(spec, **kwargs):
-    """Helper to create a loader with common defaults."""
+    """Helper to create a loader with common defaults.
+
+    用统一默认值（api_key authentication、category=data、免费）构造 loader，
+    单个用例只覆盖自己关心的差异项。
+    """
     defaults = dict(
         name="dnalyaw_market_data",
         spec=spec,
@@ -49,7 +57,10 @@ class TestDnalyawMarketDataSpec:
 
     @patch.dict(os.environ, {"OPENAPI_ALLOWED_DOMAINS": "*"})
     def test_spec_loads_single_operation(self, dnalyaw_spec):
-        """Spec should parse and produce 1 operation (getStockBars only)."""
+        """Spec should parse and produce 1 operation (getStockBars only).
+
+        spec 中只声明了 getStockBars 这一个 operation。
+        """
         loader = _make_loader(dnalyaw_spec)
         assert len(loader.operations) == 1
 

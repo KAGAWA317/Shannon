@@ -60,6 +60,8 @@ export function removeRunningTask(workflowId: string) {
 /**
  * Background task tracker - polls for task completion even when user navigates away.
  * Shows notifications and updates badge count when tasks complete.
+ * 后台 task 追踪器：即使用户离开页面也持续轮询 task 是否完成。
+ * 完成时发送通知并更新角标数量。
  */
 export function BackgroundTaskTracker() {
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);

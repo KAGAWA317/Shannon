@@ -1,4 +1,7 @@
-"""HTTP error handling tests (no network)."""
+"""HTTP error handling tests (no network).
+
+HTTP 错误处理测试（不发起网络 request）。
+"""
 
 import pytest
 import httpx

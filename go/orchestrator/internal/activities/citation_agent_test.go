@@ -28,6 +28,7 @@ func TestLevenshteinDistance(t *testing.T) {
 		{"single substitution", "hello", "hallo", 1},
 
 		// Citation marker insertion (the main use case)
+		// 插入 citation marker（主要用例）
 		{"add [1] marker", "Revenue grew 19%.", "Revenue grew 19%.[1]", 3},
 		{"add [12] marker", "Revenue grew 19%.", "Revenue grew 19%.[12]", 4},
 		{"add marker with space", "Revenue grew 19%.", "Revenue grew 19%. [1]", 4},
@@ -60,6 +61,7 @@ func TestLevenshteinDistance(t *testing.T) {
 			}
 
 			// Test symmetry: distance(a, b) == distance(b, a)
+			// 验证对称性：distance(a, b) == distance(b, a)
 			resultReverse := levenshteinDistance(s2, s1)
 			if result != resultReverse {
 				t.Errorf("levenshteinDistance is not symmetric: (%q,%q)=%d, (%q,%q)=%d",
@@ -79,6 +81,7 @@ func TestLevenshteinDistance_EdgeCases(t *testing.T) {
 	}
 
 	// Test space optimization (s1 should be shorter)
+	// 验证空间优化（传入时 s1 应为较短的那个）
 	long := []rune("this is a longer string")
 	short := []rune("short")
 	result1 := levenshteinDistance(long, short)
@@ -151,6 +154,7 @@ func TestSampledEditDistanceRatio(t *testing.T) {
 	}
 
 	// Test with longer strings (the actual use case)
+	// 用更长的字符串测试（实际使用场景）
 	t.Run("long identical strings", func(t *testing.T) {
 		long := make([]rune, 15000)
 		for i := range long {
@@ -229,6 +233,7 @@ func TestValidateContentImmutability(t *testing.T) {
 		expectContain string // substring expected in error message
 	}{
 		// Valid cases - only citation markers added
+		// 合法用例——仅添加了 citation marker
 		{
 			name:        "identical (no citations)",
 			original:    "Hello world.",
@@ -267,6 +272,7 @@ func TestValidateContentImmutability(t *testing.T) {
 		},
 
 		// Invalid cases - content modified
+		// 非法用例——正文内容被修改
 		{
 			name:          "word changed",
 			original:      "Revenue grew 19%.",
@@ -312,6 +318,7 @@ func TestValidateContentImmutability(t *testing.T) {
 
 func TestValidateContentImmutability_MinorChangesTolerated(t *testing.T) {
 	// LLMs sometimes make minor whitespace changes that should be tolerated
+	// LLM 有时会产生细微空白差异，这类改动应被容忍
 	tests := []struct {
 		name     string
 		original string
@@ -672,6 +679,7 @@ func BenchmarkLevenshteinDistance_Long(b *testing.B) {
 
 func BenchmarkSampledEditDistanceRatio(b *testing.B) {
 	// 15000 characters (triggers sampling)
+	// 15000 个字符（会触发采样）
 	base := make([]rune, 15000)
 	for i := range base {
 		base[i] = rune('a' + (i % 26))
@@ -888,6 +896,7 @@ func TestBuildCitationAgentPrompt_PrecisionFirst(t *testing.T) {
 	prompt := buildCitationAgentPrompt()
 
 	// Ensure we don't encourage "density targets" or URL/title-only citation behavior.
+	// 确保 prompt 不鼓励 "density targets" 或仅凭 URL/title 就标注引用的行为。
 	for _, banned := range []string{
 		"30-50%",
 		"Cite if URL/Title Confirms",
@@ -900,6 +909,7 @@ func TestBuildCitationAgentPrompt_PrecisionFirst(t *testing.T) {
 	}
 
 	// Ensure strict, evidence-first guidance is present.
+	// 确保包含严格的 evidence-first 指导。
 	for _, required := range []string{
 		"SUFFICIENT EVIDENCE REQUIRED",
 		"Content",
@@ -998,6 +1008,10 @@ func TestLooksLikeTableRow(t *testing.T) {
 // when zero placements succeed, not when partial placements succeed.
 // This tests the fix for: placement with low success rate (e.g., 6/21=28%)
 // should use partial results instead of falling back to slow inline method.
+// TestPlacementFallbackCondition 验证仅当没有任何 placement 成功时才触发 inline fallback，
+// 部分成功时不应触发。
+// 该测试覆盖的修复：placement 成功率较低时（如 6/21=28%）
+// 应使用部分结果，而不是回退到较慢的 inline 方式。
 func TestPlacementFallbackCondition(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -1006,6 +1020,7 @@ func TestPlacementFallbackCondition(t *testing.T) {
 		wantFallback bool
 	}{
 		// Should NOT fallback - use partial results
+		// 不应 fallback——使用部分结果
 		{"partial success 6/21", 6, 21, false},
 		{"partial success 1/10", 1, 10, false},
 		{"partial success 3/100", 3, 100, false},
@@ -1013,6 +1028,7 @@ func TestPlacementFallbackCondition(t *testing.T) {
 		{"all success 10/10", 10, 10, false},
 
 		// Should fallback - zero success
+		// 应 fallback——零成功
 		{"zero success 0/21", 0, 21, true},
 		{"zero success 0/1", 0, 1, true},
 		{"zero success 0/100", 0, 100, true},
@@ -1021,6 +1037,7 @@ func TestPlacementFallbackCondition(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Simulate the fallback condition logic from AddCitations
+			// 模拟 AddCitations 中的 fallback 条件判断
 			needFallback := false
 			if tt.applied == 0 {
 				needFallback = true
@@ -1036,6 +1053,8 @@ func TestPlacementFallbackCondition(t *testing.T) {
 
 // TestApplyPlacementsV2_PartialSuccess verifies that applyPlacementsV2
 // correctly applies successful placements and records failures.
+// TestApplyPlacementsV2_PartialSuccess 验证 applyPlacementsV2 能正确应用成功的 placement，
+// 并记录失败的 placement。
 func TestApplyPlacementsV2_PartialSuccess(t *testing.T) {
 	sentences := []string{
 		"First sentence about the company.",

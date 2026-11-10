@@ -15,6 +15,7 @@ import (
 )
 
 // GoogleUser represents user info extracted from Google OAuth
+// GoogleUser 表示从 Google OAuth 中提取的用户信息
 type GoogleUser struct {
 	Email         string
 	EmailVerified bool
@@ -25,6 +26,7 @@ type GoogleUser struct {
 
 // iOSClientID is the Google OAuth client ID for iOS public client flows.
 // Set via IOS_GOOGLE_CLIENT_ID env var. Empty disables iOS OAuth.
+// iOSClientID 是用于 iOS 公共客户端流程的 Google OAuth client ID，通过 IOS_GOOGLE_CLIENT_ID 环境变量设置；为空则禁用 iOS OAuth。
 var iOSClientID = os.Getenv("IOS_GOOGLE_CLIENT_ID")
 
 // GoogleOAuthVerifier handles Google OAuth token verification
@@ -38,6 +40,8 @@ type GoogleOAuthVerifier struct {
 
 // NewGoogleOAuthVerifier creates a new Google OAuth verifier
 // desktopClientID and desktopClientSecret are optional - for desktop/native app OAuth flows
+// NewGoogleOAuthVerifier 创建 Google OAuth 校验器
+// desktopClientID 与 desktopClientSecret 可选——用于桌面/原生应用的 OAuth 流程
 func NewGoogleOAuthVerifier(clientID, clientSecret, desktopClientID, desktopClientSecret string) *GoogleOAuthVerifier {
 	return &GoogleOAuthVerifier{
 		clientID:            clientID,
@@ -52,23 +56,28 @@ func NewGoogleOAuthVerifier(clientID, clientSecret, desktopClientID, desktopClie
 
 // VerifyIDToken verifies a Google ID token and extracts user info
 // Used for web flow where frontend sends ID token directly
+// VerifyIDToken 校验 Google ID token 并提取用户信息
+// 用于前端直接发送 ID token 的 web 流程
 func (v *GoogleOAuthVerifier) VerifyIDToken(ctx context.Context, idToken string) (*GoogleUser, error) {
 	return v.verifyIDTokenWithAudience(ctx, idToken, v.clientID)
 }
 
 // verifyIDTokenWithAudience verifies a Google ID token against a specific client ID (audience)
+// verifyIDTokenWithAudience 针对指定 client ID（audience）校验 Google ID token
 func (v *GoogleOAuthVerifier) verifyIDTokenWithAudience(ctx context.Context, idToken, expectedAudience string) (*GoogleUser, error) {
 	if expectedAudience == "" {
 		return nil, fmt.Errorf("Google OAuth client ID not configured")
 	}
 
 	// Verify the ID token using Google's library
+	// 使用 Google 官方库校验 ID token
 	payload, err := idtoken.Validate(ctx, idToken, expectedAudience)
 	if err != nil {
 		return nil, fmt.Errorf("invalid Google ID token: %w", err)
 	}
 
 	// Extract claims with safe type assertions (avoid panics on missing fields)
+	// 用安全的类型断言提取 claims（避免字段缺失时 panic）
 	email, _ := payload.Claims["email"].(string)
 	if email == "" {
 		return nil, fmt.Errorf("email claim missing from Google token")
@@ -88,10 +97,15 @@ func (v *GoogleOAuthVerifier) verifyIDTokenWithAudience(ctx context.Context, idT
 
 // ExchangeAuthCode exchanges an authorization code for user info
 // Used for desktop/mobile flows where we get auth code from deep link
+// ExchangeAuthCode 用授权码换取用户信息
+// 用于从深链接获得 auth code 的桌面/移动流程
 func (v *GoogleOAuthVerifier) ExchangeAuthCode(ctx context.Context, authCode, redirectURI string) (*GoogleUser, error) {
 	// Select credentials based on redirect_uri pattern
 	// Desktop apps use custom schemes (shannon://) or loopback
 	// iOS uses com.googleusercontent.apps.* scheme (public client - no secret)
+	// 根据 redirect_uri 形态选择凭据
+	// 桌面应用使用自定义 scheme（shannon://）或 loopback
+	// iOS 使用 com.googleusercontent.apps.* scheme（公共客户端，无 secret）
 	clientID, clientSecret, isPublicClient := v.selectCredentials(redirectURI)
 
 	if clientID == "" {
@@ -99,6 +113,7 @@ func (v *GoogleOAuthVerifier) ExchangeAuthCode(ctx context.Context, authCode, re
 	}
 
 	// For confidential clients (web/desktop), require client_secret
+	// 机密客户端（web/desktop）必须提供 client_secret
 	if !isPublicClient && clientSecret == "" {
 		return nil, fmt.Errorf("Google OAuth client secret not configured for redirect_uri: %s", redirectURI)
 	}
@@ -112,6 +127,7 @@ func (v *GoogleOAuthVerifier) ExchangeAuthCode(ctx context.Context, authCode, re
 	values.Set("grant_type", "authorization_code")
 
 	// Only include client_secret for confidential clients (not for iOS public client)
+	// 仅机密客户端才包含 client_secret（iOS 公共客户端不带）
 	if !isPublicClient && clientSecret != "" {
 		values.Set("client_secret", clientSecret)
 	}
@@ -142,6 +158,7 @@ func (v *GoogleOAuthVerifier) ExchangeAuthCode(ctx context.Context, authCode, re
 	}
 
 	// Verify the ID token using the same client ID that was used for exchange
+	// 使用与换取时相同的 client ID 校验 ID token
 	return v.verifyIDTokenWithAudience(ctx, tokenResp.IDToken, clientID)
 }
 
@@ -149,14 +166,21 @@ func (v *GoogleOAuthVerifier) ExchangeAuthCode(ctx context.Context, authCode, re
 // Returns: clientID, clientSecret, isPublicClient
 // - Desktop/native apps use custom schemes or loopback addresses
 // - iOS uses com.googleusercontent.apps.* scheme (public client - no secret needed)
+// selectCredentials 根据 redirect_uri 返回合适的 client ID 与 secret
+// 返回 clientID、clientSecret、isPublicClient
+// - 桌面/原生应用使用自定义 scheme 或 loopback 地址
+// - iOS 使用 com.googleusercontent.apps.* scheme（公共客户端，无需 secret）
 func (v *GoogleOAuthVerifier) selectCredentials(redirectURI string) (clientID, clientSecret string, isPublicClient bool) {
 	// iOS pattern: com.googleusercontent.apps.{client_id}:/oauth2redirect/google
 	// iOS is a public client - no client_secret required
+	// iOS 形态：com.googleusercontent.apps.{client_id}:/oauth2redirect/google
+	// iOS 是公共客户端，不需要 client_secret
 	if strings.Contains(redirectURI, "googleusercontent.apps") {
 		return iOSClientID, "", true
 	}
 
 	// Desktop patterns: custom schemes or loopback for native apps
+	// 桌面形态：原生应用的自定义 scheme 或 loopback
 	isDesktop := strings.HasPrefix(redirectURI, "shannon://") ||
 		strings.HasPrefix(redirectURI, "http://localhost") ||
 		strings.HasPrefix(redirectURI, "http://127.0.0.1")
@@ -170,6 +194,7 @@ func (v *GoogleOAuthVerifier) selectCredentials(redirectURI string) (clientID, c
 }
 
 // parseJSON is a helper to parse JSON response
+// parseJSON 是解析 JSON response 的辅助函数
 func parseJSON(body io.Reader, v interface{}) error {
 	data, err := io.ReadAll(body)
 	if err != nil {

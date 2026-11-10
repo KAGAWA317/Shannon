@@ -217,6 +217,7 @@ export function WorkspacePanel({ sessionId, workspaceUpdateSeq }: WorkspacePanel
             }
         } catch (e: any) {
             // Don't show error for common cases (session not found, etc.)
+            // 常见情况（session 不存在等）不展示错误
             if (e?.status !== 404) {
                 setError(e?.message || "Failed to list files");
             }
@@ -280,6 +281,7 @@ export function WorkspacePanel({ sessionId, workspaceUpdateSeq }: WorkspacePanel
                 const contentType = resp.content_type || "text/plain";
 
                 // Truncate large text files (skip binary/image content — truncating base64 corrupts it)
+                // 截断过大的文本文件（跳过二进制/图片内容 —— 截断 base64 会损坏数据）
                 const isBinary = isImage(filePath) || contentType.startsWith("image/") || contentType === "application/octet-stream";
                 if (!isBinary && content.length > MAX_FILE_CONTENT_LENGTH) {
                     content = content.substring(0, MAX_FILE_CONTENT_LENGTH) + "\n\n--- Truncated (file too large to display fully) ---";

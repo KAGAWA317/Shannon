@@ -36,9 +36,12 @@ func (dc *DaemonConn) Send(msg ServerMessage) error {
 
 // WorkflowStartedCallback is called when a progress message carries a workflow_id.
 // Used to start streaming for the associated channel.
+// 进度消息携带 workflow_id 时调用 WorkflowStartedCallback。
+// 用于为对应渠道启动 streaming 输出。
 type WorkflowStartedCallback func(ctx context.Context, messageID string, meta ClaimMetadata)
 
 // Hub manages all connected daemon WebSocket connections.
+// Hub 管理所有已连接的 daemon WebSocket 连接。
 type Hub struct {
 	mu          sync.RWMutex
 	conns       map[string]*DaemonConn         // conn_id -> connection
@@ -51,6 +54,7 @@ type Hub struct {
 	logger *zap.Logger
 
 	// OnWorkflowStarted is called when a daemon progress message carries a workflow_id.
+	// daemon 进度消息携带 workflow_id 时调用 OnWorkflowStarted。
 	OnWorkflowStarted WorkflowStartedCallback
 }
 
@@ -77,6 +81,7 @@ func stickyKey(channelType, threadID string) string {
 }
 
 // Register adds a daemon connection to the hub.
+// Register 把 daemon 连接加入 hub。
 func (h *Hub) Register(conn *DaemonConn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -99,6 +104,7 @@ func (h *Hub) Register(conn *DaemonConn) {
 }
 
 // Unregister removes a daemon connection from the hub.
+// Unregister 从 hub 移除 daemon 连接。
 func (h *Hub) Unregister(connID string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -130,6 +136,7 @@ func (h *Hub) Unregister(connID string) {
 }
 
 // GetConnections returns all connections for a tenant:user pair.
+// GetConnections 返回某个 tenant:user 组合的全部连接。
 func (h *Hub) GetConnections(tenantID, userID string) []*DaemonConn {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -150,6 +157,7 @@ func (h *Hub) GetConnections(tenantID, userID string) []*DaemonConn {
 }
 
 // GetConn returns a single connection by ID.
+// GetConn 按 ID 返回单个连接。
 func (h *Hub) GetConn(connID string) (*DaemonConn, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -158,6 +166,7 @@ func (h *Hub) GetConn(connID string) (*DaemonConn, bool) {
 }
 
 // SetSticky sets sticky routing for a channel:thread to a specific connection.
+// SetSticky 把 channel:thread 的粘性路由指向某个连接。
 func (h *Hub) SetSticky(channelType, threadID, connID string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -165,6 +174,7 @@ func (h *Hub) SetSticky(channelType, threadID, connID string) {
 }
 
 // GetSticky returns the sticky connection for a channel:thread, if any.
+// GetSticky 返回 channel:thread 的粘性连接（若有）。
 func (h *Hub) GetSticky(channelType, threadID string) (string, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -173,6 +183,7 @@ func (h *Hub) GetSticky(channelType, threadID string) (string, bool) {
 }
 
 // ClearStickyForConn removes all sticky entries pointing to a connection.
+// ClearStickyForConn 移除指向某连接的全部粘性条目。
 func (h *Hub) ClearStickyForConn(connID string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -180,6 +191,7 @@ func (h *Hub) ClearStickyForConn(connID string) {
 }
 
 // clearStickyForConnLocked removes sticky entries; caller must hold h.mu.
+// clearStickyForConnLocked 移除粘性条目；调用方必须持有 h.mu。
 func (h *Hub) clearStickyForConnLocked(connID string) {
 	for k, v := range h.sticky {
 		if v == connID {
@@ -194,6 +206,11 @@ func (h *Hub) clearStickyForConnLocked(connID string) {
 // The meta parameter carries channel routing metadata that will be stored for
 // claim resolution — when a daemon claims this message, the pending metadata
 // is merged with the claim so replies can be routed back to the originating channel.
+// Dispatch 把消息发送到合适的 daemon 连接。
+// 系统渠道会广播给所有连接且不期待 claim。
+// 普通渠道先尝试粘性路由，再广播。
+// meta 参数携带渠道路由 metadata，会被保存用于 claim 解析——当 daemon 占用该消息时，
+// 待处理 metadata 与 claim 合并，使回复能路由回原渠道。
 func (h *Hub) Dispatch(ctx context.Context, tenantID, userID string, payload MessagePayload, meta ClaimMetadata) error {
 	messageID := uuid.New().String()
 
@@ -215,9 +232,12 @@ func (h *Hub) Dispatch(ctx context.Context, tenantID, userID string, payload Mes
 
 	// Collect targets under lock, then send outside to avoid holding the write lock
 	// during potentially slow WebSocket writes (conn.Send has a 10s write deadline).
+	// 在锁内收集目标，然后在锁外发送，避免在可能较慢的 WebSocket 写入期间持有写锁
+	// （conn.Send 有 10s 写 timeout）。
 	h.mu.Lock()
 
 	// Try sticky routing for non-system channels with a thread.
+	// 对带 thread 的非系统渠道尝试粘性路由。
 	var stickyConn *DaemonConn
 	if !isSystem && payload.ThreadID != "" {
 		sk := stickyKey(payload.Channel, payload.ThreadID)
@@ -239,6 +259,7 @@ func (h *Hub) Dispatch(ctx context.Context, tenantID, userID string, payload Mes
 	}
 
 	// If sticky hit, release lock and send.
+	// 粘性命中则释放锁后发送。
 	if stickyConn != nil {
 		h.mu.Unlock()
 		return stickyConn.Send(msg)
@@ -267,6 +288,8 @@ func (h *Hub) Dispatch(ctx context.Context, tenantID, userID string, payload Mes
 
 	// Send outside lock — WebSocket writes can be slow.
 	// Return nil if at least one daemon received the message (partial success is OK for broadcast).
+	// 在锁外发送——WebSocket 写入可能较慢。
+	// 只要至少一个 daemon 收到消息就返回 nil（广播允许部分成功）。
 	var sent int
 	for _, conn := range targets {
 		if err := conn.Send(msg); err != nil {
@@ -292,6 +315,11 @@ func (h *Hub) Dispatch(ctx context.Context, tenantID, userID string, payload Mes
 // is preserved in the claim for reply routing.
 // storePendingMeta stores metadata and schedules automatic cleanup.
 // Caller must hold h.mu.
+// HandleClaim 处理 daemon 对某消息的占用，占用成功返回 true。
+// 若 Dispatch 已保存待处理 metadata，会与传入的 meta 合并，
+// 从而在 claim 中保留渠道路由信息（channel_id、channel_type、thread_id 等）供回复路由使用。
+// storePendingMeta 保存 metadata 并安排自动清理。
+// 调用方必须持有 h.mu。
 func (h *Hub) storePendingMeta(messageID string, meta ClaimMetadata) {
 	h.pendingMeta[messageID] = meta
 	h.pendingTimers[messageID] = time.AfterFunc(pendingMetaTTL, func() {
@@ -303,6 +331,7 @@ func (h *Hub) storePendingMeta(messageID string, meta ClaimMetadata) {
 }
 
 // consumePendingMeta retrieves and removes pending metadata. Caller must hold h.mu.
+// consumePendingMeta 取出并删除待处理 metadata。调用方必须持有 h.mu。
 func (h *Hub) consumePendingMeta(messageID string) (ClaimMetadata, bool) {
 	meta, ok := h.pendingMeta[messageID]
 	if ok {
@@ -317,6 +346,7 @@ func (h *Hub) consumePendingMeta(messageID string) (ClaimMetadata, bool) {
 
 func (h *Hub) HandleClaim(ctx context.Context, connID, messageID string, meta ClaimMetadata) (bool, error) {
 	// Merge pending metadata from Dispatch (carries channel routing info).
+	// 合并 Dispatch 留下的待处理 metadata（携带渠道路由信息）。
 	h.mu.Lock()
 	if pending, ok := h.consumePendingMeta(messageID); ok {
 		if meta.ChannelID == "" {
@@ -361,6 +391,8 @@ func (h *Hub) HandleClaim(ctx context.Context, connID, messageID string, meta Cl
 
 // HandleProgress extends the claim TTL for a message being processed.
 // If payload carries a workflow_id, updates the claim and notifies via OnWorkflowStarted.
+// HandleProgress 延长正在处理的消息的 claim TTL。
+// 若 payload 携带 workflow_id，则更新 claim 并通过 OnWorkflowStarted 通知。
 func (h *Hub) HandleProgress(ctx context.Context, messageID string, payload *ProgressPayload) error {
 	if err := h.claims.ExtendClaim(ctx, messageID, h.claims.claimTTL); err != nil {
 		return err
@@ -385,6 +417,7 @@ func (h *Hub) HandleProgress(ctx context.Context, messageID string, payload *Pro
 }
 
 // HandleReply retrieves claim metadata and releases the claim.
+// HandleReply 取出 claim metadata 并释放 claim。
 func (h *Hub) HandleReply(ctx context.Context, messageID string) (ClaimMetadata, error) {
 	meta, err := h.claims.GetClaim(ctx, messageID)
 	if err != nil {
@@ -404,12 +437,14 @@ func (h *Hub) HandleReply(ctx context.Context, messageID string) (ClaimMetadata,
 }
 
 // HandleDisconnect unregisters a connection and releases all its claims.
+// HandleDisconnect 注销连接并释放其全部 claim。
 func (h *Hub) HandleDisconnect(ctx context.Context, connID string) ([]string, error) {
 	h.Unregister(connID)
 	return h.claims.ReleaseAllForConn(ctx, connID)
 }
 
 // ConnectedCount returns the number of connections for a tenant:user pair.
+// ConnectedCount 返回某个 tenant:user 组合的连接数。
 func (h *Hub) ConnectedCount(tenantID, userID string) int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -417,6 +452,7 @@ func (h *Hub) ConnectedCount(tenantID, userID string) int {
 }
 
 // SendToConn sends a message to a specific connection by ID.
+// SendToConn 按 ID 向指定连接发送消息。
 func (h *Hub) SendToConn(connID string, msg ServerMessage) error {
 	conn, ok := h.GetConn(connID)
 	if !ok {

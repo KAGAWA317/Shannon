@@ -57,6 +57,7 @@ func NewWorkspaceHandler(db *sqlx.DB, logger *zap.Logger) *WorkspaceHandler {
 }
 
 // DownloadRequest matches the Firecracker executor's request format
+// DownloadRequest 与 Firecracker executor 的 request 格式一致。
 type DownloadRequest struct {
 	SessionID     string `json:"session_id"`
 	FilePath      string `json:"file_path"`
@@ -152,6 +153,7 @@ func (h *WorkspaceHandler) DownloadFile(w http.ResponseWriter, r *http.Request) 
 
 	// Prefer local filesystem (fast, handles text encoding correctly).
 	// Falls through to Firecracker if local path doesn't exist.
+	// 优先读本地文件系统（快，且能正确处理文本编码）；本地路径不存在时回退到 Firecracker。
 	if _, err := os.Stat(filepath.Join(workspacePath, filePath)); err == nil {
 		h.downloadFileLocal(w, workspacePath, filePath)
 		return
@@ -249,6 +251,8 @@ func (h *WorkspaceHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 	// If the workspace directory doesn't exist locally, the session never created
 	// files (or they were cleaned up). Return empty immediately — calling Firecracker
 	// just to list an empty ext4 root wastes ~6s and only returns lost+found.
+	// 优先本地文件系统（快，无需 Firecracker 往返）。若本地不存在该 workspace 目录，说明该 session 从未产生文件
+	// （或已被清理），直接返回空即可——只为列一个空 ext4 根目录去调 Firecracker 要浪费约 6 秒，且只会返回 lost+found。
 	targetDir := workspacePath
 	if subPath != "" {
 		targetDir = filepath.Join(workspacePath, subPath)
@@ -264,6 +268,7 @@ func (h *WorkspaceHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Subdirectory requested but not found locally — try Firecracker as fallback
+	// request 的是子目录但本地不存在——回退到 Firecracker。
 	reqBody := ListFilesRequest{
 		SessionID:     workspaceKey,
 		WorkspacePath: workspacePath,
@@ -297,6 +302,7 @@ func (h *WorkspaceHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 
 	// Decode Firecracker response so we can filter ext4 artifacts (lost+found)
 	// that the VM-side listing includes but shouldn't be exposed to clients.
+	// 解析 Firecracker response，以便过滤 ext4 产物（lost+found）——VM 侧会列出它，但不该暴露给客户端。
 	if resp.StatusCode == http.StatusOK {
 		var listResp ListFilesResponse
 		if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
@@ -317,6 +323,7 @@ func (h *WorkspaceHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 
 // listFilesLocal reads workspace files directly from the local filesystem.
 // Used as fallback when Firecracker executor is unavailable (e.g. local dev).
+// listFilesLocal 直接从本地文件系统读取 workspace 文件；Firecracker executor 不可用时（如本地开发）作为兜底。
 func (h *WorkspaceHandler) listFilesLocal(w http.ResponseWriter, workspacePath, subPath string) {
 	targetDir := workspacePath
 	if subPath != "" {
@@ -324,6 +331,7 @@ func (h *WorkspaceHandler) listFilesLocal(w http.ResponseWriter, workspacePath, 
 	}
 
 	// Security: ensure resolved path stays within workspace
+	// 安全：确保解析后的路径仍在 workspace 内。
 	absTarget, err := filepath.Abs(targetDir)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid path"})
@@ -375,10 +383,12 @@ func (h *WorkspaceHandler) listFilesLocal(w http.ResponseWriter, workspacePath, 
 
 // downloadFileLocal reads a single file from the local filesystem.
 // Returns JSON response matching the Firecracker executor format.
+// downloadFileLocal 从本地文件系统读取单个文件，返回与 Firecracker executor 格式一致的 JSON。
 func (h *WorkspaceHandler) downloadFileLocal(w http.ResponseWriter, workspacePath, filePath string) {
 	fullPath := filepath.Join(workspacePath, filePath)
 
 	// Security: ensure resolved path stays within workspace
+	// 安全：确保解析后的路径仍在 workspace 内。
 	absPath, err := filepath.Abs(fullPath)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid path"})
@@ -425,6 +435,7 @@ func (h *WorkspaceHandler) downloadFileLocal(w http.ResponseWriter, workspacePat
 	size := uint64(len(data))
 
 	// For text files, return content directly; for binary, base64-encode
+	// 文本文件直接返回内容，二进制文件做 base64 编码。
 	var content string
 	if isTextContentType(ct) {
 		content = string(data)
@@ -441,10 +452,12 @@ func (h *WorkspaceHandler) downloadFileLocal(w http.ResponseWriter, workspacePat
 }
 
 // detectContentType returns a MIME type based on file extension.
+// detectContentType 根据文件扩展名推断 MIME 类型。
 func detectContentType(filePath string) string {
 	ext := strings.ToLower(filepath.Ext(filePath))
 
 	// Common types that mime.TypeByExtension may not cover well
+	// 补充 mime.TypeByExtension 覆盖不佳的常见类型。
 	switch ext {
 	case ".md":
 		return "text/markdown"
@@ -486,6 +499,7 @@ func detectContentType(filePath string) string {
 }
 
 // isTextContentType returns true if the content type represents text content.
+// isTextContentType 判断该 content type 是否属于文本。
 func isTextContentType(ct string) bool {
 	return strings.HasPrefix(ct, "text/") || ct == "application/json" || ct == "application/xml"
 }
@@ -508,6 +522,7 @@ func (h *WorkspaceHandler) resolveWorkspaceKey(
 	}
 
 	// If external_id is present, it's the session identifier used by task execution and workspace manager.
+	// 存在 external_id 时，它就是 task 执行和 workspace manager 使用的 session 标识。
 	if meta.ExternalID.Valid && strings.TrimSpace(meta.ExternalID.String) != "" {
 		return strings.TrimSpace(meta.ExternalID.String), nil
 	}
@@ -563,6 +578,7 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 
 // filterWorkspaceFiles removes ext4 filesystem artifacts from a file listing.
 // Applied to both local and Firecracker code paths to ensure consistent output.
+// filterWorkspaceFiles 过滤 ext4 文件系统产物；本地与 Firecracker 两条路径都应用，保证输出一致。
 func filterWorkspaceFiles(files []FileInfo) []FileInfo {
 	filtered := make([]FileInfo, 0, len(files))
 	for _, f := range files {

@@ -6,7 +6,9 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 /// Workspace state file for crash recovery.
+/// 用于崩溃恢复的工作区状态文件。
 /// Written before VM start (dirty) and after successful post-sync (clean).
+/// VM 启动前写入（dirty），后置同步成功后写入（clean）。
 #[derive(Serialize, Deserialize)]
 struct WorkspaceState {
     status: String,   // "clean" or "dirty"
@@ -14,8 +16,11 @@ struct WorkspaceState {
 }
 
 /// Check ext4 consistency. Run fsck if state is missing or dirty.
+/// 检查 ext4 一致性。状态缺失或为 dirty 时执行 fsck。
 /// Call this BEFORE writing dirty marker.
+/// 应在写入 dirty 标记之前调用。
 /// Returns Ok(true) if ext4 is consistent, Ok(false) if fsck found errors.
+/// ext4 一致时返回 Ok(true)，fsck 发现错误时返回 Ok(false)。
 pub fn ensure_ext4_consistent(ext4_path: &str) -> Result<bool, String> {
     let state_path = format!("{}.state", ext4_path);
 
@@ -36,6 +41,7 @@ pub fn ensure_ext4_consistent(ext4_path: &str) -> Result<bool, String> {
             .output()
             .map_err(|e| format!("Failed to run e2fsck: {}", e))?;
         // e2fsck returns 0=clean, 1=fixed, 2+=error
+        // e2fsck 返回 0=干净，1=已修复，2+=错误
         let code = output.status.code().unwrap_or(255);
         if code > 1 {
             warn!(ext4_path = %ext4_path, exit_code = code, "e2fsck found uncorrectable errors");
@@ -47,6 +53,7 @@ pub fn ensure_ext4_consistent(ext4_path: &str) -> Result<bool, String> {
 }
 
 /// Mark workspace as dirty BEFORE VM starts.
+/// 在 VM 启动前将工作区标记为 dirty。
 pub fn mark_dirty(ext4_path: &str) -> Result<(), String> {
     let state = WorkspaceState {
         status: "dirty".to_string(),
@@ -62,6 +69,7 @@ pub fn mark_dirty(ext4_path: &str) -> Result<(), String> {
 }
 
 /// Mark workspace as clean AFTER successful post-sync.
+/// 后置同步成功后，将工作区标记为 clean。
 pub fn mark_clean(ext4_path: &str) -> Result<(), String> {
     let state = WorkspaceState {
         status: "clean".to_string(),
@@ -89,8 +97,11 @@ fn cleanup_mount(mount_point: &str) {
 }
 
 /// Sync files from session directory to ext4 block device BEFORE a VM starts.
+/// VM 启动前，将 session 目录中的文件同步到 ext4 块设备。
 /// This enables the VM (which mounts the ext4 at /workspace) to access files created by tools
+/// 这样 VM（把 ext4 挂载到 /workspace）就能看到由直接写入
 /// that write directly to the session directory.
+/// session 目录的 tool 所创建的文件。
 pub(crate) fn sync_directory_to_ext4(workspace_path: &str) -> Result<(), String> {
     let ext4_path = format!("{}.ext4", workspace_path.trim_end_matches('/'));
     let dir_path = workspace_path;
@@ -164,8 +175,11 @@ pub(crate) fn sync_directory_to_ext4(workspace_path: &str) -> Result<(), String>
 }
 
 /// Sync files from ext4 block device to session directory AFTER a VM terminates.
+/// VM 终止后，将 ext4 块设备中的文件同步回 session 目录。
 /// This enables tools that read from the session directory to access files created by code
+/// 这样从 session 目录读取的 tool 就能看到 VM 内代码
 /// executed inside the VM.
+/// 执行所创建的文件。
 pub(crate) fn sync_ext4_to_directory(workspace_path: &str) -> Result<(), String> {
     let ext4_path = format!("{}.ext4", workspace_path.trim_end_matches('/'));
     let dir_path = workspace_path;
@@ -178,6 +192,7 @@ pub(crate) fn sync_ext4_to_directory(workspace_path: &str) -> Result<(), String>
     let mount_point = temp_mount_point("sync")?;
 
     // Use read-write mount - read-only fails on Amazon Linux 2 with "cannot mount read-only"
+    // 使用读写挂载——只读挂载在 Amazon Linux 2 上会报 "cannot mount read-only"
     let mount_result = Command::new("mount")
         .args(["-o", "loop", &ext4_path, &mount_point])
         .output();

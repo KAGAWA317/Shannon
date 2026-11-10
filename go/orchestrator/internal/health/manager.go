@@ -10,6 +10,7 @@ import (
 )
 
 // CheckerState represents the runtime state of a health checker
+// CheckerState 表示健康检查器的运行时状态
 type CheckerState struct {
 	checker   Checker
 	enabled   bool
@@ -65,6 +66,7 @@ func NewManager(logger *zap.Logger) *Manager {
 }
 
 // NewManagerWithConfig creates a health manager with specific configuration
+// NewManagerWithConfig 使用指定配置创建健康管理器
 func NewManagerWithConfig(config *HealthConfiguration, logger *zap.Logger) *Manager {
 	if config == nil {
 		return NewManager(logger)
@@ -98,6 +100,7 @@ func (m *Manager) RegisterChecker(checker Checker) error {
 	checkConfig, hasConfig := m.config.Checks[name]
 
 	// Create checker state with config or defaults
+	// 按配置或默认值创建检查器状态
 	state := &CheckerState{
 		checker:  checker,
 		enabled:  true,
@@ -201,6 +204,7 @@ func (m *Manager) GetDetailedHealth(ctx context.Context) DetailedHealth {
 	}
 
 	// Run health checks only for enabled checkers
+	// 仅对已启用的检查器执行健康检查
 	for name, state := range checkerStates {
 		if !state.enabled {
 			// Skip disabled checkers
@@ -246,6 +250,7 @@ func (m *Manager) GetDetailedHealth(ctx context.Context) DetailedHealth {
 }
 
 // runSingleCheck executes a single health check with timeout (legacy method)
+// runSingleCheck 执行单次健康检查并带 timeout（旧方法）
 func (m *Manager) runSingleCheck(ctx context.Context, checker Checker) CheckResult {
 	checkCtx, cancel := context.WithTimeout(ctx, checker.Timeout())
 	defer cancel()
@@ -263,6 +268,7 @@ func (m *Manager) runSingleCheck(ctx context.Context, checker Checker) CheckResu
 }
 
 // runSingleCheckWithState executes a single health check with state-based configuration
+// runSingleCheckWithState 基于状态中的配置执行单次健康检查
 func (m *Manager) runSingleCheckWithState(ctx context.Context, state *CheckerState) CheckResult {
 	checkCtx, cancel := context.WithTimeout(ctx, state.timeout)
 	defer cancel()
@@ -271,6 +277,7 @@ func (m *Manager) runSingleCheckWithState(ctx context.Context, state *CheckerSta
 	result := state.checker.Check(checkCtx)
 
 	// Ensure result has required fields from state
+	// 确保结果带有状态中的必需字段
 	result.Component = state.checker.Name()
 	result.Critical = state.critical
 	result.Duration = time.Since(startTime)
@@ -283,6 +290,7 @@ func (m *Manager) runSingleCheckWithState(ctx context.Context, state *CheckerSta
 }
 
 // calculateOverallStatus determines overall health from component results
+// calculateOverallStatus 由各组件结果判定整体健康状况
 func (m *Manager) calculateOverallStatus(components map[string]CheckResult, summary HealthSummary) OverallHealth {
 	if summary.Total == 0 {
 		return OverallHealth{
@@ -349,12 +357,14 @@ func (m *Manager) calculateOverallStatus(components map[string]CheckResult, summ
 }
 
 // IsReady returns true if the service is ready to serve requests
+// 服务可接收 request 时 IsReady 返回 true
 func (m *Manager) IsReady(ctx context.Context) bool {
 	overall := m.GetOverallHealth(ctx)
 	return overall.Ready
 }
 
 // IsLive returns true if the service is alive (for liveness probes)
+// 服务存活时 IsLive 返回 true（用于 liveness 探针）
 func (m *Manager) IsLive(ctx context.Context) bool {
 	overall := m.GetOverallHealth(ctx)
 	return overall.Live
@@ -412,6 +422,7 @@ func (m *Manager) backgroundChecker() {
 }
 
 // runBackgroundChecks executes all health checks in background with per-check intervals
+// runBackgroundChecks 在后台按各自的间隔执行全部健康检查
 func (m *Manager) runBackgroundChecks() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -433,6 +444,7 @@ func (m *Manager) runBackgroundChecks() {
 		}
 
 		// Check if it's time to run this check
+		// 检查是否到了该执行此检查的时间
 		if now.Sub(state.lastCheck) >= state.interval {
 			result := m.runSingleCheckWithState(ctx, state)
 			checkResults[name] = result
@@ -440,6 +452,7 @@ func (m *Manager) runBackgroundChecks() {
 	}
 
 	// Update last results if we have any new results
+	// 有新结果时更新最后一次结果
 	if len(checkResults) > 0 {
 		m.mu.Lock()
 		for name, result := range checkResults {
@@ -463,6 +476,7 @@ func (m *Manager) SetCheckInterval(interval time.Duration) {
 }
 
 // GetLastResults returns the most recent health check results without running new checks
+// GetLastResults 返回最近一次健康检查结果，不执行新检查
 func (m *Manager) GetLastResults() map[string]CheckResult {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -487,6 +501,7 @@ func (m *Manager) UpdateConfiguration(config *HealthConfiguration) error {
 	m.checkInterval = config.CheckInterval
 
 	// Update existing checker states with new configuration
+	// 用新配置更新已有的检查器状态
 	for name, state := range m.checkers {
 		if checkConfig, exists := config.Checks[name]; exists {
 			state.enabled = checkConfig.Enabled
@@ -525,6 +540,7 @@ func (m *Manager) GetConfiguration() *HealthConfiguration {
 	defer m.mu.RUnlock()
 
 	// Return a copy to prevent external modification
+	// 返回副本，防止外部修改
 	configCopy := &HealthConfiguration{
 		Enabled:       m.config.Enabled,
 		CheckInterval: m.config.CheckInterval,
@@ -583,6 +599,7 @@ func (m *Manager) DisableChecker(name string) error {
 }
 
 // GetCheckerStates returns the current state of all checkers (for debugging)
+// GetCheckerStates 返回所有检查器的当前状态（用于调试）
 func (m *Manager) GetCheckerStates() map[string]CheckerState {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

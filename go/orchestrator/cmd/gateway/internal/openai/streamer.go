@@ -18,6 +18,8 @@ import (
 
 // ShannonSSEEvent represents an event from Shannon's internal SSE stream.
 // This is used for parsing incoming events, distinct from the output ShannonEvent in types.go.
+// ShannonSSEEvent 表示 Shannon 内部 SSE stream 中的 event，用于解析输入 event，
+// 与 types.go 中输出的 ShannonEvent 区分。
 type ShannonSSEEvent struct {
 	WorkflowID string                 `json:"workflow_id"`
 	Type       string                 `json:"type"`
@@ -82,6 +84,7 @@ func NewStreamerWithMetrics(logger *zap.Logger, modelName string, metrics *Metri
 
 // HeartbeatInterval is the interval at which to send SSE keepalive comments.
 // Set to 30s to stay well under typical ALB idle timeouts (60-300s).
+// HeartbeatInterval 是发送 SSE keepalive 注释的间隔；设为 30 秒，远低于常见的 ALB 空闲 timeout（60-300 秒）。
 const HeartbeatInterval = 30 * time.Second
 
 // sseLineResult represents a line read from the SSE scanner.
@@ -105,12 +108,14 @@ func (s *Streamer) StreamResponse(ctx context.Context, sseReader io.Reader, w ht
 
 	// Use a goroutine to read lines so we can implement heartbeat timeouts.
 	// Channel is buffered (1) to allow goroutine to exit even if receiver stops.
+	// 用 goroutine 读行，才能实现心跳 timeout；channel 缓冲为 1，接收方停止后 goroutine 也能退出。
 	lineCh := make(chan sseLineResult, 1)
 	go func() {
 		defer close(lineCh)
 		scanner := bufio.NewScanner(sseReader)
 		// Allow large SSE events (e.g., browser action=screenshot base64 payloads).
 		// Configurable via env to accommodate different deployments.
+		// 允许较大的 SSE event（例如 browser action=screenshot 的 base64 payload）；可通过环境变量按部署调整。
 		bufBytes := 64 * 1024
 		if v := os.Getenv("OPENAI_SSE_SCANNER_BUF_BYTES"); v != "" {
 			if n, err := strconv.Atoi(v); err == nil && n > 0 {
@@ -157,6 +162,7 @@ func (s *Streamer) StreamResponse(ctx context.Context, sseReader io.Reader, w ht
 			// Only send keepalive if we haven't written to client recently.
 			// This prevents keepalive gaps when upstream sends frequent pings
 			// but we're not forwarding content to the client.
+			// 只有最近没有向客户端写过数据时才发 keepalive，避免上游频繁 ping 而我们并未转发内容时出现心跳空档。
 			if time.Since(s.lastClientWrite) >= HeartbeatInterval {
 				s.writeHeartbeat(w, flusher)
 			}
@@ -178,6 +184,7 @@ func (s *Streamer) StreamResponse(ctx context.Context, sseReader io.Reader, w ht
 
 			// Forward upstream SSE comments (like ": ping") as keepalives to client.
 			// This ensures client connection stays alive during long quiet periods.
+			// 把上游的 SSE 注释（如 ": ping"）作为 keepalive 转发给客户端，保证长时间静默期间连接不被断开。
 			if strings.HasPrefix(line, ":") {
 				s.writeHeartbeat(w, flusher)
 				continue
@@ -226,6 +233,7 @@ func (s *Streamer) processEvent(eventType, data string, w http.ResponseWriter, f
 	}
 
 	// Determine the effective event type (prefer event.Type from JSON, fall back to SSE event name)
+	// 确定实际的 event 类型（优先用 JSON 里的 event.Type，回退到 SSE event 名）。
 	effectiveType := event.Type
 	if effectiveType == "" {
 		effectiveType = eventType
@@ -248,6 +256,8 @@ func (s *Streamer) processEvent(eventType, data string, w http.ResponseWriter, f
 		// Only stream partials from final-phase agents (synthesis).
 		// Skip subtask agent partials (they set seenPartial and hide final output).
 		// Skip citation_agent partials (they contain <cited_report> tags).
+		// 只 stream 转发最终阶段 agent（synthesis）的 partial；跳过子 task agent 的 partial（它们会设置 seenPartial 并隐藏最终输出），
+		// 也跳过 citation_agent 的 partial（其中含 <cited_report> 标签）。
 		if !isFinalPhaseAgent(event.AgentID) {
 			s.logger.Debug("Skipping non-final agent partial",
 				zap.String("agent_id", event.AgentID))
@@ -262,6 +272,8 @@ func (s *Streamer) processEvent(eventType, data string, w http.ResponseWriter, f
 	case isOutputEvent(eventType, event.Type):
 		// Only show "final_output" LLM_OUTPUT - the canonical answer after all processing.
 		// Skip all other LLM_OUTPUT events to avoid duplicates from intermediate phases.
+		// 只展示 "final_output" 的 LLM_OUTPUT——即所有处理完成后的规范答案；
+		// 其余 LLM_OUTPUT 一律跳过，避免中间阶段造成重复。
 		if event.AgentID == "final_output" {
 			content := event.Response
 			if content == "" {
@@ -270,6 +282,7 @@ func (s *Streamer) processEvent(eventType, data string, w http.ResponseWriter, f
 			if strings.TrimSpace(content) != "" {
 				// B-lite: Stream final output in chunks for progressive display.
 				// This gives streaming UX while ensuring correctness (single canonical answer).
+				// B-lite：把最终输出分块 streaming 发送，兼顾渐进展示与正确性（只有一份规范答案）。
 				s.writeContentChunked(w, flusher, content)
 				s.sawFinalOutput = true
 			}
@@ -283,6 +296,8 @@ func (s *Streamer) processEvent(eventType, data string, w http.ResponseWriter, f
 	case isEndEvent(eventType, event.Type):
 		// Some workflows may emit WORKFLOW_COMPLETED before emitting the canonical "final_output" LLM_OUTPUT.
 		// If we haven't seen final output yet, keep the stream open until STREAM_END or EOF.
+		// 某些 workflow 会先发 WORKFLOW_COMPLETED 再发规范的 "final_output" LLM_OUTPUT；
+		// 若尚未见到最终输出，则保持 stream 打开，直到 STREAM_END 或 EOF。
 		if isWorkflowCompletedEvent(eventType, event.Type) && !s.sawFinalOutput {
 			s.writeEventChunk(w, flusher, "WORKFLOW_COMPLETED", event)
 			return nil
@@ -324,12 +339,16 @@ func isWorkflowCompletedEvent(eventName, eventType string) bool {
 // whose partials should be streamed to the OpenAI client.
 // For maximum correctness, we drop ALL partials and rely on the "final_output"
 // LLM_OUTPUT event which contains the fully post-processed answer.
+// isFinalPhaseAgent 判断 agent_id 是否属于最终阶段（其 partial 应转发给 OpenAI 客户端）。
+// 为最大程度保证正确性，这里丢弃所有 partial，只依赖 "final_output" 的 LLM_OUTPUT event——它包含后处理完成的答案。
 func isFinalPhaseAgent(agentID string) bool {
 	// Drop all partials - they can cause duplicates and include raw intermediate work.
 	// The canonical final answer comes via "final_output" LLM_OUTPUT event.
 	// Subtask agents (Tenma, Gora, etc.) are intermediate work.
 	// synthesis partials may duplicate final_output.
 	// citation_agent partials contain <cited_report> wrapper tags.
+	// 丢弃所有 partial：它们会带来重复，且包含原始中间产物。规范答案只来自 "final_output" 的 LLM_OUTPUT event。
+	// 子 task agent（Tenma、Gora 等）属于中间过程；synthesis 的 partial 可能与 final_output 重复；citation_agent 的 partial 带 <cited_report> 包裹标签。
 	return false
 }
 
@@ -387,10 +406,12 @@ func (s *Streamer) captureUsage(meta *struct {
 
 // FinalOutputChunkSize is the size of chunks for streaming final output.
 // Smaller chunks give smoother streaming UX; larger chunks reduce overhead.
+// FinalOutputChunkSize 是最终输出 streaming 分块的大小；块越小越顺滑，越大开销越低。
 const FinalOutputChunkSize = 100 // ~100 chars per chunk for natural reading pace
 
 // writeContentChunked splits content into chunks for progressive streaming.
 // This gives OpenAI-compatible streaming UX while ensuring correctness.
+// writeContentChunked 把内容切块逐步发送，在保证正确性的同时提供 OpenAI 兼容的 streaming 体验。
 func (s *Streamer) writeContentChunked(w http.ResponseWriter, flusher http.Flusher, content string) {
 	// Split content into chunks for progressive display
 	runes := []rune(content)
@@ -532,6 +553,7 @@ func (s *Streamer) writeEventChunk(w http.ResponseWriter, flusher http.Flusher, 
 
 // writeHeartbeat writes an SSE comment as a keepalive signal.
 // SSE comments start with ':' and are ignored by conforming clients.
+// writeHeartbeat 写入 SSE 注释作为 keepalive；SSE 注释以 ':' 开头，合规客户端会忽略。
 func (s *Streamer) writeHeartbeat(w http.ResponseWriter, flusher http.Flusher) {
 	fmt.Fprintf(w, ": keepalive\n\n")
 	flusher.Flush()

@@ -18,6 +18,7 @@ const (
 )
 
 // CircuitBreaker implements the circuit breaker pattern for workflows
+// 进程内版本靠 sync.RWMutex 保护；workflow 版本不能加锁（会破坏确定性），改用 workflow.Now 计时。
 type CircuitBreaker struct {
 	maxFailures      int
 	resetTimeout     time.Duration
@@ -46,6 +47,7 @@ func (cb *CircuitBreaker) Call(fn func() error) error {
 	defer cb.mu.Unlock()
 
 	// Check if circuit should transition from Open to HalfOpen
+	// Open 持续超过 resetTimeout 才转 HalfOpen，放少量 request 试探下游是否恢复。
 	if cb.state == StateOpen {
 		if time.Since(cb.lastFailTime) > cb.resetTimeout {
 			cb.state = StateHalfOpen

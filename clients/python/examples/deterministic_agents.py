@@ -1,4 +1,7 @@
-"""Example of deterministic agents and optional swarm follow-up messaging."""
+"""Example of deterministic agents and optional swarm follow-up messaging.
+
+示例：确定性 agent 以及可选的 swarm 后续消息。
+"""
 
 import json
 import os

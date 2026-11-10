@@ -1,6 +1,9 @@
 """
 Unified LLM Manager
 Orchestrates multiple providers with caching, routing, and token management
+
+统一的 LLM Manager
+编排多个 provider，负责 caching、routing 与 token 管理
 """
 
 import os
@@ -15,6 +18,7 @@ from datetime import datetime
 import logging
 
 # Optional instrumentation (prometheus)
+# 可选埋点（prometheus）
 try:
     from prometheus_client import Counter, Histogram
 
@@ -64,6 +68,7 @@ except Exception:
     _METRICS_ENABLED = False
 
 # Optional redis cache
+# 可选的 redis cache
 try:
     import redis  # type: ignore
 
@@ -82,6 +87,7 @@ from .base import (
     TokenUsage,
 )
 # Provider implementations (optional at import time to ease testing without deps)
+# provider 实现（导入时可选，便于在缺少依赖时测试）
 try:
     from .openai_provider import OpenAIProvider
 except Exception:  # pragma: no cover
@@ -124,6 +130,13 @@ class LLMManager:
     - Caching and rate limiting
     - Token budget enforcement
     - Usage tracking and reporting
+
+    主要的 LLM 管理类，负责：
+    - provider 注册与 routing
+    - model 分层与选择
+    - caching 与 rate limit
+    - token budget 约束
+    - 用量跟踪与报表
     """
 
     def __init__(self, config_path: Optional[str] = None):
@@ -149,14 +162,17 @@ class LLMManager:
         self._breakers: Dict[str, "_CircuitBreaker"] = {}
 
         # Token budget tracking
+        # token budget 跟踪
         self.session_usage: Dict[str, TokenUsage] = {}
         self.task_usage: Dict[str, TokenUsage] = {}
 
         # Load configuration
+        # 加载配置
         if config_path:
             self.load_config(config_path)
         else:
             # Try unified config first (MODELS_CONFIG_PATH → /app/config/models.yaml → ./config/models.yaml)
+            # 优先尝试统一配置（MODELS_CONFIG_PATH → /app/config/models.yaml → ./config/models.yaml）
             auto_paths = [
                 os.getenv("MODELS_CONFIG_PATH", "").strip(),
                 "/app/config/models.yaml",
@@ -168,25 +184,32 @@ class LLMManager:
             else:
                 self.load_default_config()
         # Apply centralized pricing overrides after providers are loaded
+        # provider 加载后应用集中的 pricing 覆盖
         try:
             self._load_and_apply_pricing_overrides()
         except Exception as e:
             self.logger.warning(f"Pricing overrides not applied: {e}")
 
     # Backward compatibility aliases removed intentionally to keep logic simple
+    # 为保持逻辑简单，有意移除了向后兼容的别名
 
     def load_config(self, config_path: str):
-        """Load configuration from YAML file. Supports both unified and legacy formats."""
+        """Load configuration from YAML file. Supports both unified and legacy formats.
+
+        从 YAML 文件加载配置。同时支持统一格式与旧格式。
+        """
         self._config_path = config_path
         with open(config_path, "r") as f:
             config = yaml.safe_load(f) or {}
 
         if "model_catalog" in config or "model_tiers" in config:
             # Unified config format (config/models.yaml)
+            # 统一配置格式（config/models.yaml）
             providers_cfg, routing_cfg, caching_cfg = self._translate_unified_config(
                 config
             )
             # Resilience configuration (optional)
+            # resilience 配置（可选）
             try:
                 self._resilience_cfg = dict(
                     config.get("resilience", {}) or self._resilience_cfg
@@ -198,6 +221,7 @@ class LLMManager:
             self._configure_caching(caching_cfg)
         else:
             # Legacy format
+            # 旧格式
             self._initialize_providers(config.get("providers", {}))
             self._configure_routing(config.get("routing", {}))
             self._configure_caching(config.get("caching", {}))
@@ -208,6 +232,12 @@ class LLMManager:
         This fallback only initializes providers from environment variables without
         model definitions. All model metadata, pricing, and routing preferences must
         come from config/models.yaml (see MODELS_CONFIG_PATH env var).
+
+        最小兜底配置 —— 生产环境必须提供 models.yaml。
+
+        该兜底仅从环境变量初始化 provider，不含 model 定义。所有 model metadata、
+        pricing 与 routing 偏好都必须来自 config/models.yaml（见 MODELS_CONFIG_PATH
+        环境变量）。
         """
         self.logger.warning(
             "Loading minimal fallback config - models.yaml not found. "
@@ -224,6 +254,7 @@ class LLMManager:
         }
 
         # Initialize providers from environment (model definitions come from models.yaml)
+        # 从环境变量初始化 provider（model 定义来自 models.yaml）
         if os.getenv("OPENAI_API_KEY"):
             config["providers"]["openai"] = {
                 "type": "openai",
@@ -255,6 +286,7 @@ class LLMManager:
             }
 
         # OpenAI-compatible providers (require base_url + models from models.yaml)
+        # OpenAI 兼容 provider（需要 base_url，以及来自 models.yaml 的 model 定义）
         for name, env_key, base_url in [
             ("deepseek", "DEEPSEEK_API_KEY", "https://api.deepseek.com"),
             ("qwen", "QWEN_API_KEY", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
@@ -281,8 +313,12 @@ class LLMManager:
         self._configure_caching(config["caching"])
 
     def _initialize_providers(self, providers_config: Dict):
-        """Initialize all configured providers"""
+        """Initialize all configured providers
+
+        初始化所有已配置的 provider。
+        """
         # Reset registry and limiters when re-initializing
+        # 重新初始化时重置 registry 与 limiter
         self.registry = LLMProviderRegistry()
         self.rate_limiters = {}
         self._breakers = {}
@@ -344,6 +380,7 @@ class LLMManager:
                 )
 
                 # Initialize rate limiter for provider (0 = disabled, rely on gateway layer)
+                # 为 provider 初始化 rate limiter（0 = 禁用，交由 gateway 层处理）
                 rpm = int(config.get("requests_per_minute", 0) or 0)
                 max_conc = int(config.get("max_concurrent", 0) or 0)
                 if rpm > 0 or max_conc > 0:
@@ -351,6 +388,7 @@ class LLMManager:
 
                 self.logger.info(f"Initialized provider: {name}")
                 # Initialize circuit breaker for provider
+                # 为 provider 初始化 circuit breaker
                 cb_cfg = (
                     (self._resilience_cfg.get("circuit_breakers") or {})
                     if hasattr(self, "_resilience_cfg")
@@ -363,6 +401,7 @@ class LLMManager:
                     metrics_enabled=_METRICS_ENABLED,
                 )
                 # If pricing overrides already loaded, apply immediately
+                # 若 pricing 覆盖已加载，立即应用
                 try:
                     self._apply_pricing_overrides_for_provider(name, provider)
                 except Exception as e:
@@ -376,7 +415,10 @@ class LLMManager:
     def _translate_unified_config(
         self, cfg: Dict[str, Any]
     ) -> tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
-        """Translate unified config (model_catalog/model_tiers/selection_strategy) to internal structures."""
+        """Translate unified config (model_catalog/model_tiers/selection_strategy) to internal structures.
+
+        将统一配置（model_catalog/model_tiers/selection_strategy）转换为内部结构。
+        """
         model_catalog = cfg.get("model_catalog", {}) or {}
         provider_settings = cfg.get("provider_settings", {}) or {}
         model_tiers = cfg.get("model_tiers", {}) or {}
@@ -386,6 +428,7 @@ class LLMManager:
         capabilities_cfg = cfg.get("model_capabilities", {}) or {}
 
         # Provider type + env var mapping
+        # provider 类型与环境变量映射
         type_map = {
             "openai": ("openai", "OPENAI_API_KEY"),
             "anthropic": ("anthropic", "ANTHROPIC_API_KEY"),
@@ -396,21 +439,25 @@ class LLMManager:
             "kimi": ("openai_compatible", "KIMI_API_KEY"),
             "minimax": ("minimax", "MINIMAX_API_KEY"),
             # OpenAI-compatible providers we support
+            # 我们支持的 OpenAI 兼容 provider
             "deepseek": ("openai_compatible", "DEEPSEEK_API_KEY"),
             "qwen": ("openai_compatible", "QWEN_API_KEY"),
             "ollama": ("openai_compatible", "OLLAMA_API_KEY"),
             # Others exist in config but not yet implemented here: meta/bedrock
+            # 配置中还有其他项但此处尚未实现：meta/bedrock
         }
 
         providers_cfg: Dict[str, Any] = {}
         for prov_name, models in model_catalog.items():
             if prov_name not in type_map:
                 # Skip providers without a concrete implementation in this service
+                # 跳过本服务中没有具体实现的 provider
                 continue
             ptype, env_key = type_map[prov_name]
             p_cfg: Dict[str, Any] = {"type": ptype, "models": {}}
 
             # API key from env if present
+            # 若环境变量中存在 API key 则使用
             api_key = os.getenv(env_key)
             if api_key:
                 p_cfg["api_key"] = api_key
@@ -419,6 +466,7 @@ class LLMManager:
             p_cfg.setdefault("name", prov_name)
 
             # Base URL + timeouts for HTTP providers we instantiate locally
+            # 本地实例化的 HTTP provider 的 base URL 与 timeout
             if ptype in ("openai_compatible", "xai", "anthropic", "minimax"):
                 base_url = provider_cfg.get("base_url")
                 if base_url:
@@ -430,17 +478,20 @@ class LLMManager:
                 p_cfg.setdefault("max_retries", provider_cfg.get("max_retries"))
 
             # Copy over model metadata (honor enabled flag)
+            # 复制 model metadata（遵守 enabled 标志）
             for alias, meta in (models or {}).items():
                 meta = dict(meta or {})
                 if str(meta.get("enabled", "true")).lower() == "false":
                     continue
                 # Augment with capabilities from top-level capabilities lists
+                # 用顶层 capabilities 列表补充能力标记
                 try:
                     if alias in (capabilities_cfg.get("multimodal_models", []) or []):
                         meta["supports_vision"] = True
                     if alias in (capabilities_cfg.get("thinking_models", []) or []):
                         meta["supports_reasoning"] = True
                     # JSON mode support defaults per provider type
+                    # 各 provider 类型的 JSON mode 支持默认值
                     if ptype in (
                         "openai",
                         "openai_compatible",
@@ -452,6 +503,7 @@ class LLMManager:
                     else:
                         meta.setdefault("supports_json_mode", False)
                     # Default max parallel tools
+                    # 默认的最大并行 tool 数
                     meta.setdefault("max_parallel_tools", 1)
                 except Exception:
                     pass
@@ -460,10 +512,12 @@ class LLMManager:
             providers_cfg[prov_name] = p_cfg
 
         # Build routing preferences from model_tiers (ordered by priority)
+        # 依据 model_tiers 构建 routing 偏好（按优先级排序）
         tier_prefs: Dict[str, List[str]] = {}
         for tier_name, tier_cfg in model_tiers.items():
             items = tier_cfg.get("providers", []) or []
             # Sort by 'priority' (lower is higher priority); if absent, keep order
+            # 按 'priority' 排序（数值越小优先级越高）；缺失时保持原顺序
             try:
                 items = sorted(items, key=lambda x: int(x.get("priority", 9999)))
             except Exception:
@@ -483,11 +537,14 @@ class LLMManager:
             "enabled": bool(prompt_cache.get("enabled", True)),
             "default_ttl": int(prompt_cache.get("ttl_seconds", 3600) or 3600),
             # Keep default size; unified file tracks size in MB for a different cache
+            # 保持默认大小；统一文件里的 size（MB）针对的是另一个 cache
             "max_size": 1000,
         }
 
         # Rate limits (optional): apply per-provider RPM only if explicitly configured.
         # default_rpm=0 means disabled — rely on gateway layer for user-facing rate limits.
+        # rate limit（可选）：仅在显式配置时应用各 provider 的 RPM。
+        # default_rpm=0 表示禁用 —— 面向用户的 rate limit 交由 gateway 层处理。
         default_rpm = int(rate_limits.get("default_rpm", 0) or 0)
         if default_rpm > 0:
             for name, pcfg in providers_cfg.items():
@@ -496,12 +553,18 @@ class LLMManager:
         return providers_cfg, routing_cfg, caching_cfg
 
     def _configure_routing(self, routing_config: Dict):
-        """Configure routing preferences"""
+        """Configure routing preferences
+
+        配置 routing 偏好。
+        """
         self.routing_config = routing_config
         self.tier_preferences = routing_config.get("tier_preferences", {})
 
     def _configure_caching(self, caching_config: Dict):
-        """Configure caching settings"""
+        """Configure caching settings
+
+        配置 caching 设置。
+        """
         self._cache_cfg = dict(caching_config or {})
         if not self._cache_cfg.get("enabled", True):
             self.cache = None
@@ -509,6 +572,7 @@ class LLMManager:
             return
 
         # Prefer Redis cache if REDIS_URL (or REDIS_HOST/PORT) is present and library available
+        # 若存在 REDIS_URL（或 REDIS_HOST/PORT）且库可用，优先使用 Redis cache
         redis_url = os.getenv("REDIS_URL") or os.getenv("LLM_REDIS_URL")
         if not redis_url and os.getenv("REDIS_HOST"):
             host = os.getenv("REDIS_HOST")
@@ -537,7 +601,10 @@ class LLMManager:
         self.default_cache_ttl = int(self._cache_cfg.get("default_ttl", 3600))
 
     def _load_and_apply_pricing_overrides(self):
-        """Load pricing overrides from /app/config/models.yaml and apply to providers."""
+        """Load pricing overrides from /app/config/models.yaml and apply to providers.
+
+        从 /app/config/models.yaml 加载 pricing 覆盖并应用到 provider。
+        """
         config_path = os.getenv("MODELS_CONFIG_PATH", "/app/config/models.yaml")
         if not os.path.exists(config_path):
             return
@@ -560,6 +627,7 @@ class LLMManager:
         if not prov_map:
             return
         # Update known models' pricing if present
+        # 若存在则更新已知 model 的 pricing
         for key, model_cfg in provider.models.items():
             override = prov_map.get(model_cfg.model_id) or prov_map.get(key)
             if not override:
@@ -580,20 +648,26 @@ class LLMManager:
         """
         Main completion method with automatic provider selection,
         caching, and rate limiting
+
+        主 completion 方法，自动完成 provider 选择、caching 与 rate limit。
         """
 
         # Create request object
+        # 构造 request 对象
         request = CompletionRequest(messages=messages, model_tier=model_tier, **kwargs)
 
         # No model aliasing: expect callers to provide canonical model IDs
+        # 不做 model 别名转换：调用方应提供规范化的 model ID
 
         # Check cache if enabled
+        # 若启用则检查 cache
         cache_key = None
         if self.cache and not request.stream:
             cache_key = request.generate_cache_key()
             cached_response = self.cache.get(cache_key)
             if cached_response:
                 # Guard against cache poisoning when strict JSON is expected
+                # 期望严格 JSON 时防止 cache 被污染
                 if _is_strict_json_mode(request):
                     try:
                         parsed = json.loads(cached_response.content or "")
@@ -607,6 +681,7 @@ class LLMManager:
                             pass
                         cached_response = None
                 # Avoid serving cached truncated/filtered outputs
+                # 避免返回被截断/被过滤的 cache 输出
                 if cached_response and (getattr(cached_response, "finish_reason", "") or "").lower() in {"length", "content_filter"}:
                     try:
                         if hasattr(self.cache, "delete"):
@@ -626,13 +701,16 @@ class LLMManager:
                     return cached_response
 
         # Select provider based on request
+        # 依据 request 选择 provider
         provider_name, provider = self._select_provider(request)
 
         # Track token budget if session/task specified
+        # 指定了 session/task 时跟踪 token budget
         if request.session_id:
             await self._check_session_budget(request)
 
         # Make the actual API call (supports hedging when enabled)
+        # 发起实际 API 调用（启用时支持 hedging）
         hedge_cfg = self._resilience_cfg.get("hedged_requests") or {}
         allow_hedge = bool(
             hedge_cfg.get("enabled", False)
@@ -659,9 +737,11 @@ class LLMManager:
                 )
 
             # Update usage tracking
+            # 更新用量跟踪
             self._update_usage_tracking(request, response)
 
             # Cache the response if applicable and safe
+            # 适用且安全时 cache 该 response
             if self.cache and not request.stream:
                 try:
                     cache_ttl = request.cache_ttl or self.default_cache_ttl
@@ -672,9 +752,11 @@ class LLMManager:
                         self.logger.info("Skip caching response (unsafe/invalid for cache)")
                 except Exception:
                     # Never fail due to cache issues
+                    # 绝不因 cache 问题导致失败
                     self.logger.debug("Cache set failed; continuing without cache", exc_info=True)
 
             # Instrumentation
+            # 埋点上报
             if _METRICS_ENABLED:
                 LLM_MANAGER_REQUESTS.labels(
                     response.provider, response.model, "ok"
@@ -704,15 +786,18 @@ class LLMManager:
                     pass
 
             # If provider_override was explicitly set, do NOT fallback — let caller handle.
+            # 若显式设置了 provider_override，则不要 fallback —— 交由调用方处理。
             po = getattr(request, "provider_override", None)
             if isinstance(po, str) and po.strip():
                 raise
 
             # Try fallback provider if available
+            # 若有可用的 fallback provider 则尝试
             fallback = self._get_fallback_provider(provider_name, request.model_tier)
             if fallback:
                 self.logger.info(f"Trying fallback provider: {fallback[0]}")
                 # Clear model selection so fallback provider can choose its own compatible model
+                # 清空 model 选择，让 fallback provider 自行选择兼容的 model
                 original_model = request.model
                 request.model = None
                 try:
@@ -736,13 +821,19 @@ class LLMManager:
 
         Backward compatible: this method is additive and does not alter existing
         response formats, protobuf contracts, or event emission.
+
+        统一的 streaming API：从选中的 provider 产出文本 chunk。
+
+        向后兼容：该方法为增量新增，不改变既有 response 格式、protobuf 契约或 event 发射。
         """
         # Build request (mark stream=True for clarity to providers)
+        # 构造 request（stream=True，向 provider 明确表示流式）
         request = CompletionRequest(
             messages=messages, model_tier=model_tier, stream=True, **kwargs
         )
 
         # If a cached response exists and caller requested streaming, emit as a single chunk
+        # 若存在 cache 的 response 且调用方要求 streaming，则作为单个 chunk 输出
         cache_key = None
         if self.cache:
             try:
@@ -755,45 +846,57 @@ class LLMManager:
                 pass
 
         # Select provider and apply rate limiting
+        # 选择 provider 并应用 rate limit
         provider_name, provider = self._select_provider(request)
         if provider_name in self.rate_limiters:
             await self.rate_limiters[provider_name].acquire()
 
         # Stream from provider
+        # 从 provider 流式获取
         try:
             req = self._normalize_function_call_for_provider(provider_name, request)
             async for chunk in provider.stream_complete(req):
                 # Pass through strings and dicts (for usage metadata)
+                # 原样传出字符串与 dict（用于 usage metadata）
                 if isinstance(chunk, (str, dict)) and chunk:
                     yield chunk
         except Exception as e:
             self.logger.error(f"Provider {provider_name} streaming failed: {e}")
             # If provider_override was explicitly set, do NOT fallback
+            # 若显式设置了 provider_override，则不要 fallback
             po = getattr(request, "provider_override", None)
             if isinstance(po, str) and po.strip():
                 raise
             # Attempt fallback provider for streaming if configured
+            # 若已配置，则为 streaming 尝试 fallback provider
             fallback = self._get_fallback_provider(provider_name, request.model_tier)
             if fallback:
                 # Clear model selection so fallback provider can choose its own compatible model
+                # 清空 model 选择，让 fallback provider 自行选择兼容的 model
                 original_model = request.model
                 request.model = None
                 try:
                     req = self._normalize_function_call_for_provider(fallback[0], request)
                     async for chunk in fallback[1].stream_complete(req):
                         # Pass through strings and dicts (for usage metadata)
+                        # 原样传出字符串与 dict（用于 usage metadata）
                         if isinstance(chunk, (str, dict)) and chunk:
                             yield chunk
                 except Exception:
                     # Restore original model before re-raising
+                    # 重新抛出前恢复原始 model
                     request.model = original_model
                     raise
             else:
                 raise
 
     def _select_provider(self, request: CompletionRequest) -> tuple[str, LLMProvider]:
-        """Select the best provider for a request"""
+        """Select the best provider for a request
+
+        为 request 选择最合适的 provider。
+        """
         # Provider override (explicit control)
+        # provider 覆盖（显式控制）
         po = getattr(request, "provider_override", None)
         if isinstance(po, str) and po:
             provider_name = str(po).strip()
@@ -803,6 +906,7 @@ class LLMManager:
                 raise RuntimeError(f"Provider '{provider_name}' circuit breaker is open")
             provider = self.registry.providers[provider_name]
             # If a specific model was requested, ensure this provider has it
+            # 若请求了具体 model，确认该 provider 拥有它
             if request.model and request.model not in provider.models:
                 raise ValueError(
                     f"Model '{request.model}' not available for provider '{provider_name}'"
@@ -811,6 +915,8 @@ class LLMManager:
 
         # If specific model is explicitly set (e.g., via specific_model parameter),
         # find and use the provider that has this model, bypassing tier preferences
+        # 若显式指定了具体 model（如通过 specific_model 参数），
+        # 找到并直接使用拥有该 model 的 provider，绕过 tier 偏好
         if request.model:
             self.logger.debug(f"Specific model requested: {request.model}, searching for provider")
             for pname, pprovider in self.registry.providers.items():
@@ -820,6 +926,7 @@ class LLMManager:
                     self.logger.info(f"Using provider '{pname}' for specific model '{request.model}'")
                     return pname, pprovider
             # If no provider has this model, log warning and fall through to tier-based selection
+            # 若无 provider 拥有该 model，记录告警并转入基于 tier 的选择
             self.logger.warning(
                 f"Specific model '{request.model}' not found in any available provider, "
                 f"falling back to tier-based selection (tier={request.model_tier.value})"
@@ -827,6 +934,7 @@ class LLMManager:
             request.model = None  # Clear it so tier selection can proceed
 
         # Check tier preferences
+        # 检查 tier 偏好
         tier_prefs = self.tier_preferences.get(request.model_tier.value, [])
 
         for pref in tier_prefs:
@@ -842,9 +950,11 @@ class LLMManager:
                         continue
                     provider = self.registry.providers[provider_name]
                     # Check if provider has the model; if so, lock request.model explicitly
+                    # 检查 provider 是否拥有该 model；若有则显式锁定 request.model
                     if model_id in provider.models:
                         try:
                             # Set explicit model to ensure exact match downstream
+                            # 设置显式 model，确保下游精确匹配
                             request.model = model_id
                         except Exception:
                             pass
@@ -856,10 +966,12 @@ class LLMManager:
                         )
             else:
                 # Just provider name, use any model in tier
+                # 只有 provider 名时，使用该 tier 中任意 model
                 if pref in self.registry.providers and not self._is_breaker_open(pref):
                     return pref, self.registry.providers[pref]
 
         # Fall back to registry's selection
+        # 回退到 registry 的选择
         provider_name, provider = self.registry.select_provider_for_request(request)
         if self._is_breaker_open(provider_name):
             fb = self._get_fallback_provider(provider_name, request.model_tier)
@@ -870,7 +982,10 @@ class LLMManager:
     def _get_fallback_provider(
         self, failed_provider: str, tier: ModelTier
     ) -> Optional[tuple[str, LLMProvider]]:
-        """Get a fallback provider if the primary fails"""
+        """Get a fallback provider if the primary fails
+
+        主 provider 失败时获取一个 fallback provider。
+        """
 
         tier_prefs = self.tier_preferences.get(tier.value, [])
 
@@ -896,11 +1011,15 @@ class LLMManager:
     def _normalize_function_call_for_provider(
         self, provider_name: str, request: CompletionRequest
     ) -> CompletionRequest:
-        """Normalize internal tool forcing semantics to provider-compatible values."""
+        """Normalize internal tool forcing semantics to provider-compatible values.
+
+        将内部“强制使用 tool”的语义归一化为各 provider 兼容的取值。
+        """
         if not (isinstance(request.function_call, str) and request.function_call == "any"):
             return request
 
         # Anthropic supports tool_choice={"type":"any"} directly.
+        # Anthropic 直接支持 tool_choice={"type":"any"}。
         if provider_name == "anthropic":
             return request
 
@@ -926,21 +1045,26 @@ class LLMManager:
 
         # OpenAI-compatible APIs don't support a direct "any" string; forcing one tool is
         # the closest equivalent that prevents "tool-optional" behavior.
+        # OpenAI 兼容 API 不支持直接的 "any" 字符串；强制指定一个 tool 是最接近的等价做法，
+        # 可避免 “tool 可选” 的行为。
         return replace(request, function_call={"name": tool_name})
 
     async def _call_provider_with_cb(
         self, provider_name: str, provider: LLMProvider, request: CompletionRequest
     ) -> CompletionResponse:
         # Circuit breaker gate
+        # circuit breaker 闸门
         cb = self._breakers.get(provider_name)
         if cb and not cb.allow():
             raise RuntimeError(f"Circuit open for provider {provider_name}")
 
         # Apply rate limiting per provider
+        # 按 provider 应用 rate limit
         if provider_name in self.rate_limiters:
             await self.rate_limiters[provider_name].acquire()
 
         # Validate and cap max_tokens to model's limit
+        # 校验 max_tokens 并限制到 model 上限
         if request.model and request.model in provider.models:
             model_config = provider.models[request.model]
             if hasattr(request, 'max_tokens') and request.max_tokens:
@@ -953,6 +1077,7 @@ class LLMManager:
                     request.max_tokens = model_max
 
         # Call provider
+        # 调用 provider
         try:
             req = self._normalize_function_call_for_provider(provider_name, request)
             resp = await provider.complete(req)
@@ -966,6 +1091,7 @@ class LLMManager:
 
     def _is_hedge_candidate(self, request: CompletionRequest) -> bool:
         # Non-streaming, no tools, not strict JSON
+        # 非 streaming、无 tool、非严格 JSON
         if getattr(request, "stream", False):
             return False
         if getattr(request, "functions", None):
@@ -983,9 +1109,16 @@ class LLMManager:
         - For strict JSON, only cache if content parses to a JSON object.
         - Do not cache when finish_reason indicates truncation or content filtering.
         - Require non-empty content unless a function_call is present.
+
+        response 可以安全 cache 时返回 True。
+
+        - 严格 JSON 场景下，仅当 content 能解析为 JSON 对象时才 cache。
+        - finish_reason 表示截断或内容过滤时不要 cache。
+        - 除非存在 function_call，否则要求 content 非空。
         """
         try:
             # Check finish_reason FIRST (most important guard)
+            # 首先检查 finish_reason（最重要的保护）
             fr = (getattr(response, "finish_reason", "") or "").lower()
             if fr in {"length", "content_filter"}:
                 self.logger.info(f"Skip caching: finish_reason={fr}")
@@ -1042,6 +1175,7 @@ class LLMManager:
             return resp, winner
         except Exception:
             # If first failed immediately, wait for the other
+            # 若首选立即失败，则等待另一个
             if pending:
                 rest_done, _ = await asyncio.wait(
                     pending, return_when=asyncio.FIRST_COMPLETED
@@ -1052,30 +1186,41 @@ class LLMManager:
             raise
 
     async def _check_session_budget(self, request: CompletionRequest):
-        """Check and enforce session-level token budget"""
+        """Check and enforce session-level token budget
+
+        检查并执行 session 级 token budget。
+        """
         # Shannon architecture: budget enforcement is owned by the Go orchestrator.
         # Disable Python-side budget enforcement by default to avoid duplication/conflicts.
         # Override by setting LLM_DISABLE_BUDGETS=0 (or false) if you explicitly want
         # the LLM service to enforce its own per-session budget.
+        # Shannon 架构：budget 的执行由 Go orchestrator 负责。
+        # 默认关闭 Python 侧的 budget 执行，避免重复与冲突。
+        # 若明确希望 LLM 服务执行自己的 per-session budget，可设置 LLM_DISABLE_BUDGETS=0（或 false）。
         try:
             if str(os.getenv("LLM_DISABLE_BUDGETS", "1")).lower() in (
                 "1",
                 "true",
                 "yes",
             ):  # default disabled
+                # 默认禁用
                 return
         except Exception:
             # If env parsing fails, fail open (do not enforce here)
+            # 环境变量解析失败时 fail open（此处不执行约束）
             return
 
         if request.session_id not in self.session_usage:
             self.session_usage[request.session_id] = TokenUsage(0, 0, 0, 0.0)
 
         # Get current usage
+        # 获取当前用量
         current_usage = self.session_usage[request.session_id]
 
         # Enforce token budget limits
+        # 执行 token budget 限制
         max_tokens_per_session = 100000  # Default limit, should be configurable
+        # 默认限制，应可配置
         if hasattr(request, "max_tokens_budget"):
             max_tokens_per_session = request.max_tokens_budget
 
@@ -1094,15 +1239,20 @@ class LLMManager:
     def _update_usage_tracking(
         self, request: CompletionRequest, response: CompletionResponse
     ):
-        """Update usage tracking for sessions and tasks"""
+        """Update usage tracking for sessions and tasks
+
+        更新 session 与 task 的用量跟踪。
+        """
 
         # Update session usage
+        # 更新 session 用量
         if request.session_id:
             if request.session_id not in self.session_usage:
                 self.session_usage[request.session_id] = TokenUsage(0, 0, 0, 0.0)
             self.session_usage[request.session_id] += response.usage
 
         # Update task usage
+        # 更新 task 用量
         if request.task_id:
             if request.task_id not in self.task_usage:
                 self.task_usage[request.task_id] = TokenUsage(0, 0, 0, 0.0)
@@ -1111,7 +1261,10 @@ class LLMManager:
     def get_usage_report(
         self, session_id: Optional[str] = None, task_id: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Get usage report for a session or task"""
+        """Get usage report for a session or task
+
+        获取 session 或 task 的用量报表。
+        """
 
         report = {
             "timestamp": datetime.utcnow().isoformat(),
@@ -1143,12 +1296,16 @@ class LLMManager:
         return report
 
     def get_provider_status(self) -> Dict[str, Any]:
-        """Get status of all registered providers"""
+        """Get status of all registered providers
+
+        获取所有已注册 provider 的状态。
+        """
 
         status = {}
         for name, provider in self.registry.providers.items():
             status[name] = {
                 "available": True,  # Could add health checks
+                # 后续可加入健康检查
                 "models": list(provider.models.keys()),
                 "rate_limit": {
                     "requests_per_minute": self.rate_limiters[name].requests_per_minute
@@ -1160,12 +1317,16 @@ class LLMManager:
         return status
 
     async def reload(self) -> None:
-        """Hot-reload configuration if a config path was provided or discovered."""
+        """Hot-reload configuration if a config path was provided or discovered.
+
+        若提供了或已发现配置路径，则热重载配置。
+        """
         try:
             if self._config_path and os.path.exists(self._config_path):
                 self.load_config(self._config_path)
             else:
                 # Fall back to auto-detection or env defaults
+                # 回退到自动探测或环境变量默认值
                 auto_paths = [
                     os.getenv("MODELS_CONFIG_PATH", "").strip(),
                     "/app/config/models.yaml",
@@ -1180,6 +1341,7 @@ class LLMManager:
                     self.load_default_config()
 
             # Re-apply centralized pricing if available
+            # 若可用则重新应用集中的 pricing
             try:
                 self._load_and_apply_pricing_overrides()
             except Exception as e:
@@ -1190,8 +1352,12 @@ class LLMManager:
     async def generate_embedding(
         self, text: str, model: Optional[str] = None
     ) -> List[float]:
-        """Generate embeddings via the first capable provider (prefers OpenAI)."""
+        """Generate embeddings via the first capable provider (prefers OpenAI).
+
+        通过第一个具备能力的 provider 生成 embedding（优先 OpenAI）。
+        """
         # Prefer OpenAI if available
+        # 若可用则优先 OpenAI
         if "openai" in self.registry.providers:
             provider = self.registry.providers["openai"]
             gen = getattr(provider, "generate_embedding", None)
@@ -1199,6 +1365,7 @@ class LLMManager:
                 return await gen(text, model or "text-embedding-3-small")
 
         # Fallback to any provider exposing generate_embedding
+        # 回退到任何暴露 generate_embedding 的 provider
         for provider in self.registry.providers.values():
             gen = getattr(provider, "generate_embedding", None)
             if gen:
@@ -1208,11 +1375,15 @@ class LLMManager:
 
 
 # Singleton instance
+# 单例实例
 _manager_instance: Optional[LLMManager] = None
 
 
 def get_llm_manager(config_path: Optional[str] = None) -> LLMManager:
-    """Get or create the singleton LLM manager instance"""
+    """Get or create the singleton LLM manager instance
+
+    获取或创建单例 LLM manager 实例。
+    """
     global _manager_instance
 
     if _manager_instance is None:
@@ -1222,11 +1393,16 @@ def get_llm_manager(config_path: Optional[str] = None) -> LLMManager:
 
 
 # --- Redis cache backend (optional) ---
+# --- Redis cache 后端（可选）---
 class _RedisCacheManager:
-    """Redis-backed cache storing serialized CompletionResponse."""
+    """Redis-backed cache storing serialized CompletionResponse.
+
+    基于 Redis 的 cache，存放序列化后的 CompletionResponse。
+    """
 
     def __init__(self, url: str):
         # Lazy import guarded above
+        # 上方已做懒加载保护
         self._r = redis.Redis.from_url(url, decode_responses=True)
 
     def get(self, key: str) -> Optional[CompletionResponse]:
@@ -1256,6 +1432,7 @@ class _RedisCacheManager:
     @property
     def hit_rate(self) -> float:
         # Redis backend does not track hit/miss in this service; return 0.0 for compatibility
+        # 本服务中 Redis 后端不跟踪 hit/miss；为兼容性返回 0.0
         return 0.0
 
 
@@ -1286,6 +1463,10 @@ def _serialize_response(resp: CompletionResponse) -> Dict[str, Any]:
     # cached response silently reverts to the legacy {output_text, tool_calls}
     # shape and Anthropic's "preserve thinking across trajectory" contract
     # breaks for any session that touches a cached upstream call.
+    # 持久化有序的 content_blocks 列表，使 Redis cache 命中时能把 thinking block
+    # 原样回传给客户端。否则每个 cache 的 response 都会静默退回旧的 {output_text, tool_calls}
+    # 形状，任何触及 cache 上游调用的 session 都会破坏 Anthropic 的
+    # “在轨迹中保留 thinking”契约。
     if getattr(resp, "content_blocks", None):
         data["content_blocks"] = resp.content_blocks
     return data
@@ -1322,6 +1503,7 @@ def _is_strict_json_mode(request: CompletionRequest) -> bool:
 
 
 # --- Resilience helpers ---
+# --- resilience 辅助函数 ---
 def _is_transient_error(err: Exception) -> bool:
     txt = str(err).lower()
     if "timeout" in txt or "timed out" in txt:
@@ -1329,9 +1511,11 @@ def _is_transient_error(err: Exception) -> bool:
     if "429" in txt or "rate limit" in txt:
         return True
     # Heuristic for 5xx
+    # 针对 5xx 的启发式判断
     if " 5" in txt or "internal server error" in txt:
         return True
     # SDKs may attach status_code
+    # SDK 可能附带 status_code
     code = getattr(err, "status_code", None)
     try:
         if code is not None:
@@ -1356,6 +1540,7 @@ class _CircuitBreaker:
         self.recovery_timeout = float(recovery_timeout)
         self.failures = 0
         self.state = "closed"  # closed | open | half-open
+        # closed | open | half-open
         self.opened_at = 0.0
         self._metrics = metrics_enabled
 
@@ -1365,6 +1550,8 @@ class _CircuitBreaker:
         if self.state == "open":
             # Transition to half-open after cooldown
             # Add small jitter (±10%) to avoid thundering herd
+            # 冷却后转入 half-open
+            # 加入小幅抖动（±10%）以避免惊群
             jitter = self.recovery_timeout * random.uniform(-0.1, 0.1)
             if (time.time() - self.opened_at) >= (self.recovery_timeout + jitter):
                 self.state = "half-open"
@@ -1376,6 +1563,7 @@ class _CircuitBreaker:
                 return True
             return False
         # half-open allows one probe
+        # half-open 状态允许一次探测
         return True
 
     def on_success(self):

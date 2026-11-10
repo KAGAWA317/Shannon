@@ -72,6 +72,7 @@ func ExecuteParallel(
 	}
 
 	// Channel for collecting in-flight futures with a release handshake
+	// 收集进行中 future 的 channel 带释放握手：信号量要等收集器处理完结果后才释放。
 	futuresChan := workflow.NewChannel(ctx)
 
 	// Track futures with their original index
@@ -222,6 +223,7 @@ func ExecuteParallel(
 			var _sig struct{}
 			rel.Receive(ctx, &_sig)
 			// Now safe to release the semaphore
+			// 在收集器确认已处理完结果之前一直持有许可，之后才可安全释放信号量。
 			config.Semaphore.Release(1)
 		})
 	}
@@ -285,6 +287,7 @@ func ExecuteParallel(
 						// Record token usage for this parallel task
 						// Important: Avoid double-recording when running budgeted agents.
 						// ExecuteAgentWithBudget already records usage inside the activity.
+						// 注意：budget 路径已在 activity 内部记录用量，此处勿重复记录。
 						if budgetPerAgent <= 0 {
 							wid := workflow.GetInfo(ctx).WorkflowExecution.ID
 							if config.Context != nil {
@@ -456,6 +459,7 @@ func ExecuteParallel(
 
 // persistAgentExecutionLocal is a local helper to avoid circular imports
 // It mirrors the logic from supervisor_workflow.go and sequential.go
+// 本地副本，用于规避包循环导入；逻辑与 supervisor_workflow.go、sequential.go 保持一致。
 func persistAgentExecutionLocal(ctx workflow.Context, workflowID, agentID, input string, result activities.AgentExecutionResult) {
 	logger := workflow.GetLogger(ctx)
 
@@ -470,6 +474,7 @@ func persistAgentExecutionLocal(ctx workflow.Context, workflowID, agentID, input
 	detachedCtx = workflow.WithActivityOptions(detachedCtx, activityOpts)
 
 	// Pre-generate agent execution ID using SideEffect for replay safety
+	// 用 SideEffect 预生成执行 ID，保证重放时 ID 一致。
 	var agentExecutionID string
 	workflow.SideEffect(ctx, func(ctx workflow.Context) interface{} {
 		return uuid.New().String()

@@ -1,4 +1,7 @@
-"""Claim verification API for cross-referencing synthesis against citations."""
+"""Claim verification API for cross-referencing synthesis against citations.
+
+对照 citations 交叉核对 synthesis 的 claim 验证 API。
+"""
 
 import logging
 import json
@@ -13,13 +16,17 @@ from pydantic.config import ConfigDict
 logger = logging.getLogger(__name__)
 
 # CJK character pattern for language detection and tokenization
+# 用于语言检测与分词的 CJK 字符模式
 CJK_PATTERN = re.compile(r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]')
 
 router = APIRouter()
 
 
 class Citation(BaseModel):
-    """Citation structure matching Go orchestrator."""
+    """Citation structure matching Go orchestrator.
+
+    与 Go orchestrator 匹配的 citation 结构。
+    """
     model_config = ConfigDict(extra="ignore")
 
     url: str = ""
@@ -32,7 +39,10 @@ class Citation(BaseModel):
 
 
 class ClaimVerification(BaseModel):
-    """Verification result for a single claim."""
+    """Verification result for a single claim.
+
+    单个 claim 的验证结果。
+    """
     claim: str
     supporting_citations: List[int] = Field(default_factory=list)
     conflicting_citations: List[int] = Field(default_factory=list)
@@ -40,7 +50,10 @@ class ClaimVerification(BaseModel):
 
 
 class ConflictReport(BaseModel):
-    """Report of conflicting information between sources."""
+    """Report of conflicting information between sources.
+
+    sources 之间冲突信息的报告。
+    """
     claim: str
     source1: int
     source1_text: str
@@ -49,7 +62,10 @@ class ConflictReport(BaseModel):
 
 
 class VerificationResult(BaseModel):
-    """Overall verification result."""
+    """Overall verification result.
+
+    整体验证结果。
+    """
     overall_confidence: float
     total_claims: int
     supported_claims: int
@@ -60,10 +76,14 @@ class VerificationResult(BaseModel):
 
 # ============================================================================
 # V2 Models with three-category classification
+# 带 three-category 分类的 V2 Models
 # ============================================================================
 
 class ClaimVerificationV2(BaseModel):
-    """V2 Verification result with three-category classification."""
+    """V2 Verification result with three-category classification.
+
+    带 three-category 分类的 V2 验证结果。
+    """
     claim: str
     verdict: str = "insufficient_evidence"  # "supported" | "unsupported" | "insufficient_evidence"
     supporting_citations: List[int] = Field(default_factory=list)
@@ -74,49 +94,63 @@ class ClaimVerificationV2(BaseModel):
 
 
 class VerificationResultV2(BaseModel):
-    """V2 Overall verification result with three-category breakdown."""
+    """V2 Overall verification result with three-category breakdown.
+
+    带 three-category 分类统计的 V2 整体验证结果。
+    """
     overall_confidence: float
     total_claims: int
 
     # Three-category counts
+    # three-category 计数
     supported_claims: int
     unsupported_claims: int
     insufficient_evidence_claims: int
 
     # Lists for each category
+    # 各类别的列表
     supported_claim_texts: List[str] = Field(default_factory=list)
     unsupported_claim_texts: List[str] = Field(default_factory=list)
     insufficient_claim_texts: List[str] = Field(default_factory=list)
 
     # Details
+    # 明细
     claim_details: List[ClaimVerificationV2] = Field(default_factory=list)
     conflicts: List[ConflictReport] = Field(default_factory=list)
 
     # Quality metrics
+    # 质量 metrics
     evidence_coverage: float = 0.0  # % of claims with relevant citations found
     avg_retrieval_score: float = 0.0  # Average top-1 retrieval relevance
 
 
 # ============================================================================
 # V2 Helper Functions: Language Detection & BM25 Retrieval
+# V2 辅助函数：语言检测与 BM25 检索
 # ============================================================================
 
 def detect_language(text: str) -> str:
     """
     Detect if text is primarily CJK (Chinese/Japanese/Korean) or Latin-based.
 
+    检测文本主要是 CJK（中文/日文/韩文）还是拉丁语系。
+
     Args:
         text: Text to analyze (first ~500 chars recommended)
+            待分析的文本（建议取前约 500 字符）
 
     Returns:
         "zh" for CJK-dominant text, "en" otherwise
+        CJK 为主的文本返回 "zh"，否则返回 "en"
     """
     if not text:
         return "en"
 
     # Count CJK characters vs total alphanumeric
+    # 统计 CJK 字符数与字母数字总数
     cjk_count = len(CJK_PATTERN.findall(text))
     # Count Latin letters
+    # 统计拉丁字母数
     latin_count = len(re.findall(r'[a-zA-Z]', text))
 
     total = cjk_count + latin_count
@@ -124,6 +158,7 @@ def detect_language(text: str) -> str:
         return "en"
 
     # If >30% CJK, treat as CJK-dominant
+    # 若 CJK 占比 >30%，视为 CJK 为主
     if cjk_count / total > 0.3:
         return "zh"
     return "en"
@@ -133,11 +168,15 @@ def tokenize(text: str) -> List[str]:
     """
     Tokenize text supporting both CJK (character-level) and Latin (word-level).
 
+    对文本分词，同时支持 CJK（字符级）与拉丁语系（词级）。
+
     Args:
         text: Text to tokenize
+            待分词的文本
 
     Returns:
         List of tokens (CJK chars + Latin words)
+        token 列表（CJK 字符 + 拉丁词）
     """
     if not text:
         return []
@@ -145,11 +184,13 @@ def tokenize(text: str) -> List[str]:
     tokens = []
 
     # CJK: character-level tokenization
+    # CJK：字符级分词
     for char in text:
         if CJK_PATTERN.match(char):
             tokens.append(char)
 
     # Latin: word-level tokenization (lowercase)
+    # 拉丁语系：词级分词（转为小写）
     words = re.findall(r'\b\w+\b', text.lower())
     tokens.extend(words)
 
@@ -157,7 +198,10 @@ def tokenize(text: str) -> List[str]:
 
 
 class CorpusStats:
-    """P1-5: Corpus statistics for IDF calculation."""
+    """P1-5: Corpus statistics for IDF calculation.
+
+    P1-5：用于 IDF 计算的语料统计。
+    """
     def __init__(self):
         self.doc_freq: Dict[str, int] = {}  # term → number of documents containing it
         self.total_docs: int = 0
@@ -165,7 +209,10 @@ class CorpusStats:
 
     @classmethod
     def from_citations(cls, citations: List["Citation"]) -> "CorpusStats":
-        """Compute corpus statistics from a list of citations."""
+        """Compute corpus statistics from a list of citations.
+
+        从 citation 列表计算语料统计。
+        """
         stats = cls()
         stats.total_docs = len(citations)
 
@@ -179,6 +226,7 @@ class CorpusStats:
             total_tokens += len(tokens)
 
             # Count document frequency (each term counted once per document)
+            # 统计 document frequency（每个 term 在每个 document 中只计一次）
             unique_terms = set(tokens)
             for term in unique_terms:
                 stats.doc_freq[term] = stats.doc_freq.get(term, 0) + 1
@@ -202,18 +250,29 @@ def bm25_score(
     """
     Compute BM25 score between query and document.
 
+    计算 query 与 document 之间的 BM25 得分。
+
     P1-5: Now includes IDF weighting when corpus_stats is provided.
+
+    P1-5：提供 corpus_stats 时，现包含 IDF 加权。
 
     Args:
         query_tokens: Tokenized query (claim)
+            分词后的 query（claim）
         doc_tokens: Tokenized document (citation content)
+            分词后的 document（citation 内容）
         k1: Term frequency saturation parameter
+            词频饱和参数
         b: Length normalization parameter
+            长度归一化参数
         avg_doc_len: Estimated average document length (used if corpus_stats not provided)
+            估算的平均 document 长度（未提供 corpus_stats 时使用）
         corpus_stats: Optional corpus statistics for IDF calculation
+            可选的语料统计，用于 IDF 计算
 
     Returns:
         BM25 relevance score (higher = more relevant)
+        BM25 相关性得分（越高越相关）
     """
     if not query_tokens or not doc_tokens:
         return 0.0
@@ -222,6 +281,7 @@ def bm25_score(
     doc_len = len(doc_tokens)
 
     # Use corpus stats if available
+    # 若可用则使用 corpus stats
     if corpus_stats and corpus_stats.total_docs > 0:
         avg_doc_len = corpus_stats.avg_doc_len
         N = corpus_stats.total_docs
@@ -235,13 +295,17 @@ def bm25_score(
         tf = doc_freq.get(term, 0)
         if tf > 0:
             # TF component (BM25 saturation)
+            # TF 分量（BM25 饱和）
             tf_component = (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * doc_len / avg_doc_len))
 
             # IDF component (P1-5: proper inverse document frequency)
+            # IDF 分量（P1-5：规范的 inverse document frequency）
             if N > 0 and corpus_stats:
                 n = corpus_stats.doc_freq.get(term, 0)
                 # BM25 IDF formula: log((N - n + 0.5) / (n + 0.5) + 1)
                 # The +1 inside log prevents negative scores for very common terms
+                # BM25 IDF 公式：log((N - n + 0.5) / (n + 0.5) + 1)
+                # log 内的 +1 可避免常见 term 得到负分
                 idf = math.log((N - n + 0.5) / (n + 0.5) + 1)
             else:
                 idf = 1.0  # No IDF weighting without corpus stats
@@ -260,49 +324,67 @@ def retrieve_relevant_citations(
     """
     Retrieve top-k most relevant citations for a claim using BM25 scoring.
 
+    使用 BM25 打分为 claim 检索最相关的前 k 个 citations。
+
     P1-5: Now uses IDF weighting via corpus_stats for better precision.
+
+    P1-5：现通过 corpus_stats 使用 IDF 加权，以获得更好的精度。
 
     Args:
         claim: The claim to find evidence for
+            需要寻找证据的 claim
         citations: List of all available citations
+            所有可用 citations 的列表
         top_k: Number of top citations to return
+            返回的 top citations 数量
         corpus_stats: Optional pre-computed corpus stats (computed if not provided)
+            可选的预计算语料统计（未提供时即时计算）
 
     Returns:
         List of (original_1based_index, citation, relevance_score) tuples
+        (original_1based_index, citation, relevance_score) 元组列表
     """
     if not citations or not claim:
         return []
 
     # Tokenize claim
+    # 对 claim 分词
     claim_tokens = tokenize(claim)
     if not claim_tokens:
         return []
 
     # P1-5: Compute corpus stats if not provided
+    # P1-5：未提供时计算 corpus stats
     if corpus_stats is None:
         corpus_stats = CorpusStats.from_citations(citations)
 
     # Score each citation
+    # 为每个 citation 打分
     scored: List[Tuple[int, Citation, float]] = []
     for idx, c in enumerate(citations):
         # Combine title + content/snippet for matching
+        # 合并 title + content/snippet 用于匹配
         citation_text = f"{c.title or ''} {c.content or c.snippet or ''}"
         citation_tokens = tokenize(citation_text)
 
         # BM25 scoring with IDF
+        # 带 IDF 的 BM25 打分
         score = bm25_score(claim_tokens, citation_tokens, corpus_stats=corpus_stats)
 
         # Boost by credibility (0.5 baseline + 0.5 * credibility)
+        # 按 credibility 加权（0.5 基线 + 0.5 * credibility）
         score *= (0.5 + 0.5 * c.credibility_score)
 
         # 1-indexed for citation references
+        # citation 引用使用 1-based 索引
         scored.append((idx + 1, c, score))
 
     # Sort by score descending, take top-k
+    # 按得分降序排序，取 top-k
     scored.sort(key=lambda x: x[2], reverse=True)
 
     # Filter out zero-score citations
+    # 过滤掉零分 citations
     scored = [(idx, c, s) for idx, c, s in scored if s > 0]
 
     return scored[:top_k]
@@ -312,13 +394,19 @@ def _extract_cited_numbers(text: str, max_citations: int, limit: int = 50) -> se
     """
     Extract citation numbers referenced in text (e.g., [1], [37]).
 
+    提取文本中引用的 citation 编号（例如 [1]、[37]）。
+
     Args:
         text: Text potentially containing citation references
+            可能包含 citation 引用的文本
         max_citations: Maximum valid citation number (len(citations))
+            最大有效 citation 编号（len(citations)）
         limit: Maximum number of unique citations to extract (prevent OOM)
+            提取的 unique citations 上限（防止 OOM）
 
     Returns:
         Set of valid citation numbers found in text
+        文本中找到的有效 citation 编号集合
     """
     cited_numbers = set()
     for match in re.findall(r'\[(\d+)\]', text):
@@ -342,18 +430,26 @@ def _build_relevant_citations(
     """
     Build a list of relevant citations preserving original indices.
 
+    构建保留原始索引的相关 citations 列表。
+
     Args:
         citations: Full list of Citation objects
+            完整的 Citation 对象列表
         cited_numbers: Set of citation numbers actually referenced in answer
+            answer 中实际引用的 citation 编号集合
         min_count: Minimum citations to include (pad with top-K if needed)
+            最少包含的 citations 数量（不足时用 top-K 补齐）
         max_count: Maximum citations to include
+            最多包含的 citations 数量
 
     Returns:
         List of (original_index, citation) tuples
+        (original_index, citation) 元组列表
     """
     relevant = []
 
     # First, add all actually cited citations (preserving original index)
+    # 首先加入所有实际被引用的 citations（保留原始索引）
     for num in sorted(cited_numbers):
         if num <= len(citations):
             relevant.append((num, citations[num - 1]))
@@ -361,6 +457,7 @@ def _build_relevant_citations(
             break
 
     # If we have fewer than min_count, pad with top-K fallback
+    # 若少于 min_count，则用 top-K fallback 补齐
     if len(relevant) < min_count:
         existing_nums = {num for num, _ in relevant}
         for i, c in enumerate(citations[:20]):  # Check first 20
@@ -381,16 +478,23 @@ async def verify_claims(
     """
     Verify factual claims in synthesis against collected citations.
 
+    对照已收集的 citations 验证 synthesis 中的事实性 claims。
+
     Args:
         answer: Synthesis result containing claims
+            包含 claims 的 synthesis 结果
         citations: List of citation dicts from orchestrator
+            来自 orchestrator 的 citation dict 列表
         llm_client: LLM client for claim extraction
+            用于 claim 提取的 LLM client
 
     Returns:
         VerificationResult with confidence scores and unsupported claims
+        包含 confidence 得分与 unsupported claims 的 VerificationResult
     """
 
     # Parse citations (be tolerant of partial/mismatched fields)
+    # 解析 citations（容忍字段缺失/不匹配）
     citation_objs: List[Citation] = []
     for idx, raw in enumerate(citations or []):
         try:
@@ -399,14 +503,17 @@ async def verify_claims(
             logger.warning(f"[verification] Failed to parse citation[{idx}]: {e}")
 
     # Extract which citation numbers are actually referenced in the answer
+    # 提取 answer 中实际被引用的 citation 编号
     cited_numbers = _extract_cited_numbers(answer, len(citation_objs), limit=50)
     logger.debug(f"[verification] Found {len(cited_numbers)} unique citation references in answer: {sorted(cited_numbers)[:10]}...")
 
     # Build relevant citations with original indices preserved
+    # 构建保留原始索引的相关 citations
     relevant_citations = _build_relevant_citations(citation_objs, cited_numbers, min_count=10, max_count=25)
     logger.debug(f"[verification] Using {len(relevant_citations)} relevant citations for verification")
 
     # Step 1: Extract factual claims using LLM
+    # 步骤 1：使用 LLM 提取事实性 claims
     claims = await _extract_claims(answer, llm_client)
     logger.info(f"[verification] Extracted {len(claims)} claims from synthesis")
 
@@ -418,16 +525,19 @@ async def verify_claims(
         )
 
     # Step 2: Cross-reference each claim against citations (using relevant citations with original indices)
+    # 步骤 2：将每个 claim 与 citations 交叉比对（使用带原始索引的相关 citations）
     claim_verifications = []
     for claim in claims:
         verification = await _verify_single_claim(claim, relevant_citations, llm_client)
         claim_verifications.append(verification)
 
     # Step 3: Calculate aggregate metrics
+    # 步骤 3：计算聚合 metrics
     supported = sum(1 for cv in claim_verifications if cv.confidence >= 0.7)
     unsupported = [cv.claim for cv in claim_verifications if cv.confidence < 0.5]
 
     # Geometric mean: harsher on gaps than arithmetic
+    # 几何平均：对覆盖缺口比算术平均更严格
     if claim_verifications:
         mean_conf = sum(cv.confidence for cv in claim_verifications) / len(claim_verifications)
         coverage = supported / max(1, len(claim_verifications))
@@ -436,6 +546,7 @@ async def verify_claims(
         overall_conf = 1.0
 
     # Step 4: Detect conflicts (claims with both supporting AND conflicting citations)
+    # 步骤 4：检测冲突（同时有 supporting 与 conflicting citations 的 claims）
     conflicts = _detect_conflicts(claim_verifications, citation_objs)
 
     logger.info(f"[verification] Overall confidence: {overall_conf:.2f}, " +
@@ -453,10 +564,15 @@ async def verify_claims(
 
 
 async def _extract_claims(answer: str, providers: Any) -> List[str]:
-    """Extract factual claims from synthesis using LLM."""
+    """Extract factual claims from synthesis using LLM.
+
+    使用 LLM 从 synthesis 中提取事实性 claims。
+    """
 
     # P0 fix: Detect language and use appropriate prompt
     # This ensures claims are extracted correctly for CJK text
+    # P0 修复：检测语言并使用对应的 prompt
+    # 以确保 CJK 文本的 claims 能被正确提取
     lang = detect_language(answer[:500])
 
     if lang == "zh":
@@ -498,11 +614,15 @@ Output format:
 
     try:
         # Use LLM to extract claims
+        # 使用 LLM 提取 claims
         from llm_service.providers.base import ModelTier
 
         # max_tokens=8000: Claims extraction typically produces ~1500-2000 tokens
         # (10 claims × ~100-150 tokens each + JSON/list formatting overhead).
         # Previous value of 2000 caused truncation; 8000 provides 4x safety margin.
+        # max_tokens=8000：claims 提取通常产出约 1500-2000 token
+        # （10 个 claims × 每个约 100-150 token + JSON/list 格式化开销）。
+        # 此前设为 2000 会导致截断；8000 提供了 4 倍安全余量。
         result = await providers.generate_completion(
             messages=[{"role": "user", "content": prompt}],
             tier=ModelTier.SMALL,
@@ -514,13 +634,16 @@ Output format:
         response = result.get("output_text", "")
 
         # Parse numbered list
+        # 解析编号列表
         claims = []
         for line in response.split('\n'):
             line = line.strip()
             if line and len(line) > 3:
                 # Match patterns like "1. ", "1) ", or just starting with digit
+                # 匹配 "1. "、"1) " 这类模式，或以数字开头
                 if line[0].isdigit():
                     # Find the claim text after number and separator
+                    # 在编号与分隔符之后取出 claim 文本
                     for sep in ['. ', ') ', ': ']:
                         if sep in line:
                             claim = line.split(sep, 1)[1].strip()
@@ -544,25 +667,33 @@ async def _verify_single_claim(
     """
     Verify a single claim against available citations.
 
+    对照可用 citations 验证单个 claim。
+
     Args:
         claim: The factual claim to verify
+            待验证的事实性 claim
         indexed_citations: List of (original_index, citation) tuples preserving original numbering
+            保留原始编号的 (original_index, citation) 元组列表
         providers: LLM provider for verification
+            用于验证的 LLM provider
     """
 
     if not indexed_citations:
         return ClaimVerification(claim=claim, confidence=0.0)
 
     # Build mapping from original index to citation for lookup
+    # 建立 original index 到 citation 的映射以便查找
     idx_to_citation = {idx: c for idx, c in indexed_citations}
 
     # Build citation context using ORIGINAL indices (e.g., [1], [37], [42])
+    # 使用原始索引构建 citation context（例如 [1]、[37]、[42]）
     citation_context = "\n\n".join([
         f"[{idx}] {(c.title or c.source or c.url)}\n{((c.content or c.snippet) or '')[:500]}"
         for idx, c in indexed_citations
     ])
 
     # List valid citation numbers for the prompt
+    # 列出 prompt 中可用的 citation 编号
     valid_nums = sorted(idx_to_citation.keys())
 
     prompt = f"""Verify the following claim against the provided sources.
@@ -593,6 +724,7 @@ IMPORTANT:
 
     try:
         # Use LLM for verification
+        # 使用 LLM 进行验证
         from llm_service.providers.base import ModelTier
 
         result = await providers.generate_completion(
@@ -606,9 +738,11 @@ IMPORTANT:
         response = result.get("output_text", "")
 
         # Try to extract JSON from response
+        # 尝试从 response 中提取 JSON
         response = response.strip()
 
         # Find JSON object in response
+        # 在 response 中定位 JSON 对象
         json_start = response.find('{')
         json_end = response.rfind('}') + 1
         if json_start != -1 and json_end > json_start:
@@ -622,14 +756,17 @@ IMPORTANT:
         base_confidence = result.get("confidence", 0.5)
 
         # Filter to only valid citation numbers and get credibility weights
+        # 过滤出有效的 citation 编号并取得 credibility 权重
         valid_supporting = [n for n in supporting if n in idx_to_citation]
         valid_conflicting = [n for n in conflicting if n in idx_to_citation]
 
         # Weight confidence by citation credibility and count with diminishing returns (log2)
+        # 按 citation credibility 加权 confidence，并对数量做递减（log2）处理
         if valid_supporting:
             credibility_weights = [idx_to_citation[n].credibility_score for n in valid_supporting]
             avg_cred = (sum(credibility_weights) / len(credibility_weights)) if credibility_weights else 0.5
             # Diminishing returns for multiple sources
+            # 多个 sources 时收益递减
             num_sources = len(valid_supporting)
             bonus = min(0.25, 0.2 * math.log2(max(1, num_sources)))  # cap 25%
             confidence = base_confidence * avg_cred * (1.0 + bonus if num_sources > 1 else 1.0)
@@ -637,6 +774,7 @@ IMPORTANT:
             confidence = 0.0
 
         # Weighted conflict penalty proportional to conflict strength
+        # 按冲突强度比例加权的 conflict 惩罚
         if valid_conflicting:
             conflict_weight = sum(idx_to_citation[n].credibility_score for n in valid_conflicting)
             support_weight = sum(idx_to_citation[n].credibility_score for n in valid_supporting) if valid_supporting else 0.0
@@ -649,6 +787,7 @@ IMPORTANT:
             confidence *= (1.0 - penalty)
 
         # Clamp to [0,1]
+        # 限制到 [0,1] 区间
         if confidence < 0:
             confidence = 0.0
         if confidence > 1:
@@ -664,6 +803,7 @@ IMPORTANT:
     except (json.JSONDecodeError, KeyError, IndexError, ValueError) as e:
         logger.warning(f"[verification] Failed to parse LLM response for claim: {e}")
         # Fallback: assume moderate confidence if we can't verify
+        # Fallback：无法验证时假定中等 confidence
         return ClaimVerification(claim=claim, confidence=0.5)
     except Exception as e:
         logger.error(f"[verification] Unexpected error verifying claim: {e}")
@@ -674,12 +814,16 @@ def _detect_conflicts(
     verifications: List[ClaimVerification],
     citations: List[Citation]
 ) -> List[ConflictReport]:
-    """Detect conflicting information across sources."""
+    """Detect conflicting information across sources.
+
+    检测 sources 之间冲突的信息。
+    """
 
     conflicts = []
     for v in verifications:
         if v.supporting_citations and v.conflicting_citations:
             # This claim has both supporting AND conflicting citations
+            # 该 claim 同时拥有 supporting 与 conflicting citations
             src1 = v.supporting_citations[0]
             src2 = v.conflicting_citations[0]
 
@@ -697,6 +841,7 @@ def _detect_conflicts(
 
 # ============================================================================
 # V2 Verification Functions (Three-category with BM25 retrieval)
+# V2 验证函数（三类判定 + BM25 检索）
 # ============================================================================
 
 async def _verify_single_claim_v2(
@@ -708,15 +853,25 @@ async def _verify_single_claim_v2(
     """
     Verify a single claim with evidence retrieval + three-category output.
 
+    对单个 claim 做证据检索 + 三类判定输出。
+
     Uses BM25 to find relevant citations, then LLM judges:
     - supported: At least one source explicitly supports the claim
     - unsupported: A source explicitly contradicts the claim
     - insufficient_evidence: Sources don't directly address the claim
 
+    先用 BM25 找出相关 citations，再由 LLM 判定：
+    - supported：至少一个 source 明确支持该 claim
+    - unsupported：有 source 明确反驳该 claim
+    - insufficient_evidence：sources 未直接涉及该 claim
+
     P1-5: Accepts pre-computed corpus_stats for efficient IDF-weighted retrieval.
+
+    P1-5：接受预计算的 corpus_stats，以实现高效的 IDF 加权检索。
     """
 
     # Step 1: Retrieve top-5 relevant citations via BM25 (with IDF)
+    # 步骤 1：通过 BM25（带 IDF）检索前 5 个相关 citations
     relevant = retrieve_relevant_citations(claim, all_citations, top_k=5, corpus_stats=corpus_stats)
 
     if not relevant:
@@ -728,6 +883,7 @@ async def _verify_single_claim_v2(
         )
 
     # Step 2: Build context from relevant citations only
+    # 步骤 2：仅用相关 citations 构建 context
     citation_context = "\n\n".join([
         f"[{idx}] (relevance: {score:.2f}) {c.title or c.source or c.url}\n{(c.content or c.snippet or '')[:500]}"
         for idx, c, score in relevant
@@ -737,6 +893,7 @@ async def _verify_single_claim_v2(
     retrieval_scores = {idx: score for idx, _, score in relevant}
 
     # Step 3: Language-aware prompt
+    # 步骤 3：语言感知的 prompt
     lang = detect_language(claim)
 
     if lang == "zh":

@@ -17,15 +17,18 @@ import (
 )
 
 // Registry maintains an in-memory catalogue of templates loaded from disk.
+// Registry 维护从磁盘加载的模板的内存目录。
 type Registry struct {
 	mu        sync.RWMutex
 	templates map[string]Entry
 
 	// watcher is reserved for future hot-reload; nil in the MVP implementation.
+	// watcher 预留给将来的热重载；MVP 实现中为 nil。
 	watcher interface{}
 }
 
 // Entry captures a loaded template alongside bookkeeping data.
+// Entry 记录已加载的模板及其记账信息。
 type Entry struct {
 	Key         string
 	Template    *Template
@@ -35,6 +38,7 @@ type Entry struct {
 }
 
 // TemplateSummary exposes lightweight information about a registered template.
+// TemplateSummary 暴露已注册模板的轻量信息。
 type TemplateSummary struct {
 	Name        string
 	Version     string
@@ -49,6 +53,7 @@ func NewRegistry() *Registry {
 }
 
 // LoadDirectory loads every YAML template under the provided directory.
+// LoadDirectory 加载指定目录下的所有 YAML 模板。
 func (r *Registry) LoadDirectory(root string) error {
 	info, err := os.Stat(root)
 	if err != nil {
@@ -87,6 +92,7 @@ func (r *Registry) LoadDirectory(root string) error {
 }
 
 // Get returns the template entry that matches the supplied key.
+// Get 返回与给定键匹配的模板条目。
 func (r *Registry) Get(key string) (Entry, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -95,6 +101,7 @@ func (r *Registry) Get(key string) (Entry, bool) {
 }
 
 // List summaries of all currently loaded templates.
+// 列出当前所有已加载模板的摘要。
 func (r *Registry) List() []TemplateSummary {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -162,6 +169,7 @@ func (r *Registry) loadFile(path string) error {
 }
 
 // MakeKey produces the canonical map key for a template name/version pair.
+// MakeKey 生成模板名/版本对的规范 map 键。
 func MakeKey(name, version string) string {
 	n := strings.TrimSpace(name)
 	v := strings.TrimSpace(version)
@@ -178,6 +186,8 @@ func isYAML(path string) bool {
 
 // Find attempts to locate a template entry by name and optional version.
 // When version is empty, the first matching version (sorted by name/version) is returned.
+// Find 按名称与可选版本定位模板条目。
+// 版本为空时返回首个匹配版本（按名称/版本排序）。
 func (r *Registry) Find(name, version string) (Entry, bool) {
 	name = strings.TrimSpace(name)
 	version = strings.TrimSpace(version)
@@ -217,6 +227,7 @@ func sortSummaries(summaries []TemplateSummary) {
 }
 
 // Finalize resolves template inheritance/composition and re-validates the registry.
+// Finalize 解析模板的继承/组合关系并重新校验注册表。
 func (r *Registry) Finalize() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -471,6 +482,7 @@ func (e *LoadError) Error() string {
 }
 
 // IsLoadError returns true when err represents aggregated template load failures.
+// err 表示聚合的模板加载失败时，IsLoadError 返回 true。
 func IsLoadError(err error) bool {
 	_, ok := err.(*LoadError)
 	return ok

@@ -11,6 +11,7 @@ import (
 )
 
 // rngGuard protects the shared RNG to keep epsilon-greedy selection goroutine-safe.
+// rngGuard 保护共享 RNG，保证 epsilon-greedy 选择在 goroutine 下安全。
 var (
 	rngGuard sync.Mutex
 	rng      = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -29,6 +30,7 @@ func randIntn(n int) int {
 }
 
 // AgentPerformanceInput requests performance metrics for agent selection
+// AgentPerformanceInput 请求 agent 选择所需的性能指标。
 type AgentPerformanceInput struct {
 	Mode           string        `json:"mode"`            // Task mode to filter by (e.g., "simple", "research")
 	LookbackPeriod time.Duration `json:"lookback_period"` // How far back to look (e.g., 7 days)
@@ -36,6 +38,7 @@ type AgentPerformanceInput struct {
 }
 
 // AgentPerformance represents an agent's historical performance
+// AgentPerformance 表示某个 agent 的历史表现。
 type AgentPerformance struct {
 	AgentID     string  `json:"agent_id"`
 	SuccessRate float64 `json:"success_rate"` // 0.0 to 1.0
@@ -45,14 +48,17 @@ type AgentPerformance struct {
 }
 
 // FetchAgentPerformancesInput requests performance data for specific agents
+// FetchAgentPerformancesInput 请求指定 agent 的性能数据。
 type FetchAgentPerformancesInput struct {
 	AgentIDs  []string `json:"agent_ids"`
 	SessionID string   `json:"session_id,omitempty"` // Optional: scope to session
 }
 
 // FetchAgentPerformances retrieves historical performance for a list of agent IDs.
+// FetchAgentPerformances 按 agent ID 列表取回历史性能。
 func FetchAgentPerformances(ctx context.Context, in FetchAgentPerformancesInput) ([]AgentPerformance, error) {
 	// Short‑circuit if no agents provided
+	// 未提供 agent 时直接短路返回。
 	if len(in.AgentIDs) == 0 {
 		return []AgentPerformance{}, nil
 	}
@@ -68,6 +74,7 @@ func FetchAgentPerformances(ctx context.Context, in FetchAgentPerformancesInput)
 	}
 
 	// Build dynamic IN clause placeholders
+	// 动态拼接 IN 子句的占位符。
 	placeholders := make([]string, 0, len(in.AgentIDs))
 	args := make([]interface{}, 0, len(in.AgentIDs)+1)
 	for i, id := range in.AgentIDs {
@@ -132,6 +139,7 @@ func FetchAgentPerformances(ctx context.Context, in FetchAgentPerformancesInput)
 }
 
 // AgentPerformanceResult contains performance metrics for agent selection
+// AgentPerformanceResult 汇总 agent 选择所需的性能指标。
 type AgentPerformanceResult struct {
 	Performances []AgentPerformance `json:"performances"`
 	BestAgentID  string             `json:"best_agent_id"`
@@ -139,6 +147,7 @@ type AgentPerformanceResult struct {
 
 // GetAgentPerformanceMetrics queries historical agent performance
 // This activity is used for performance-based agent selection (Phase 2)
+// GetAgentPerformanceMetrics 查询历史 agent 性能，供基于性能的 agent 选择使用（Phase 2）。
 func GetAgentPerformanceMetrics(ctx context.Context, db *sql.DB, in AgentPerformanceInput) (AgentPerformanceResult, error) {
 	if db == nil {
 		// Return default if no database
@@ -204,6 +213,7 @@ func GetAgentPerformanceMetrics(ctx context.Context, db *sql.DB, in AgentPerform
 	}
 
 	// Identify best performer
+	// 找出表现最好的 agent。
 	bestAgentID := ""
 	if len(performances) > 0 {
 		bestAgentID = performances[0].AgentID // Already sorted by success_rate DESC
@@ -218,6 +228,7 @@ func GetAgentPerformanceMetrics(ctx context.Context, db *sql.DB, in AgentPerform
 // SelectAgentEpsilonGreedy implements epsilon-greedy agent selection
 // With probability epsilon, explore (random selection)
 // With probability 1-epsilon, exploit (best performer)
+// SelectAgentEpsilonGreedy 实现 epsilon-greedy 选择：以 epsilon 概率探索（随机选），以 1-epsilon 概率利用（选最佳）。
 type SelectAgentEpsilonGreedyInput struct {
 	Performances      []AgentPerformance `json:"performances"`
 	Epsilon           float64            `json:"epsilon"`             // Exploration rate (0.0 to 1.0)
@@ -241,10 +252,12 @@ func SelectAgentEpsilonGreedy(ctx context.Context, in SelectAgentEpsilonGreedyIn
 	}
 
 	// Epsilon-greedy selection using shared RNG guarded by mutex
+	// 在 mutex 保护的共享 RNG 上做 epsilon-greedy 选择。
 	r := randFloat64()
 
 	if r < in.Epsilon {
 		// Exploration: random selection from available agents
+		// 探索：从可用 agent 中随机选一个。
 		if len(in.AvailableAgentIDs) > 0 {
 			idx := randIntn(len(in.AvailableAgentIDs))
 			return SelectAgentEpsilonGreedyResult{
@@ -261,6 +274,7 @@ func SelectAgentEpsilonGreedy(ctx context.Context, in SelectAgentEpsilonGreedyIn
 	}
 
 	// Exploitation: select best performer
+	// 利用：选择表现最好的 agent。
 	return SelectAgentEpsilonGreedyResult{
 		SelectedAgentID: in.Performances[0].AgentID, // Already sorted by performance
 		IsExploration:   false,
@@ -268,6 +282,7 @@ func SelectAgentEpsilonGreedy(ctx context.Context, in SelectAgentEpsilonGreedyIn
 }
 
 // Alternative: UCB1 (Upper Confidence Bound) selection for better exploration
+// 备选方案：UCB1（Upper Confidence Bound）选择，探索效果更好。
 type SelectAgentUCB1Input struct {
 	Performances    []AgentPerformance `json:"performances"`
 	TotalSelections int                `json:"total_selections"` // Total times any agent has been selected
@@ -281,6 +296,7 @@ type SelectAgentUCB1Result struct {
 
 // SelectAgentUCB1 implements Upper Confidence Bound selection
 // Balances exploration and exploitation better than epsilon-greedy
+// SelectAgentUCB1 实现 Upper Confidence Bound 选择，比 epsilon-greedy 更好地平衡探索与利用。
 func SelectAgentUCB1(ctx context.Context, in SelectAgentUCB1Input) (SelectAgentUCB1Result, error) {
 	if len(in.Performances) == 0 {
 		return SelectAgentUCB1Result{
@@ -291,11 +307,13 @@ func SelectAgentUCB1(ctx context.Context, in SelectAgentUCB1Input) (SelectAgentU
 
 	// Calculate UCB1 score for each agent
 	// UCB1 = success_rate + sqrt(2 * ln(total_selections) / agent_runs)
+	// 为每个 agent 计算 UCB1 分数：success_rate + sqrt(2*ln(total_selections)/agent_runs)。
 	bestAgentID := ""
 	bestScore := -1.0
 
 	for _, perf := range in.Performances {
 		// Exploration bonus decreases as agent is selected more
+		// 被选中次数越多，探索加分越小。
 		explorationBonus := 0.0
 		if perf.TotalRuns > 0 && in.TotalSelections > 0 {
 			explorationBonus = 1.41421356 * // sqrt(2)
@@ -317,6 +335,7 @@ func SelectAgentUCB1(ctx context.Context, in SelectAgentUCB1Input) (SelectAgentU
 }
 
 // RecordAgentPerformanceInput records an agent execution outcome for learning
+// RecordAgentPerformanceInput 记录一次 agent 执行结果，供学习使用。
 type RecordAgentPerformanceInput struct {
 	AgentID    string `json:"agent_id"`
 	SessionID  string `json:"session_id"`
@@ -332,6 +351,7 @@ type RecordAgentPerformanceResult struct {
 
 // RecordAgentPerformance persists agent execution outcome to agent_executions table.
 // This feeds the performance-based selection algorithms (epsilon-greedy, UCB1).
+// RecordAgentPerformance 把 agent 执行结果持久化到 agent_executions 表，为 epsilon-greedy、UCB1 等选择算法提供数据。
 func RecordAgentPerformance(ctx context.Context, in RecordAgentPerformanceInput) (RecordAgentPerformanceResult, error) {
 	// TODO: Insert into agent_executions table
 	// INSERT INTO agent_executions (agent_id, session_id, success, tokens_used, duration_ms, mode, created_at)

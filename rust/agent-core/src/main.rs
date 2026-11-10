@@ -11,18 +11,22 @@ use shannon_agent_core::sandbox_service::SandboxServiceImpl;
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize OpenTelemetry tracing
+    // 初始化 OpenTelemetry 追踪
     if let Err(e) = trace_mod::init_tracing() {
         eprintln!("Failed to initialize tracing: {}", e);
         // Fall back to basic logging
+        // 回退到基础日志
     }
 
     info!("Starting Shannon Agent Core service");
 
     // Load configuration and get metrics port
+    // 加载配置并获取指标端口
     let config = shannon_agent_core::config::Config::global().unwrap_or_default();
     let metrics_port = config.metrics.port;
 
     // Start metrics server
+    // 启动指标服务
     tokio::spawn(async move {
         if let Err(e) = shannon_agent_core::metrics::start_metrics_server(metrics_port).await {
             tracing::error!("Failed to start metrics server: {}", e);
@@ -35,6 +39,7 @@ async fn main() -> Result<()> {
     info!("SandboxService initialized from environment");
 
     // Build reflection service
+    // 构建反射服务
     let reflection_service = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(
             shannon_agent_core::grpc_server::proto::FILE_DESCRIPTOR_SET,
@@ -55,3 +60,4 @@ async fn main() -> Result<()> {
 }
 
 // Removed legacy metrics port lookup - now using centralized config::Config
+// 已移除旧的指标端口查找逻辑——现在统一使用 config::Config

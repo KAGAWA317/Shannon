@@ -11,6 +11,7 @@ import (
 )
 
 // WorkflowConfig contains configuration for cognitive workflows
+// WorkflowConfig 保存各类 cognitive workflow 的配置。
 type WorkflowConfig struct {
 	// Exploratory workflow config
 	ExploratoryMaxIterations       int     `json:"exploratory_max_iterations"`
@@ -46,6 +47,7 @@ type WorkflowConfig struct {
 	MaxParallelAgents int     `json:"max_parallel_agents"`
 
 	// Complexity thresholds for model tier selection
+	// 用于选择 model tier 的复杂度阈值：低于 Simple 用 small，低于 Medium 用 medium，再往上用 large。
 	ComplexitySimpleThreshold float64 `json:"complexity_simple_threshold"` // < this = small model
 	ComplexityMediumThreshold float64 `json:"complexity_medium_threshold"` // < this = medium model, >= this = large model
 
@@ -81,24 +83,31 @@ type WorkflowConfig struct {
 
 	// Learning router toggle (continuous learning)
 	// When false, skip learning-based strategy recommendation in the router
+	// 学习型 router 开关（continuous learning）。
+	// 为 false 时，router 跳过基于学习的策略推荐。
 	ContinuousLearningEnabled bool `json:"continuous_learning_enabled"`
 }
 
 // GetWorkflowConfig is an activity that returns workflow configuration
+// GetWorkflowConfig 是返回 workflow 配置的 activity。
 func GetWorkflowConfig(ctx context.Context) (*WorkflowConfig, error) {
 	// Create a new viper instance to load features.yaml
+	// 新建一个 viper 实例来加载 features.yaml。
 	v := viper.New()
 
 	// Determine config path
+	// 确定配置路径。
 	cfgPath := os.Getenv("CONFIG_PATH")
 	if cfgPath != "" {
 		// CONFIG_PATH may be a directory; append filename if so
+		// CONFIG_PATH 可能是目录，是目录时补上文件名。
 		info, err := os.Stat(cfgPath)
 		if err == nil && info.IsDir() {
 			cfgPath = cfgPath + "/features.yaml"
 		}
 	} else {
 		// Try local development paths first
+		// 先试本地开发用的相对路径。
 		if _, err := os.Stat("config/features.yaml"); err == nil {
 			cfgPath = "config/features.yaml"
 		} else if _, err := os.Stat("../../config/features.yaml"); err == nil {
@@ -110,6 +119,7 @@ func GetWorkflowConfig(ctx context.Context) (*WorkflowConfig, error) {
 
 	v.SetConfigFile(cfgPath)
 	// Try to read config, but don't fail if it doesn't exist - use defaults
+	// 尝试读取配置；不存在也不报错，全部走默认值。
 	_ = v.ReadInConfig()
 
 	config := &WorkflowConfig{
@@ -163,6 +173,7 @@ func GetWorkflowConfig(ctx context.Context) (*WorkflowConfig, error) {
 	}
 
 	// Set defaults if not configured
+	// 未配置的项按零值判定，补上默认值。
 	if config.ExploratoryMaxIterations == 0 {
 		config.ExploratoryMaxIterations = 5
 	}
@@ -241,6 +252,8 @@ func GetWorkflowConfig(ctx context.Context) (*WorkflowConfig, error) {
 
 	// Approval defaults - check environment variables first
 	// Override with environment variables if set
+	// approval 默认值：先看环境变量，
+	// 环境变量有值时覆盖配置。
 	if envEnabled := os.Getenv("APPROVAL_ENABLED"); envEnabled != "" {
 		config.ApprovalEnabled = envEnabled == "true" || envEnabled == "1"
 	}
@@ -269,10 +282,12 @@ func GetWorkflowConfig(ctx context.Context) (*WorkflowConfig, error) {
 		config.HybridDependencyTimeout = 360 // 6 minutes
 	}
 	// SequentialPassResults defaults to true if not explicitly set to false
+	// SequentialPassResults 未显式设为 false 时默认为 true。
 	if !v.IsSet("workflows.execution.sequential_pass_results") {
 		config.SequentialPassResults = true
 	}
 	// SequentialExtractNumeric defaults to true if not explicitly set to false
+	// SequentialExtractNumeric 未显式设为 false 时默认为 true。
 	if !v.IsSet("workflows.execution.sequential_extract_numeric") {
 		config.SequentialExtractNumeric = true
 	}
@@ -326,6 +341,7 @@ func GetWorkflowConfig(ctx context.Context) (*WorkflowConfig, error) {
 	}
 
 	// Template fallback (prefer env override; default false)
+	// template fallback：优先读环境变量，默认关闭。
 	if env := os.Getenv("TEMPLATE_FALLBACK_ENABLED"); env != "" {
 		config.TemplateFallbackEnabled = env == "true" || env == "1"
 	} else {
@@ -334,6 +350,8 @@ func GetWorkflowConfig(ctx context.Context) (*WorkflowConfig, error) {
 
 	// Continuous learning toggle (default false)
 	// Prefer env CONTINUOUS_LEARNING_ENABLED, else config key continuous_learning.enabled
+	// continuous learning 开关（默认关闭）。
+	// 优先取环境变量 CONTINUOUS_LEARNING_ENABLED，其次取配置项 continuous_learning.enabled。
 	if env := os.Getenv("CONTINUOUS_LEARNING_ENABLED"); env != "" {
 		config.ContinuousLearningEnabled = env == "true" || env == "1"
 	} else {
@@ -344,6 +362,7 @@ func GetWorkflowConfig(ctx context.Context) (*WorkflowConfig, error) {
 }
 
 // LoadWorkflowConfig loads configuration at workflow start
+// LoadWorkflowConfig 在 workflow 启动时加载配置。
 func LoadWorkflowConfig(ctx context.Context) (map[string]interface{}, error) {
 	config, err := GetWorkflowConfig(ctx)
 	if err != nil {
@@ -351,6 +370,7 @@ func LoadWorkflowConfig(ctx context.Context) (map[string]interface{}, error) {
 	}
 
 	// Convert to map for easier access
+	// 转成 map，便于按 key 访问。
 	return map[string]interface{}{
 		"exploratory": map[string]interface{}{
 			"max_iterations":        config.ExploratoryMaxIterations,

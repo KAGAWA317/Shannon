@@ -223,6 +223,7 @@ func ConvertAgentInputFromTask(input TaskInput) (*AgentWorkflowInput, error) {
 
 	// Copy context fields to agent input, but ONLY if they are defined in the agent's schema
 	// AND pass type validation. This prevents arbitrary field injection through context.
+	// 只拷贝 agent schema 中定义且类型校验通过的字段，防止通过 context 注入任意字段。
 	for field, propSchema := range schemaProperties {
 		if v, ok := input.Context[field]; ok {
 			if existing, exists := agentInput[field]; !exists || existing == nil {
@@ -292,6 +293,7 @@ func ConvertAgentInputFromTask(input TaskInput) (*AgentWorkflowInput, error) {
 
 	// Normalize URLs/domains based on agent requirements.
 	// This allows users to provide URLs in any format (with or without scheme).
+	// 按 agent 需求规范化 URL/域名，允许用户以任意格式提供（带不带 scheme 均可）。
 	normalizeAgentInput(agentID, agentInput)
 
 	// Minimal required-field validation for agents that cannot infer parameters from query.

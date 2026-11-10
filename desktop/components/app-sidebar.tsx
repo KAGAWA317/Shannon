@@ -53,8 +53,10 @@ function SidebarInner() {
   const { isMobile, setOpenMobile } = useSidebar();
   
   // Subscribe to run status for auto-refresh on task completion
+  // 订阅 run 状态，以便 task 完成后自动刷新列表
   const runStatus = useSelector((state: RootState) => state.run.status);
   // Subscribe to session title from streaming events (title now generated at start of task)
+  // 订阅 stream event 里的 session 标题（标题改为在 task 开始时生成）
   const streamingTitle = useSelector((state: RootState) => state.run.sessionTitle);
 
   const router = useRouter();
@@ -154,6 +156,8 @@ function SidebarInner() {
 
   // Refresh when navigating to a new session (e.g., after creating a task)
   // This detects when currentSessionId changes to a value not in our list
+  // 切换到新 session 时刷新（例如刚创建完 task）
+  // 通过 currentSessionId 变成列表中不存在的值来识别
   useEffect(() => {
     if (!currentSessionId || currentSessionId === "new") return;
     if (currentSessionId === lastKnownSessionIdRef.current) return;
@@ -165,16 +169,20 @@ function SidebarInner() {
     if (!sessionExists) {
       // New session detected, refresh the list after a short delay
       // (give the backend time to persist the session)
+      // 检测到新 session，稍作延迟后刷新列表
+      // （给后端留出持久化 session 的时间）
       const timer = setTimeout(() => fetchRecent(), 1000);
       return () => clearTimeout(timer);
     }
   }, [currentSessionId, recentSessions, fetchRecent]);
 
   // Auto-refresh when a task completes (to update title)
+  // task 完成时自动刷新（用于更新标题）
   useEffect(() => {
     // Detect transition from running to completed
     if (prevStatusRef.current === "running" && runStatus === "completed") {
       // Delay refresh to allow backend to update session title
+      // 延迟刷新，等待后端更新 session 标题
       const timer = setTimeout(() => fetchRecent(), 1500);
       return () => clearTimeout(timer);
     }
@@ -183,6 +191,8 @@ function SidebarInner() {
 
   // Update sidebar immediately when streaming title arrives (title now generated at task start)
   // Re-run when recentSessions changes to handle case where title arrives before session is loaded
+  // stream 标题到达时立即更新侧边栏（标题现在在 task 开始时生成）
+  // 依赖 recentSessions 变化重跑，以处理标题先于 session 加载到达的情况
   useEffect(() => {
     if (!streamingTitle || !currentSessionId || currentSessionId === "new") return;
     
@@ -364,6 +374,7 @@ function SidebarInner() {
             <ThemeToggle />
           </div>
           {/* Show logout only if authenticated (not using dev X-User-Id) */}
+          {/* 仅在 authenticated 时显示登出（未使用开发态 X-User-Id） */}
           {!process.env.NEXT_PUBLIC_USER_ID && getStoredUser() && (
             <button
               onClick={logout}

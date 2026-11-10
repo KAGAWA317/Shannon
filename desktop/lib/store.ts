@@ -22,6 +22,8 @@ const storage = typeof window !== 'undefined' ? createWebStorage('local') : crea
 
 // Nested persist config for run slice - only persist user preferences
 // Exclude: events, messages, toolHistory (contain large base64 screenshots)
+// run slice 的嵌套 persist 配置 —— 只持久化用户偏好
+// 排除：events、messages、toolHistory（其中包含体积很大的 base64 截图）
 const runPersistConfig = {
     key: 'run',
     storage,
@@ -39,6 +41,7 @@ const persistConfig = {
     key: 'root',
     storage,
     blacklist: ['run'], // run has its own nested config
+    // run 拥有自己的嵌套配置
 };
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
@@ -49,6 +52,7 @@ export const store = configureStore({
         getDefaultMiddleware({
             serializableCheck: {
                 // Ignore all redux-persist actions (they use non-serializable callbacks)
+                // 忽略所有 redux-persist action（其中使用了不可序列化的回调）
                 ignoredActions: [
                     'persist/PERSIST',
                     'persist/REHYDRATE',

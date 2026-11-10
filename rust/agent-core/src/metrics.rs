@@ -8,32 +8,39 @@ use std::time::Instant;
 use tokio::io::AsyncWriteExt;
 
 // Task metrics
+// task 指标
 pub static TASKS_TOTAL: OnceLock<CounterVec> = OnceLock::new();
 pub static TASK_DURATION: OnceLock<HistogramVec> = OnceLock::new();
 pub static TASK_TOKENS: OnceLock<HistogramVec> = OnceLock::new();
 
 // FSM metrics
+// FSM 指标
 pub static FSM_STATE_TRANSITIONS: OnceLock<CounterVec> = OnceLock::new();
 pub static FSM_CURRENT_STATE: OnceLock<Gauge> = OnceLock::new();
 
 // Memory metrics
+// 内存指标
 pub static MEMORY_POOL_USED_BYTES: OnceLock<Gauge> = OnceLock::new();
 pub static MEMORY_POOL_TOTAL_BYTES: OnceLock<Gauge> = OnceLock::new();
 
 // Tool metrics
+// tool 指标
 pub static TOOL_EXECUTIONS: OnceLock<CounterVec> = OnceLock::new();
 pub static TOOL_DURATION: OnceLock<HistogramVec> = OnceLock::new();
 pub static TOOL_SELECTION_DURATION: OnceLock<HistogramVec> = OnceLock::new();
 
 // gRPC metrics
+// gRPC 指标
 pub static GRPC_REQUESTS: OnceLock<CounterVec> = OnceLock::new();
 pub static GRPC_REQUEST_DURATION: OnceLock<HistogramVec> = OnceLock::new();
 
 // Enforcement metrics
+// 执行约束指标
 pub static ENFORCEMENT_DROPS: OnceLock<CounterVec> = OnceLock::new(); // labels: reason
 pub static ENFORCEMENT_ALLOWED: OnceLock<CounterVec> = OnceLock::new(); // labels: outcome
 
 // Thread-safe initialization result
+// 线程安全的初始化结果
 static INIT_RESULT: OnceLock<Result<()>> = OnceLock::new();
 
 pub struct TaskTimer {
@@ -76,6 +83,7 @@ pub fn get_metrics() -> String {
     let metric_families = prometheus::gather();
     let mut buffer = Vec::new();
     // If encoding fails, return empty metrics rather than panic
+    // 编码失败时返回空指标，而不是 panic
     if encoder.encode(&metric_families, &mut buffer).is_err() {
         return String::new();
     }
@@ -83,6 +91,7 @@ pub fn get_metrics() -> String {
 }
 
 // Thread-safe metrics initialization with proper synchronization
+// 线程安全的指标初始化，具备正确的同步
 pub fn init_metrics() -> Result<()> {
     match INIT_RESULT.get_or_init(init_metrics_internal) {
         Ok(()) => Ok(()),
@@ -91,13 +100,16 @@ pub fn init_metrics() -> Result<()> {
 }
 
 // Internal initialization function - only called once
+// 内部初始化函数，只会被调用一次
 fn init_metrics_internal() -> Result<()> {
     // Check if already initialized (defensive programming)
+    // 检查是否已初始化（防御性编程）
     if TASKS_TOTAL.get().is_some() {
         return Ok(()); // Already initialized, not an error
     }
 
     // Task metrics
+    // task 指标
     let tasks_total = register_counter_vec!(
         "agent_core_tasks_total",
         "Total number of tasks processed",
@@ -120,6 +132,7 @@ fn init_metrics_internal() -> Result<()> {
     .context("Failed to register TASK_TOKENS metric")?;
 
     // FSM metrics
+    // FSM 指标
     let fsm_state_transitions = register_counter_vec!(
         "agent_core_fsm_transitions_total",
         "Total FSM state transitions",
@@ -134,6 +147,7 @@ fn init_metrics_internal() -> Result<()> {
     .context("Failed to register FSM_CURRENT_STATE metric")?;
 
     // Memory metrics
+    // 内存指标
     let memory_pool_used_bytes = register_gauge!(
         "agent_core_memory_pool_used_bytes",
         "Memory pool used bytes"
@@ -147,6 +161,7 @@ fn init_metrics_internal() -> Result<()> {
     .context("Failed to register MEMORY_POOL_TOTAL_BYTES metric")?;
 
     // Tool metrics
+    // tool 指标
     let tool_executions = register_counter_vec!(
         "agent_core_tool_executions_total",
         "Total tool executions",
@@ -169,6 +184,7 @@ fn init_metrics_internal() -> Result<()> {
     .context("Failed to register TOOL_SELECTION_DURATION metric")?;
 
     // gRPC metrics
+    // gRPC 指标
     let grpc_requests = register_counter_vec!(
         "agent_core_grpc_requests_total",
         "Total gRPC requests",
@@ -184,6 +200,7 @@ fn init_metrics_internal() -> Result<()> {
     .context("Failed to register GRPC_REQUEST_DURATION metric")?;
 
     // Enforcement metrics
+    // 执行约束指标
     let enforcement_drops = register_counter_vec!(
         "agent_core_enforcement_drops_total",
         "Total requests dropped by enforcement layer",
@@ -199,6 +216,7 @@ fn init_metrics_internal() -> Result<()> {
     .context("Failed to register ENFORCEMENT_ALLOWED metric")?;
 
     // Now set all OnceLocks - these should never fail since we're in a Once guard
+    // 现在写入所有 OnceLock——处于 Once 保护中，不应失败
     TASKS_TOTAL
         .set(tasks_total)
         .map_err(|_| anyhow::anyhow!("Failed to set TASKS_TOTAL"))?;
@@ -243,6 +261,7 @@ fn init_metrics_internal() -> Result<()> {
         .map_err(|_| anyhow::anyhow!("Failed to set ENFORCEMENT_ALLOWED"))?;
 
     // Set initial values for gauges
+    // 为 gauge 设置初始值
     if let Some(memory_total) = MEMORY_POOL_TOTAL_BYTES.get() {
         memory_total.set(512.0 * 1024.0 * 1024.0); // 512MB default
     }
@@ -257,6 +276,7 @@ fn init_metrics_internal() -> Result<()> {
 }
 
 // Compatibility wrapper for old init_metrics() calls without Result
+// 兼容旧 init_metrics() 调用（无 Result）的包装
 pub fn init_metrics_legacy() {
     if let Err(e) = init_metrics() {
         tracing::warn!("Failed to initialize metrics: {}", e);
@@ -264,11 +284,13 @@ pub fn init_metrics_legacy() {
 }
 
 // Start metrics server with proper error handling
+// 启动指标服务，并妥善处理错误
 pub async fn start_metrics_server(port: u16) -> Result<()> {
     use std::net::SocketAddr;
     use tokio::net::TcpListener;
 
     // Initialize metrics before starting server
+    // 启动服务前先初始化指标
     init_metrics().context("Failed to initialize metrics")?;
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -297,6 +319,7 @@ pub async fn start_metrics_server(port: u16) -> Result<()> {
             Err(e) => {
                 tracing::error!("Failed to accept connection: {:?}", e);
                 // Continue accepting connections despite errors
+                // 出错后继续接受连接
             }
         }
     }

@@ -4,6 +4,7 @@ use tonic::{Request, Response, Status};
 use tracing::{debug, error, info, warn};
 
 // FSM removed; Rust acts as an enforcement gateway
+// FSM 已移除；Rust 侧仅作为执行约束网关
 use crate::enforcement::RequestEnforcer;
 use crate::llm_client::LLMClient;
 use crate::memory::MemoryPool;
@@ -15,6 +16,7 @@ use crate::memory_manager::MemoryManager;
 use crate::workspace::WorkspaceManager;
 
 // Include the generated proto code
+// 引入生成的 proto 代码
 #[allow(clippy::enum_variant_names)]
 pub mod proto {
     pub mod agent {
@@ -26,6 +28,7 @@ pub mod proto {
     }
 
     // Export file descriptor for reflection
+    // 导出文件描述符，供反射使用
     pub const FILE_DESCRIPTOR_SET: &[u8] =
         tonic::include_file_descriptor_set!("shannon_descriptor");
 }
@@ -34,14 +37,18 @@ use proto::agent::agent_service_server::{AgentService, AgentServiceServer};
 use proto::agent::*;
 
 /// Type alias for sandbox override parameter.
+/// sandbox 覆盖参数的类型别名。
 /// When wasi feature is enabled, carries a WasiSandbox with session workspace mounted.
+/// 启用 wasi feature 时携带已挂载 session 工作区的 WasiSandbox。
 /// When wasi is disabled, this is just a unit type.
+/// 未启用 wasi 时仅为 unit 类型。
 #[cfg(feature = "wasi")]
 type SandboxOverride = WasiSandbox;
 #[cfg(not(feature = "wasi"))]
 type SandboxOverride = ();
 
 // Streaming limits to prevent resource exhaustion
+// streaming 上限，防止资源耗尽
 const MAX_STREAM_BUFFER_SIZE: usize = 1_000_000; // 1MB max buffer size
 const DEFAULT_STREAM_TIMEOUT_SECS: u64 = 600; // 10 minutes default timeout
 
@@ -57,22 +64,31 @@ pub struct AgentServiceImpl {
 impl Default for AgentServiceImpl {
     fn default() -> Self {
         // Default implementation uses unwrap - should only be used in tests
+        // 默认实现使用 unwrap，仅应在测试中使用
         Self::new().expect("Failed to create AgentServiceImpl in Default trait")
     }
 }
 
 // Thread safety: AgentServiceImpl is Send + Sync because:
+// 线程安全：AgentServiceImpl 满足 Send + Sync，原因如下：
 // - memory_pool: MemoryPool uses Arc<RwLock<>> internally for thread safety
+// - memory_pool：MemoryPool 内部使用 Arc<RwLock<>> 保证线程安全
 // - sandbox: WasiSandbox uses Arc<Engine> for thread safety and contains only basic types
+// - sandbox：WasiSandbox 用 Arc<Engine> 保证线程安全，且只包含基础类型
 //            that are Send/Sync, with methods thread-safe for concurrent execution
+//            这些类型满足 Send/Sync，其方法可安全并发调用
 // - start_time: std::time::Instant is Send + Sync
+// - start_time：std::time::Instant 满足 Send + Sync
 //
 // Both MemoryPool and WasiSandbox automatically implement Send + Sync since all their
+// MemoryPool 和 WasiSandbox 的所有字段均为 Send + Sync，因此自动实现 Send + Sync，
 // fields are Send + Sync, so AgentServiceImpl also automatically implements them.
+// AgentServiceImpl 也随之自动实现这两个 trait。
 
 impl AgentServiceImpl {
     pub fn new() -> anyhow::Result<Self> {
         // Get sweep interval from environment or use default of 10 seconds
+        // 从环境变量读取清理间隔，默认 10 秒
         let sweep_interval_ms = std::env::var("MEMORY_SWEEP_INTERVAL_MS")
             .unwrap_or_else(|_| "10000".to_string())
             .parse()
@@ -93,7 +109,9 @@ impl AgentServiceImpl {
     }
 
     /// LLM-native direct tool execution - bypass FSM entirely
+    /// LLM 原生的直接 tool 执行——完全绕过 FSM
     /// Execute a single tool directly with an optional sandbox override for session workspace.
+    /// 直接执行单个 tool，可选传入 session 工作区的 sandbox 覆盖。
     async fn execute_direct_tool(
         &self,
         tool_params: &prost_types::Value,
@@ -107,6 +125,7 @@ impl AgentServiceImpl {
         info!("Executing LLM-suggested tool directly");
 
         // Extract tool parameters from prost Value (strict: must include tool + args)
+        // 从 prost Value 中提取 tool 参数（严格模式：必须包含 tool 与参数）
         let (tool_name, parameters) = match &tool_params.kind {
             Some(prost_types::value::Kind::StructValue(s)) => {
                 let parse_tool_name = |v: &Value| {
@@ -152,6 +171,7 @@ impl AgentServiceImpl {
                 }
 
                 // Enforce allowed tools if provided in request
+                // 若 request 提供了可用 tool 白名单，则强制校验
                 if !req.available_tools.is_empty() && !req.available_tools.contains(&tool_name) {
                     return Err(Status::permission_denied(format!(
                         "Tool '{}' is not allowed for this request",
@@ -159,6 +179,7 @@ impl AgentServiceImpl {
                     )));
                 }
                 // Helper function for recursive prost Value to JSON conversion
+                // 递归将 prost Value 转为 JSON 的辅助函数
                 fn prost_to_json_recursive(prost_val: &prost_types::Value) -> serde_json::Value {
                     match prost_val.kind.as_ref() {
                         Some(prost_types::value::Kind::StringValue(s)) => {
@@ -182,6 +203,7 @@ impl AgentServiceImpl {
                         }
                         Some(prost_types::value::Kind::StructValue(st)) => {
                             // Recursive convert nested struct
+                            // 递归转换嵌套 struct
                             let mut map = serde_json::Map::new();
                             for (k, v) in &st.fields {
                                 map.insert(k.clone(), prost_to_json_recursive(v));
@@ -193,6 +215,7 @@ impl AgentServiceImpl {
                 }
 
                 // Convert fields (except metadata fields) to JSON params
+                // 将除 metadata 字段外的其余字段转为 JSON 参数
                 for (key, value) in &s.fields {
                     if key == "tool" || key == "tool_name" || key == "name" || key == "parameters" {
                         continue;
@@ -202,6 +225,7 @@ impl AgentServiceImpl {
                 }
 
                 // Strict: do NOT infer parameters from req.query; require LLM-provided args
+                // 严格模式：不从 req.query 推断参数，必须由 LLM 提供参数
                 if tool_name == "calculator" && !params.contains_key("expression") {
                     return Err(Status::invalid_argument(
                         "calculator requires 'expression' parameter",
@@ -218,6 +242,7 @@ impl AgentServiceImpl {
         };
 
         // Create and execute tool call
+        // 构造并执行 tool 调用
         let tool_call = ToolCall {
             tool_name: tool_name.clone(),
             parameters,
@@ -239,10 +264,12 @@ impl AgentServiceImpl {
         };
 
         // Build context with session_id for Firecracker (defense-in-depth: try multiple sources)
+        // 为 Firecracker 构建含 session_id 的 context（纵深防御：尝试多个来源）
         let tool_context = {
             let mut ctx = req.context.clone().unwrap_or_default();
 
             // Try to get session_id from multiple sources (priority order)
+            // 从多个来源按优先级获取 session_id
             let session_id = if let Some(session_ctx) = &req.session_context {
                 if !session_ctx.session_id.is_empty() {
                     info!(
@@ -258,6 +285,7 @@ impl AgentServiceImpl {
             }
             .or_else(|| {
                 // Fallback: try metadata.session_id
+                // 兜底：尝试 metadata.session_id
                 req.metadata.as_ref().and_then(|m| {
                     if !m.session_id.is_empty() {
                         info!(
@@ -285,6 +313,7 @@ impl AgentServiceImpl {
         };
 
         // Measure execution time
+        // 记录执行耗时
         let start_time = std::time::Instant::now();
         match tool_executor
             .execute_tool(&tool_call, Some(&tool_context))
@@ -293,11 +322,15 @@ impl AgentServiceImpl {
             Ok(tool_result) => {
                 let execution_time_ms = start_time.elapsed().as_millis() as i64;
                 // Prefer a simple, user-facing response: if the tool output
+                // 优先返回简洁的面向用户文本：若 tool 输出包含顶层 "result"，
                 // contains a top-level "result" or is a primitive, surface that;
+                // 或本身是基础类型，则直接返回该值；
                 // otherwise fall back to compact JSON string.
+                // 否则回退为紧凑的 JSON 字符串。
                 let result_text = extract_simple_text_from_json(&tool_result.output);
 
                 // Convert parameters back to Struct for response
+                // 将参数转回 Struct 用于 response
                 fn to_prost_value(v: &serde_json::Value) -> Value {
                     match v {
                         serde_json::Value::Null => Value {
@@ -341,6 +374,7 @@ impl AgentServiceImpl {
                 };
 
                 // Build tool_call and tool_result for response
+                // 构造 response 中的 tool_call 与 tool_result
                 let resp_tool_call = proto::common::ToolCall {
                     name: tool_call.tool_name.clone(),
                     parameters: Some(params_struct),
@@ -362,6 +396,7 @@ impl AgentServiceImpl {
                 info!("LLM-native tool execution completed: {}", tool_name);
 
                 // Post-execution workspace size check (safety valve)
+                // 执行后的工作区大小检查（安全阀）
                 if let Some(session_ctx) = &req.session_context {
                     let sid = &session_ctx.session_id;
                     if !sid.is_empty() {
@@ -370,6 +405,7 @@ impl AgentServiceImpl {
                             Ok(size_bytes) => {
                                 let size_mb = size_bytes / (1024 * 1024);
                                 // Default 500MB; override via WORKSPACE_MAX_SIZE_MB
+                                // 默认 500MB，可通过 WORKSPACE_MAX_SIZE_MB 覆盖
                                 let max_mb: u64 = std::env::var("WORKSPACE_MAX_SIZE_MB")
                                     .ok()
                                     .and_then(|v| v.parse().ok())
@@ -438,7 +474,9 @@ impl AgentServiceImpl {
     }
 
     /// Execute a sequence of tool calls provided by Python in context.tool_calls
+    /// 执行 Python 通过 context.tool_calls 提供的 tool 调用序列
     /// Execute a sequence of tool calls with an optional sandbox override for session workspace.
+    /// 执行 tool 调用序列，可选传入 session 工作区的 sandbox 覆盖。
     async fn execute_tool_calls(
         &self,
         list: &prost_types::ListValue,
@@ -454,6 +492,7 @@ impl AgentServiceImpl {
         }
 
         // Resolve the effective sandbox once: prefer override, fall back to default
+        // 一次性确定生效的 sandbox：优先用覆盖值，否则回退到默认
         #[cfg(feature = "wasi")]
         let effective_sandbox = sandbox_override.unwrap_or_else(|| self.sandbox.clone());
         #[cfg(not(feature = "wasi"))]
@@ -473,6 +512,7 @@ impl AgentServiceImpl {
         let total = list.values.len();
 
         // Optional secondary allowlist from context (defense-in-depth)
+        // 可选的 context 二级白名单（纵深防御）
         let mut ctx_allowed: Option<std::collections::HashSet<String>> = None;
         if let Some(ctx) = &req.context {
             if let Some(val) = ctx.fields.get("allowed_tools") {
@@ -491,6 +531,7 @@ impl AgentServiceImpl {
         }
 
         // Parallel fan-out (bounded) when enabled via env TOOL_PARALLELISM>1
+        // 当环境变量 TOOL_PARALLELISM>1 时启用有界并行 fan-out
         if std::env::var("TOOL_PARALLELISM")
             .ok()
             .and_then(|s| s.parse::<usize>().ok())
@@ -502,6 +543,7 @@ impl AgentServiceImpl {
             use tokio::sync::Semaphore;
 
             // Determine parallelism and clamp
+            // 确定并行度并做上下限裁剪
             let parallelism = std::env::var("TOOL_PARALLELISM")
                 .ok()
                 .and_then(|s| s.parse::<usize>().ok())
@@ -510,6 +552,7 @@ impl AgentServiceImpl {
             let semaphore = Arc::new(Semaphore::new(parallelism));
 
             // Pre-parse items and enforce allowlist prior to spawning
+            // 预先解析条目并在启动 task 前校验白名单
             let mut parsed: Vec<(usize, String, HashMap<String, serde_json::Value>)> =
                 Vec::with_capacity(total);
             for (idx, item) in list.values.iter().enumerate() {
@@ -574,6 +617,7 @@ impl AgentServiceImpl {
             }
 
             // Pre-allocate results without requiring Clone on ItemRes
+            // 预分配结果槽位，避免要求 ItemRes 实现 Clone
             let mut results: Vec<Option<ItemRes>> = (0..total).map(|_| None).collect();
             let wall_start = std::time::Instant::now();
             let mut handles = Vec::with_capacity(total);
@@ -588,10 +632,12 @@ impl AgentServiceImpl {
                 let tool_name_c = tool_name.clone();
                 let params_map_c = params_map.clone();
                 // Build context with session_id for Firecracker (defense-in-depth: try multiple sources)
+                // 为 Firecracker 构建含 session_id 的 context（纵深防御：尝试多个来源）
                 let context_c = {
                     let mut ctx = req.context.clone().unwrap_or_default();
 
                     // Try to get session_id from multiple sources (priority order)
+                    // 从多个来源按优先级获取 session_id
                     let session_id = if let Some(session_ctx) = &req.session_context {
                         if !session_ctx.session_id.is_empty() {
                             Some(session_ctx.session_id.clone())
@@ -603,6 +649,7 @@ impl AgentServiceImpl {
                     }
                     .or_else(|| {
                         // Fallback: try metadata.session_id
+                        // 兜底：尝试 metadata.session_id
                         req.metadata.as_ref().and_then(|m| {
                             if !m.session_id.is_empty() {
                                 Some(m.session_id.clone())
@@ -674,6 +721,7 @@ impl AgentServiceImpl {
             }
 
             // Build response in original order
+            // 按原始顺序构建 response
             let mut tool_calls_vec = Vec::with_capacity(total);
             let mut tool_results_vec = Vec::with_capacity(total);
             let mut overall_status = proto::common::StatusCode::Ok.into();
@@ -829,10 +877,12 @@ impl AgentServiceImpl {
             debug!("Executing tool {}/{}: {}", idx + 1, total, tool_name);
 
             // Build context with session_id for Firecracker (defense-in-depth: try multiple sources)
+            // 为 Firecracker 构建含 session_id 的 context（纵深防御：尝试多个来源）
             let tool_context = {
                 let mut ctx = req.context.clone().unwrap_or_default();
 
                 // Try to get session_id from multiple sources (priority order)
+                // 从多个来源按优先级获取 session_id
                 let session_id = if let Some(session_ctx) = &req.session_context {
                     if !session_ctx.session_id.is_empty() {
                         Some(session_ctx.session_id.clone())
@@ -844,6 +894,7 @@ impl AgentServiceImpl {
                 }
                 .or_else(|| {
                     // Fallback: try metadata.session_id
+                    // 兜底：尝试 metadata.session_id
                     req.metadata.as_ref().and_then(|m| {
                         if !m.session_id.is_empty() {
                             Some(m.session_id.clone())
@@ -878,6 +929,7 @@ impl AgentServiceImpl {
                     }
 
                     // Build response artifacts
+                    // 构造 response 所需的结构
                     let tc_params_struct = prost_types::Struct {
                         fields: params_map
                             .iter()
@@ -994,12 +1046,14 @@ impl AgentService for AgentServiceImpl {
         info!("Executing task: {}", req.query);
 
         // Validate sandbox permissions early (non-fatal). Ensures WASI sandbox wiring is active.
+        // 尽早校验 sandbox 权限（非致命），确保 WASI sandbox 接线已生效。
         #[cfg(feature = "wasi")]
         if let Err(e) = self.sandbox.validate_permissions() {
             tracing::warn!("WASI sandbox permission validation warning: {}", e);
         }
 
         // Extract session context if available
+        // 若存在 session context 则提取
         if let Some(session_ctx) = &req.session_context {
             info!(
                 "Processing with session context: session_id={}",
@@ -1009,6 +1063,7 @@ impl AgentService for AgentServiceImpl {
         }
 
         // Extract user_id from session_context (primary) or metadata (fallback)
+        // 从 session_context（主）或 metadata（兜底）提取 user_id
         let mut user_id = req
             .session_context
             .as_ref()
@@ -1032,6 +1087,7 @@ impl AgentService for AgentServiceImpl {
         }
 
         // Get session_id from session_context for workspace mounting
+        // 从 session_context 获取 session_id，用于挂载工作区
         #[cfg(feature = "wasi")]
         let session_workspace = if let Some(session_ctx) = &req.session_context {
             let session_id = &session_ctx.session_id;
@@ -1061,6 +1117,7 @@ impl AgentService for AgentServiceImpl {
         };
 
         // Construct user memory workspace from user_id
+        // 根据 user_id 构造用户记忆工作区
         #[cfg(feature = "wasi")]
         let memory_workspace = if !user_id.is_empty() {
             match MemoryManager::from_env().get_memory_dir(&user_id) {
@@ -1078,6 +1135,7 @@ impl AgentService for AgentServiceImpl {
         };
 
         // Configure sandbox from request config (timeouts, memory, workspace)
+        // 根据 request 配置设置 sandbox（timeout、内存、工作区）
         #[cfg(feature = "wasi")]
         let mut _sandbox = self.sandbox.clone();
         #[cfg(not(feature = "wasi"))]
@@ -1085,14 +1143,17 @@ impl AgentService for AgentServiceImpl {
         #[cfg(feature = "wasi")]
         {
             // Apply session workspace if available
+            // 若有 session 工作区则应用
             if let Some(workspace) = session_workspace {
                 _sandbox = _sandbox.with_session_workspace(workspace);
             }
             // Apply user memory workspace if available
+            // 若有用户记忆工作区则应用
             if let Some(ref mw) = memory_workspace {
                 _sandbox = _sandbox.with_memory_workspace(mw.clone());
             }
             // Apply config overrides
+            // 应用配置覆盖项
             if let Some(cfg) = &req.config {
                 if cfg.timeout_seconds > 0 {
                     _sandbox = _sandbox.set_execution_timeout(std::time::Duration::from_secs(
@@ -1109,6 +1170,7 @@ impl AgentService for AgentServiceImpl {
         let _ = &req.config; // Avoid unused variable warning
 
         // Check for multi-tool sequence first
+        // 优先检查是否为多 tool 调用序列
         info!("Request context: {:?}", req.context);
         if let Some(context) = &req.context {
             info!(
@@ -1116,6 +1178,7 @@ impl AgentService for AgentServiceImpl {
                 context.fields.keys().collect::<Vec<_>>()
             );
             // Pre-execution workspace quota check (prevent DoS before tool runs)
+            // 执行前检查工作区配额（在 tool 运行前防止 DoS）
             if let Some(session_ctx) = &req.session_context {
                 let sid = &session_ctx.session_id;
                 if !sid.is_empty() {
@@ -1173,6 +1236,7 @@ impl AgentService for AgentServiceImpl {
                 }
             }
             // ENFORCEMENT: Check for tool parameters and execute tools directly
+            // 强制执行：检查 tool 参数并直接执行 tool
             if let Some(tool_params) = context.fields.get("tool_parameters") {
                 info!(
                     "ENFORCING tool execution from orchestration parameters - bypassing LLM choice"
@@ -1208,9 +1272,11 @@ impl AgentService for AgentServiceImpl {
         }
 
         // Check if we have suggested tools from decomposition
+        // 检查分解阶段是否给出了建议 tool
         let has_suggested_tools = !req.available_tools.is_empty();
 
         // Simple/Standard mode -> Use tool-enabled LLM if tools suggested, otherwise direct LLM
+        // Simple/Standard 模式：若有建议 tool 则走带 tool 的 LLM，否则直接调用 LLM
         match req.mode() {
             proto::common::ExecutionMode::Simple | proto::common::ExecutionMode::Standard => {
                 if has_suggested_tools {
@@ -1222,9 +1288,11 @@ impl AgentService for AgentServiceImpl {
                 let llm = self.llm.clone();
 
                 // Merge minimal context (history to summary string if present)
+                // 合并最小 context（若存在历史则汇总为字符串）
                 let mut ctx_json = serde_json::json!({});
                 if let Some(ctx) = &req.context {
                     // pass-through Struct -> serde_json
+                    // 将 Struct 原样转换为 serde_json
                     let mut map = serde_json::Map::new();
                     for (k, v) in &ctx.fields {
                         map.insert(k.clone(), prost_value_to_json(v));
@@ -1262,6 +1330,7 @@ impl AgentService for AgentServiceImpl {
                 let ctx = ctx_json.clone();
 
                 // Pass suggested tools to LLM if available
+                // 若有建议 tool 则传给 LLM
                 let tools_option = if has_suggested_tools {
                     Some(req.available_tools.clone())
                 } else {
@@ -1290,6 +1359,7 @@ impl AgentService for AgentServiceImpl {
                 let result = agent_result.response;
 
                 // Save values for logging before move
+                // 在 move 之前保存用于日志的值
                 let log_provider = usage.provider.clone();
                 let log_model = usage.model.clone();
                 let log_tokens = usage.total_tokens;
@@ -1345,6 +1415,7 @@ impl AgentService for AgentServiceImpl {
         }
 
         // Complex or unspecified -> LLM path with enforcement and optional context
+        // Complex 或未指定模式：走带执行约束和可选 context 的 LLM 路径
         if has_suggested_tools {
             info!(
                 "Tool-enabled LLM query path for complex with suggested tools: {:?}",
@@ -1368,6 +1439,7 @@ impl AgentService for AgentServiceImpl {
             _ => "standard",
         };
         // Build minimal context from session history
+        // 由 session 历史构建最小 context
         let mut ctx_json = serde_json::json!({});
         if let Some(session_ctx) = &req.session_context {
             if !session_ctx.history.is_empty() {
@@ -1384,6 +1456,7 @@ impl AgentService for AgentServiceImpl {
         let q = req.query.clone();
 
         // Pass suggested tools to LLM for complex mode as well
+        // complex 模式同样将建议 tool 传给 LLM
         let tools_option = if has_suggested_tools {
             Some(req.available_tools.clone())
         } else {
@@ -1417,6 +1490,7 @@ impl AgentService for AgentServiceImpl {
         let result = agent_result.response;
 
         // Save values for logging before move
+        // 在 move 之前保存用于日志的值
         let log_provider = usage.provider.clone();
         let log_model = usage.model.clone();
         let log_tokens = usage.total_tokens;
@@ -1486,6 +1560,7 @@ impl AgentService for AgentServiceImpl {
         let llm = self.llm.clone();
 
         // Build minimal JSON context (including session history)
+        // 构建最小 JSON context（包含 session 历史）
         let mut ctx_json = serde_json::json!({});
         if let Some(ctx) = &req.context {
             let mut map = serde_json::Map::new();
@@ -1514,6 +1589,7 @@ impl AgentService for AgentServiceImpl {
         };
 
         // Extract stream timeout from request config; fall back to default
+        // 从 request 配置读取 stream timeout，缺省时用默认值
         let stream_timeout_secs = req
             .config
             .as_ref()
@@ -1558,6 +1634,7 @@ impl AgentService for AgentServiceImpl {
                 Ok(mut stream) => {
                     let mut buffer = String::new();
                     // Wrap stream consumption in timeout to prevent hanging
+                    // 为 stream 消费加上 timeout，防止长时间无响应
                     let stream_result = tokio::time::timeout(
                         std::time::Duration::from_secs(stream_timeout_secs),
                         async {
@@ -1566,6 +1643,7 @@ impl AgentService for AgentServiceImpl {
                                     Ok(chunk) => {
                                         if let Some(d) = chunk.delta.clone() {
                                             // Check buffer size limit before appending
+                                            // 追加前检查缓冲区大小上限
                                             if buffer.len() + d.len() > MAX_STREAM_BUFFER_SIZE {
                                                 return Err(Status::resource_exhausted(
                                                     format!("Response exceeds maximum size of {} bytes", MAX_STREAM_BUFFER_SIZE)
@@ -1592,6 +1670,7 @@ impl AgentService for AgentServiceImpl {
                                         final_msg.response
                                     };
                                     // Attach usage metadata when available so downstream can track budgets
+                                    // 有 usage metadata 时附带返回，便于下游跟踪 budget
                                     let usage_result = {
                                         let has_usage = final_msg.total_tokens.is_some()
                                             || final_msg.input_tokens.is_some()
@@ -1601,6 +1680,7 @@ impl AgentService for AgentServiceImpl {
                                             || final_msg.provider.is_some();
                                         if has_usage {
                                             // Validate token values are within reasonable bounds
+                                            // 校验 token 值处于合理范围内
                                             let validate_tokens = |val: Option<u32>| -> Option<u32> {
                                                 val.filter(|&t| t > 0 && t < 10_000_000)
                                             };
@@ -1651,6 +1731,7 @@ impl AgentService for AgentServiceImpl {
                     }
 
                     // If stream ends without an explicit final chunk, emit completion with buffered text
+                    // 若 stream 结束时没有显式 final 分片，则用已缓冲文本发送完成 event
                     let _ = tx
                         .send(Ok(TaskUpdate {
                             task_id: task_id.clone(),
@@ -1668,9 +1749,11 @@ impl AgentService for AgentServiceImpl {
                     .await;
 
                     // Handle timeout result
+                    // 处理 timeout 结果
                     match stream_result {
                         Ok(Ok(())) => {
                             // Stream completed successfully
+                            // stream 正常完成
                         }
                         Ok(Err(e)) => {
                             let _ = tx.send(Err(e)).await;
@@ -1712,6 +1795,7 @@ impl AgentService for AgentServiceImpl {
                     "database_query".to_string(),
                 ];
                 // C1: Only advertise code execution tools if an executor backend is available
+                // C1：仅在存在执行器后端时才对外声明代码执行 tool
                 let wasm_path = std::env::var("PYTHON_WASI_WASM_PATH")
                     .unwrap_or_else(|_| "/opt/wasm-interpreters/python-3.11.4.wasm".to_string());
                 let firecracker_mode = std::env::var("PYTHON_EXECUTOR_MODE")
@@ -1784,6 +1868,7 @@ impl AgentService for AgentServiceImpl {
 }
 
 // Helper: convert prost_types::Value to serde_json::Value for passing context to Python
+// 辅助函数：将 prost_types::Value 转为 serde_json::Value，便于把 context 传给 Python
 fn tool_meta_to_proto(
     meta: &Option<serde_json::Value>,
 ) -> (Vec<proto::common::ToolCall>, Vec<proto::common::ToolResult>) {
@@ -1863,6 +1948,7 @@ pub fn prost_value_to_json(v: &prost_types::Value) -> serde_json::Value {
 }
 
 // Helper: convert serde_json::Value back to prost_types::Value
+// 辅助函数：将 serde_json::Value 转回 prost_types::Value
 fn prost_value_to_json_to_prost(v: &serde_json::Value) -> prost_types::Value {
     use prost_types::value::Kind;
     match v {
@@ -1895,7 +1981,9 @@ fn prost_value_to_json_to_prost(v: &serde_json::Value) -> prost_types::Value {
 }
 
 /// Convert `Option<serde_json::Value>` (expected Object) to `Option<prost_types::Struct>`.
+/// 将 `Option<serde_json::Value>`（预期为 Object）转换为 `Option<prost_types::Struct>`。
 /// Used to forward agent metadata (including tool_cost_entries) through gRPC responses.
+/// 用于通过 gRPC response 透传 agent metadata（包括 tool_cost_entries）。
 fn serde_json_to_prost_struct(meta: &Option<serde_json::Value>) -> Option<prost_types::Struct> {
     match meta {
         Some(serde_json::Value::Object(map)) => Some(prost_types::Struct {
@@ -1916,9 +2004,13 @@ fn serde_json_to_prost_struct(meta: &Option<serde_json::Value>) -> Option<prost_
 }
 
 // Helper: produce a simple, user-facing string from a serde_json::Value.
+// 辅助函数：从 serde_json::Value 生成简洁的面向用户字符串。
 // - If it's a primitive (string/number/bool), stringify it directly
+// - 基础类型（string/number/bool）直接转字符串
 // - If it's an object with a "result" field, surface that field (recursively)
+// - 含 "result" 字段的对象则递归返回该字段
 // - If null/array/other objects, fall back to compact JSON string or empty
+// - null/数组/其他对象则回退为紧凑 JSON 字符串或空串
 fn extract_simple_text_from_json(v: &serde_json::Value) -> String {
     match v {
         serde_json::Value::Null => String::new(),
@@ -1936,6 +2028,7 @@ fn extract_simple_text_from_json(v: &serde_json::Value) -> String {
 }
 
 // Helper: same as above, but starting from prost_types::Value
+// 辅助函数：同上，但入参为 prost_types::Value
 fn extract_simple_text_from_prost(v: &prost_types::Value) -> String {
     let json = prost_value_to_json(v);
     extract_simple_text_from_json(&json)

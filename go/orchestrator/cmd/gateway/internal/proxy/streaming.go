@@ -43,6 +43,7 @@ func NewStreamingProxy(adminURL string, logger *zap.Logger) (*StreamingProxy, er
 
 		// Don't forward auth query params upstream (they may appear in logs).
 		// Gateway auth middleware validates them before proxying.
+		// 不要把 auth query 参数转发到上游（它们可能进入日志）；gateway 的 auth middleware 在代理前已完成校验。
 		q := req.URL.Query()
 		changed := false
 		if q.Has("token") {
@@ -82,6 +83,7 @@ func NewStreamingProxy(adminURL string, logger *zap.Logger) (*StreamingProxy, er
 	}
 
 	// Set FlushInterval to 0 for immediate flushing (important for SSE)
+	// FlushInterval 设为 -1 表示立即 flush（对 SSE 至关重要）。
 	proxy.FlushInterval = -1 // Negative value means flush immediately
 
 	return sp, nil
@@ -108,5 +110,6 @@ func (sp *StreamingProxy) isWebSocketRequest(r *http.Request) bool {
 func (sp *StreamingProxy) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// WebSocket requires special handling
 	// For simplicity, we'll use the default proxy which handles WebSocket
+	// WebSocket 需要特殊处理；为简单起见，直接使用默认 proxy（它已支持 WebSocket）。
 	sp.proxy.ServeHTTP(w, r)
 }

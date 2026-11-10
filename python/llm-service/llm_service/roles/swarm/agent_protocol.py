@@ -1,22 +1,34 @@
 """Role-aware agent protocol for Swarm V2.
+适用于 Swarm V2 的角色感知 agent 协议。
 
 Splits the monolithic AGENT_LOOP_SYSTEM_PROMPT into a shared base and
 role-specific PHASE 2 work protocols. Every agent gets the same identity,
 actions, JSON format, and quality rules — only the *execution strategy*
 changes per role.
+将单体式的 AGENT_LOOP_SYSTEM_PROMPT 拆分为共享基础部分与角色专属的 PHASE 2
+工作协议。每个 agent 都拥有相同的身份、动作、JSON 格式与质量规则 —— 只有
+*执行策略* 随角色变化。
 
 Architecture:
   _PROTOCOL_HEADER    Identity, notes strategy, continue protocol
   + role protocol     HOW TOOLS WORK (role-specific) + PHASE 2
   + _PROTOCOL_FOOTER  PHASE 1, PHASE 3, error recovery, actions, rules, JSON constraint
+架构：
+  _PROTOCOL_HEADER    身份、notes 策略、continue 协议
+  + role protocol     tool 如何工作（角色专属）+ PHASE 2
+  + _PROTOCOL_FOOTER  PHASE 1、PHASE 3、错误恢复、动作、规则、JSON 约束
 
 get_work_protocol(role) assembles header + role_protocol + footer.
 COMMON_PROTOCOL_BASE = _PROTOCOL_HEADER + _PROTOCOL_FOOTER (for test imports).
 AGENT_LOOP_SYSTEM_PROMPT = get_work_protocol("researcher") for backward compat.
+get_work_protocol(role) 组装 header + role_protocol + footer。
+COMMON_PROTOCOL_BASE = _PROTOCOL_HEADER + _PROTOCOL_FOOTER（供测试导入）。
+AGENT_LOOP_SYSTEM_PROMPT = get_work_protocol("researcher")，用于向后兼容。
 """
 
 # ---------------------------------------------------------------------------
 # PROTOCOL HEADER — identity, notes, continue protocol (shared by ALL roles)
+# 协议头部 —— 身份、notes、continue 协议（所有角色共享）
 # ---------------------------------------------------------------------------
 _PROTOCOL_HEADER = """You are an autonomous agent in a multi-agent team. Your task is given below.
 You operate in a reason-act loop. Each turn, you decide ONE action to take.
@@ -42,6 +54,7 @@ CONTINUE PROTOCOL — when task contains "PREVIOUS WORK CONTEXT:" or "CONTINUE:"
 
 # ---------------------------------------------------------------------------
 # PROTOCOL FOOTER — phases 1+3, error recovery, actions, rules (shared by ALL)
+# 协议尾部 —— 阶段 1+3、错误恢复、动作、规则（所有角色共享）
 # ---------------------------------------------------------------------------
 _PROTOCOL_FOOTER = """
 PHASE 1 — ORIENT (skip if CONTINUE applies or workspace is empty):
@@ -122,10 +135,13 @@ Return ONLY valid JSON, no markdown wrapping.
 
 # Public alias: header + footer (no role-specific section).
 # Exported for tests that check common content is present in all protocols.
+# 公开别名：header + footer（不含角色专属部分）。
+# 导出供测试使用，用于校验所有协议都包含公共内容。
 COMMON_PROTOCOL_BASE = _PROTOCOL_HEADER + _PROTOCOL_FOOTER
 
 # ---------------------------------------------------------------------------
 # Role-specific work protocols (inserted between header and footer)
+# 角色专属工作协议（插入在 header 与 footer 之间）
 # ---------------------------------------------------------------------------
 
 _RESEARCH_WORK_PROTOCOL = """
@@ -291,6 +307,7 @@ PHASE 2 — EXECUTE:
 
 # ---------------------------------------------------------------------------
 # Role → protocol mapping
+# 角色 → 协议映射
 # ---------------------------------------------------------------------------
 _ROLE_PROTOCOL_MAP = {
     "researcher": _RESEARCH_WORK_PROTOCOL,
@@ -303,28 +320,41 @@ _ROLE_PROTOCOL_MAP = {
     "planner": _REVIEW_WORK_PROTOCOL,
     "generalist": _GENERAL_WORK_PROTOCOL,
     "writer": _GENERAL_WORK_PROTOCOL,  # Technical writing — uses general workflow with writing-oriented role_prompt
+    # 技术写作 —— 使用通用 workflow 并配合面向写作的 role_prompt
 }
 
 
 def get_work_protocol(role: str, methodology: str = "") -> str:
     """Return the full agent protocol for a given role.
+    返回指定角色的完整 agent 协议。
 
     Combines:
       _PROTOCOL_HEADER  (identity, notes, continue protocol)
       + methodology     (optional role methodology from SWARM_ROLE_PROMPTS)
       + role protocol   (HOW TOOLS WORK + PHASE 2, role-specific)
       + _PROTOCOL_FOOTER (PHASE 1, PHASE 3, error recovery, actions, rules)
+    组合：
+      _PROTOCOL_HEADER  （身份、notes、continue 协议）
+      + methodology     （可选的角色方法论，来自 SWARM_ROLE_PROMPTS）
+      + role protocol   （tool 如何工作 + PHASE 2，角色专属）
+      + _PROTOCOL_FOOTER（PHASE 1、PHASE 3、错误恢复、动作、规则）
 
     Role-specific content appears between header and footer so that
     tool mental models (e.g. "HOW YOUR TOOLS WORK") come before PHASE 1,
     matching LLM cognitive expectations.
+    角色专属内容位于 header 与 footer 之间，使 tool 心智模型（如
+    "HOW YOUR TOOLS WORK"）出现在 PHASE 1 之前，符合 LLM 的认知预期。
 
     When methodology is provided, it is placed between the header and
     role protocol — giving the LLM identity context first, then domain
     methodology, then tool execution strategy. This avoids the old pattern
     of prepending methodology before identity.
+    当提供 methodology 时，它被放在 header 与 role protocol 之间 —— 先给 LLM
+    身份 context，再给领域方法论，最后给 tool 执行策略。这避免了旧做法中把
+    方法论前置在身份之前的做法。
 
     Unknown roles fall back to the general work protocol.
+    未知角色回退到通用 work protocol。
     """
     role_protocol = _ROLE_PROTOCOL_MAP.get(role, _GENERAL_WORK_PROTOCOL)
     if methodology:
@@ -335,4 +365,7 @@ def get_work_protocol(role: str, methodology: str = "") -> str:
 # Backward-compatible alias — existing code imports this constant.
 # Equivalent to get_work_protocol("researcher") since researchers were
 # the original target audience of the monolithic prompt.
+# 向后兼容别名 —— 现有代码会导入此常量。
+# 等价于 get_work_protocol("researcher")，因为 researcher 原本就是
+# 单体 prompt 的目标受众。
 AGENT_LOOP_SYSTEM_PROMPT = get_work_protocol("researcher")

@@ -1,19 +1,25 @@
 # Docker Compose Override for Local Development
+# 用于本地开发的 Docker Compose 覆盖文件
 #
 # Copy this file to docker-compose.override.yml for local development settings
 # that won't be committed to the repository.
+# 将本文件复制为 docker-compose.override.yml，用于存放不会提交到仓库的本地开发配置。
 #
 # Usage:
+# 用法：
 #   cp docker-compose.override.example.yml docker-compose.override.yml
 #   docker compose up -d
 #
 # The override file is automatically used by Docker Compose when present.
+# 存在该覆盖文件时，Docker Compose 会自动使用它。
 
 services:
   # Gateway overrides for local development
+  # 网关的本地开发覆盖配置
   gateway:
     environment:
       # Authentication bypass for easy local development
+      # 为方便本地开发而跳过 authentication
       # Set to 0 to enable authentication
       - GATEWAY_SKIP_AUTH=1
 
@@ -28,62 +34,77 @@ services:
       - "8080:8080"
 
     # Mount local code for hot reload (if using air or similar)
+    # 挂载本地代码以实现热重载（如果使用 air 等）
     # volumes:
     #   - ../../go/orchestrator:/app/go/orchestrator
 
   # Orchestrator overrides for debugging
+  # orchestrator 的调试覆盖配置
   orchestrator:
     environment:
       - LOG_LEVEL=debug
       # Enable detailed workflow logging
+      # 启用详细的 workflow 日志
       - TEMPORAL_LOG_LEVEL=debug
 
     # Expose admin port for local debugging
+    # 暴露管理端口以便本地调试
     ports:
       - "8081:8081"
 
   # LLM Service overrides
+  # LLM 服务覆盖配置
   llm-service:
     environment:
       - LOG_LEVEL=DEBUG
       # Use mock LLM for testing without API costs
+      # 使用 mock LLM 进行测试，避免产生 API 费用
       # - USE_MOCK_LLM=true
 
     # Mount local code for hot reload
+    # 挂载本地代码以实现热重载
     # volumes:
     #   - ../../python/llm-service:/app
 
   # Agent Core overrides
+  # Agent Core 覆盖配置
   agent-core:
     environment:
       - RUST_LOG=debug
       # Enable WASI sandbox debug output
+      # 启用 WASI sandbox 调试输出
       - WASI_DEBUG=1
 
     # Mount local code for development
+    # 挂载本地代码用于开发
     # volumes:
     #   - ../../rust/agent-core:/app
 
   # Temporal UI - ensure it's accessible
+  # Temporal UI - 确保其可访问
   temporal-ui:
     ports:
       - "8088:8080"
 
   # PostgreSQL - expose for local debugging
+  # PostgreSQL - 暴露端口以便本地调试
   postgres:
     ports:
       - "5432:5432"
     # Persist data between restarts (remove for clean slate)
+    # 在重启之间保留数据（如需干净环境可移除）
     # volumes:
     #   - postgres_data:/var/lib/postgresql/data
 
   # Redis - expose for debugging
+  # Redis - 暴露端口以便调试
   redis:
     ports:
       - "6379:6379"
     command: redis-server --loglevel debug
 
 # Volume overrides (uncomment to persist data)
+# 卷覆盖配置（取消注释以持久化数据）
 # volumes:
 #   postgres_data:
 #     driver: local

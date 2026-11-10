@@ -475,6 +475,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 
 	// Aggregate agent metadata (model, provider, tokens, cost)
 	// Note: ReactResult doesn't track per-iteration models; use tier's priority-1 model
+	// ReactResult 不跟踪每轮使用的 model，这里取该档位 priority-1 的 model。
 	agentResults := []activities.AgentExecutionResult{
 		{
 			AgentID:      "react-agent",

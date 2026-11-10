@@ -245,6 +245,7 @@ export default function RunsPage() {
                                                         const isRunning = session.latest_task_status === "RUNNING" || session.latest_task_status === "QUEUED";
                                                         const isActive = session.is_active || isRunning;
                                                         // Friendly title: prefer title, else truncated query, else "New task..."
+                                                        // 友好的展示标题：优先用 title，其次用截断后的 query，最后回退到 "New task..."
                                                         const truncatedQuery = session.latest_task_query 
                                                             ? (session.latest_task_query.length > 50 
                                                                 ? session.latest_task_query.slice(0, 50) + "..." 
@@ -253,6 +254,7 @@ export default function RunsPage() {
                                                         const displayTitle = session.title || truncatedQuery || "New task...";
                                                         const hasRealTitle = !!session.title;
                                                         // Only show query below if we have a real title (avoid redundancy)
+                                                        // 仅当存在真实 title 时才在下方展示 query，避免信息重复
                                                         const showQueryBelow = hasRealTitle && session.latest_task_query;
                                                         return (
                                                             <>

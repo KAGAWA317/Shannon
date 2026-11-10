@@ -29,7 +29,10 @@ def _l2_normalize(vec: List[float]) -> List[float]:
 
 @router.post("/", response_model=EmbeddingResponse)
 async def generate_embeddings(request: Request, body: EmbeddingRequest):
-    """Generate embeddings for the provided texts"""
+    """Generate embeddings for the provided texts
+
+    为给定的文本生成 embedding
+    """
     providers = request.app.state.providers
 
     try:

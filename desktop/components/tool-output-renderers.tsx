@@ -319,6 +319,7 @@ interface LPBatchResult {
 }
 
 // Section-mode response types for LP analysis
+// LP 分析的分节（section）模式 response 类型
 interface LPSection {
     index: number;                    // 0-based
     y: number;                        // Y position
@@ -366,6 +367,7 @@ interface CreativeAnalyzeResultLegacy {
 }
 
 // New comprehensive creative analysis format
+// 新的综合创意分析格式
 interface CreativeCompetitiveGap {
     gap: string;
     opportunity: string;
@@ -490,6 +492,7 @@ function ExternalLinkButton({ href, children }: { href: string; children: React.
 
 // =============================================================================
 // Blob Image Component (handles both inline and blob reference images)
+// 图片 Blob 组件（同时支持内联图片与 blob 引用图片）
 // =============================================================================
 
 interface BlobImageProps {
@@ -508,6 +511,7 @@ function BlobImage({ inline, blobRef, alt, className, onClick, mediaType = "imag
 
     useEffect(() => {
         // If we have inline data, use it directly
+        // 有内联数据时直接使用
         if (inline) {
             setImageData(inline);
             setLoading(false);
@@ -516,6 +520,7 @@ function BlobImage({ inline, blobRef, alt, className, onClick, mediaType = "imag
         }
 
         // If we have a blob reference, fetch it
+        // 有 blob 引用时则去拉取
         if (blobRef?.blob_id) {
             setLoading(true);
             setError(null);
@@ -565,6 +570,7 @@ function BlobImage({ inline, blobRef, alt, className, onClick, mediaType = "imag
 }
 
 // Hook to resolve an image from either inline data or blob reference
+// 从内联数据或 blob 引用解析图片的 Hook
 function useBlobImage(inline?: string | null, blobRef?: BlobReference): {
     imageData: string | null;
     loading: boolean;
@@ -576,6 +582,7 @@ function useBlobImage(inline?: string | null, blobRef?: BlobReference): {
 
     useEffect(() => {
         // If we have inline data, use it directly
+        // 有内联数据时直接使用
         if (inline) {
             setImageData(inline);
             setLoading(false);
@@ -584,6 +591,7 @@ function useBlobImage(inline?: string | null, blobRef?: BlobReference): {
         }
 
         // If we have a blob reference, fetch it
+        // 有 blob 引用时则去拉取
         if (blobRef?.blob_id) {
             setLoading(true);
             setError(null);
@@ -606,8 +614,10 @@ function useBlobImage(inline?: string | null, blobRef?: BlobReference): {
 }
 
 // Component to display LP screenshots with blob reference support
+// 展示 LP 截图并支持 blob 引用的组件
 function LPScreenshotDisplay({ result }: { result: LPAnalyzeResult }): React.ReactElement | null {
     // Determine if we have any screenshot source
+    // 判断是否存在任何截图来源
     const hasS3Url = !!result.s3_screenshot_url;
     const hasScreenshotUrl = !!result.screenshot_url;
     const hasScreenshotInline = !!result.screenshot_b64;
@@ -616,6 +626,7 @@ function LPScreenshotDisplay({ result }: { result: LPAnalyzeResult }): React.Rea
     const firstPopup = result.popup_artifacts?.[0];
 
     // Prefer S3 permanent URL (best performance, no auth)
+    // 优先使用 S3 永久 URL（性能最佳且无需 auth）
     if (hasS3Url) {
         return (
             <img
@@ -627,6 +638,7 @@ function LPScreenshotDisplay({ result }: { result: LPAnalyzeResult }): React.Rea
     }
 
     // If we have screenshot_url (Firecrawl), use it directly
+    // 有 screenshot_url（Firecrawl）时直接使用
     if (hasScreenshotUrl) {
         return (
             <img
@@ -638,6 +650,7 @@ function LPScreenshotDisplay({ result }: { result: LPAnalyzeResult }): React.Rea
     }
 
     // If we have screenshot_b64 or screenshot_b64_ref (Playwright), use BlobImage
+    // 有 screenshot_b64 或 screenshot_b64_ref（Playwright）时使用 BlobImage
     if (hasScreenshotInline || hasScreenshotRef) {
         return (
             <BlobImage
@@ -650,6 +663,7 @@ function LPScreenshotDisplay({ result }: { result: LPAnalyzeResult }): React.Rea
     }
 
     // If we have popup_artifacts, use the first one (may have inline or ref)
+    // 有 popup_artifacts 时取第一个（可能为内联或引用形式）
     if (hasPopupArtifact && firstPopup) {
         return (
             <BlobImage
@@ -883,11 +897,13 @@ export function AdsTransparencyRenderer({ data }: { data: AdsTransparencyResult 
     const [showAll, setShowAll] = useState(false);
 
     // Support both creatives array and legacy ads array
+    // 同时兼容 creatives 数组和旧版 ads 数组
     const allAds = data.creatives || data.ads || [];
     const displayAds = showAll ? allAds : allAds.slice(0, 6);
     const totalAds = data.total_ads || allAds.length;
 
     // Get advertiser name from various possible formats
+    // 从多种可能格式中获取广告主名称
     const advertiserName = data.advertiser_name || data.advertiser?.name || "Unknown Advertiser";
     const advertiserId = data.advertiser?.id;
 
@@ -945,6 +961,7 @@ export function AdsTransparencyRenderer({ data }: { data: AdsTransparencyResult 
                         const displayText = ad.title || ad.text;
 
                         // Compact single-line format when no rich content
+                        // 无富内容时使用紧凑的单行格式
                         if (!hasRichContent) {
                             return (
                                 <div
@@ -982,6 +999,7 @@ export function AdsTransparencyRenderer({ data }: { data: AdsTransparencyResult 
                         }
 
                         // Full card format when there's rich content
+                        // 有富内容时使用完整卡片格式
                         return (
                             <Card key={index} className="overflow-hidden">
                                 <CardContent className="p-3">
@@ -1133,6 +1151,7 @@ function LPCard({ result }: { result: LPAnalyzeResult }) {
     const hasVisionAnalysis = !!structured;
 
     // Handle failed results
+    // 处理失败的结果
     if (result.success === false || result.error) {
         return (
             <Card className="border-red-200 dark:border-red-800">
@@ -1421,6 +1440,7 @@ function LPCard({ result }: { result: LPAnalyzeResult }) {
 }
 
 // Block type colors for section cards
+// 分节卡片的区块类型配色
 const BLOCK_TYPE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
     FV: { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-300", border: "border-blue-200 dark:border-blue-800" },
     "Pain Points": { bg: "bg-red-100 dark:bg-red-900/30", text: "text-red-700 dark:text-red-300", border: "border-red-200 dark:border-red-800" },
@@ -1511,6 +1531,7 @@ function LPSectionCard({ section, onClick }: { section: LPSection; onClick?: () 
 
 function LPSectionsGrid({ sections, url }: { sections: LPSection[]; url?: string }): React.ReactElement {
     // Store the expanded section (for both inline and blob ref support)
+    // 保存展开的分节（同时兼容内联与 blob 引用）
     const [expandedSection, setExpandedSection] = useState<LPSection | null>(null);
 
     return (
@@ -1576,9 +1597,11 @@ function LPSectionsGrid({ sections, url }: { sections: LPSection[]; url?: string
 
 export function LPAnalyzeRenderer({ data }: { data: LPAnalyzeResult | LPSectionsResult }) {
     // Check if this is sections mode (has sections array)
+    // 判断是否为分节模式（存在 sections 数组）
     const isSectionsMode = "sections" in data && Array.isArray(data.sections) && data.sections.length > 0;
 
     // Build subtitle: URL hostname + device info
+    // 构建副标题：URL 主机名 + 设备信息
     const subtitle = (() => {
         const hostname = data.url ? (() => {
             try {
@@ -1600,6 +1623,7 @@ export function LPAnalyzeRenderer({ data }: { data: LPAnalyzeResult | LPSections
     })();
 
     // Get cost - different field structure for each mode
+    // 获取成本——两种模式的字段结构不同
     const cost = isSectionsMode
         ? (data as LPSectionsResult).cost_usd
         : (data as LPAnalyzeResult).cost_usd;
@@ -1636,6 +1660,7 @@ export function LPBatchRenderer({ data }: { data: LPBatchResult }) {
     const costValue = typeof data.cost_usd === "object" ? data.cost_usd.total : data.cost_usd;
 
     // Batch does NOT support sections mode - only full page analysis
+    // 批量模式不支持分节模式，仅支持整页分析
     return (
         <div className="space-y-4">
             {/* Header */}
@@ -1676,11 +1701,13 @@ export function LPBatchRenderer({ data }: { data: LPBatchResult }) {
 // =============================================================================
 
 // Helper to check if data is new format
+// 辅助函数：判断数据是否为新格式
 function isNewCreativeFormat(data: CreativeAnalyzeResult | CreativeAnalyzeResultLegacy): data is CreativeAnalyzeResult {
     return "ads_analyzed" in data && "analysis" in data;
 }
 
 // Persuasion technique display names
+// 说服技巧的展示名称
 const PERSUASION_LABELS: Record<string, string> = {
     authority: "Authority",
     price_anchoring: "Price Anchoring",
@@ -1701,6 +1728,7 @@ export function CreativeAnalyzeRenderer({ data }: { data: CreativeAnalyzeResult 
     };
 
     // New comprehensive format
+    // 新的综合格式
     if (isNewCreativeFormat(data)) {
         const { analysis } = data;
         const techniques = analysis.persuasion_techniques;
@@ -1988,6 +2016,7 @@ export function CreativeAnalyzeRenderer({ data }: { data: CreativeAnalyzeResult 
     }
 
     // Legacy format
+    // 旧版格式
     return (
         <div className="space-y-4">
             {/* Header */}
@@ -2106,6 +2135,7 @@ export function CreativeAnalyzeRenderer({ data }: { data: CreativeAnalyzeResult 
 
 export function ScreenshotRenderer({ data }: { data: ScreenshotResult }) {
     // Support multiple field names for base64 image: screenshot, screenshot_base64
+    // base64 图片支持多个字段名：screenshot、screenshot_base64
     const base64Data = data.screenshot || data.screenshot_base64;
     const imageUrl = data.screenshot_url || (base64Data ? `data:${data.content_type || 'image/png'};base64,${base64Data}` : null);
 
@@ -2174,77 +2204,92 @@ export interface ToolOutputData {
 
 /**
  * Detects the tool output type from JSON content
+ * 根据 JSON 内容检测 tool 输出类型
  */
 export function detectToolOutputType(content: string): ToolOutputData | null {
     try {
         const parsed = JSON.parse(content);
 
         // SERP Ads - has keywords field (string) and ads array
+        // SERP 广告——含 keywords 字段（字符串）和 ads 数组
         if (parsed.ads && Array.isArray(parsed.ads) && typeof parsed.keywords === "string" && parsed.total_ads !== undefined) {
             return { type: "serp_ads", data: parsed as SerpAdsResult };
         }
 
         // Competitor Discovery - has competitors array
+        // 竞品发现——含 competitors 数组
         if (parsed.competitors && Array.isArray(parsed.competitors)) {
             return { type: "competitor_discover", data: parsed as CompetitorResult };
         }
 
         // Ads Transparency - has creatives array OR (advertiser + ads array + domain)
+        // 广告透明度——含 creatives 数组，或（advertiser + ads 数组 + domain）
         if ((parsed.creatives && Array.isArray(parsed.creatives)) ||
             (parsed.advertiser !== undefined && parsed.ads && Array.isArray(parsed.ads) && parsed.domain)) {
             return { type: "ads_transparency", data: parsed as AdsTransparencyResult };
         }
 
         // Keywords - backend returns detected_country/detected_language instead of query
+        // 关键词——后端返回 detected_country/detected_language 而非 query
         if (parsed.keywords && Array.isArray(parsed.keywords) && (parsed.query || parsed.detected_country || parsed.detected_language)) {
             return { type: "keyword_extract", data: parsed as KeywordResult };
         }
 
         // LP Batch Analyze - has results array and (total_analyzed OR total_urls OR results with sections/url)
+        // LP 批量分析——含 results 数组以及（total_analyzed 或 total_urls 或带 sections/url 的 results）
         if (parsed.results && Array.isArray(parsed.results) && parsed.results.length > 0) {
             const firstResult = parsed.results[0];
             // Check if it looks like LP batch (has url or sections in results)
+            // 判断是否像 LP 批量（results 中含 url 或 sections）
             if (parsed.total_analyzed !== undefined || parsed.total_urls !== undefined || firstResult.url !== undefined || firstResult.sections !== undefined) {
                 return { type: "lp_batch_analyze", data: parsed as LPBatchResult };
             }
         }
 
         // LP Analyze (sections mode) - has sections array with block_type items
+        // LP 分析（分节模式）——含由 block_type 项组成的 sections 数组
         if (parsed.sections && Array.isArray(parsed.sections) && parsed.sections.length > 0 && parsed.sections[0].block_type !== undefined) {
             return { type: "lp_analyze", data: parsed as LPSectionsResult };
         }
 
         // LP Analyze (single) - has url and (vision_analysis OR legacy fields)
+        // LP 分析（单页）——含 url 以及（vision_analysis 或旧版字段）
         if (parsed.url && (parsed.vision_analysis !== undefined || parsed.headline !== undefined || parsed.analysis !== undefined || parsed.capture_method !== undefined)) {
             return { type: "lp_analyze", data: parsed as LPAnalyzeResult };
         }
 
         // Creative Analyze (new format) - has ads_analyzed and analysis object with recommendations
+        // 创意分析（新格式）——含 ads_analyzed 以及带 recommendations 的 analysis 对象
         if (parsed.ads_analyzed !== undefined && parsed.analysis && parsed.analysis.recommendations) {
             return { type: "creative_analyze", data: parsed as CreativeAnalyzeResult };
         }
 
         // Creative Analyze (legacy) - has analyses array
+        // 创意分析（旧版）——含 analyses 数组
         if (parsed.analyses && Array.isArray(parsed.analyses)) {
             return { type: "creative_analyze", data: parsed as CreativeAnalyzeResultLegacy };
         }
 
         // Screenshot - has url and (screenshot OR screenshot_base64 OR screenshot_url)
+        // 截图——含 url 以及（screenshot 或 screenshot_base64 或 screenshot_url）
         if (parsed.url && (parsed.screenshot !== undefined || parsed.screenshot_base64 !== undefined || parsed.screenshot_url !== undefined)) {
             return { type: "browser_screenshot", data: parsed as ScreenshotResult };
         }
 
         // SEC Filings - has filings array and ticker/company_name
+        // SEC 文件——含 filings 数组及 ticker/company_name
         if (parsed.filings && Array.isArray(parsed.filings) && parsed.ticker && parsed.company_name) {
             return { type: "sec_filings", data: parsed as SECFilingsResult };
         }
 
         // Twitter Sentiment - has analysis, sentiment, and ticker
+        // Twitter 情绪——含 analysis、sentiment 和 ticker
         if (parsed.analysis && typeof parsed.analysis === "string" && parsed.sentiment && parsed.ticker) {
             return { type: "twitter_sentiment", data: parsed as TwitterSentimentResult };
         }
 
         // Alpaca News - has articles array and symbols
+        // Alpaca 新闻——含 articles 数组和 symbols
         if (parsed.articles && Array.isArray(parsed.articles) && parsed.symbols) {
             return { type: "alpaca_news", data: parsed as AlpacaNewsResult };
         }
@@ -2437,25 +2482,30 @@ function TwitterSentimentRenderer({ data }: { data: TwitterSentimentResult }) {
     };
 
     // Parse analysis text into React elements (safe rendering without dangerouslySetInnerHTML)
+    // 将分析文本解析为 React 元素（安全渲染，不使用 dangerouslySetInnerHTML）
     const renderAnalysis = (text: string) => {
         // Split by line breaks first
+        // 先按换行拆分
         const lines = text.split(/\\n|\n/);
 
         return lines.map((line, lineIdx) => {
             if (!line.trim()) return <br key={lineIdx} />;
 
             // Parse inline elements: **bold**, [[n]](url)
+            // 解析行内元素：**bold**、[[n]](url)
             const parts: React.ReactNode[] = [];
             let remaining = line;
             let partKey = 0;
 
             // Pattern for bold and citations
+            // 粗体与引用的匹配模式
             const pattern = /(\*\*[^*]+\*\*|\[\[\d+\]\]\([^)]+\))/g;
             let lastIndex = 0;
             let match;
 
             while ((match = pattern.exec(remaining)) !== null) {
                 // Add text before match
+                // 添加匹配之前的文本
                 if (match.index > lastIndex) {
                     parts.push(<span key={partKey++}>{remaining.slice(lastIndex, match.index)}</span>);
                 }
@@ -2463,10 +2513,12 @@ function TwitterSentimentRenderer({ data }: { data: TwitterSentimentResult }) {
                 const matched = match[0];
                 if (matched.startsWith("**")) {
                     // Bold text
+                    // 粗体文本
                     const boldText = matched.slice(2, -2);
                     parts.push(<strong key={partKey++}>{boldText}</strong>);
                 } else if (matched.startsWith("[[")) {
                     // Citation link [[n]](url)
+                    // 引用链接 [[n]](url)
                     const citationMatch = matched.match(/\[\[(\d+)\]\]\(([^)]+)\)/);
                     if (citationMatch) {
                         parts.push(
@@ -2486,11 +2538,13 @@ function TwitterSentimentRenderer({ data }: { data: TwitterSentimentResult }) {
             }
 
             // Add remaining text
+            // 添加剩余文本
             if (lastIndex < remaining.length) {
                 parts.push(<span key={partKey++}>{remaining.slice(lastIndex)}</span>);
             }
 
             // Convert bullet points
+            // 转换项目符号
             const isBullet = line.trimStart().startsWith("- ");
             if (isBullet) {
                 return (
@@ -2870,13 +2924,16 @@ function FinancialNewsRenderer({ content }: { content: string }) {
 
 /**
  * Main renderer that auto-detects and renders tool output
+ * 自动检测并渲染 tool 输出的主渲染器
  */
 export function ToolOutputRenderer({ content }: { content: string }) {
     // First try to detect JSON-based tool outputs (higher priority)
+    // 优先尝试检测基于 JSON 的 tool 输出
     const detected = detectToolOutputType(content);
 
     if (detected) {
         // JSON-based renderers take priority
+        // JSON 渲染器优先级更高
         switch (detected.type) {
             case "serp_ads":
                 return <SerpAdsRenderer data={detected.data as SerpAdsResult} />;
@@ -2904,6 +2961,7 @@ export function ToolOutputRenderer({ content }: { content: string }) {
     }
 
     // Fallback to markdown-based Financial News renderer
+    // 回退到基于 markdown 的财经新闻渲染器
     if (content.startsWith("# Financial News Summary") ||
         content.startsWith("# Stock News for") ||
         content.includes("Overall Sentiment:")) {
@@ -2911,6 +2969,7 @@ export function ToolOutputRenderer({ content }: { content: string }) {
     }
 
     // Default: raw content display
+    // 默认：展示原始内容
     return (
         <div className="p-4 rounded-lg border bg-muted/30">
             <pre className="text-sm whitespace-pre-wrap overflow-x-auto font-mono">{content}</pre>

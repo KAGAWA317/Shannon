@@ -1,9 +1,14 @@
 # Shannon: Rate Limits Configuration
+# Shannon：rate limit 配置
 # This file is loaded alongside config/shannon.yaml
+# 本文件与 config/shannon.yaml 一同加载
 
 # Rate limit tiers (requests per window)
+# rate limit 层级（每窗口 request 数）
 # Applied per API key based on api_keys.tier column
+# 按 api_keys.tier 列对每个 API Key 生效
 # Precedence: per-key rate_limit_override > tier config > api_keys.rate_limit_per_hour (floor)
+# 优先级：单 Key 的 rate_limit_override > 层级配置 > api_keys.rate_limit_per_hour（下限）
 tiers:
   free:
     requests_per_minute: 60

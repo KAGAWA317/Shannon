@@ -66,6 +66,7 @@ func TestBuildClosingSummaryPrioritizesCurrentRun(t *testing.T) {
 	summary := buildClosingSummary(results, files, currentRunFiles)
 
 	// Current run file should have content
+	// 本轮产出的文件带正文，历史文件只列路径，否则 closing summary 会被旧内容撑爆。
 	assert.Contains(t, summary, "current run backend findings")
 	// Old file should only have path, not content
 	assert.Contains(t, summary, "research/old-react-comparison.md")
@@ -116,9 +117,11 @@ func TestIsLeadReplyValid(t *testing.T) {
 	))
 
 	// Invalid: too short
+	// 过短的回复（如 "Done."）视为无效，会被要求重写。
 	assert.False(t, isLeadReplyValid("Done.", files))
 
 	// Valid: long enough reply (file path reference no longer required)
+	// 现在只校验长度，不再强制要求引用文件路径。
 	assert.True(t, isLeadReplyValid(
 		"I completed the task and created all the necessary files for the API server module.",
 		files,

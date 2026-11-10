@@ -119,6 +119,7 @@ func getCompressionRatios(ctx map[string]interface{}, defTrigger, defTarget floa
 
 // shapeHistory returns a sliced history keeping the first nPrimers and last nRecents messages
 // when there are enough messages to have a middle section. Otherwise it returns the original.
+// 保留首 nPrimers 条与末 nRecents 条，中间段落仅在消息足够多时才丢弃；否则原样返回。
 func shapeHistory(messages []Message, nPrimers, nRecents int) []Message {
 	m := len(messages)
 	if m == 0 {
@@ -195,6 +196,8 @@ func detectProviderFromModel(model string) string {
 // AddTaskContextToMetadata enriches TaskResult metadata with task submission context
 // for API exposure (force_research, research_strategy, etc.). Call before returning
 // from workflows to ensure context is persisted and available via GET /tasks/{id}.
+// 在返回前调用，把 task 提交 context（force_research、research_strategy 等）写入 metadata，
+// 确保其被持久化并可通过 GET /tasks/{id} 读取。
 func AddTaskContextToMetadata(result TaskResult, taskContext map[string]interface{}) TaskResult {
 	if result.Metadata == nil {
 		result.Metadata = make(map[string]interface{})

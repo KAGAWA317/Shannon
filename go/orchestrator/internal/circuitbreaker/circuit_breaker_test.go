@@ -55,9 +55,11 @@ func TestCircuitBreakerStates(t *testing.T) {
 	}
 
 	// Wait for timeout to transition to half-open
+	// 等待 timeout 到期，open 会自动转为 half-open
 	time.Sleep(150 * time.Millisecond)
 
 	// Trigger state check by attempting a call
+	// 主动发起一次调用以触发状态检查，让 open 在 timeout 后转为 half-open
 	cb.beforeRequest()
 
 	if cb.State() != StateHalfOpen {
@@ -87,6 +89,7 @@ func TestCircuitBreakerMaxRequests(t *testing.T) {
 	ctx := context.Background()
 
 	// Force to half-open state
+	// 直接构造 half-open 状态
 	cb.mutex.Lock()
 	cb.state = StateHalfOpen
 	cb.generation++

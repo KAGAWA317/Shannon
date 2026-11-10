@@ -7,6 +7,7 @@ import (
 )
 
 // ValidationIssue captures a single validation failure with a stable code for metrics.
+// ValidationIssue 记录单条校验失败，并带稳定 code 供指标使用。
 type ValidationIssue struct {
 	Code    string
 	Message string
@@ -33,11 +34,13 @@ func (e *ValidationError) Error() string {
 }
 
 // HasIssues reports whether any validation problems were captured.
+// HasIssues 报告是否捕获到校验问题。
 func (e *ValidationError) HasIssues() bool {
 	return e != nil && len(e.Issues) > 0
 }
 
 // Messages returns just the human-readable text for each issue.
+// Messages 只返回每条问题的人类可读文本。
 func (e *ValidationError) Messages() []string {
 	if e == nil {
 		return nil
@@ -66,6 +69,7 @@ var (
 )
 
 // ValidateTemplate performs structural checks and returns a ValidationError when problems exist.
+// ValidateTemplate 执行结构性检查，有问题时返回 ValidationError。
 func ValidateTemplate(tpl *Template) error {
 	if tpl == nil {
 		return &ValidationError{Issues: []ValidationIssue{{Code: "template_nil", Message: "template is nil"}}}

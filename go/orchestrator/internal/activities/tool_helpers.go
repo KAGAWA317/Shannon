@@ -15,12 +15,14 @@ import (
 )
 
 // ToolExecuteRequest is the request format for /tools/execute
+// ToolExecuteRequest 是 /tools/execute 的 request 格式。
 type ToolExecuteRequest struct {
 	ToolName   string                 `json:"tool_name"`
 	Parameters map[string]interface{} `json:"parameters"`
 }
 
 // ToolExecuteResponse is the response from /tools/execute
+// ToolExecuteResponse 是 /tools/execute 的 response 格式。
 type ToolExecuteResponse struct {
 	Success       bool                   `json:"success"`
 	Output        interface{}            `json:"output"`
@@ -31,6 +33,7 @@ type ToolExecuteResponse struct {
 }
 
 // ExtractKeywordsInput is the input for keyword extraction
+// ExtractKeywordsInput 是关键词提取的入参。
 type ExtractKeywordsInput struct {
 	Query    string `json:"query"`
 	Language string `json:"language,omitempty"`
@@ -38,6 +41,7 @@ type ExtractKeywordsInput struct {
 }
 
 // ExtractKeywordsOutput is the output from keyword extraction
+// ExtractKeywordsOutput 是关键词提取的输出。
 type ExtractKeywordsOutput struct {
 	Keywords         []string `json:"keywords"`
 	BrandKeywords    []string `json:"brand_keywords,omitempty"`
@@ -49,6 +53,7 @@ type ExtractKeywordsOutput struct {
 }
 
 // ExtractSearchKeywords uses a small LLM to extract search keywords from a query
+// ExtractSearchKeywords 用 small model 从 query 中抽取检索关键词。
 func ExtractSearchKeywords(ctx context.Context, input ExtractKeywordsInput) (ExtractKeywordsOutput, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Extracting search keywords", zap.String("query", input.Query))
@@ -197,6 +202,7 @@ Rules:
 }
 
 // callToolWithTimeout makes a request to the LLM service /tools/execute endpoint with custom timeout
+// callToolWithTimeout 以自定义 timeout 调用 LLM service 的 /tools/execute。
 func callToolWithTimeout(ctx context.Context, toolName string, params map[string]interface{}, timeout time.Duration) (*ToolExecuteResponse, error) {
 	llmServiceURL := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/tools/execute", llmServiceURL)

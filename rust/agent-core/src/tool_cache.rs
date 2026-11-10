@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use tracing::{debug, info, instrument, warn};
 
 /// Cache key for tool results
+/// tool 结果的 cache 键
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 struct CacheKey {
     tool_name: String,
@@ -20,6 +21,7 @@ impl CacheKey {
         let mut hasher = DefaultHasher::new();
 
         // Hash the parameters in a deterministic way
+        // 以确定性方式对参数做哈希
         let params_string =
             serde_json::to_string(&call.parameters).unwrap_or_else(|_| String::new());
         params_string.hash(&mut hasher);
@@ -32,6 +34,7 @@ impl CacheKey {
 }
 
 /// Cached tool result with metadata
+/// 带 metadata 的 cache tool 结果
 #[derive(Debug, Clone)]
 struct CachedResult {
     result: ToolResult,
@@ -48,6 +51,7 @@ impl CachedResult {
 }
 
 /// Statistics for cache performance
+/// cache 性能统计
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CacheStats {
     pub total_requests: u64,
@@ -68,6 +72,7 @@ impl CacheStats {
 }
 
 /// Tool execution result cache
+/// tool 执行结果 cache
 pub struct ToolCache {
     cache: Arc<RwLock<HashMap<CacheKey, CachedResult>>>,
     stats: Arc<RwLock<CacheStats>>,
@@ -86,6 +91,7 @@ impl ToolCache {
     }
 
     /// Get a cached result if available and not expired
+    /// 若存在且未过期，则返回 cache 结果
     #[instrument(skip(self, call), fields(tool = %call.tool_name))]
     pub fn get(&self, call: &ToolCall) -> Option<ToolResult> {
         let key = CacheKey::from_tool_call(call);
@@ -109,6 +115,7 @@ impl ToolCache {
                 return Some(cached.result.clone());
             } else {
                 // Remove expired entry
+                // 移除已过期条目
                 debug!("Cache entry expired for tool '{}'", call.tool_name);
                 cache.remove(&key);
                 stats.evictions += 1;
@@ -121,9 +128,11 @@ impl ToolCache {
     }
 
     /// Store a tool result in the cache
+    /// 将 tool 结果写入 cache
     #[instrument(skip(self, call, result), fields(tool = %call.tool_name))]
     pub fn put(&self, call: &ToolCall, result: ToolResult, ttl_override: Option<Duration>) {
         // Don't cache failed results
+        // 不 cache 失败结果
         if !result.success {
             debug!("Not caching failed result for tool '{}'", call.tool_name);
             return;
@@ -136,6 +145,7 @@ impl ToolCache {
         let mut stats = self.stats.write().unwrap();
 
         // Evict old entries if cache is full
+        // cache 已满时淘汰旧条目
         if cache.len() >= self.max_size {
             self.evict_oldest(&mut cache, &mut stats);
         }
@@ -150,6 +160,7 @@ impl ToolCache {
         };
 
         // Update average TTL
+        // 更新平均 TTL
         let total_ttl = stats.average_ttl_seconds * cache.len() as f64 + ttl.as_secs_f64();
         stats.average_ttl_seconds = total_ttl / (cache.len() + 1) as f64;
 
@@ -161,6 +172,7 @@ impl ToolCache {
     }
 
     /// Evict the least recently used entry from the cache (true LRU)
+    /// 按最近最少使用（真正的 LRU）淘汰 cache 条目
     fn evict_oldest(&self, cache: &mut HashMap<CacheKey, CachedResult>, stats: &mut CacheStats) {
         if let Some((lru_key, _)) = cache
             .iter()
@@ -174,6 +186,7 @@ impl ToolCache {
     }
 
     /// Clear the entire cache
+    /// 清空整个 cache
     pub fn clear(&self) {
         let mut cache = self.cache.write().unwrap();
         let count = cache.len();
@@ -182,11 +195,13 @@ impl ToolCache {
     }
 
     /// Get cache statistics
+    /// 获取 cache 统计信息
     pub fn get_stats(&self) -> CacheStats {
         self.stats.read().unwrap().clone()
     }
 
     /// Invalidate cache entries for a specific tool
+    /// 使指定 tool 的 cache 条目失效
     pub fn invalidate_tool(&self, tool_name: &str) {
         let mut cache = self.cache.write().unwrap();
         let keys_to_remove: Vec<_> = cache
@@ -209,6 +224,7 @@ impl ToolCache {
     }
 
     /// Remove expired entries from the cache
+    /// 移除 cache 中已过期的条目
     #[instrument(skip(self))]
     pub fn sweep_expired(&self) {
         let mut cache = self.cache.write().unwrap();
@@ -259,17 +275,21 @@ mod tests {
         };
 
         // Cache miss initially
+        // 初始应为 cache 未命中
         assert!(cache.get(&call).is_none());
 
         // Store result
+        // 存储结果
         cache.put(&call, result.clone(), None);
 
         // Cache hit
+        // 再次读取应为 cache 命中
         let cached = cache.get(&call);
         assert!(cached.is_some());
         assert_eq!(cached.unwrap().output, result.output);
 
         // Check stats
+        // 检查统计
         let stats = cache.get_stats();
         assert_eq!(stats.cache_hits, 1);
         assert_eq!(stats.cache_misses, 1);
@@ -294,12 +314,15 @@ mod tests {
         };
 
         // Store with immediate expiration
+        // 以立即过期方式存储
         cache.put(&call, result, Some(Duration::from_millis(1)));
 
         // Sleep briefly to ensure expiration
+        // 短暂休眠以确保过期
         std::thread::sleep(Duration::from_millis(10));
 
         // Should be expired
+        // 此时应已过期
         assert!(cache.get(&call).is_none());
 
         let stats = cache.get_stats();
@@ -324,9 +347,11 @@ mod tests {
         };
 
         // Try to cache failed result
+        // 尝试 cache 失败结果
         cache.put(&call, failed_result, None);
 
         // Should not be cached
+        // 不应被 cache
         assert!(cache.get(&call).is_none());
     }
 
@@ -335,6 +360,7 @@ mod tests {
         let cache = ToolCache::new(10, 60);
 
         // Add multiple entries for same tool
+        // 为同一 tool 添加多个条目
         for i in 0..3 {
             let call = ToolCall {
                 tool_name: "test_tool".to_string(),
@@ -353,6 +379,7 @@ mod tests {
         }
 
         // Add entry for different tool
+        // 为另一个 tool 添加条目
         let other_call = ToolCall {
             tool_name: "other_tool".to_string(),
             parameters: HashMap::new(),
@@ -369,9 +396,11 @@ mod tests {
         cache.put(&other_call, other_result, None);
 
         // Invalidate test_tool entries
+        // 使 test_tool 的条目失效
         cache.invalidate_tool("test_tool");
 
         // test_tool entries should be gone
+        // test_tool 的条目应已消失
         for i in 0..3 {
             let call = ToolCall {
                 tool_name: "test_tool".to_string(),
@@ -382,6 +411,7 @@ mod tests {
         }
 
         // other_tool entry should remain
+        // other_tool 的条目应保留
         assert!(cache.get(&other_call).is_some());
     }
 }

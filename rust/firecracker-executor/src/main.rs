@@ -52,6 +52,7 @@ async fn execute_handler(
     let (result, is_transient) = runner.execute(req).await;
 
     // P1 fix: Return 503 for transient errors to trigger WASI fallback
+    // P1 修复：瞬时错误返回 503，以触发 WASI 回退
     if is_transient {
         (StatusCode::SERVICE_UNAVAILABLE, Json(result))
     } else {
@@ -90,7 +91,9 @@ async fn metrics_handler(State(state): State<AppState>) -> String {
 }
 
 /// Download a file from session workspace
+/// 从 session 工作区下载文件
 /// Uses the session's VM to read the file via Python code execution.
+/// 借助 session 的 VM 执行 Python 代码读取文件。
 async fn download_handler(
     State(state): State<AppState>,
     Json(req): Json<DownloadRequest>,
@@ -101,6 +104,7 @@ async fn download_handler(
     );
 
     // Security: Validate file_path doesn't escape /workspace
+    // 安全：校验 file_path 不会逃出 /workspace
     if req.file_path.contains("..") || req.file_path.starts_with('/') {
         return (
             StatusCode::BAD_REQUEST,
@@ -115,12 +119,15 @@ async fn download_handler(
     }
 
     // Build safe path within /workspace
+    // 在 /workspace 内构建安全路径
     let safe_path = format!("/workspace/{}", req.file_path);
     let safe_path_literal =
         serde_json::to_string(&safe_path).unwrap_or_else(|_| "\"/workspace\"".to_string());
 
     // Use base64 encoding for binary safety - read file via VM
+    // 使用 base64 编码保证二进制安全——通过 VM 读取文件
     // Using `base64` command to encode, which handles binary files correctly
+    // 使用 `base64` 命令编码，可正确处理二进制文件
     let code = format!(
         r#"import sys, base64, os
 path = {}
@@ -195,9 +202,11 @@ print(len(data), file=sys.stderr)"#,
     }
 
     // Parse size from stderr (our Python script prints it there)
+    // 从 stderr 解析文件大小（Python 脚本会输出到那里）
     let size_bytes: Option<u64> = result.stderr.trim().parse().ok();
 
     // Infer content type from extension
+    // 根据扩展名推断内容类型
     let content_type = infer_content_type(&req.file_path);
 
     (
@@ -213,6 +222,7 @@ print(len(data), file=sys.stderr)"#,
 }
 
 /// List files in session workspace
+/// 列出 session 工作区中的文件
 async fn list_files_handler(
     State(state): State<AppState>,
     Json(req): Json<ListFilesRequest>,
@@ -223,9 +233,11 @@ async fn list_files_handler(
     );
 
     // Build path to list
+    // 构建要列出的路径
     let list_path = match &req.path {
         Some(p) if !p.is_empty() => {
             // Security: Validate path doesn't escape /workspace
+            // 安全：校验路径不会逃出 /workspace
             if p.contains("..") {
                 return (
                     StatusCode::BAD_REQUEST,
@@ -248,6 +260,7 @@ async fn list_files_handler(
         serde_json::to_string(&list_path).unwrap_or_else(|_| "\"/workspace\"".to_string());
 
     // Python script to list files with metadata
+    // 列出文件及 metadata 的 Python 脚本
     let code = format!(
         r#"import os, json, sys
 path = {}
@@ -327,6 +340,7 @@ print(json.dumps(files))"#,
     }
 
     // Parse JSON output
+    // 解析 JSON 输出
     match serde_json::from_str::<Vec<FileInfo>>(&result.stdout) {
         Ok(files) => (
             StatusCode::OK,
@@ -351,23 +365,31 @@ print(json.dumps(files))"#,
 }
 
 /// Known EKS mount point prefix - when paths start with this, we need to translate
+/// 已知的 EKS 挂载点前缀——路径以此开头时需要转换，
 /// them to use the local FIRECRACKER_EFS_MOUNT which includes the PVC subdirectory.
+/// 改用包含 PVC 子目录的本地 FIRECRACKER_EFS_MOUNT。
 const EKS_MOUNT_PREFIX: &str = "/mnt/shannon-sessions/";
 
 /// Translate workspace path from EKS format to EC2 format.
+/// 将 EKS 格式的工作区路径转换为 EC2 格式。
 /// EKS pods mount EFS via Access Point at /mnt/shannon-sessions which maps to
+/// EKS Pod 通过 Access Point 将 EFS 挂载到 /mnt/shannon-sessions，
 /// a PVC subdirectory. EC2 mounts the EFS root at /mnt/shannon-sessions.
+/// 映射到 PVC 子目录；EC2 则把 EFS 根挂载到 /mnt/shannon-sessions。
 /// This translates /mnt/shannon-sessions/{session} → {efs_mount_point}/{session}
+/// 此处将 /mnt/shannon-sessions/{session} → {efs_mount_point}/{session}
 fn translate_workspace_path(path: &str, efs_mount_point: &std::path::Path) -> String {
     let efs_mount = efs_mount_point.to_string_lossy();
     let efs_mount_str = efs_mount.trim_end_matches('/');
 
     // Guard: if path already starts with our EFS mount point, don't double-translate
+    // 保护：若路径已以本地 EFS 挂载点开头，避免重复转换
     if path.starts_with(efs_mount_str) {
         return path.to_string();
     }
 
     // Translate EKS Access Point path to EC2 full path
+    // 将 EKS Access Point 路径转换为 EC2 完整路径
     if let Some(session_part) = path.strip_prefix(EKS_MOUNT_PREFIX) {
         let translated = format!("{}/{}", efs_mount_str, session_part.trim_start_matches('/'));
         tracing::debug!(
@@ -378,11 +400,13 @@ fn translate_workspace_path(path: &str, efs_mount_point: &std::path::Path) -> St
         translated
     } else {
         // Path doesn't start with known EKS prefix, use as-is
+        // 路径不以已知 EKS 前缀开头，原样使用
         path.to_string()
     }
 }
 
 /// Clean up a session workspace (ext4 file, directory, state file)
+/// 清理 session 工作区（ext4 文件、目录、状态文件）
 async fn cleanup_handler(
     State(state): State<AppState>,
     Json(req): Json<CleanupRequest>,
@@ -393,10 +417,13 @@ async fn cleanup_handler(
     );
 
     // SECURITY: Derive workspace path from session_id instead of trusting input.
+    // 安全：由 session_id 推导工作区路径，而非信任入参。
     // This prevents directory traversal attacks entirely - we never use the untrusted path.
+    // 这样彻底杜绝目录穿越攻击——完全不使用不可信路径。
     let session_id = req.session_id.trim();
 
     // Validate session_id contains no path traversal characters
+    // 校验 session_id 不含路径穿越字符
     if session_id.is_empty() || session_id.contains('/') || session_id.contains('\\') || session_id.contains("..") {
         warn!(session_id = %session_id, "Cleanup rejected: invalid session_id");
         return (
@@ -417,6 +444,7 @@ async fn cleanup_handler(
     let state_file_path = format!("{}.state", ext4_path);
 
     // Acquire workspace lock before deleting to prevent conflicts with running executions
+    // 删除前获取工作区锁，避免与正在执行的 request 冲突
     let lock = state.pool.get_workspace_lock(session_id).await;
     let _guard = lock.lock().await;
 
@@ -428,6 +456,7 @@ async fn cleanup_handler(
     };
 
     // Delete ext4 file
+    // 删除 ext4 文件
     if std::path::Path::new(&ext4_path).exists() {
         if let Ok(metadata) = std::fs::metadata(&ext4_path) {
             response.freed_bytes += metadata.len();
@@ -444,6 +473,7 @@ async fn cleanup_handler(
     }
 
     // Delete directory
+    // 删除目录
     if std::path::Path::new(&workspace_path).exists() {
         match std::fs::remove_dir_all(&workspace_path) {
             Ok(()) => {
@@ -457,6 +487,7 @@ async fn cleanup_handler(
     }
 
     // Delete state file
+    // 删除状态文件
     if std::path::Path::new(&state_file_path).exists() {
         match std::fs::remove_file(&state_file_path) {
             Ok(()) => {
@@ -473,6 +504,7 @@ async fn cleanup_handler(
 }
 
 /// Infer MIME type from file extension
+/// 根据文件扩展名推断 MIME 类型
 fn infer_content_type(path: &str) -> String {
     let ext = path.rsplit('.').next().unwrap_or("").to_lowercase();
     match ext.as_str() {
@@ -508,6 +540,7 @@ async fn main() {
     let pool = VmPool::new(settings.clone());
 
     // Spawn background task to maintain warm pool
+    // 启动后台 task 维护预热池
     let pool_clone = pool.clone();
     tokio::spawn(async move {
         pool_clone.maintain_warm_pool().await;

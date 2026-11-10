@@ -42,37 +42,47 @@ func getFloatEnvWithRange(key string, defaultValue, min, max float64) float64 {
 // Configuration constants for supervisor memory
 var (
 	// Similarity threshold for matching decomposition patterns (0.0 to 1.0)
+	// 匹配 decomposition pattern 的相似度阈值（0.0 到 1.0）
 	DecompositionSimilarityThreshold = getFloatEnvWithRange("DECOMPOSITION_SIMILARITY_THRESHOLD", 0.8, 0.0, 1.0)
 
 	// Success rate threshold for considering a pattern successful (0.0 to 1.0)
+	// 判定 pattern 成功所用的 success rate 阈值（0.0 到 1.0）
 	PatternSuccessThreshold = getFloatEnvWithRange("PATTERN_SUCCESS_THRESHOLD", 0.7, 0.0, 1.0)
 
 	// Exploration rate for epsilon-greedy strategy selection (0.0 to 1.0)
+	// epsilon-greedy 选 strategy 时的探索率（0.0 到 1.0）
 	StrategyExplorationRate = getFloatEnvWithRange("STRATEGY_EXPLORATION_RATE", 0.1, 0.0, 1.0)
 
 	// Speed vs accuracy thresholds
+	// speed 与 accuracy 的阈值
 	SpeedPriorityThreshold    = getFloatEnvWithRange("SPEED_PRIORITY_THRESHOLD", 0.3, 0.0, 1.0)
 	AccuracyPriorityThreshold = getFloatEnvWithRange("ACCURACY_PRIORITY_THRESHOLD", 0.8, 0.0, 1.0)
 
 	// Default speed vs accuracy balance
+	// speed 与 accuracy 的默认权重
 	DefaultSpeedVsAccuracy = getFloatEnvWithRange("DEFAULT_SPEED_VS_ACCURACY", 0.7, 0.0, 1.0)
 
 	// Maximum duration baseline for speed scoring (milliseconds)
+	// 速度打分的最大时长基准（毫秒）
 	MaxDurationBaseline = getFloatEnv("MAX_DURATION_BASELINE_MS", 30000)
 
 	// TTL for strategy performance cache entries (24 hours)
+	// strategy performance cache entry 的 TTL（24 小时）
 	StrategyPerformanceTTL = 24 * time.Hour
 
 	// Maximum number of strategy performance entries to keep
+	// strategy performance 最多保留的 entry 数
 	MaxStrategyPerformanceEntries = 100
 )
 
 // SupervisorMemoryContext enriches raw memory with strategic insights
 type SupervisorMemoryContext struct {
 	// Raw conversation history (what we have now)
+	// 原始对话历史（目前已有的内容）
 	ConversationHistory []map[string]interface{} `json:"conversation_history"`
 
 	// Strategic memory (what we need)
+	// 战略记忆（真正需要的内容）
 	DecompositionHistory []DecompositionMemory    `json:"decomposition_history"`
 	StrategyPerformance  map[string]StrategyStats `json:"strategy_performance"`
 	TeamCompositions     []TeamMemory             `json:"team_compositions"`
@@ -186,6 +196,9 @@ func (f *fallbackLogger) Error(msg string, keyvals ...interface{}) {}
 // FetchSupervisorMemory fetches and enriches memory for strategic decisions
 // FetchSupervisorMemory fetches enhanced supervisor memory with strategic insights.
 // Implements TTL-based cleanup for strategy performance cache to prevent memory leaks.
+// FetchSupervisorMemory 抓取并增强用于战略决策的 memory。
+// FetchSupervisorMemory 返回带战略洞察的增强版 supervisor memory。
+// 对 strategy performance cache 实现基于 TTL 的清理，防止内存泄漏。
 func FetchSupervisorMemory(ctx context.Context, input FetchSupervisorMemoryInput) (*SupervisorMemoryContext, error) {
 	logger := getLoggerSafe(ctx)
 	logger.Info("Fetching enhanced supervisor memory",
@@ -201,6 +214,7 @@ func FetchSupervisorMemory(ctx context.Context, input FetchSupervisorMemoryInput
 	}
 
 	// 1. Get conversation history (existing implementation)
+	// 1. 获取对话历史（沿用现有实现）
 	hierarchicalInput := FetchHierarchicalMemoryInput{
 		Query:        input.Query,
 		SessionID:    input.SessionID,
@@ -217,24 +231,29 @@ func FetchSupervisorMemory(ctx context.Context, input FetchSupervisorMemoryInput
 	}
 
 	// 2. Fetch decomposition patterns for similar queries
+	// 2. 抓取相似 query 的 decomposition pattern
 	if err := fetchDecompositionPatterns(ctx, memory, input.Query, input.SessionID); err != nil {
 		logger.Warn("Failed to fetch decomposition patterns", "error", err)
 	}
 
 	// 3. Aggregate strategy performance for this session/user
+	// 3. 汇总该 session/user 的 strategy performance
 	if err := fetchStrategyPerformance(ctx, memory, input.SessionID, input.UserID); err != nil {
 		logger.Warn("Failed to fetch strategy performance", "error", err)
 	}
 
 	// Clean up expired entries after fetching to prevent memory leak
+	// 抓取后清理过期 entry，防止内存泄漏
 	cleanupStrategyPerformance(memory, logger)
 
 	// 4. Identify relevant failure patterns
+	// 4. 识别相关的 failure pattern
 	if err := identifyFailurePatterns(ctx, memory, input.Query); err != nil {
 		logger.Warn("Failed to identify failure patterns", "error", err)
 	}
 
 	// 5. Load user preferences from session metadata
+	// 5. 从 session metadata 加载用户偏好
 	if err := loadUserPreferences(ctx, memory, input.SessionID, input.UserID); err != nil {
 		logger.Warn("Failed to load user preferences", "error", err)
 		// Use defaults
@@ -269,6 +288,7 @@ func fetchDecompositionPatterns(ctx context.Context, memory *SupervisorMemoryCon
 	results, err := vdb.SearchDecompositionPatterns(ctx, queryEmbedding, sessionID, "", 5, 0.7)
 	if err != nil {
 		// Collection might not exist yet, log but don't fail
+		// collection 可能还不存在，只记日志不报错
 		logger := getLoggerSafe(ctx)
 		logger.Info("Decomposition patterns collection not found or search failed",
 			"error", err, "session_id", sessionID)
@@ -296,6 +316,7 @@ func fetchDecompositionPatterns(ctx context.Context, memory *SupervisorMemoryCon
 			}
 
 			// Extract performance indicators (support both aggregated and raw keys)
+			// 提取 performance 指标（同时兼容聚合后的 key 和原始 key）
 			if sr, ok := result.Payload["success_rate"].(float64); ok {
 				dm.SuccessRate = sr
 			} else if s, ok := result.Payload["success"].(bool); ok {
@@ -322,6 +343,7 @@ func fetchStrategyPerformance(ctx context.Context, memory *SupervisorMemoryConte
 	logger := getLoggerSafe(ctx)
 
 	// Wrap database operation in circuit breaker
+	// 用 circuit breaker 包住数据库操作
 	return WithCircuitBreaker(ctx, func(ctx context.Context) error {
 		dbClient := GetGlobalDBClient()
 		if dbClient == nil {
@@ -334,6 +356,7 @@ func fetchStrategyPerformance(ctx context.Context, memory *SupervisorMemoryConte
 		}
 
 		// Query agent_executions joined with task_executions for session/user filtering
+		// 查询 agent_executions 并 join task_executions，以便按 session/user 过滤
 		query := `
 					SELECT
 						COALESCE(ae.strategy, ae.metadata->>'strategy') AS strategy,
@@ -370,6 +393,7 @@ func fetchStrategyPerformance(ctx context.Context, memory *SupervisorMemoryConte
 			}
 
 			// Set last accessed time for TTL tracking
+			// 记录 last accessed 时间，供 TTL 追踪
 			stats.LastAccessed = time.Now()
 			memory.StrategyPerformance[strategy] = stats
 		}
@@ -418,6 +442,7 @@ func identifyFailurePatterns(ctx context.Context, memory *SupervisorMemoryContex
 
 func loadUserPreferences(ctx context.Context, memory *SupervisorMemoryContext, sessionID, userID string) error {
 	// Analyze past interactions to infer preferences
+	// 依据历史交互推断用户偏好
 	dbClient := GetGlobalDBClient()
 	if dbClient == nil {
 		return fmt.Errorf("database client unavailable")
@@ -429,6 +454,7 @@ func loadUserPreferences(ctx context.Context, memory *SupervisorMemoryContext, s
 	}
 
 	// Get average response length preference
+	// 取平均回复长度，推断长度偏好
 	var avgResponseLength float64
 	err := db.QueryRowContext(ctx, `
         SELECT AVG(LENGTH(result))
@@ -448,6 +474,7 @@ func loadUserPreferences(ctx context.Context, memory *SupervisorMemoryContext, s
 	}
 
 	// Infer expertise level from query complexity
+	// 由 query 复杂度推断 expertise level
 	var avgComplexity float64
 	err = db.QueryRowContext(ctx, `
         SELECT AVG(complexity_score)
@@ -467,9 +494,11 @@ func loadUserPreferences(ctx context.Context, memory *SupervisorMemoryContext, s
 	}
 
 	// Speed vs accuracy preference (based on retry patterns)
+	// speed 与 accuracy 偏好（依据 retry 模式）
 	memory.UserPreferences.SpeedVsAccuracy = DefaultSpeedVsAccuracy // Default balanced
 
 	// Ensure SpeedVsAccuracy is within valid range [0.0, 1.0]
+	// 保证 SpeedVsAccuracy 落在 [0.0, 1.0] 的有效区间内
 	if memory.UserPreferences.SpeedVsAccuracy < 0.0 {
 		memory.UserPreferences.SpeedVsAccuracy = 0.0
 	} else if memory.UserPreferences.SpeedVsAccuracy > 1.0 {
@@ -625,6 +654,7 @@ func (da *DecompositionAdvisor) SuggestDecomposition(query string) Decomposition
 	}
 
 	// 1. Check decomposition history for similar successful patterns
+	// 1. 在 decomposition history 中查找相似且成功的 pattern
 	for _, prev := range da.Memory.DecompositionHistory {
 		similarity := calculateSimilarity(query, prev.QueryPattern)
 		if similarity > DecompositionSimilarityThreshold && prev.SuccessRate > PatternSuccessThreshold {
@@ -642,6 +672,7 @@ func (da *DecompositionAdvisor) SuggestDecomposition(query string) Decomposition
 	}
 
 	// 2. Select optimal strategy based on performance history
+	// 2. 依据 performance 历史选择最优 strategy
 	if !suggestion.UsesPreviousSuccess {
 		suggestion.Strategy = da.selectOptimalStrategy()
 	}
@@ -652,6 +683,7 @@ func (da *DecompositionAdvisor) SuggestDecomposition(query string) Decomposition
 	}
 
 	// 3. Check for failure patterns and add warnings
+	// 3. 检查 failure pattern 并追加 warning
 	for _, pattern := range da.Memory.FailurePatterns {
 		if matchesPattern(query, pattern) {
 			suggestion.Warnings = append(suggestion.Warnings, pattern.Mitigation)
@@ -663,17 +695,20 @@ func (da *DecompositionAdvisor) SuggestDecomposition(query string) Decomposition
 	}
 
 	// 4. Adjust for user preferences
+	// 4. 按用户偏好做调整
 	if da.Memory.UserPreferences.ExpertiseLevel == "beginner" {
 		suggestion.PreferSequential = true
 		suggestion.AddExplanations = true
 	} else if da.Memory.UserPreferences.ExpertiseLevel == "expert" {
 		// Expert users can handle parallel complexity
+		// expert 用户能承受 parallel 的复杂度
 		if suggestion.Strategy == "" {
 			suggestion.Strategy = "parallel"
 		}
 	}
 
 	// 5. Consider speed vs accuracy preference
+	// 5. 考虑 speed 与 accuracy 偏好
 	if da.Memory.UserPreferences.SpeedVsAccuracy < SpeedPriorityThreshold {
 		// Prioritize speed
 		suggestion.Strategy = "parallel"
@@ -689,21 +724,26 @@ func (da *DecompositionAdvisor) SuggestDecomposition(query string) Decomposition
 
 func (da *DecompositionAdvisor) selectOptimalStrategy() string {
 	// Use epsilon-greedy selection based on performance history
+	// 依据 performance 历史做 epsilon-greedy 选择
 	epsilon := StrategyExplorationRate
 
 	// Create per-goroutine random source for thread safety
+	// 每个 goroutine 用独立随机源，保证线程安全
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	if r.Float64() < epsilon {
 		// Explore: try less-used strategies
+		// Explore：尝试较少使用的 strategy
 		return da.selectLeastUsedStrategy()
 	}
 
 	// Exploit: use best performing strategy
+	// Exploit：使用表现最好的 strategy
 	var bestStrategy string
 	var bestScore float64
 
 	for strategy, stats := range da.Memory.StrategyPerformance {
 		// Balance success rate with speed based on user preference
+		// 按用户偏好平衡 success rate 与速度
 		maxDuration := MaxDurationBaseline
 		speedScore := 1.0 - float64(stats.AvgDuration)/maxDuration
 		if speedScore < 0 {
@@ -740,6 +780,7 @@ func (da *DecompositionAdvisor) selectLeastUsedStrategy() string {
 			}
 		} else {
 			// Never used - highest priority for exploration
+			// 从未使用过 —— 探索优先级最高
 			return strategy
 		}
 	}
@@ -751,6 +792,8 @@ func (da *DecompositionAdvisor) selectLeastUsedStrategy() string {
 func calculateSimilarity(a, b string) float64 {
 	// In production, this would use embedding similarity
 	// For now, use simple string comparison
+	// 生产环境应该用 embedding 相似度
+	// 目前先用简单的字符串比较
 	aLower := strings.ToLower(a)
 	bLower := strings.ToLower(b)
 
@@ -797,6 +840,7 @@ func max(a, b int) int {
 }
 
 // RecordDecompositionResult stores the decomposition outcome for future learning
+// RecordDecompositionResult 存储 decomposition 结果，供后续学习使用
 type RecordDecompositionInput struct {
 	SessionID    string   `json:"session_id"`
 	Query        string   `json:"query"`
@@ -856,6 +900,7 @@ func RecordDecomposition(ctx context.Context, input RecordDecompositionInput) er
 		// TODO: Add metrics.VectorDBErrors when available
 
 		// Fallback: try storing in generic task_embeddings so retrieval still has signal
+		// Fallback：退而写入通用的 task_embeddings，保证检索仍有信号
 		if _, fbErr := vdb.UpsertTaskEmbedding(ctx, embedding, payload); fbErr != nil {
 			logger.Error("Fallback store to task_embeddings also failed",
 				"error", fbErr, "session_id", input.SessionID)
@@ -865,6 +910,7 @@ func RecordDecomposition(ctx context.Context, input RecordDecompositionInput) er
 				"session_id", input.SessionID)
 		}
 		// Non-critical error, don't fail the activity
+		// 非关键错误，不让 activity 失败
 		return nil
 	}
 
@@ -880,6 +926,8 @@ func RecordDecomposition(ctx context.Context, input RecordDecompositionInput) er
 
 // cleanupStrategyPerformance removes expired entries from the strategy performance cache
 // to prevent unbounded memory growth. Uses both TTL and size limits.
+// cleanupStrategyPerformance 清理 strategy performance cache 中的过期 entry，
+// 防止内存无界增长。同时使用 TTL 和容量上限。
 func cleanupStrategyPerformance(memory *SupervisorMemoryContext, logger log.Logger) {
 	if memory == nil || memory.StrategyPerformance == nil {
 		return
@@ -897,6 +945,7 @@ func cleanupStrategyPerformance(memory *SupervisorMemoryContext, logger log.Logg
 	}
 
 	// If still over limit, remove least recently accessed
+	// 仍超限时，删除最久未访问的 entry
 	if len(memory.StrategyPerformance) > MaxStrategyPerformanceEntries {
 		// Create a slice for sorting by LastAccessed
 		type strategyEntry struct {
@@ -909,6 +958,7 @@ func cleanupStrategyPerformance(memory *SupervisorMemoryContext, logger log.Logg
 		}
 
 		// Sort by LastAccessed (oldest first)
+		// 按 LastAccessed 排序（最旧的在前）
 		for i := 0; i < len(entries)-1; i++ {
 			for j := i + 1; j < len(entries); j++ {
 				if entries[i].stats.LastAccessed.After(entries[j].stats.LastAccessed) {
@@ -918,6 +968,7 @@ func cleanupStrategyPerformance(memory *SupervisorMemoryContext, logger log.Logg
 		}
 
 		// Remove oldest entries to stay within limit
+		// 删除最旧的 entry，回到上限之内
 		toRemove := len(entries) - MaxStrategyPerformanceEntries
 		for i := 0; i < toRemove; i++ {
 			delete(memory.StrategyPerformance, entries[i].strategy)

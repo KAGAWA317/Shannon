@@ -78,6 +78,7 @@ func TestUpdateSessionTitle_Validation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Test the validation logic directly (same as handler)
+			// 直接测试校验逻辑（与 handler 中一致）。
 			title := strings.TrimSpace(tt.title)
 			var validationError string
 
@@ -153,6 +154,7 @@ func TestUpdateSessionTitle_ControlCharacterSanitization(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Test the sanitization logic (using same logic as the handler)
+			// 测试清洗逻辑（与 handler 中的逻辑一致）。
 			cleaned := ""
 			for _, r := range tt.input {
 				if !isControlChar(r) {
@@ -170,6 +172,7 @@ func TestUpdateSessionTitle_ControlCharacterSanitization(t *testing.T) {
 // Helper function to check if a rune is a control character
 func isControlChar(r rune) bool {
 	return r < 32 || (r >= 127 && r < 160) || r == '\u200B' // Control chars + zero-width space
+	// 控制字符 + 零宽空格。
 }
 
 func TestUpdateSessionTitle_RuneLengthValidation(t *testing.T) {

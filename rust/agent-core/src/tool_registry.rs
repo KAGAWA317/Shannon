@@ -4,6 +4,7 @@ use std::sync::{Arc, RwLock};
 use tracing::{info, instrument};
 
 /// Tool capability metadata
+/// tool 能力 metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolCapability {
     pub id: String,
@@ -37,6 +38,7 @@ pub struct RateLimit {
 }
 
 /// Tool discovery request
+/// tool 发现 request
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolDiscoveryRequest {
     pub query: Option<String>,
@@ -47,12 +49,14 @@ pub struct ToolDiscoveryRequest {
 }
 
 /// Tool discovery response
+/// tool 发现 response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolDiscoveryResponse {
     pub tools: Vec<ToolCapability>,
 }
 
 /// Tool registry for capability management
+/// 用于能力管理的 tool 注册表
 pub struct ToolRegistry {
     tools: Arc<RwLock<HashMap<String, ToolCapability>>>,
 }
@@ -64,12 +68,14 @@ impl ToolRegistry {
         };
 
         // Initialize with default tools
+        // 初始化默认 tool
         registry.init_default_tools();
         registry
     }
 
     fn init_default_tools(&mut self) {
         // Calculator tool
+        // calculator tool
         let calculator = ToolCapability {
             id: "calculator".to_string(),
             name: "Calculator".to_string(),
@@ -109,6 +115,7 @@ impl ToolRegistry {
         };
 
         // Web search tool
+        // 网页搜索 tool
         let web_search = ToolCapability {
             id: "web_search".to_string(),
             name: "Web Search".to_string(),
@@ -158,6 +165,7 @@ impl ToolRegistry {
         };
 
         // Code executor tool (WASI)
+        // 代码执行器 tool（WASI）
         let code_executor = ToolCapability {
             id: "code_executor".to_string(),
             name: "Code Executor".to_string(),
@@ -203,6 +211,7 @@ impl ToolRegistry {
         };
 
         // Firecracker executor tool (microVM)
+        // Firecracker 执行器 tool（microVM）
         let firecracker_executor = ToolCapability {
             id: "firecracker_executor".to_string(),
             name: "Firecracker Executor".to_string(),
@@ -255,6 +264,7 @@ impl ToolRegistry {
     }
 
     /// Register a new tool capability
+    /// 注册新的 tool 能力
     #[instrument(skip(self, capability), fields(tool_id = %capability.id))]
     pub fn register_tool(&self, capability: ToolCapability) {
         let mut tools = self.tools.write().unwrap();
@@ -266,18 +276,21 @@ impl ToolRegistry {
     }
 
     /// Get a specific tool capability
+    /// 获取指定 tool 的能力信息
     pub fn get_tool(&self, tool_id: &str) -> Option<ToolCapability> {
         let tools = self.tools.read().unwrap();
         tools.get(tool_id).cloned()
     }
 
     /// List all available tools
+    /// 列出所有可用 tool
     pub fn list_all_tools(&self) -> Vec<ToolCapability> {
         let tools = self.tools.read().unwrap();
         tools.values().cloned().collect()
     }
 
     /// Discover tools based on query and filters
+    /// 按查询和过滤条件发现 tool
     #[instrument(skip(self, request))]
     pub fn discover_tools(&self, request: ToolDiscoveryRequest) -> Vec<ToolCapability> {
         let tools = self.tools.read().unwrap();
@@ -285,6 +298,7 @@ impl ToolRegistry {
 
         for tool in tools.values() {
             // Apply filters
+            // 应用过滤条件
             if let Some(exclude_dangerous) = request.exclude_dangerous {
                 if exclude_dangerous && tool.is_dangerous {
                     continue;
@@ -305,6 +319,7 @@ impl ToolRegistry {
             }
 
             // Calculate relevance score
+            // 计算相关度评分
             let mut matches = false;
 
             if let Some(query) = &request.query {
@@ -330,6 +345,7 @@ impl ToolRegistry {
         }
 
         // Apply max_results limit if specified
+        // 若指定则限制最大结果数
         if let Some(max) = request.max_results {
             matching_tools.truncate(max);
         }
@@ -338,6 +354,7 @@ impl ToolRegistry {
     }
 
     /// Get statistics about registered tools
+    /// 获取已注册 tool 的统计信息
     pub fn get_stats(&self) -> HashMap<String, usize> {
         let tools = self.tools.read().unwrap();
         let mut stats = HashMap::new();
@@ -345,6 +362,7 @@ impl ToolRegistry {
         stats.insert("total".to_string(), tools.len());
 
         // Count by category
+        // 按类别统计
         let mut category_counts: HashMap<String, usize> = HashMap::new();
         for tool in tools.values() {
             *category_counts.entry(tool.category.clone()).or_insert(0) += 1;

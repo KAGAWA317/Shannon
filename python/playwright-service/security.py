@@ -64,6 +64,8 @@ def validate_url_for_ssrf(url: str) -> None:
 
     # Block if hostname resolves to any non-global IP (RFC1918, loopback, link-local,
     # reserved, multicast, CGNAT, etc).
+    # 若主机名解析到任何非全局 IP（RFC1918、loopback、link-local、
+    # reserved、multicast、CGNAT 等），则拒绝访问。
     if any(not ip.is_global for ip in ips):
         raise ValueError("Access to internal URLs is not allowed")
 

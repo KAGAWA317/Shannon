@@ -14,24 +14,31 @@ import (
 // persistScreenshot decodes base64 PNG data and writes it to the session workspace.
 // Returns the relative path from session root (e.g. "screenshots/1709312345678_abc12345_0.png").
 // All errors are non-fatal — returns empty string on failure.
+// 解码 base64 PNG 数据并写入 session workspace；
+// 返回相对 session 根目录的路径（如 "screenshots/1709312345678_abc12345_0.png"）；
+// 所有错误都不致命 —— 失败时返回空字符串。
 func persistScreenshot(logger *zap.Logger, sessionID, workflowID string, index int, b64Data string) string {
 	// Guard: skip if data is too short to be a plausible image
+	// 前置检查：数据太短，不可能是有效图片，直接跳过。
 	if len(b64Data) < 100 {
 		return ""
 	}
 
 	// Validate session ID to prevent path traversal
+	// 校验 session ID，防止路径穿越。
 	if err := validateSessionID(sessionID); err != nil {
 		logger.Warn("persistScreenshot: invalid session_id", zap.Error(err))
 		return ""
 	}
 
 	// Strip data URI prefix if present (e.g. "data:image/png;base64,...")
+	// 存在 data URI 前缀就剥掉（如 "data:image/png;base64,..."）。
 	if idx := strings.Index(b64Data, ","); idx >= 0 && idx < 100 {
 		b64Data = b64Data[idx+1:]
 	}
 
 	// Strip whitespace and newlines that some encoders insert
+	// 去掉部分 encoder 插入的空白字符与换行。
 	b64Data = strings.NewReplacer("\n", "", "\r", "", " ", "", "\t", "").Replace(b64Data)
 
 	// Try multiple base64 variants for robustness:
@@ -39,6 +46,8 @@ func persistScreenshot(logger *zap.Logger, sessionID, workflowID string, index i
 	// 2. Raw standard (no padding)
 	// 3. URL-safe (with padding) — some HTTP transports use this
 	// 4. Raw URL-safe (no padding)
+	// 依次尝试多种 base64 变体以提高兼容性：standard（带 padding）、raw standard（无 padding）、
+	// URL-safe（带 padding，部分 HTTP 传输层会用）、raw URL-safe（无 padding）。
 	var data []byte
 	var err error
 	for _, enc := range []*base64.Encoding{
@@ -67,6 +76,7 @@ func persistScreenshot(logger *zap.Logger, sessionID, workflowID string, index i
 	}
 
 	// Use last 8 chars of workflow ID as suffix for readability
+	// 取 workflow ID 后 8 位作后缀，便于辨认。
 	wfSuffix := workflowID
 	if len(wfSuffix) > 8 {
 		wfSuffix = wfSuffix[len(wfSuffix)-8:]
@@ -102,6 +112,9 @@ func persistScreenshot(logger *zap.Logger, sessionID, workflowID string, index i
 // metadata for screenshot_path values set by Python's browser tool persistence.
 // This covers the agent loop path where tools execute inside Python and Go only
 // receives metadata (not raw ToolResults).
+// 扫描 agent response metadata 中的 tool_execution_records，收集 Python 侧
+// browser tool 落盘时写入的 screenshot_path。这条路径覆盖 agent loop 场景：
+// tool 在 Python 内执行，Go 侧只收到 metadata（而不是原始 ToolResults）。
 func extractScreenshotPathsFromMetadata(metadata map[string]interface{}) []string {
 	if metadata == nil {
 		return nil

@@ -14,6 +14,7 @@ import (
 //
 // This is a utility function that can be called when performance-based agent
 // selection is needed. Currently not wired into default execution paths.
+// 该工具函数当前未接入默认执行路径，需要性能驱动的 agent 选择时可直接调用。
 //
 // Example usage:
 //

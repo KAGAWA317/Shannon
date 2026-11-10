@@ -21,6 +21,8 @@ import (
 // maxBase64FieldSize is the threshold above which base64 fields are stored in Redis
 // instead of being returned through Temporal to avoid the 2MB payload limit.
 // Set to 500KB to allow headroom for multiple fields and JSON overhead.
+// 超过该阈值的 base64 字段改存 Redis，而不经 Temporal 返回，以避开 2MB 负载上限；
+// 取 500KB 是为多个字段叠加与 JSON 开销留余量。
 const maxBase64FieldSize = 500 * 1024
 
 // base64FieldsToStore are the field names that may contain large base64 data
@@ -35,6 +37,8 @@ var base64FieldsToStore = []string{
 // storeOversizedBase64Fields recursively processes a map and stores large
 // base64-encoded fields in Redis, replacing them with reference keys.
 // Returns the sanitized output and whether any fields were stored.
+// 递归遍历 map，把体积过大的 base64 字段存入 Redis 并替换为引用键；
+// 返回清洗后的输出以及是否发生过存储。
 func storeOversizedBase64Fields(ctx context.Context, workflowID string, output interface{}, path string) (interface{}, bool) {
 	if output == nil {
 		return nil, false
@@ -315,6 +319,8 @@ func ExecuteAgentActivity(ctx context.Context, input ExecuteAgentInput) (*Execut
 	// Store oversized base64 fields in Redis to avoid Temporal's 2MB payload limit.
 	// This is critical for tools like lp_visual_analyze that return large screenshots.
 	// The fields are replaced with reference keys that can be used to fetch the data.
+	// 把超大 base64 字段存进 Redis 以避开 Temporal 的 2MB 负载上限，
+	// 对 lp_visual_analyze 等返回大截图的 tool 尤其关键；字段会被替换成可回取数据的引用键。
 	sanitizedOutput, stored := storeOversizedBase64Fields(ctx, input.WorkflowID, result.Output, "")
 	if stored {
 		logger.Info("Stored oversized base64 fields in Redis",
@@ -325,6 +331,8 @@ func ExecuteAgentActivity(ctx context.Context, input ExecuteAgentInput) (*Execut
 
 	// Safety net: if total serialized output still exceeds 1.5MB, store entire output in Redis.
 	// This catches cases where many small base64 fields collectively exceed the Temporal limit.
+	// 兜底：若整体序列化输出仍超过 1.5MB，则把整个输出存入 Redis，
+	// 覆盖多个小 base64 字段叠加后超限的情况（1.5MB 为 2MB 上限留出余量）。
 	const maxOutputSize = 1500 * 1024 // 1.5MB - leaves headroom for Temporal's 2MB limit
 	if serialized, err := json.Marshal(sanitizedOutput); err == nil && len(serialized) > maxOutputSize {
 		logger.Warn("Agent output exceeds safe size, storing entire output in Redis",
@@ -592,6 +600,8 @@ func callToolForAgentExec(ctx context.Context, toolName string, params map[strin
 // validateBrowserURL checks that a URL is safe for browser navigation.
 // Only http and https schemes are allowed to prevent security issues
 // with javascript:, file://, data:, and other potentially dangerous URIs.
+// 校验 URL 是否可安全用于浏览器导航：只允许 http/https，
+// 阻止 javascript:、file://、data: 等危险 scheme。
 func validateBrowserURL(rawURL string) error {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
@@ -608,6 +618,7 @@ func validateBrowserURL(rawURL string) error {
 
 // callToolWithHeartbeat calls a tool and sends periodic heartbeats to Temporal
 // to prevent heartbeat timeout for long-running tools like LP analysis.
+// 调用 tool 并周期性向 Temporal 发送心跳，避免 LP 分析这类长耗时 tool 触发心跳 timeout。
 func callToolWithHeartbeat(ctx context.Context, toolName string, params map[string]interface{}, timeout time.Duration, agentID string) (*ToolExecuteResponse, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("callToolWithHeartbeat starting", "tool", toolName, "agent_id", agentID, "timeout", timeout.String())
