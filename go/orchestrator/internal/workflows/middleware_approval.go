@@ -23,7 +23,7 @@ func CheckApprovalPolicy(_ workflow.Context, input TaskInput, decomp activities.
 // CheckApprovalPolicyWith evaluates approval against a provided policy
 func CheckApprovalPolicyWith(policy activities.ApprovalPolicy, input TaskInput, decomp activities.DecompositionResult) (bool, string) {
 
-	ctx := map[string]interface{}{
+	ctx := map[string]any{
 		"complexity_score": decomp.ComplexityScore,
 		"query":            input.Query,
 	}
@@ -62,7 +62,7 @@ func RequestAndWaitApproval(ctx workflow.Context, input TaskInput, reason string
 		Context:        input.Context,
 		ProposedAction: "execute_decomposition_plan",
 		Reason:         reason,
-		Metadata:       map[string]interface{}{"subtasks": len(input.History)},
+		Metadata:       map[string]any{"subtasks": len(input.History)},
 	}).Get(ctx, &approval)
 	if err != nil {
 		return nil, err

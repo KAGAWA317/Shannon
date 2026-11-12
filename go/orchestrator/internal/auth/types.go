@@ -22,12 +22,12 @@ var (
 )
 
 // JSONMap handles JSON database columns
-type JSONMap map[string]interface{}
+type JSONMap map[string]any
 
 // Scan implements sql.Scanner interface
-func (j *JSONMap) Scan(value interface{}) error {
+func (j *JSONMap) Scan(value any) error {
 	if value == nil {
-		*j = make(map[string]interface{})
+		*j = make(map[string]any)
 		return nil
 	}
 	bytes, ok := value.([]byte)

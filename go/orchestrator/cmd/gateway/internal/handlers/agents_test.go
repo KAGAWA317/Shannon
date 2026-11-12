@@ -9,13 +9,13 @@ import (
 func TestValidateAgentInput_RequiredFields(t *testing.T) {
 	agent := &activities.AgentDefinition{
 		Name: "test-agent",
-		InputSchema: map[string]interface{}{
-			"required": []interface{}{"keywords", "country"},
-			"properties": map[string]interface{}{
-				"keywords": map[string]interface{}{
+		InputSchema: map[string]any{
+			"required": []any{"keywords", "country"},
+			"properties": map[string]any{
+				"keywords": map[string]any{
 					"type": "string",
 				},
-				"country": map[string]interface{}{
+				"country": map[string]any{
 					"type": "string",
 				},
 			},
@@ -24,13 +24,13 @@ func TestValidateAgentInput_RequiredFields(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		input   map[string]interface{}
+		input   map[string]any
 		wantErr bool
 		errMsg  string
 	}{
 		{
 			name: "all required fields present",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"keywords": "test query",
 				"country":  "us",
 			},
@@ -38,7 +38,7 @@ func TestValidateAgentInput_RequiredFields(t *testing.T) {
 		},
 		{
 			name: "missing required field keywords",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"country": "us",
 			},
 			wantErr: true,
@@ -46,7 +46,7 @@ func TestValidateAgentInput_RequiredFields(t *testing.T) {
 		},
 		{
 			name: "missing required field country",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"keywords": "test",
 			},
 			wantErr: true,
@@ -54,7 +54,7 @@ func TestValidateAgentInput_RequiredFields(t *testing.T) {
 		},
 		{
 			name:    "missing all required fields",
-			input:   map[string]interface{}{},
+			input:   map[string]any{},
 			wantErr: true,
 		},
 	}
@@ -84,21 +84,21 @@ func TestValidateAgentInput_RequiredFields(t *testing.T) {
 func TestValidateAgentInput_TypeValidation(t *testing.T) {
 	agent := &activities.AgentDefinition{
 		Name: "test-agent",
-		InputSchema: map[string]interface{}{
-			"properties": map[string]interface{}{
-				"name": map[string]interface{}{
+		InputSchema: map[string]any{
+			"properties": map[string]any{
+				"name": map[string]any{
 					"type": "string",
 				},
-				"count": map[string]interface{}{
+				"count": map[string]any{
 					"type": "integer",
 				},
-				"enabled": map[string]interface{}{
+				"enabled": map[string]any{
 					"type": "boolean",
 				},
-				"tags": map[string]interface{}{
+				"tags": map[string]any{
 					"type": "array",
 				},
-				"config": map[string]interface{}{
+				"config": map[string]any{
 					"type": "object",
 				},
 			},
@@ -107,62 +107,62 @@ func TestValidateAgentInput_TypeValidation(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		input   map[string]interface{}
+		input   map[string]any
 		wantErr bool
 	}{
 		{
 			name:    "valid string",
-			input:   map[string]interface{}{"name": "test"},
+			input:   map[string]any{"name": "test"},
 			wantErr: false,
 		},
 		{
 			name:    "invalid string (number)",
-			input:   map[string]interface{}{"name": 123},
+			input:   map[string]any{"name": 123},
 			wantErr: true,
 		},
 		{
 			name:    "valid integer",
-			input:   map[string]interface{}{"count": 10},
+			input:   map[string]any{"count": 10},
 			wantErr: false,
 		},
 		{
 			name:    "valid integer from float64",
-			input:   map[string]interface{}{"count": float64(10)},
+			input:   map[string]any{"count": float64(10)},
 			wantErr: false,
 		},
 		{
 			name:    "invalid integer (float with decimal)",
-			input:   map[string]interface{}{"count": 10.5},
+			input:   map[string]any{"count": 10.5},
 			wantErr: true,
 		},
 		{
 			name:    "valid boolean",
-			input:   map[string]interface{}{"enabled": true},
+			input:   map[string]any{"enabled": true},
 			wantErr: false,
 		},
 		{
 			name:    "invalid boolean (string)",
-			input:   map[string]interface{}{"enabled": "true"},
+			input:   map[string]any{"enabled": "true"},
 			wantErr: true,
 		},
 		{
 			name:    "valid array",
-			input:   map[string]interface{}{"tags": []string{"a", "b"}},
+			input:   map[string]any{"tags": []string{"a", "b"}},
 			wantErr: false,
 		},
 		{
 			name:    "invalid array (string)",
-			input:   map[string]interface{}{"tags": "not an array"},
+			input:   map[string]any{"tags": "not an array"},
 			wantErr: true,
 		},
 		{
 			name:    "valid object",
-			input:   map[string]interface{}{"config": map[string]interface{}{"key": "value"}},
+			input:   map[string]any{"config": map[string]any{"key": "value"}},
 			wantErr: false,
 		},
 		{
 			name:    "invalid object (string)",
-			input:   map[string]interface{}{"config": "not an object"},
+			input:   map[string]any{"config": "not an object"},
 			wantErr: true,
 		},
 	}
@@ -182,9 +182,9 @@ func TestValidateAgentInput_TypeValidation(t *testing.T) {
 func TestValidateAgentInput_UnknownFields(t *testing.T) {
 	agent := &activities.AgentDefinition{
 		Name: "test-agent",
-		InputSchema: map[string]interface{}{
-			"properties": map[string]interface{}{
-				"allowed_field": map[string]interface{}{
+		InputSchema: map[string]any{
+			"properties": map[string]any{
+				"allowed_field": map[string]any{
 					"type": "string",
 				},
 			},
@@ -193,22 +193,22 @@ func TestValidateAgentInput_UnknownFields(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		input   map[string]interface{}
+		input   map[string]any
 		wantErr bool
 	}{
 		{
 			name:    "only allowed field",
-			input:   map[string]interface{}{"allowed_field": "test"},
+			input:   map[string]any{"allowed_field": "test"},
 			wantErr: false,
 		},
 		{
 			name:    "unknown field rejected",
-			input:   map[string]interface{}{"unknown_field": "hacker input"},
+			input:   map[string]any{"unknown_field": "hacker input"},
 			wantErr: true,
 		},
 		{
 			name: "mixed allowed and unknown fields",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"allowed_field": "test",
 				"malicious":     "injection attempt",
 			},
@@ -231,11 +231,11 @@ func TestValidateAgentInput_UnknownFields(t *testing.T) {
 func TestValidateAgentInput_EnumValidation(t *testing.T) {
 	agent := &activities.AgentDefinition{
 		Name: "test-agent",
-		InputSchema: map[string]interface{}{
-			"properties": map[string]interface{}{
-				"device": map[string]interface{}{
+		InputSchema: map[string]any{
+			"properties": map[string]any{
+				"device": map[string]any{
 					"type": "string",
-					"enum": []interface{}{"desktop", "mobile", "tablet"},
+					"enum": []any{"desktop", "mobile", "tablet"},
 				},
 			},
 		},
@@ -243,22 +243,22 @@ func TestValidateAgentInput_EnumValidation(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		input   map[string]interface{}
+		input   map[string]any
 		wantErr bool
 	}{
 		{
 			name:    "valid enum value",
-			input:   map[string]interface{}{"device": "desktop"},
+			input:   map[string]any{"device": "desktop"},
 			wantErr: false,
 		},
 		{
 			name:    "another valid enum value",
-			input:   map[string]interface{}{"device": "mobile"},
+			input:   map[string]any{"device": "mobile"},
 			wantErr: false,
 		},
 		{
 			name:    "invalid enum value",
-			input:   map[string]interface{}{"device": "smartphone"},
+			input:   map[string]any{"device": "smartphone"},
 			wantErr: true,
 		},
 	}
@@ -283,7 +283,7 @@ func TestValidateAgentInput_NilSchema(t *testing.T) {
 
 	// Should allow any input when no schema is defined
 	// 未定义 schema 时应允许任意输入。
-	err := ValidateAgentInput(agent, map[string]interface{}{
+	err := ValidateAgentInput(agent, map[string]any{
 		"any_field": "any_value",
 	})
 	if err != nil {

@@ -195,7 +195,7 @@ func (v *GoogleOAuthVerifier) selectCredentials(redirectURI string) (clientID, c
 
 // parseJSON is a helper to parse JSON response
 // parseJSON 是解析 JSON response 的辅助函数
-func parseJSON(body io.Reader, v interface{}) error {
+func parseJSON(body io.Reader, v any) error {
 	data, err := io.ReadAll(body)
 	if err != nil {
 		return err

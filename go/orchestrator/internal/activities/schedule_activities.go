@@ -158,7 +158,7 @@ type RecordScheduleExecutionCompleteInput struct {
 
 	// Full metadata from child workflow result (screenshot_urls, pipeline, etc.)
 	// 子 workflow 结果里的完整 metadata（screenshot_urls、pipeline 等）。
-	ResultMetadata map[string]interface{}
+	ResultMetadata map[string]any
 }
 
 // RecordScheduleExecutionComplete logs the completion of a scheduled execution

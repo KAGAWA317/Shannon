@@ -22,14 +22,14 @@ const globalNotificationMaxLen = 10000
 // Event is a minimal streaming event used by SSE and future gRPC.
 // Event 是 SSE 与将来 gRPC 使用的最小 streaming event。
 type Event struct {
-	WorkflowID string                 `json:"workflow_id"`
-	Type       string                 `json:"type"`
-	AgentID    string                 `json:"agent_id,omitempty"`
-	Message    string                 `json:"message,omitempty"`
-	Payload    map[string]interface{} `json:"payload,omitempty"`
-	Timestamp  time.Time              `json:"timestamp"`
-	Seq        uint64                 `json:"seq"`
-	StreamID   string                 `json:"stream_id,omitempty"` // Redis stream ID for deduplication
+	WorkflowID string         `json:"workflow_id"`
+	Type       string         `json:"type"`
+	AgentID    string         `json:"agent_id,omitempty"`
+	Message    string         `json:"message,omitempty"`
+	Payload    map[string]any `json:"payload,omitempty"`
+	Timestamp  time.Time      `json:"timestamp"`
+	Seq        uint64         `json:"seq"`
+	StreamID   string         `json:"stream_id,omitempty"` // Redis stream ID for deduplication
 }
 
 // subscription tracks a subscriber with its cancellation mechanism
@@ -316,7 +316,7 @@ func (m *Manager) streamReaderFrom(ctx context.Context, workflowID string, ch ch
 					}
 				}
 				if v, ok := message.Values["payload"].(string); ok && v != "" {
-					var p map[string]interface{}
+					var p map[string]any
 					if err := json.Unmarshal([]byte(v), &p); err == nil {
 						event.Payload = p
 					}
@@ -444,7 +444,7 @@ func (m *Manager) Publish(workflowID string, evt Event) {
 			Stream: streamKey,
 			MaxLen: int64(m.capacity),
 			Approx: true,
-			Values: map[string]interface{}{
+			Values: map[string]any{
 				"workflow_id": evt.WorkflowID,
 				"type":        evt.Type,
 				"agent_id":    evt.AgentID,
@@ -485,7 +485,7 @@ func (m *Manager) Publish(workflowID string, evt Event) {
 				Stream: globalKey,
 				MaxLen: globalNotificationMaxLen,
 				Approx: true,
-				Values: map[string]interface{}{
+				Values: map[string]any{
 					"workflow_id": evt.WorkflowID,
 					"type":        evt.Type,
 					"agent_id":    evt.AgentID,
@@ -673,14 +673,14 @@ func sanitizeEventMessage(s string) string {
 // Truncates large base64 images in string values.
 // sanitizeEventPayload 清洗待存储的 payload map。
 // 截断字符串值中较大的 base64 图片。
-func sanitizeEventPayload(payload map[string]interface{}) map[string]interface{} {
+func sanitizeEventPayload(payload map[string]any) map[string]any {
 	if payload == nil {
 		return nil
 	}
 
 	const maxDepth = 4
-	var sanitizeValue func(key string, v interface{}, depth int) interface{}
-	sanitizeValue = func(key string, v interface{}, depth int) interface{} {
+	var sanitizeValue func(key string, v any, depth int) any
+	sanitizeValue = func(key string, v any, depth int) any {
 		if v == nil || depth > maxDepth {
 			return v
 		}
@@ -693,10 +693,10 @@ func sanitizeEventPayload(payload map[string]interface{}) map[string]interface{}
 				return "[BASE64_IMAGE_TRUNCATED]"
 			}
 			return SanitizeBase64Image(val)
-		case map[string]interface{}:
+		case map[string]any:
 			return sanitizeEventPayload(val)
-		case []interface{}:
-			out := make([]interface{}, 0, len(val))
+		case []any:
+			out := make([]any, 0, len(val))
 			for _, item := range val {
 				out = append(out, sanitizeValue("", item, depth+1))
 			}
@@ -706,7 +706,7 @@ func sanitizeEventPayload(payload map[string]interface{}) map[string]interface{}
 		}
 	}
 
-	sanitized := make(map[string]interface{}, len(payload))
+	sanitized := make(map[string]any, len(payload))
 	for k, v := range payload {
 		sanitized[k] = sanitizeValue(k, v, 0)
 	}
@@ -717,7 +717,7 @@ func sanitizeEventPayload(payload map[string]interface{}) map[string]interface{}
 // before persisting to Postgres. The full payload is still available via Redis/SSE for real-time UI.
 // sanitizePayloadForPersistence 在持久化到 Postgres 之前移除 payload 中的大块数据
 // （如 base64 截图）。完整 payload 仍可通过 Redis/SSE 供实时 UI 使用。
-func sanitizePayloadForPersistence(eventType string, payload map[string]interface{}) map[string]interface{} {
+func sanitizePayloadForPersistence(eventType string, payload map[string]any) map[string]any {
 	if payload == nil {
 		return nil
 	}
@@ -731,7 +731,7 @@ func sanitizePayloadForPersistence(eventType string, payload map[string]interfac
 	// Check if this is a browser screenshot tool result
 	// 判断是否为浏览器截图 tool 的结果
 	tool, hasT := payload["tool"].(string)
-	output, hasO := payload["output"].(map[string]interface{})
+	output, hasO := payload["output"].(map[string]any)
 	if !hasT || !hasO || tool != "browser" {
 		return payload
 	}
@@ -743,11 +743,11 @@ func sanitizePayloadForPersistence(eventType string, payload map[string]interfac
 
 	// Deep copy payload and strip screenshot base64
 	// 深拷贝 payload 并去掉截图的 base64
-	sanitized := make(map[string]interface{})
+	sanitized := make(map[string]any)
 	for k, v := range payload {
 		if k == "output" {
 			// Create sanitized output without screenshot base64
-			sanitizedOutput := make(map[string]interface{})
+			sanitizedOutput := make(map[string]any)
 			for ok, ov := range output {
 				if ok == "screenshot" {
 					sanitizedOutput[ok] = "[BASE64_STRIPPED_FOR_PERSISTENCE]"
@@ -904,7 +904,7 @@ func (m *Manager) ReplaySince(workflowID string, since uint64) []Event {
 			}
 		}
 		if v, ok := msg.Values["payload"].(string); ok && v != "" {
-			var p map[string]interface{}
+			var p map[string]any
 			if err := json.Unmarshal([]byte(v), &p); err == nil {
 				event.Payload = p
 			}
@@ -965,7 +965,7 @@ func (m *Manager) ReplayFromStreamID(workflowID string, streamID string) []Event
 			}
 		}
 		if v, ok := msg.Values["payload"].(string); ok && v != "" {
-			var p map[string]interface{}
+			var p map[string]any
 			if err := json.Unmarshal([]byte(v), &p); err == nil {
 				event.Payload = p
 			}

@@ -77,12 +77,12 @@ const (
 
 // EmitTaskUpdateInput carries minimal event data for streaming_v1
 type EmitTaskUpdateInput struct {
-	WorkflowID string                 `json:"workflow_id"`
-	EventType  StreamEventType        `json:"event_type"`
-	AgentID    string                 `json:"agent_id,omitempty"`
-	Message    string                 `json:"message,omitempty"`
-	Timestamp  time.Time              `json:"timestamp"`
-	Payload    map[string]interface{} `json:"payload,omitempty"`
+	WorkflowID string          `json:"workflow_id"`
+	EventType  StreamEventType `json:"event_type"`
+	AgentID    string          `json:"agent_id,omitempty"`
+	Message    string          `json:"message,omitempty"`
+	Timestamp  time.Time       `json:"timestamp"`
+	Payload    map[string]any  `json:"payload,omitempty"`
 }
 
 // EmitTaskUpdate logs a minimal deterministic event. In future it can publish to a stream.

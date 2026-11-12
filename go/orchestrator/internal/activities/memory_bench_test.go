@@ -110,7 +110,7 @@ func BenchmarkMMRReranking(b *testing.B) {
 		items[i] = vectordb.ContextItem{
 			Vector: generateRandomVector(1536),
 			Score:  0.9 - float64(i)*0.01,
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"query":  fmt.Sprintf("Query %d", i),
 				"answer": fmt.Sprintf("Answer %d", i),
 			},

@@ -42,7 +42,7 @@ func TestReactLoopExecutes(t *testing.T) {
 	wf := func(ctx workflow.Context) (string, error) {
 		cfg := ReactConfig{MaxIterations: 2, MinIterations: 1, ObservationWindow: 1, MaxObservations: 10, MaxThoughts: 10, MaxActions: 10}
 		opts := Options{BudgetAgentMax: 0, SessionID: "s", UserID: "u", ModelTier: "small"}
-		res, err := ReactLoop(ctx, "solve x", map[string]interface{}{}, "s", []string{}, cfg, opts)
+		res, err := ReactLoop(ctx, "solve x", map[string]any{}, "s", []string{}, cfg, opts)
 		if err != nil {
 			return "", err
 		}
@@ -79,7 +79,7 @@ func TestChainOfThoughtExecutes(t *testing.T) {
 	wf := func(ctx workflow.Context) (string, error) {
 		cfg := ChainOfThoughtConfig{MaxSteps: 3}
 		opts := Options{ModelTier: "small"}
-		res, err := ChainOfThought(ctx, "What is the answer?", map[string]interface{}{}, "s", []string{}, cfg, opts)
+		res, err := ChainOfThought(ctx, "What is the answer?", map[string]any{}, "s", []string{}, cfg, opts)
 		if err != nil {
 			return "", err
 		}
@@ -117,7 +117,7 @@ func TestParallelRespectsMaxConcurrency(t *testing.T) {
 
 	wf := func(ctx workflow.Context) (int, error) {
 		tasks := []execution.ParallelTask{{ID: "1", Description: "a"}, {ID: "2", Description: "b"}, {ID: "3", Description: "c"}}
-		cfg := execution.ParallelConfig{MaxConcurrency: 2, Context: map[string]interface{}{}}
+		cfg := execution.ParallelConfig{MaxConcurrency: 2, Context: map[string]any{}}
 		res, err := execution.ExecuteParallel(ctx, tasks, "s", []string{}, cfg, 0, "u", "small")
 		if err != nil {
 			return 0, err

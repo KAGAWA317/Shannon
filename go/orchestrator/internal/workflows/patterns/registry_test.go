@@ -18,7 +18,7 @@ func TestRegistryRegistersDefaultPatterns(t *testing.T) {
 
 func TestRegistrySelectorHonorsContextHint(t *testing.T) {
 	r := GetRegistry()
-	ctx := map[string]interface{}{"pattern": string(PatternReact)}
+	ctx := map[string]any{"pattern": string(PatternReact)}
 	p, err := r.SelectForTask("test query", ctx)
 	if err != nil {
 		t.Fatalf("SelectForTask returned error: %v", err)

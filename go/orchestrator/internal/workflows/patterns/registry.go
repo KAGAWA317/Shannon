@@ -50,11 +50,11 @@ type Pattern interface {
 // PatternInput provides input to a pattern
 type PatternInput struct {
 	Query     string
-	Context   map[string]interface{}
+	Context   map[string]any
 	History   []string
 	SessionID string
 	UserID    string
-	Config    interface{} // Pattern-specific config
+	Config    any // Pattern-specific config
 	BudgetMax int
 	ModelTier string
 }
@@ -64,7 +64,7 @@ type PatternResult struct {
 	Result       string
 	TokensUsed   int
 	Confidence   float64
-	Metadata     map[string]interface{}
+	Metadata     map[string]any
 	AgentResults []activities.AgentExecutionResult
 }
 
@@ -79,14 +79,14 @@ type PatternRegistry struct {
 
 // PatternSelector decides which pattern to use
 type PatternSelector interface {
-	SelectPattern(query string, context map[string]interface{}, available []Pattern) (Pattern, error)
+	SelectPattern(query string, context map[string]any, available []Pattern) (Pattern, error)
 }
 
 // DefaultPatternSelector selects patterns based on task characteristics
 type DefaultPatternSelector struct{}
 
 // SelectPattern chooses the best pattern for a task
-func (s *DefaultPatternSelector) SelectPattern(query string, context map[string]interface{}, available []Pattern) (Pattern, error) {
+func (s *DefaultPatternSelector) SelectPattern(query string, context map[string]any, available []Pattern) (Pattern, error) {
 	// Simple heuristic-based selection
 	// 目前只认 context["pattern"] 显式提示，否则退回第一个注册的 pattern，没有按 task 特征真正打分。
 	// Could be enhanced with ML-based selection
@@ -161,7 +161,7 @@ func (r *PatternRegistry) List() []Pattern {
 }
 
 // SelectForTask chooses the best pattern for a given task
-func (r *PatternRegistry) SelectForTask(query string, context map[string]interface{}) (Pattern, error) {
+func (r *PatternRegistry) SelectForTask(query string, context map[string]any) (Pattern, error) {
 	available := r.List()
 	if len(available) == 0 {
 		return nil, fmt.Errorf("no patterns registered")

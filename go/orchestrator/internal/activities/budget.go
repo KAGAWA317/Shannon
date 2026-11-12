@@ -204,7 +204,7 @@ type TokenUsageInput struct {
 	CacheCreation1hTokens int                    `json:"cache_creation_1h_tokens,omitempty"`
 	CallSequence        int                    `json:"call_sequence,omitempty"`
 	CostOverride        float64                `json:"cost_override,omitempty"` // When > 0, use instead of pricing calculation
-	Metadata            map[string]interface{} `json:"metadata"`
+	Metadata            map[string]any `json:"metadata"`
 }
 
 // RecordTokenUsage records actual token usage
@@ -415,7 +415,7 @@ func (b *BudgetActivities) ExecuteAgentWithBudget(ctx context.Context, input Bud
 	// 无输出且无 token、无 tool 调用时视为失败并跳过记录，除非显式要求；
 	// 但先检查 tool_cost_entries——即使 LLM 调用产生零 token（如 provider 报错），tool 成本也必须记录。
 	hasToolCosts := result.Metadata != nil &&
-		func() bool { _, ok := result.Metadata["tool_cost_entries"].([]interface{}); return ok }()
+		func() bool { _, ok := result.Metadata["tool_cost_entries"].([]any); return ok }()
 
 	noOutput := strings.TrimSpace(result.Response) == "" &&
 		len(result.ToolExecutions) == 0 &&
@@ -475,9 +475,9 @@ func (b *BudgetActivities) ExecuteAgentWithBudget(ctx context.Context, input Bud
 	// HTTP 路径（ExecuteAgentWithForcedTools）来自 Python agent response，gRPC 路径来自 ExecuteTaskResponse.metadata；
 	// streaming 路径不携带 metadata，但有 tool 时总走 unary（useStreaming=false）。
 	if result.Metadata != nil {
-		if rawEntries, ok := result.Metadata["tool_cost_entries"].([]interface{}); ok {
+		if rawEntries, ok := result.Metadata["tool_cost_entries"].([]any); ok {
 			for i, raw := range rawEntries {
-				em, ok := raw.(map[string]interface{})
+				em, ok := raw.(map[string]any)
 				if !ok {
 					continue
 				}

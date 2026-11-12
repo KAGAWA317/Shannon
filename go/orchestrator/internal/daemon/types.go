@@ -136,11 +136,11 @@ type ProgressPayload struct {
 // DaemonEventPayload 携带 daemon 到 server 的单条 agent 循环 event。
 // 发布到 streaming.Manager 以更新渠道卡片。
 type DaemonEventPayload struct {
-	EventType string                 `json:"event_type"` // TOOL_INVOKED, TOOL_COMPLETED, LLM_OUTPUT, LLM_PARTIAL
-	Message   string                 `json:"message"`
-	Data      map[string]interface{} `json:"data,omitempty"`
-	Seq       int64                  `json:"seq"`
-	Timestamp string                 `json:"ts"`
+	EventType string         `json:"event_type"` // TOOL_INVOKED, TOOL_COMPLETED, LLM_OUTPUT, LLM_PARTIAL
+	Message   string         `json:"message"`
+	Data      map[string]any `json:"data,omitempty"`
+	Seq       int64          `json:"seq"`
+	Timestamp string         `json:"ts"`
 }
 
 // ProactivePayload is sent by the daemon to push an unsolicited message

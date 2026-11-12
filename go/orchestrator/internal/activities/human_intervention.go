@@ -13,14 +13,14 @@ import (
 // HumanApprovalInput represents a request for human approval
 // HumanApprovalInput 表示一次人工审批 request。
 type HumanApprovalInput struct {
-	SessionID      string                 `json:"session_id"`
-	WorkflowID     string                 `json:"workflow_id"`
-	RunID          string                 `json:"run_id"`
-	Query          string                 `json:"query"`
-	Context        map[string]interface{} `json:"context"`
-	ProposedAction string                 `json:"proposed_action"`
-	Reason         string                 `json:"reason"`
-	Metadata       map[string]interface{} `json:"metadata"`
+	SessionID      string         `json:"session_id"`
+	WorkflowID     string         `json:"workflow_id"`
+	RunID          string         `json:"run_id"`
+	Query          string         `json:"query"`
+	Context        map[string]any `json:"context"`
+	ProposedAction string         `json:"proposed_action"`
+	Reason         string         `json:"reason"`
+	Metadata       map[string]any `json:"metadata"`
 }
 
 // HumanApprovalResult represents the human's response
@@ -133,7 +133,7 @@ type ApprovalPolicy struct {
 
 // EvaluateApprovalPolicy determines if human approval is required
 // EvaluateApprovalPolicy 判断是否需要人工审批。
-func EvaluateApprovalPolicy(policy ApprovalPolicy, context map[string]interface{}) (bool, string) {
+func EvaluateApprovalPolicy(policy ApprovalPolicy, context map[string]any) (bool, string) {
 	// Check complexity threshold
 	// 检查复杂度阈值。
 	if complexity, ok := context["complexity_score"].(float64); ok {
@@ -184,7 +184,7 @@ func EvaluateApprovalPolicy(policy ApprovalPolicy, context map[string]interface{
 					}
 				}
 			}
-		case []interface{}:
+		case []any:
 			for _, toolInterface := range tools {
 				if tool, ok := toolInterface.(string); ok {
 					for _, requiredTool := range policy.RequireForTools {

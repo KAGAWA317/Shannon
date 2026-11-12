@@ -24,8 +24,8 @@ func TestEnforceTaskInputPayloadLimitTrimsHistory(t *testing.T) {
 		})
 	}
 
-	conversationHistory := []interface{}{
-		map[string]interface{}{
+	conversationHistory := []any{
+		map[string]any{
 			"role":    "assistant",
 			"content": "keep this context intact",
 		},
@@ -35,11 +35,11 @@ func TestEnforceTaskInputPayloadLimitTrimsHistory(t *testing.T) {
 		Query:     "latest query",
 		UserID:    "user-1",
 		SessionID: "session-1",
-		Context: map[string]interface{}{
+		Context: map[string]any{
 			"conversation_history": conversationHistory,
 		},
 		History: history,
-		SessionCtx: map[string]interface{}{
+		SessionCtx: map[string]any{
 			"last_response": "short summary",
 		},
 	}
@@ -63,7 +63,7 @@ func TestEnforceTaskInputPayloadLimitRejectsOversizedNonHistoryPayload(t *testin
 	input := workflows.TaskInput{
 		Query:   strings.Repeat("q", taskInputPreflightLimitBytes),
 		UserID:  "user-1",
-		Context: map[string]interface{}{"conversation_history": []interface{}{}},
+		Context: map[string]any{"conversation_history": []any{}},
 	}
 
 	result, err := enforceTaskInputPayloadLimit(&input, taskInputPreflightLimitBytes)

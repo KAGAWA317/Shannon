@@ -21,7 +21,7 @@ type FetchSemanticMemoryInput struct {
 // FetchSemanticMemoryResult contains semantically similar items
 // FetchSemanticMemoryResult 包含语义相似的条目
 type FetchSemanticMemoryResult struct {
-	Items []map[string]interface{} `json:"items"`
+	Items []map[string]any `json:"items"`
 }
 
 // FetchSemanticMemory performs semantic search for session memories
@@ -51,8 +51,8 @@ type FetchHierarchicalMemoryInput struct {
 // FetchHierarchicalMemoryResult contains deduplicated memory items
 // FetchHierarchicalMemoryResult 包含去重后的 memory 条目
 type FetchHierarchicalMemoryResult struct {
-	Items   []map[string]interface{} `json:"items"`
-	Sources map[string]int           `json:"sources"` // Count by source type
+	Items   []map[string]any `json:"items"`
+	Sources map[string]int   `json:"sources"` // Count by source type
 }
 
 // FetchHierarchicalMemory combines recent session memory with semantic search
@@ -61,7 +61,7 @@ type FetchHierarchicalMemoryResult struct {
 // 同时提供时间相关性（recent）与语义相关性
 func FetchHierarchicalMemory(ctx context.Context, in FetchHierarchicalMemoryInput) (FetchHierarchicalMemoryResult, error) {
 	result := FetchHierarchicalMemoryResult{
-		Items:   make([]map[string]interface{}, 0),
+		Items:   make([]map[string]any, 0),
 		Sources: make(map[string]int),
 	}
 

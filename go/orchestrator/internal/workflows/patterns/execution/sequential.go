@@ -20,11 +20,11 @@ import (
 
 // SequentialConfig controls sequential execution behavior
 type SequentialConfig struct {
-	EmitEvents               bool                   // Whether to emit streaming events
-	Context                  map[string]interface{} // Base context for all agents
-	PassPreviousResults      bool                   // Whether to pass previous results to next agent
-	ExtractNumericValues     bool                   // Whether to extract numeric values from responses
-	ClearDependentToolParams bool                   // Clear tool params for dependent tasks
+	EmitEvents               bool           // Whether to emit streaming events
+	Context                  map[string]any // Base context for all agents
+	PassPreviousResults      bool           // Whether to pass previous results to next agent
+	ExtractNumericValues     bool           // Whether to extract numeric values from responses
+	ClearDependentToolParams bool           // Clear tool params for dependent tasks
 }
 
 // SequentialTask represents a task to execute sequentially
@@ -32,7 +32,7 @@ type SequentialTask struct {
 	ID             string
 	Description    string
 	SuggestedTools []string
-	ToolParameters map[string]interface{}
+	ToolParameters map[string]any
 	PersonaID      string
 	Role           string
 	Dependencies   []string // Tasks this depends on
@@ -42,7 +42,7 @@ type SequentialTask struct {
 type SequentialResult struct {
 	Results     []activities.AgentExecutionResult
 	TotalTokens int
-	Metadata    map[string]interface{}
+	Metadata    map[string]any
 }
 
 // ExecuteSequential runs tasks one after another, optionally passing results between them.
@@ -81,7 +81,7 @@ func ExecuteSequential(
 
 	for i, task := range tasks {
 		// Prepare task context
-		taskContext := make(map[string]interface{})
+		taskContext := make(map[string]any)
 		for k, v := range config.Context {
 			taskContext[k] = v
 		}
@@ -114,10 +114,10 @@ func ExecuteSequential(
 
 		// Add previous results to context if configured
 		if config.PassPreviousResults && len(results) > 0 {
-			previousResults := make(map[string]interface{})
+			previousResults := make(map[string]any)
 			for j, prevResult := range results {
 				if j < i && j < len(tasks) {
-					resultMap := map[string]interface{}{
+					resultMap := map[string]any{
 						"response": prevResult.Response,
 						"tokens":   prevResult.TokensUsed,
 						"success":  prevResult.Success,
@@ -136,15 +136,15 @@ func ExecuteSequential(
 							switch te.Tool {
 							case "calculator":
 								if te.Output != nil {
-									if calcResult, ok := te.Output.(map[string]interface{}); ok {
+									if calcResult, ok := te.Output.(map[string]any); ok {
 										if res, ok := calcResult["result"]; ok {
-											resultMap["calculator"] = map[string]interface{}{"result": res}
+											resultMap["calculator"] = map[string]any{"result": res}
 										}
 									}
 								}
 							case "code_executor":
 								if te.Output != nil {
-									resultMap["code_executor"] = map[string]interface{}{"output": te.Output}
+									resultMap["code_executor"] = map[string]any{"output": te.Output}
 								}
 							default:
 								if te.Output != nil {
@@ -312,7 +312,7 @@ func ExecuteSequential(
 				}
 			}
 
-			meta := map[string]interface{}{"phase": "sequential"}
+			meta := map[string]any{"phase": "sequential"}
 			if (inTok + outTok) == 0 {
 				if recordZero {
 					meta["zero_tokens"] = true
@@ -374,7 +374,7 @@ func ExecuteSequential(
 					Answer:    result.Response,
 					Model:     result.ModelUsed,
 					RedactPII: true,
-					Extra: map[string]interface{}{
+					Extra: map[string]any{
 						"task_id": task.ID,
 					},
 				})
@@ -391,7 +391,7 @@ func ExecuteSequential(
 	return &SequentialResult{
 		Results:     results,
 		TotalTokens: totalTokens,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"total_tasks": len(tasks),
 			"successful":  successCount,
 			"failed":      errorCount,
@@ -409,7 +409,7 @@ func persistAgentExecution(ctx workflow.Context, workflowID string, agentID stri
 
 	// Pre-generate agent execution ID using SideEffect for replay safety
 	var agentExecutionID string
-	workflow.SideEffect(ctx, func(ctx workflow.Context) interface{} {
+	workflow.SideEffect(ctx, func(ctx workflow.Context) any {
 		return uuid.New().String()
 	}).Get(&agentExecutionID)
 
@@ -434,7 +434,7 @@ func persistAgentExecution(ctx workflow.Context, workflowID string, agentID stri
 			ModelUsed:  result.ModelUsed,
 			DurationMs: result.DurationMs,
 			Error:      result.Error,
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"workflow": "sequential",
 				"strategy": "sequential",
 			},
@@ -461,7 +461,7 @@ func persistAgentExecution(ctx workflow.Context, workflowID string, agentID stri
 			}
 
 			// Extract input params from tool execution (from HTTP path)
-			inputParamsMap, _ := tool.InputParams.(map[string]interface{})
+			inputParamsMap, _ := tool.InputParams.(map[string]any)
 
 			workflow.ExecuteActivity(
 				persistCtx,

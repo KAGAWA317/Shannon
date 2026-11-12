@@ -62,7 +62,7 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"status":    overall.Status.String(),
 		"message":   overall.Message,
 		"timestamp": overall.Timestamp.Unix(),
@@ -102,7 +102,7 @@ func (h *HTTPHandler) handleReadiness(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"status":    message,
 		"ready":     ready,
 		"timestamp": time.Now().Unix(),
@@ -138,7 +138,7 @@ func (h *HTTPHandler) handleLiveness(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"status":    message,
 		"live":      alive,
 		"timestamp": time.Now().Unix(),
@@ -296,7 +296,7 @@ func (h *HTTPHandler) writeError(w http.ResponseWriter, statusCode int, message 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"error":     message,
 		"timestamp": time.Now().Unix(),
 	}

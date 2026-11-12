@@ -9,7 +9,7 @@ import (
 func TestSelectSynthesisTemplate(t *testing.T) {
 	tests := []struct {
 		name         string
-		context      map[string]interface{}
+		context      map[string]any
 		wantTemplate string
 		wantExplicit bool
 	}{
@@ -21,13 +21,13 @@ func TestSelectSynthesisTemplate(t *testing.T) {
 		},
 		{
 			name:         "empty context returns normal_default",
-			context:      map[string]interface{}{},
+			context:      map[string]any{},
 			wantTemplate: "normal_default",
 			wantExplicit: false,
 		},
 		{
 			name: "explicit synthesis_template",
-			context: map[string]interface{}{
+			context: map[string]any{
 				"synthesis_template": "my_custom",
 			},
 			wantTemplate: "my_custom",
@@ -35,7 +35,7 @@ func TestSelectSynthesisTemplate(t *testing.T) {
 		},
 		{
 			name: "empty synthesis_template falls through",
-			context: map[string]interface{}{
+			context: map[string]any{
 				"synthesis_template": "",
 			},
 			wantTemplate: "normal_default",
@@ -43,7 +43,7 @@ func TestSelectSynthesisTemplate(t *testing.T) {
 		},
 		{
 			name: "workflow_type research",
-			context: map[string]interface{}{
+			context: map[string]any{
 				"workflow_type": "research",
 			},
 			wantTemplate: "research_comprehensive",
@@ -51,7 +51,7 @@ func TestSelectSynthesisTemplate(t *testing.T) {
 		},
 		{
 			name: "force_research true",
-			context: map[string]interface{}{
+			context: map[string]any{
 				"force_research": true,
 			},
 			wantTemplate: "research_comprehensive",
@@ -59,7 +59,7 @@ func TestSelectSynthesisTemplate(t *testing.T) {
 		},
 		{
 			name: "force_research false falls through",
-			context: map[string]interface{}{
+			context: map[string]any{
 				"force_research": false,
 			},
 			wantTemplate: "normal_default",
@@ -67,7 +67,7 @@ func TestSelectSynthesisTemplate(t *testing.T) {
 		},
 		{
 			name: "synthesis_style comprehensive",
-			context: map[string]interface{}{
+			context: map[string]any{
 				"synthesis_style": "comprehensive",
 			},
 			wantTemplate: "research_comprehensive",
@@ -75,7 +75,7 @@ func TestSelectSynthesisTemplate(t *testing.T) {
 		},
 		{
 			name: "synthesis_style concise",
-			context: map[string]interface{}{
+			context: map[string]any{
 				"synthesis_style": "concise",
 			},
 			wantTemplate: "research_concise",
@@ -83,7 +83,7 @@ func TestSelectSynthesisTemplate(t *testing.T) {
 		},
 		{
 			name: "research_areas []string present",
-			context: map[string]interface{}{
+			context: map[string]any{
 				"research_areas": []string{"area1", "area2"},
 			},
 			wantTemplate: "research_comprehensive",
@@ -91,15 +91,15 @@ func TestSelectSynthesisTemplate(t *testing.T) {
 		},
 		{
 			name: "research_areas []interface{} present",
-			context: map[string]interface{}{
-				"research_areas": []interface{}{"area1", "area2"},
+			context: map[string]any{
+				"research_areas": []any{"area1", "area2"},
 			},
 			wantTemplate: "research_comprehensive",
 			wantExplicit: false,
 		},
 		{
 			name: "research_areas empty []string",
-			context: map[string]interface{}{
+			context: map[string]any{
 				"research_areas": []string{},
 			},
 			wantTemplate: "normal_default",
@@ -107,7 +107,7 @@ func TestSelectSynthesisTemplate(t *testing.T) {
 		},
 		{
 			name: "explicit template takes precedence over workflow_type",
-			context: map[string]interface{}{
+			context: map[string]any{
 				"synthesis_template": "custom",
 				"workflow_type":      "research",
 			},
@@ -116,7 +116,7 @@ func TestSelectSynthesisTemplate(t *testing.T) {
 		},
 		{
 			name: "workflow_type takes precedence over force_research",
-			context: map[string]interface{}{
+			context: map[string]any{
 				"workflow_type":  "research",
 				"force_research": false,
 			},

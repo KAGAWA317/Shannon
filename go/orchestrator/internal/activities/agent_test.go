@@ -11,19 +11,19 @@ import (
 func TestBodyFieldMirroring(t *testing.T) {
 	tests := []struct {
 		name           string
-		body           map[string]interface{}
-		initialParams  map[string]interface{}
-		expectedParams map[string]interface{}
+		body           map[string]any
+		initialParams  map[string]any
+		expectedParams map[string]any
 	}{
 		{
 			name: "mirrors all body fields to prompt_params",
-			body: map[string]interface{}{
+			body: map[string]any{
 				"profile_id": "test_profile",
 				"aid":        "test_aid",
 				"metrics":    []string{"users", "sessions"},
 			},
-			initialParams: map[string]interface{}{},
-			expectedParams: map[string]interface{}{
+			initialParams: map[string]any{},
+			expectedParams: map[string]any{
 				"profile_id": "test_profile",
 				"aid":        "test_aid",
 				"metrics":    []string{"users", "sessions"},
@@ -31,40 +31,40 @@ func TestBodyFieldMirroring(t *testing.T) {
 		},
 		{
 			name: "does not override existing prompt_params",
-			body: map[string]interface{}{
+			body: map[string]any{
 				"profile_id": "body_profile",
 				"aid":        "body_aid",
 			},
-			initialParams: map[string]interface{}{
+			initialParams: map[string]any{
 				"profile_id": "existing_profile",
 			},
-			expectedParams: map[string]interface{}{
+			expectedParams: map[string]any{
 				"profile_id": "existing_profile", // Not overridden
 				"aid":        "body_aid",         // Added
 			},
 		},
 		{
 			name: "handles complex nested structures",
-			body: map[string]interface{}{
-				"timeRange": map[string]interface{}{
+			body: map[string]any{
+				"timeRange": map[string]any{
 					"start": "2025-01-01",
 					"end":   "2025-01-31",
 				},
-				"filters": []interface{}{
-					map[string]interface{}{
+				"filters": []any{
+					map[string]any{
 						"field": "country",
 						"value": "US",
 					},
 				},
 			},
-			initialParams: map[string]interface{}{},
-			expectedParams: map[string]interface{}{
-				"timeRange": map[string]interface{}{
+			initialParams: map[string]any{},
+			expectedParams: map[string]any{
+				"timeRange": map[string]any{
 					"start": "2025-01-01",
 					"end":   "2025-01-31",
 				},
-				"filters": []interface{}{
-					map[string]interface{}{
+				"filters": []any{
+					map[string]any{
 						"field": "country",
 						"value": "US",
 					},
@@ -73,9 +73,9 @@ func TestBodyFieldMirroring(t *testing.T) {
 		},
 		{
 			name:           "handles empty body",
-			body:           map[string]interface{}{},
-			initialParams:  map[string]interface{}{"existing": "value"},
-			expectedParams: map[string]interface{}{"existing": "value"},
+			body:           map[string]any{},
+			initialParams:  map[string]any{"existing": "value"},
+			expectedParams: map[string]any{"existing": "value"},
 		},
 	}
 
@@ -99,18 +99,18 @@ func TestBodyFieldMirroring(t *testing.T) {
 func TestPromptParamsTypeAssertion(t *testing.T) {
 	tests := []struct {
 		name          string
-		contextValue  interface{}
+		contextValue  any
 		shouldSucceed bool
-		expectedValue map[string]interface{}
+		expectedValue map[string]any
 	}{
 		{
 			name: "valid map[string]interface{}",
-			contextValue: map[string]interface{}{
+			contextValue: map[string]any{
 				"key1": "value1",
 				"key2": "value2",
 			},
 			shouldSucceed: true,
-			expectedValue: map[string]interface{}{
+			expectedValue: map[string]any{
 				"key1": "value1",
 				"key2": "value2",
 			},
@@ -141,7 +141,7 @@ func TestPromptParamsTypeAssertion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Simulate the type assertion from agent.go
 			// 模拟 agent.go 中的类型断言
-			pp, ok := tt.contextValue.(map[string]interface{})
+			pp, ok := tt.contextValue.(map[string]any)
 
 			if tt.shouldSucceed {
 				assert.True(t, ok, "type assertion should succeed")
@@ -156,13 +156,13 @@ func TestPromptParamsTypeAssertion(t *testing.T) {
 func TestStructPbConversion(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    map[string]interface{}
+		input    map[string]any
 		wantErr  bool
 		validate func(*testing.T, *structpb.Struct)
 	}{
 		{
 			name: "simple key-value pairs",
-			input: map[string]interface{}{
+			input: map[string]any{
 				"string_key": "value",
 				"int_key":    42,
 				"bool_key":   true,
@@ -176,8 +176,8 @@ func TestStructPbConversion(t *testing.T) {
 		},
 		{
 			name: "nested structures",
-			input: map[string]interface{}{
-				"nested": map[string]interface{}{
+			input: map[string]any{
+				"nested": map[string]any{
 					"inner_key": "inner_value",
 				},
 			},
@@ -190,8 +190,8 @@ func TestStructPbConversion(t *testing.T) {
 		},
 		{
 			name: "arrays",
-			input: map[string]interface{}{
-				"array": []interface{}{"item1", "item2", "item3"},
+			input: map[string]any{
+				"array": []any{"item1", "item2", "item3"},
 			},
 			wantErr: false,
 			validate: func(t *testing.T, s *structpb.Struct) {
@@ -223,22 +223,22 @@ func TestStructPbConversion(t *testing.T) {
 func TestSessionContextMerging(t *testing.T) {
 	tests := []struct {
 		name             string
-		initialContext   map[string]interface{}
-		additionalParams map[string]interface{}
-		expectedResult   map[string]interface{}
+		initialContext   map[string]any
+		additionalParams map[string]any
+		expectedResult   map[string]any
 	}{
 		{
 			name: "merge non-overlapping contexts",
-			initialContext: map[string]interface{}{
+			initialContext: map[string]any{
 				"role":      "analysis",
 				"user_id":   "user_123",
 				"tenant_id": "tenant_456",
 			},
-			additionalParams: map[string]interface{}{
+			additionalParams: map[string]any{
 				"profile_id": "profile_789",
 				"aid":        "aid_abc",
 			},
-			expectedResult: map[string]interface{}{
+			expectedResult: map[string]any{
 				"role":       "analysis",
 				"user_id":    "user_123",
 				"tenant_id":  "tenant_456",
@@ -248,16 +248,16 @@ func TestSessionContextMerging(t *testing.T) {
 		},
 		{
 			name: "does not override existing context values",
-			initialContext: map[string]interface{}{
+			initialContext: map[string]any{
 				"role":    "existing_role",
 				"user_id": "existing_user",
 			},
-			additionalParams: map[string]interface{}{
+			additionalParams: map[string]any{
 				"role":    "new_role",
 				"user_id": "new_user",
 				"extra":   "extra_value",
 			},
-			expectedResult: map[string]interface{}{
+			expectedResult: map[string]any{
 				"role":    "existing_role", // Not overridden
 				"user_id": "existing_user", // Not overridden
 				"extra":   "extra_value",   // Added
@@ -269,7 +269,7 @@ func TestSessionContextMerging(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Simulate context merging logic
 			// 模拟 context 合并逻辑
-			result := make(map[string]interface{})
+			result := make(map[string]any)
 
 			// Copy initial context
 			for k, v := range tt.initialContext {
@@ -299,7 +299,7 @@ func TestExecuteAgentWithForcedToolsLogic(t *testing.T) {
 		type Input struct {
 			Query                string
 			ForcedToolName       string
-			ForcedToolParams     map[string]interface{}
+			ForcedToolParams     map[string]any
 			AllowedToolsOverride []string
 		}
 
@@ -313,7 +313,7 @@ func TestExecuteAgentWithForcedToolsLogic(t *testing.T) {
 				input: Input{
 					Query:            "test query",
 					ForcedToolName:   "calculator",
-					ForcedToolParams: map[string]interface{}{"expression": "2+2"},
+					ForcedToolParams: map[string]any{"expression": "2+2"},
 				},
 				wantErr: false,
 			},
@@ -322,7 +322,7 @@ func TestExecuteAgentWithForcedToolsLogic(t *testing.T) {
 				input: Input{
 					Query:            "",
 					ForcedToolName:   "calculator",
-					ForcedToolParams: map[string]interface{}{"expression": "2+2"},
+					ForcedToolParams: map[string]any{"expression": "2+2"},
 				},
 				wantErr: true,
 			},
@@ -331,7 +331,7 @@ func TestExecuteAgentWithForcedToolsLogic(t *testing.T) {
 				input: Input{
 					Query:            "test query",
 					ForcedToolName:   "",
-					ForcedToolParams: map[string]interface{}{"expression": "2+2"},
+					ForcedToolParams: map[string]any{"expression": "2+2"},
 				},
 				wantErr: true,
 			},
@@ -353,7 +353,7 @@ func TestExecuteAgentWithForcedToolsLogic(t *testing.T) {
 func TestEnsureSessionContext(t *testing.T) {
 	tests := []struct {
 		name             string
-		ctx              map[string]interface{}
+		ctx              map[string]any
 		sessionID        string
 		agentID          string
 		expectedSession  string
@@ -373,7 +373,7 @@ func TestEnsureSessionContext(t *testing.T) {
 		},
 		{
 			name:             "empty context - injects both",
-			ctx:              map[string]interface{}{},
+			ctx:              map[string]any{},
 			sessionID:        "session-abc",
 			agentID:          "agent-def",
 			expectedSession:  "session-abc",
@@ -383,7 +383,7 @@ func TestEnsureSessionContext(t *testing.T) {
 		},
 		{
 			name: "session_id is nil - injects",
-			ctx: map[string]interface{}{
+			ctx: map[string]any{
 				"session_id": nil,
 				"role":       "developer",
 			},
@@ -395,7 +395,7 @@ func TestEnsureSessionContext(t *testing.T) {
 		},
 		{
 			name: "session_id is empty string - injects",
-			ctx: map[string]interface{}{
+			ctx: map[string]any{
 				"session_id": "",
 			},
 			sessionID:        "session-empty-fix",
@@ -407,7 +407,7 @@ func TestEnsureSessionContext(t *testing.T) {
 		},
 		{
 			name: "session_id is whitespace only - injects",
-			ctx: map[string]interface{}{
+			ctx: map[string]any{
 				"session_id": "   ",
 			},
 			sessionID:        "session-ws-fix",
@@ -418,7 +418,7 @@ func TestEnsureSessionContext(t *testing.T) {
 		},
 		{
 			name: "session_id is wrong type (int) - injects",
-			ctx: map[string]interface{}{
+			ctx: map[string]any{
 				"session_id": 12345,
 			},
 			sessionID:        "session-type-fix",
@@ -429,7 +429,7 @@ func TestEnsureSessionContext(t *testing.T) {
 		},
 		{
 			name: "session_id is valid - ALWAYS overwrite from authoritative source",
-			ctx: map[string]interface{}{
+			ctx: map[string]any{
 				"session_id": "existing-session",
 			},
 			sessionID:        "new-session",
@@ -440,7 +440,7 @@ func TestEnsureSessionContext(t *testing.T) {
 		},
 		{
 			name: "both existing and valid - session_id overwritten, agent_id preserved",
-			ctx: map[string]interface{}{
+			ctx: map[string]any{
 				"session_id": "existing-session",
 				"agent_id":   "existing-agent",
 			},
@@ -453,7 +453,7 @@ func TestEnsureSessionContext(t *testing.T) {
 		},
 		{
 			name: "empty input IDs - no injection",
-			ctx: map[string]interface{}{
+			ctx: map[string]any{
 				"role": "developer",
 			},
 			sessionID:        "",

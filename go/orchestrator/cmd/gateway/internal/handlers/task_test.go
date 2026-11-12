@@ -130,9 +130,9 @@ func mustJSON(t *testing.T, v any) *bytes.Buffer {
 	return bytes.NewBuffer(b)
 }
 
-func getContextMap(t *testing.T, st *structpb.Struct) map[string]interface{} {
+func getContextMap(t *testing.T, st *structpb.Struct) map[string]any {
 	if st == nil {
-		return map[string]interface{}{}
+		return map[string]any{}
 	}
 	return st.AsMap()
 }
@@ -543,21 +543,21 @@ func TestTaskStatusResponse_UnifiedResponseField(t *testing.T) {
 		TaskID: "task-123",
 		Status: "TASK_STATUS_COMPLETED",
 		Result: "Hello world",
-		Unified: map[string]interface{}{
+		Unified: map[string]any{
 			"task_id":     "task-123",
 			"status":      "completed",
 			"result":      "Hello world",
 			"stop_reason": "completed",
-			"usage": map[string]interface{}{
+			"usage": map[string]any{
 				"input_tokens":  1000,
 				"output_tokens": 500,
 				"total_tokens":  1500,
 				"cost_usd":      0.015,
 			},
-			"performance": map[string]interface{}{
+			"performance": map[string]any{
 				"execution_time_ms": 4500,
 			},
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"model":          "claude-sonnet-4-5-20250929",
 				"execution_mode": "browser_use",
 			},
@@ -569,13 +569,13 @@ func TestTaskStatusResponse_UnifiedResponseField(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	var decoded map[string]interface{}
+	var decoded map[string]any
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 
 	// unified_response field must be present
-	unified, ok := decoded["unified_response"].(map[string]interface{})
+	unified, ok := decoded["unified_response"].(map[string]any)
 	if !ok {
 		t.Fatalf("unified_response missing or wrong type, keys: %v", keysOf(decoded))
 	}
@@ -591,7 +591,7 @@ func TestTaskStatusResponse_UnifiedResponseField(t *testing.T) {
 		t.Errorf("unified_response.stop_reason = %v, want %q", unified["stop_reason"], "completed")
 	}
 
-	usage, ok := unified["usage"].(map[string]interface{})
+	usage, ok := unified["usage"].(map[string]any)
 	if !ok {
 		t.Fatalf("unified_response.usage missing")
 	}
@@ -611,7 +611,7 @@ func TestTaskStatusResponse_UnifiedResponseOmittedWhenNil(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	var decoded map[string]interface{}
+	var decoded map[string]any
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -621,7 +621,7 @@ func TestTaskStatusResponse_UnifiedResponseOmittedWhenNil(t *testing.T) {
 	}
 }
 
-func keysOf(m map[string]interface{}) []string {
+func keysOf(m map[string]any) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
@@ -643,7 +643,7 @@ func TestExtractAndStoreContextAttachments_NilContext(t *testing.T) {
 
 func TestExtractAndStoreContextAttachments_NoAttachmentsKey(t *testing.T) {
 	h := newHandlerWithFake(t, &fakeOrchClient{})
-	ctxMap := map[string]interface{}{"force_research": true}
+	ctxMap := map[string]any{"force_research": true}
 	err := h.extractAndStoreContextAttachments(context.Background(), "sess-1", ctxMap)
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
@@ -652,7 +652,7 @@ func TestExtractAndStoreContextAttachments_NoAttachmentsKey(t *testing.T) {
 
 func TestExtractAndStoreContextAttachments_InvalidType(t *testing.T) {
 	h := newHandlerWithFake(t, &fakeOrchClient{})
-	ctxMap := map[string]interface{}{"attachments": "not-an-array"}
+	ctxMap := map[string]any{"attachments": "not-an-array"}
 	err := h.extractAndStoreContextAttachments(context.Background(), "sess-1", ctxMap)
 	if err == nil {
 		t.Fatal("expected error for non-array attachments")
@@ -661,13 +661,13 @@ func TestExtractAndStoreContextAttachments_InvalidType(t *testing.T) {
 
 func TestExtractAndStoreContextAttachments_PassthroughRefs(t *testing.T) {
 	h := newHandlerWithFake(t, &fakeOrchClient{})
-	ref := map[string]interface{}{
+	ref := map[string]any{
 		"url":        "https://example.com/img.png",
 		"media_type": "image/png",
 		"source":     "url",
 	}
-	ctxMap := map[string]interface{}{
-		"attachments": []interface{}{ref},
+	ctxMap := map[string]any{
+		"attachments": []any{ref},
 	}
 	err := h.extractAndStoreContextAttachments(context.Background(), "sess-1", ctxMap)
 	if err != nil {
@@ -675,11 +675,11 @@ func TestExtractAndStoreContextAttachments_PassthroughRefs(t *testing.T) {
 	}
 	// URL ref should pass through unchanged
 	// URL 引用应原样透传。
-	atts := ctxMap["attachments"].([]interface{})
+	atts := ctxMap["attachments"].([]any)
 	if len(atts) != 1 {
 		t.Fatalf("expected 1 attachment, got %d", len(atts))
 	}
-	got := atts[0].(map[string]interface{})
+	got := atts[0].(map[string]any)
 	if got["url"] != "https://example.com/img.png" {
 		t.Errorf("url mismatch: %v", got["url"])
 	}
@@ -687,9 +687,9 @@ func TestExtractAndStoreContextAttachments_PassthroughRefs(t *testing.T) {
 
 func TestExtractAndStoreContextAttachments_InvalidBase64(t *testing.T) {
 	h := newHandlerWithFake(t, &fakeOrchClient{})
-	ctxMap := map[string]interface{}{
-		"attachments": []interface{}{
-			map[string]interface{}{
+	ctxMap := map[string]any{
+		"attachments": []any{
+			map[string]any{
 				"data":       "not-valid-base64!!!", // invalid
 				"media_type": "image/png",
 			},
@@ -712,9 +712,9 @@ func TestExtractAndStoreContextAttachments_StoresInRedis(t *testing.T) {
 	rawData := []byte("fake-png-data")
 	b64Data := base64.StdEncoding.EncodeToString(rawData)
 
-	ctxMap := map[string]interface{}{
-		"attachments": []interface{}{
-			map[string]interface{}{
+	ctxMap := map[string]any{
+		"attachments": []any{
+			map[string]any{
 				"data":       b64Data,
 				"media_type": "image/png",
 				"filename":   "test.png",
@@ -727,11 +727,11 @@ func TestExtractAndStoreContextAttachments_StoresInRedis(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	atts := ctxMap["attachments"].([]interface{})
+	atts := ctxMap["attachments"].([]any)
 	if len(atts) != 1 {
 		t.Fatalf("expected 1 ref, got %d", len(atts))
 	}
-	ref := atts[0].(map[string]interface{})
+	ref := atts[0].(map[string]any)
 
 	// Should have an ID, not raw data
 	// 应得到 id，而不是原始 data。
@@ -776,9 +776,9 @@ func TestExtractAndStoreContextAttachments_PreservesThumbnailWithinLimit(t *test
 	b64Data := base64.StdEncoding.EncodeToString(rawData)
 	thumbnail := "data:image/jpeg;base64,abc123"
 
-	ctxMap := map[string]interface{}{
-		"attachments": []interface{}{
-			map[string]interface{}{
+	ctxMap := map[string]any{
+		"attachments": []any{
+			map[string]any{
 				"data":       b64Data,
 				"media_type": "image/png",
 				"filename":   "test.png",
@@ -792,8 +792,8 @@ func TestExtractAndStoreContextAttachments_PreservesThumbnailWithinLimit(t *test
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	atts := ctxMap["attachments"].([]interface{})
-	ref := atts[0].(map[string]interface{})
+	atts := ctxMap["attachments"].([]any)
+	ref := atts[0].(map[string]any)
 	if ref["thumbnail"] != thumbnail {
 		t.Fatalf("thumbnail mismatch: got %v want %s", ref["thumbnail"], thumbnail)
 	}
@@ -809,9 +809,9 @@ func TestExtractAndStoreContextAttachments_DropsOversizedThumbnail(t *testing.T)
 	b64Data := base64.StdEncoding.EncodeToString(rawData)
 	oversized := strings.Repeat("a", attachments.MaxAttachmentThumbnailBytes+1)
 
-	ctxMap := map[string]interface{}{
-		"attachments": []interface{}{
-			map[string]interface{}{
+	ctxMap := map[string]any{
+		"attachments": []any{
+			map[string]any{
 				"data":       b64Data,
 				"media_type": "image/png",
 				"filename":   "test.png",
@@ -825,8 +825,8 @@ func TestExtractAndStoreContextAttachments_DropsOversizedThumbnail(t *testing.T)
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	atts := ctxMap["attachments"].([]interface{})
-	ref := atts[0].(map[string]interface{})
+	atts := ctxMap["attachments"].([]any)
+	ref := atts[0].(map[string]any)
 	if _, ok := ref["thumbnail"]; ok {
 		t.Fatalf("expected oversized thumbnail to be dropped, got %v", ref["thumbnail"])
 	}

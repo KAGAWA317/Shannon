@@ -16,8 +16,8 @@ import (
 // 它是用于构建按 task metadata 的旧辅助函数。
 // NOTE: 此处产出的 agent_usages 为尽力而为，且已不推荐对外使用。
 // 完整的权威用量与成本明细请使用 token_usage 表的 model_breakdown。
-func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synthesisTokens int) map[string]interface{} {
-	meta := make(map[string]interface{})
+func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synthesisTokens int) map[string]any {
+	meta := make(map[string]any)
 
 	if len(agentResults) == 0 {
 		return meta
@@ -37,7 +37,7 @@ func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synt
 	modelCounts := make(map[string]int)
 
 	// Per-agent usage details for visibility
-	agentUsages := make([]map[string]interface{}, 0, len(agentResults))
+	agentUsages := make([]map[string]any, 0, len(agentResults))
 
 	// Track tool invocations across all agents
 	totalToolsInvoked := 0
@@ -69,7 +69,7 @@ func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synt
 
 		// Record per-agent usage
         if result.Success {
-            agentUsage := map[string]interface{}{
+            agentUsage := map[string]any{
                 "agent_id": result.AgentID,
             }
             if result.ModelUsed != "" {

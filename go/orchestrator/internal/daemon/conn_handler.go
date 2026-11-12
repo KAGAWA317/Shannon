@@ -235,7 +235,7 @@ func handleDaemonMessage(ctx context.Context, hub *Hub, conn *DaemonConn, msg Da
 						Type:       "WORKFLOW_COMPLETED",
 						AgentID:    "",
 						Message:    reply.Text,
-						Payload:    map[string]interface{}{"response": reply.Text},
+						Payload:    map[string]any{"response": reply.Text},
 						Timestamp:  time.Now(),
 					})
 					// No sleep needed — RouteReply unconditionally suppresses plain-text
@@ -384,7 +384,7 @@ func handleDaemonEvent(ctx context.Context, hub *Hub, messageID string, rawPaylo
 	// Copy daemon data and inject daemon_seq.
 	data := payload.Data
 	if data == nil {
-		data = make(map[string]interface{})
+		data = make(map[string]any)
 	}
 	data["daemon_seq"] = payload.Seq
 

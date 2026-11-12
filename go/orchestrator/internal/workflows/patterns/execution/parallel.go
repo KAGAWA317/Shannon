@@ -19,11 +19,11 @@ import (
 
 // ParallelConfig controls parallel execution behavior
 type ParallelConfig struct {
-	MaxConcurrency   int                    // Maximum concurrent agents
-	Semaphore        workflow.Semaphore     // Concurrency control (interface, not pointer)
-	EmitEvents       bool                   // Whether to emit streaming events
-	Context          map[string]interface{} // Base context for all agents
-	AgentIndexOffset int                    // Offset added to loop index for GetAgentName (used by hybrid executor)
+	MaxConcurrency   int                // Maximum concurrent agents
+	Semaphore        workflow.Semaphore // Concurrency control (interface, not pointer)
+	EmitEvents       bool               // Whether to emit streaming events
+	Context          map[string]any     // Base context for all agents
+	AgentIndexOffset int                // Offset added to loop index for GetAgentName (used by hybrid executor)
 }
 
 // ParallelTask represents a task to execute in parallel
@@ -31,20 +31,20 @@ type ParallelTask struct {
 	ID             string
 	Description    string
 	SuggestedTools []string
-	ToolParameters map[string]interface{}
+	ToolParameters map[string]any
 	PersonaID      string
 	Role           string
 	ParentArea     string
 	Dependencies   []string // For hybrid parallel/sequential execution
 	// Optional per-task context overrides (e.g., task contracts)
-	ContextOverrides map[string]interface{}
+	ContextOverrides map[string]any
 }
 
 // ParallelResult contains results from parallel execution
 type ParallelResult struct {
 	Results     []activities.AgentExecutionResult
 	TotalTokens int
-	Metadata    map[string]interface{}
+	Metadata    map[string]any
 }
 
 // ExecuteParallel runs multiple tasks in parallel with concurrency control.
@@ -110,7 +110,7 @@ func ExecuteParallel(
 			rel := workflow.NewChannel(ctx)
 
 			// Prepare task context
-			taskContext := make(map[string]interface{})
+			taskContext := make(map[string]any)
 			for k, v := range config.Context {
 				taskContext[k] = v
 			}
@@ -330,7 +330,7 @@ func ExecuteParallel(
 								}
 							}
 
-							meta := map[string]interface{}{"phase": "parallel"}
+							meta := map[string]any{"phase": "parallel"}
 
 							if (inTok + outTok) == 0 {
 								if recordZero {
@@ -403,7 +403,7 @@ func ExecuteParallel(
 									Answer:    result.Response,
 									Model:     result.ModelUsed,
 									RedactPII: true,
-									Extra: map[string]interface{}{
+									Extra: map[string]any{
 										"task_id": tasks[fwi.Index].ID,
 									},
 								})
@@ -444,7 +444,7 @@ func ExecuteParallel(
 	)
 
 	// Build metadata summary
-	md := map[string]interface{}{
+	md := map[string]any{
 		"total_tasks": len(tasks),
 		"successful":  successCount,
 		"failed":      errorCount,
@@ -476,7 +476,7 @@ func persistAgentExecutionLocal(ctx workflow.Context, workflowID, agentID, input
 	// Pre-generate agent execution ID using SideEffect for replay safety
 	// 用 SideEffect 预生成执行 ID，保证重放时 ID 一致。
 	var agentExecutionID string
-	workflow.SideEffect(ctx, func(ctx workflow.Context) interface{} {
+	workflow.SideEffect(ctx, func(ctx workflow.Context) any {
 		return uuid.New().String()
 	}).Get(&agentExecutionID)
 
@@ -494,7 +494,7 @@ func persistAgentExecutionLocal(ctx workflow.Context, workflowID, agentID, input
 			ModelUsed:  result.ModelUsed,
 			DurationMs: result.DurationMs,
 			Error:      result.Error,
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"workflow": "parallel",
 				"strategy": "parallel",
 			},
@@ -518,7 +518,7 @@ func persistAgentExecutionLocal(ctx workflow.Context, workflowID, agentID, input
 		}
 
 		// Extract input params from tool execution
-		inputParamsMap, _ := tool.InputParams.(map[string]interface{})
+		inputParamsMap, _ := tool.InputParams.(map[string]any)
 
 		workflow.ExecuteActivity(detachedCtx,
 			activities.PersistToolExecutionStandalone,

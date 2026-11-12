@@ -39,14 +39,14 @@ func (h *ScheduleHandler) CreateSchedule(w http.ResponseWriter, r *http.Request)
 	}
 
 	var req struct {
-		Name               string                 `json:"name"`
-		Description        string                 `json:"description"`
-		CronExpression     string                 `json:"cron_expression"`
-		Timezone           string                 `json:"timezone"`
-		TaskQuery          string                 `json:"task_query"`
-		TaskContext        map[string]interface{} `json:"task_context"`
-		MaxBudgetPerRunUSD float64                `json:"max_budget_per_run_usd"`
-		TimeoutSeconds     int32                  `json:"timeout_seconds"`
+		Name               string         `json:"name"`
+		Description        string         `json:"description"`
+		CronExpression     string         `json:"cron_expression"`
+		Timezone           string         `json:"timezone"`
+		TaskQuery          string         `json:"task_query"`
+		TaskContext        map[string]any `json:"task_context"`
+		MaxBudgetPerRunUSD float64        `json:"max_budget_per_run_usd"`
+		TimeoutSeconds     int32          `json:"timeout_seconds"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -91,7 +91,7 @@ func (h *ScheduleHandler) CreateSchedule(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"schedule_id": resp.ScheduleId,
 		"message":     resp.Message,
 		"next_run_at": resp.NextRunAt,
@@ -191,15 +191,15 @@ func (h *ScheduleHandler) UpdateSchedule(w http.ResponseWriter, r *http.Request)
 	}
 
 	var req struct {
-		Name               *string                `json:"name"`
-		Description        *string                `json:"description"`
-		CronExpression     *string                `json:"cron_expression"`
-		Timezone           *string                `json:"timezone"`
-		TaskQuery          *string                `json:"task_query"`
-		TaskContext        map[string]interface{} `json:"task_context"`
-		MaxBudgetPerRunUSD *float64               `json:"max_budget_per_run_usd"`
-		TimeoutSeconds     *int32                 `json:"timeout_seconds"`
-		ClearTaskContext   bool                   `json:"clear_task_context"`
+		Name               *string        `json:"name"`
+		Description        *string        `json:"description"`
+		CronExpression     *string        `json:"cron_expression"`
+		Timezone           *string        `json:"timezone"`
+		TaskQuery          *string        `json:"task_query"`
+		TaskContext        map[string]any `json:"task_context"`
+		MaxBudgetPerRunUSD *float64       `json:"max_budget_per_run_usd"`
+		TimeoutSeconds     *int32         `json:"timeout_seconds"`
+		ClearTaskContext   bool           `json:"clear_task_context"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -566,7 +566,7 @@ const jsonEncodedPrefix = "\x00json:"
 // Non-string values (arrays, objects, booleans, numbers) are JSON-encoded with a prefix marker.
 // encodeTaskContext 把 map[string]interface{} 转成 map[string]string 以适配 proto 传输；
 // 非字符串值（数组、对象、布尔、数字）会 JSON 编码并加上前缀标记。
-func encodeTaskContext(ctx map[string]interface{}) map[string]string {
+func encodeTaskContext(ctx map[string]any) map[string]string {
 	if ctx == nil {
 		return nil
 	}

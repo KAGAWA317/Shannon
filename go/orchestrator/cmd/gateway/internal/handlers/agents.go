@@ -39,33 +39,33 @@ func NewAgentsHandler(
 
 // AgentInfo represents agent information for API responses
 type AgentInfo struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Category    string                 `json:"category"`
-	Tool        string                 `json:"tool"`
-	InputSchema map[string]interface{} `json:"input_schema,omitempty"`
-	CostPerCall float64                `json:"cost_per_call,omitempty"`
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Category    string         `json:"category"`
+	Tool        string         `json:"tool"`
+	InputSchema map[string]any `json:"input_schema,omitempty"`
+	CostPerCall float64        `json:"cost_per_call,omitempty"`
 }
 
 // AgentExecuteRequest represents a request to execute an agent
 type AgentExecuteRequest struct {
-	Input     map[string]interface{} `json:"input"`
-	SessionID string                 `json:"session_id,omitempty"`
-	Stream    bool                   `json:"stream,omitempty"`
+	Input     map[string]any `json:"input"`
+	SessionID string         `json:"session_id,omitempty"`
+	Stream    bool           `json:"stream,omitempty"`
 }
 
 // AgentExecuteResponse represents an agent execution response
 type AgentExecuteResponse struct {
-	TaskID        string      `json:"task_id"`
-	AgentID       string      `json:"agent_id"`
-	Status        string      `json:"status"`
-	Result        interface{} `json:"result,omitempty"`
-	Error         string      `json:"error,omitempty"`
-	ExecutionTime int         `json:"execution_time_ms,omitempty"`
-	CostUSD       float64     `json:"cost_usd,omitempty"`
-	TokensUsed    int         `json:"tokens_used,omitempty"`
-	CreatedAt     time.Time   `json:"created_at"`
+	TaskID        string    `json:"task_id"`
+	AgentID       string    `json:"agent_id"`
+	Status        string    `json:"status"`
+	Result        any       `json:"result,omitempty"`
+	Error         string    `json:"error,omitempty"`
+	ExecutionTime int       `json:"execution_time_ms,omitempty"`
+	CostUSD       float64   `json:"cost_usd,omitempty"`
+	TokensUsed    int       `json:"tokens_used,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // ListAgents handles GET /api/v1/agents
@@ -105,7 +105,7 @@ func (h *AgentsHandler) ListAgents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"agents": agents,
 		"count":  len(agents),
 	})
@@ -191,7 +191,7 @@ func (h *AgentsHandler) ExecuteAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build context with agent and input
-	ctxMap := map[string]interface{}{
+	ctxMap := map[string]any{
 		"agent":       agentID,
 		"agent_input": req.Input,
 	}
@@ -272,7 +272,7 @@ func (h *AgentsHandler) sendError(w http.ResponseWriter, message string, code in
 // ValidateAgentInput validates input against the agent's InputSchema
 // Returns nil if valid, or an error describing validation failures
 // ValidateAgentInput 依据 agent 的 InputSchema 校验输入：合法返回 nil，否则返回描述校验失败原因的错误。
-func ValidateAgentInput(agent *activities.AgentDefinition, input map[string]interface{}) error {
+func ValidateAgentInput(agent *activities.AgentDefinition, input map[string]any) error {
 	if agent.InputSchema == nil {
 		return nil // No schema defined, allow any input
 	}
@@ -281,7 +281,7 @@ func ValidateAgentInput(agent *activities.AgentDefinition, input map[string]inte
 
 	// Check required fields (reject both missing and null values)
 	// 检查必填字段（缺失与显式 null 都拒绝）。
-	if required, ok := agent.InputSchema["required"].([]interface{}); ok {
+	if required, ok := agent.InputSchema["required"].([]any); ok {
 		for _, r := range required {
 			fieldName, ok := r.(string)
 			if !ok {
@@ -295,9 +295,9 @@ func ValidateAgentInput(agent *activities.AgentDefinition, input map[string]inte
 	}
 
 	// Validate provided fields against properties schema
-	if properties, ok := agent.InputSchema["properties"].(map[string]interface{}); ok {
+	if properties, ok := agent.InputSchema["properties"].(map[string]any); ok {
 		for fieldName, value := range input {
-			propSchema, exists := properties[fieldName].(map[string]interface{})
+			propSchema, exists := properties[fieldName].(map[string]any)
 			if !exists {
 				// Field not in schema - reject unknown fields for security
 				// 字段不在 schema 中——出于安全考虑拒绝未知字段。
@@ -313,7 +313,7 @@ func ValidateAgentInput(agent *activities.AgentDefinition, input map[string]inte
 			}
 
 			// Enum validation
-			if enumValues, ok := propSchema["enum"].([]interface{}); ok {
+			if enumValues, ok := propSchema["enum"].([]any); ok {
 				if !isValueInEnum(value, enumValues) {
 					errors = append(errors, fmt.Sprintf("field %s: value %v not in allowed values %v", fieldName, value, enumValues))
 				}
@@ -329,7 +329,7 @@ func ValidateAgentInput(agent *activities.AgentDefinition, input map[string]inte
 
 // validateFieldType checks if a value matches the expected JSON schema type
 // validateFieldType 判断值是否符合 JSON schema 声明的类型。
-func validateFieldType(fieldName string, value interface{}, expectedType string) error {
+func validateFieldType(fieldName string, value any, expectedType string) error {
 	if value == nil {
 		return nil // nil is acceptable for any type (will be caught by required check)
 	}
@@ -361,7 +361,7 @@ func validateFieldType(fieldName string, value interface{}, expectedType string)
 	case "array":
 		valid = actualType != nil && actualType.Kind() == reflect.Slice
 	case "object":
-		_, valid = value.(map[string]interface{})
+		_, valid = value.(map[string]any)
 	default:
 		valid = true // Unknown type, allow
 	}
@@ -374,7 +374,7 @@ func validateFieldType(fieldName string, value interface{}, expectedType string)
 
 // isValueInEnum checks if a value is in the allowed enum values
 // isValueInEnum 判断值是否在允许的枚举内。
-func isValueInEnum(value interface{}, enumValues []interface{}) bool {
+func isValueInEnum(value any, enumValues []any) bool {
 	for _, ev := range enumValues {
 		if reflect.DeepEqual(value, ev) {
 			return true

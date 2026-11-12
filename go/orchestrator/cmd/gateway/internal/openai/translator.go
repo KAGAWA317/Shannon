@@ -280,8 +280,8 @@ func (t *Translator) deriveSessionID(req *ChatCompletionRequest, userID string) 
 
 // buildContext creates the Shannon context map from request parameters.
 // buildContext 依据 request 参数构造 Shannon 的 context map。
-func (t *Translator) buildContext(req *ChatCompletionRequest, modelConfig *ModelConfig) map[string]interface{} {
-	ctx := make(map[string]interface{})
+func (t *Translator) buildContext(req *ChatCompletionRequest, modelConfig *ModelConfig) map[string]any {
+	ctx := make(map[string]any)
 
 	// Copy model config context
 	for k, v := range modelConfig.Context {
@@ -379,7 +379,7 @@ func (t *Translator) buildContext(req *ChatCompletionRequest, modelConfig *Model
 // logic: force_research without explicit strategy defaults to "standard".
 // applyShannonResearchPreset 为通过 chat completions 进来的研究 request 填充 model_tier 默认值；
 // 与 task handler 的 applyStrategyPreset 逻辑一致：force_research 未显式指定 strategy 时默认 standard。
-func applyShannonResearchPreset(ctx map[string]interface{}) {
+func applyShannonResearchPreset(ctx map[string]any) {
 	if ctx == nil {
 		return
 	}
@@ -472,11 +472,11 @@ func min(a, b int) int {
 // - []interface{} (NOT []string, []int, etc.)
 // sanitizeForStructpb 把值转成 structpb.NewStruct 可接受的类型。structpb 只接受：
 // nil、bool、int/float64、string；map[string]interface{}（递归清洗）；[]interface{}（不接受 []string、[]int 等）。
-func sanitizeForStructpb(m map[string]interface{}) map[string]interface{} {
+func sanitizeForStructpb(m map[string]any) map[string]any {
 	if m == nil {
 		return nil
 	}
-	result := make(map[string]interface{}, len(m))
+	result := make(map[string]any, len(m))
 	for k, v := range m {
 		result[k] = sanitizeValue(v)
 	}
@@ -484,7 +484,7 @@ func sanitizeForStructpb(m map[string]interface{}) map[string]interface{} {
 }
 
 // sanitizeValue converts a single value to structpb-compatible type.
-func sanitizeValue(v interface{}) interface{} {
+func sanitizeValue(v any) any {
 	if v == nil {
 		return nil
 	}
@@ -492,14 +492,14 @@ func sanitizeValue(v interface{}) interface{} {
 	switch val := v.(type) {
 	case bool, int, int32, int64, float32, float64, string:
 		return val
-	case []interface{}:
+	case []any:
 		// Already correct type, but sanitize elements
-		result := make([]interface{}, len(val))
+		result := make([]any, len(val))
 		for i, elem := range val {
 			result[i] = sanitizeValue(elem)
 		}
 		return result
-	case map[string]interface{}:
+	case map[string]any:
 		// Recursively sanitize nested maps
 		return sanitizeForStructpb(val)
 	default:
@@ -518,9 +518,9 @@ func sanitizeValue(v interface{}) interface{} {
 }
 
 // sanitizeSliceValue converts typed slices ([]string, []int, etc.) to []interface{}.
-func sanitizeSliceValue(rv reflect.Value) []interface{} {
+func sanitizeSliceValue(rv reflect.Value) []any {
 	length := rv.Len()
-	result := make([]interface{}, length)
+	result := make([]any, length)
 	for i := 0; i < length; i++ {
 		result[i] = sanitizeValue(rv.Index(i).Interface())
 	}
@@ -528,12 +528,12 @@ func sanitizeSliceValue(rv reflect.Value) []interface{} {
 }
 
 // sanitizeMapValue converts typed maps (map[string]string, etc.) to map[string]interface{}.
-func sanitizeMapValue(rv reflect.Value) map[string]interface{} {
+func sanitizeMapValue(rv reflect.Value) map[string]any {
 	if rv.Type().Key().Kind() != reflect.String {
 		// structpb only supports string keys
 		return nil
 	}
-	result := make(map[string]interface{}, rv.Len())
+	result := make(map[string]any, rv.Len())
 	iter := rv.MapRange()
 	for iter.Next() {
 		key := iter.Key().String()

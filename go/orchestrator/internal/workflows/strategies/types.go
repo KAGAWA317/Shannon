@@ -12,7 +12,7 @@ type TaskInput struct {
 	UserID    string
 	TenantID  string
 	SessionID string
-	Context   map[string]interface{}
+	Context   map[string]any
 	Mode      string
 
 	TemplateName    string
@@ -21,8 +21,8 @@ type TaskInput struct {
 
 	// Session context for multi-turn conversations
 	// 多轮续接靠这两个字段：History 是近期消息，SessionCtx 是跨轮持久化 context。
-	History    []Message              // Recent conversation history
-	SessionCtx map[string]interface{} // Persistent session context
+	History    []Message      // Recent conversation history
+	SessionCtx map[string]any // Persistent session context
 
 	// Human intervention settings
 	// 人工审批开关；ApprovalTimeout 为 0 时走全局默认值。
@@ -56,5 +56,5 @@ type TaskResult struct {
 	Success      bool
 	TokensUsed   int
 	ErrorMessage string
-	Metadata     map[string]interface{}
+	Metadata     map[string]any
 }

@@ -130,12 +130,12 @@ func LoadConfig() *Config {
 }
 
 // LoadConfigFromShannon creates policy configuration from Shannon config
-func LoadConfigFromShannon(shannonPolicy interface{}) *Config {
+func LoadConfigFromShannon(shannonPolicy any) *Config {
 	// Start with environment defaults as fallback
 	config := LoadConfig()
 
 	// Parse Shannon policy config if provided
-	if policyMap, ok := shannonPolicy.(map[string]interface{}); ok {
+	if policyMap, ok := shannonPolicy.(map[string]any); ok {
 		if enabled, ok := policyMap["enabled"].(bool); ok {
 			config.Enabled = enabled
 		}
@@ -156,7 +156,7 @@ func LoadConfigFromShannon(shannonPolicy interface{}) *Config {
 		}
 
 		// Parse canary configuration
-		if canaryMap, ok := policyMap["canary"].(map[string]interface{}); ok {
+		if canaryMap, ok := policyMap["canary"].(map[string]any); ok {
 			if enabled, ok := canaryMap["enabled"].(bool); ok {
 				config.Canary.Enabled = enabled
 			}
@@ -165,18 +165,18 @@ func LoadConfigFromShannon(shannonPolicy interface{}) *Config {
 			} else if percentageFloat, ok := canaryMap["enforce_percentage"].(float64); ok {
 				config.Canary.EnforcePercentage = int(percentageFloat)
 			}
-			if users, ok := canaryMap["enforce_users"].([]interface{}); ok {
+			if users, ok := canaryMap["enforce_users"].([]any); ok {
 				config.Canary.EnforceUsers = interfaceSliceToStringSlice(users)
 			}
-			if agents, ok := canaryMap["enforce_agents"].([]interface{}); ok {
+			if agents, ok := canaryMap["enforce_agents"].([]any); ok {
 				config.Canary.EnforceAgents = interfaceSliceToStringSlice(agents)
 			}
-			if dryRunUsers, ok := canaryMap["dry_run_users"].([]interface{}); ok {
+			if dryRunUsers, ok := canaryMap["dry_run_users"].([]any); ok {
 				config.Canary.DryRunUsers = interfaceSliceToStringSlice(dryRunUsers)
 			}
 
 			// Parse SLO thresholds
-			if sloMap, ok := canaryMap["slo_thresholds"].(map[string]interface{}); ok {
+			if sloMap, ok := canaryMap["slo_thresholds"].(map[string]any); ok {
 				if maxErrorRate, ok := sloMap["max_error_rate"].(float64); ok {
 					config.Canary.SLOThresholds.MaxErrorRate = maxErrorRate
 				}
@@ -288,7 +288,7 @@ func getEnvStringSlice(key string) []string {
 }
 
 // interfaceSliceToStringSlice converts []interface{} to []string
-func interfaceSliceToStringSlice(slice []interface{}) []string {
+func interfaceSliceToStringSlice(slice []any) []string {
 	result := make([]string, 0, len(slice))
 	for _, item := range slice {
 		if str, ok := item.(string); ok && str != "" {

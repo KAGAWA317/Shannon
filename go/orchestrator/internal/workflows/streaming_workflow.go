@@ -70,7 +70,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	}
 
 	// Add state validation
-	stateChannel.AddValidator(func(data interface{}) error {
+	stateChannel.AddValidator(func(data any) error {
 		s, ok := data.(*state.AgentState)
 		if !ok {
 			return fmt.Errorf("invalid state type")
@@ -86,7 +86,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	}
 
 	// Create checkpoint before execution
-	checkpointID, _ := stateChannel.Checkpoint(map[string]interface{}{
+	checkpointID, _ := stateChannel.Checkpoint(map[string]any{
 		"phase": "pre-execution",
 	})
 	logger.Info("State checkpoint created", "checkpoint_id", checkpointID)
@@ -170,7 +170,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	}
 
 	// Create final checkpoint
-	finalCheckpointID, _ := stateChannel.Checkpoint(map[string]interface{}{
+	finalCheckpointID, _ := stateChannel.Checkpoint(map[string]any{
 		"phase":  "completed",
 		"result": streamRes.Response,
 	})
@@ -209,7 +209,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 			Provider:     streamRes.Provider,
 			InputTokens:  inTok,
 			OutputTokens: outTok,
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"phase":    "stream",
 				"workflow": "streaming",
 			},
@@ -243,7 +243,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	}
 
 	// Build metadata and include model/provider + token breakdown (estimated 60/40 if missing)
-	meta := map[string]interface{}{
+	meta := map[string]any{
 		"execution_time_ms": agentState.GetExecutionDuration().Milliseconds(),
 		"checkpoints":       stateChannel.ListCheckpoints(),
 		"final_state":       agentState.ExecutionState.Status,
@@ -294,7 +294,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 			AgentID:    "final_output",
 			Message:    streamRes.Response,
 			Timestamp:  workflow.Now(ctx),
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"tokens_used": streamRes.TokensUsed,
 				"model_used":  streamRes.ModelUsed,
 			},
@@ -452,7 +452,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 				Provider:     provider,
 				InputTokens:  inTok,
 				OutputTokens: outTok,
-				Metadata: map[string]interface{}{
+				Metadata: map[string]any{
 					"phase":    "stream",
 					"workflow": "streaming",
 				},
@@ -463,12 +463,12 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	// Collect citations from streaming agent results (best-effort)
 	var collectedCitations []metadata.Citation
 	if len(results) > 0 {
-		var resultsForCitations []interface{}
+		var resultsForCitations []any
 		for _, ar := range results {
-			var toolExecs []interface{}
+			var toolExecs []any
 			if len(ar.ToolExecutions) > 0 {
 				for _, te := range ar.ToolExecutions {
-					toolExecs = append(toolExecs, map[string]interface{}{
+					toolExecs = append(toolExecs, map[string]any{
 						"tool":    te.Tool,
 						"success": te.Success,
 						"output":  te.Output,
@@ -476,7 +476,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 					})
 				}
 			}
-			resultsForCitations = append(resultsForCitations, map[string]interface{}{
+			resultsForCitations = append(resultsForCitations, map[string]any{
 				"agent_id":        ar.AgentID,
 				"tool_executions": toolExecs,
 				"response":        ar.Response,
@@ -486,8 +486,8 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	}
 
 	// Prepare synthesis context (copy input context, set defaults, inject citations)
-	buildContext := func() map[string]interface{} {
-		ctxMap := map[string]interface{}{}
+	buildContext := func() map[string]any {
+		ctxMap := map[string]any{}
 		if input.Context != nil {
 			for k, v := range input.Context {
 				ctxMap[k] = v
@@ -515,9 +515,9 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 			ctxMap["available_citations"] = strings.TrimRight(b.String(), "\n")
 			ctxMap["citation_count"] = len(collectedCitations)
 
-			out := make([]map[string]interface{}, 0, len(collectedCitations))
+			out := make([]map[string]any, 0, len(collectedCitations))
 			for _, c := range collectedCitations {
-				out = append(out, map[string]interface{}{
+				out = append(out, map[string]any{
 					"url":               c.URL,
 					"title":             c.Title,
 					"source":            c.Source,
@@ -610,7 +610,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 			Provider:     synthesis.Provider,
 			InputTokens:  inTok,
 			OutputTokens: outTok,
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"phase":    "synthesis",
 				"workflow": "streaming",
 			},
@@ -650,7 +650,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	}
 
 	// Build metadata and include aggregate model/provider + token breakdown across streams
-	meta := map[string]interface{}{
+	meta := map[string]any{
 		"num_streams": len(results),
 		"parallel":    true,
 	}
@@ -697,7 +697,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 			AgentID:    "final_output",
 			Message:    synthesis.FinalResult,
 			Timestamp:  workflow.Now(ctx),
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"tokens_used": totalTokens,
 			},
 		}).Get(ctx, nil)

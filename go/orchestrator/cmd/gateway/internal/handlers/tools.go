@@ -42,9 +42,9 @@ const toolMetaCacheTTL = 5 * time.Minute
 // Response types matching Python LLM-service.
 
 type toolSchemaItem struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Parameters  map[string]interface{} `json:"parameters"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Parameters  map[string]any `json:"parameters"`
 }
 
 type toolMetadataResponse struct {
@@ -61,33 +61,33 @@ type toolMetadataResponse struct {
 }
 
 type toolExecuteRequest struct {
-	Arguments map[string]interface{} `json:"arguments"`
-	SessionID string                 `json:"session_id,omitempty"`
+	Arguments map[string]any `json:"arguments"`
+	SessionID string         `json:"session_id,omitempty"`
 }
 
 type toolExecuteProxyRequest struct {
-	ToolName       string                 `json:"tool_name"`
-	Parameters     map[string]interface{} `json:"parameters"`
-	SessionContext map[string]interface{} `json:"session_context,omitempty"`
+	ToolName       string         `json:"tool_name"`
+	Parameters     map[string]any `json:"parameters"`
+	SessionContext map[string]any `json:"session_context,omitempty"`
 }
 
 type toolExecuteProxyResponse struct {
-	Success         bool                   `json:"success"`
-	Output          interface{}            `json:"output"`
-	Text            *string                `json:"text"`
-	Error           *string                `json:"error"`
-	Metadata        map[string]interface{} `json:"metadata"`
-	ExecutionTimeMs *int                   `json:"execution_time_ms"`
+	Success         bool           `json:"success"`
+	Output          any            `json:"output"`
+	Text            *string        `json:"text"`
+	Error           *string        `json:"error"`
+	Metadata        map[string]any `json:"metadata"`
+	ExecutionTimeMs *int           `json:"execution_time_ms"`
 }
 
 type toolExecuteResponse struct {
-	Success         bool                   `json:"success"`
-	Output          interface{}            `json:"output"`
-	Text            *string                `json:"text"`
-	Error           *string                `json:"error"`
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-	ExecutionTimeMs *int                   `json:"execution_time_ms,omitempty"`
-	Usage           *toolUsage             `json:"usage,omitempty"`
+	Success         bool           `json:"success"`
+	Output          any            `json:"output"`
+	Text            *string        `json:"text"`
+	Error           *string        `json:"error"`
+	Metadata        map[string]any `json:"metadata,omitempty"`
+	ExecutionTimeMs *int           `json:"execution_time_ms,omitempty"`
+	Usage           *toolUsage     `json:"usage,omitempty"`
 }
 
 type toolUsage struct {
@@ -247,7 +247,7 @@ func (h *ToolsHandler) GetTool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"name":            meta.Name,
 		"description":     meta.Description,
 		"category":        meta.Category,
@@ -298,14 +298,14 @@ func (h *ToolsHandler) ExecuteTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Arguments == nil {
-		req.Arguments = make(map[string]interface{})
+		req.Arguments = make(map[string]any)
 	}
 
 	// Build session_context -- only pass keys that Python _sanitize_session_context allows:
 	// session_id, user_id (tenant_id is stripped by Python sanitizer)
 	// 构建 session_context，只传 Python _sanitize_session_context 允许的键：
 	// session_id、user_id（tenant_id 会被 Python 的 sanitizer 去掉）。
-	sessionCtx := map[string]interface{}{
+	sessionCtx := map[string]any{
 		"user_id": userCtx.UserID.String(),
 	}
 	if req.SessionID != "" {

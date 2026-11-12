@@ -16,18 +16,18 @@ import (
 // Skill represents a parsed skill definition from a markdown file.
 // Skill 表示从 markdown 文件中解析出的 skill 定义。
 type Skill struct {
-	Name          string                 `yaml:"name"`
-	Version       string                 `yaml:"version"`
-	Author        string                 `yaml:"author"`
-	Category      string                 `yaml:"category"`
-	Description   string                 `yaml:"description"`
-	RequiresTools []string               `yaml:"requires_tools"`
-	RequiresRole  string                 `yaml:"requires_role"`
-	BudgetMax     int                    `yaml:"budget_max"`
-	Dangerous     bool                   `yaml:"dangerous"`
-	Enabled       bool                   `yaml:"enabled"`
-	Metadata      map[string]interface{} `yaml:"metadata"`
-	Content       string                 `yaml:"-"` // Markdown content after frontmatter
+	Name          string         `yaml:"name"`
+	Version       string         `yaml:"version"`
+	Author        string         `yaml:"author"`
+	Category      string         `yaml:"category"`
+	Description   string         `yaml:"description"`
+	RequiresTools []string       `yaml:"requires_tools"`
+	RequiresRole  string         `yaml:"requires_role"`
+	BudgetMax     int            `yaml:"budget_max"`
+	Dangerous     bool           `yaml:"dangerous"`
+	Enabled       bool           `yaml:"enabled"`
+	Metadata      map[string]any `yaml:"metadata"`
+	Content       string         `yaml:"-"` // Markdown content after frontmatter
 }
 
 // SkillRegistry manages loaded skills with thread-safe access.
@@ -64,6 +64,6 @@ type SkillSummary struct {
 // SkillDetail includes full skill information for API responses.
 // SkillDetail 包含用于 API response 的完整 skill 信息。
 type SkillDetail struct {
-	Skill    *Skill                 `json:"skill"`
-	Metadata map[string]interface{} `json:"metadata"`
+	Skill    *Skill         `json:"skill"`
+	Metadata map[string]any `json:"metadata"`
 }

@@ -17,19 +17,19 @@ import (
 // ToolExecuteRequest is the request format for /tools/execute
 // ToolExecuteRequest 是 /tools/execute 的 request 格式。
 type ToolExecuteRequest struct {
-	ToolName   string                 `json:"tool_name"`
-	Parameters map[string]interface{} `json:"parameters"`
+	ToolName   string         `json:"tool_name"`
+	Parameters map[string]any `json:"parameters"`
 }
 
 // ToolExecuteResponse is the response from /tools/execute
 // ToolExecuteResponse 是 /tools/execute 的 response 格式。
 type ToolExecuteResponse struct {
-	Success       bool                   `json:"success"`
-	Output        interface{}            `json:"output"`
-	Error         string                 `json:"error,omitempty"`
-	ExecutionTime int                    `json:"execution_time_ms,omitempty"`
-	TokensUsed    int                    `json:"tokens_used,omitempty"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	Success       bool           `json:"success"`
+	Output        any            `json:"output"`
+	Error         string         `json:"error,omitempty"`
+	ExecutionTime int            `json:"execution_time_ms,omitempty"`
+	TokensUsed    int            `json:"tokens_used,omitempty"`
+	Metadata      map[string]any `json:"metadata,omitempty"`
 }
 
 // ExtractKeywordsInput is the input for keyword extraction
@@ -79,11 +79,11 @@ Rules:
 - Detect language from query and infer country (ja->jp, zh->cn, en->us)
 - Remove task instructions (分析して, 調べて, analyze, research)`, input.Query, countryHint)
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"query":      prompt,
 		"model_tier": "small",
 		"max_tokens": 200,
-		"context":    map[string]interface{}{},
+		"context":    map[string]any{},
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)
@@ -110,7 +110,7 @@ Rules:
 		return ExtractKeywordsOutput{Keywords: []string{input.Query}}, nil
 	}
 
-	var llmResp map[string]interface{}
+	var llmResp map[string]any
 	if err := json.Unmarshal(respBody, &llmResp); err != nil {
 		return ExtractKeywordsOutput{Keywords: []string{input.Query}}, nil
 	}
@@ -126,16 +126,16 @@ Rules:
 	jsonEnd := strings.LastIndex(responseText, "}")
 	if jsonStart >= 0 && jsonEnd > jsonStart {
 		jsonStr := responseText[jsonStart : jsonEnd+1]
-		var extracted map[string]interface{}
+		var extracted map[string]any
 		if err := json.Unmarshal([]byte(jsonStr), &extracted); err == nil {
-			if kws, ok := extracted["keywords"].([]interface{}); ok {
+			if kws, ok := extracted["keywords"].([]any); ok {
 				for _, kw := range kws {
 					if s, ok := kw.(string); ok && s != "" {
 						output.Keywords = append(output.Keywords, s)
 					}
 				}
 			}
-			if bkws, ok := extracted["brand_keywords"].([]interface{}); ok {
+			if bkws, ok := extracted["brand_keywords"].([]any); ok {
 				for _, kw := range bkws {
 					if s, ok := kw.(string); ok && s != "" {
 						output.BrandKeywords = append(output.BrandKeywords, s)
@@ -160,7 +160,7 @@ Rules:
 	} else if model, ok := llmResp["model"].(string); ok {
 		output.ModelUsed = model
 	}
-	if metadata, ok := llmResp["metadata"].(map[string]interface{}); ok {
+	if metadata, ok := llmResp["metadata"].(map[string]any); ok {
 		if inTok, ok := metadata["input_tokens"].(float64); ok {
 			output.InputTokens = int(inTok)
 		}
@@ -179,7 +179,7 @@ Rules:
 		}
 	}
 	if output.InputTokens == 0 || output.OutputTokens == 0 {
-		if usage, ok := llmResp["usage"].(map[string]interface{}); ok {
+		if usage, ok := llmResp["usage"].(map[string]any); ok {
 			if output.InputTokens == 0 {
 				if inTok, ok := usage["input_tokens"].(float64); ok {
 					output.InputTokens = int(inTok)
@@ -203,7 +203,7 @@ Rules:
 
 // callToolWithTimeout makes a request to the LLM service /tools/execute endpoint with custom timeout
 // callToolWithTimeout 以自定义 timeout 调用 LLM service 的 /tools/execute。
-func callToolWithTimeout(ctx context.Context, toolName string, params map[string]interface{}, timeout time.Duration) (*ToolExecuteResponse, error) {
+func callToolWithTimeout(ctx context.Context, toolName string, params map[string]any, timeout time.Duration) (*ToolExecuteResponse, error) {
 	llmServiceURL := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/tools/execute", llmServiceURL)
 

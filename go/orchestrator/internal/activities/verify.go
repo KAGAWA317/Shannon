@@ -24,7 +24,7 @@ func (a *Activities) VerifyClaimsActivity(ctx context.Context, input VerifyClaim
 
 	// Prepare request payload (V2 format with three-category classification)
 	// 构造 request payload（V2 格式，采用三分类判定）
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"answer":    input.Answer,
 		"citations": input.Citations,
 		"use_v2":    true, // Request V2 format with BM25 retrieval and three-category output
@@ -128,7 +128,7 @@ func (a *Activities) VerifyBatch(ctx context.Context, input VerifyBatchInput) (V
 	logger.Info("Starting batch verification (Citation V2)")
 
 	// Prepare request payload
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"answer":    input.Answer,
 		"citations": input.Citations,
 	}

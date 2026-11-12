@@ -112,10 +112,10 @@ func TestGetSessionEvents_GroupedTurns_Defaults(t *testing.T) {
 			Timestamp   time.Time `json:"timestamp"`
 			Events      []any     `json:"events"`
 			Metadata    struct {
-				TokensUsed      int                      `json:"tokens_used"`
-				ExecutionTimeMs int                      `json:"execution_time_ms"`
-				AgentsInvolved  []string                 `json:"agents_involved"`
-				Attachments     []map[string]interface{} `json:"attachments"`
+				TokensUsed      int              `json:"tokens_used"`
+				ExecutionTimeMs int              `json:"execution_time_ms"`
+				AgentsInvolved  []string         `json:"agents_involved"`
+				Attachments     []map[string]any `json:"attachments"`
 			} `json:"metadata"`
 		} `json:"turns"`
 	}

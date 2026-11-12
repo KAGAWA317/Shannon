@@ -117,7 +117,7 @@ func (h *ApprovalHandler) SubmitDecision(w http.ResponseWriter, r *http.Request)
 	// Send response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"status":      "sent",
 		"success":     resp.Success,
 		"message":     resp.Message,

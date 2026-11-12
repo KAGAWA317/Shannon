@@ -17,14 +17,14 @@ import (
 // RecordQueryInput carries information to store a query and its result
 // RecordQueryInput 承载存储 query 及其结果所需的信息。
 type RecordQueryInput struct {
-	SessionID string                 `json:"session_id"`
-	UserID    string                 `json:"user_id"`
-	TenantID  string                 `json:"tenant_id"`
-	Query     string                 `json:"query"`
-	Answer    string                 `json:"answer"`
-	Model     string                 `json:"model"`
-	Metadata  map[string]interface{} `json:"metadata"`
-	RedactPII bool                   `json:"redact_pii"`
+	SessionID string         `json:"session_id"`
+	UserID    string         `json:"user_id"`
+	TenantID  string         `json:"tenant_id"`
+	Query     string         `json:"query"`
+	Answer    string         `json:"answer"`
+	Model     string         `json:"model"`
+	Metadata  map[string]any `json:"metadata"`
+	RedactPII bool           `json:"redact_pii"`
 }
 
 type RecordQueryResult struct {
@@ -171,7 +171,7 @@ func recordQueryCore(ctx context.Context, in RecordQueryInput) (RecordQueryResul
 			for i, chunk := range chunks {
 				// Build payload with chunk metadata
 				// 构造带 chunk metadata 的 payload。
-				payload := map[string]interface{}{
+				payload := map[string]any{
 					"query":       q,                // Original query
 					// 原始 query。
 					"chunk_text":  chunk.Text,       // The actual chunk (no full answer stored)
@@ -250,7 +250,7 @@ func recordQueryCore(ctx context.Context, in RecordQueryInput) (RecordQueryResul
 
 	// Build payload
 	// 构造 payload。
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"query":      q,
 		"answer":     a,
 		"is_chunked": false, // Flag for retrieval
@@ -298,7 +298,7 @@ func RecordQuery(ctx context.Context, in RecordQueryInput) (RecordQueryResult, e
 				Type:       string(StreamEventProgress),
 				AgentID:    "memory",
 				Message:    msg,
-				Payload:    map[string]interface{}{"operation": "upsert", "count": count},
+				Payload:    map[string]any{"operation": "upsert", "count": count},
 				Timestamp:  time.Now(),
 			})
 		}

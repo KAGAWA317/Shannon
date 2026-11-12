@@ -84,7 +84,7 @@ func ScheduledTaskWorkflow(ctx workflow.Context, input schedules.ScheduledTaskIn
 
 	// Ensure context map exists for scheduled task metadata
 	if taskInput.Context == nil {
-		taskInput.Context = make(map[string]interface{})
+		taskInput.Context = make(map[string]any)
 	}
 
 	// Mark as scheduled execution so downstream workflows know this is an
@@ -104,7 +104,7 @@ func ScheduledTaskWorkflow(ctx workflow.Context, input schedules.ScheduledTaskIn
 		TaskQueue:           "shannon-tasks",
 		WorkflowRunTimeout:  workflow.GetInfo(ctx).WorkflowRunTimeout, // Inherit timeout
 		WorkflowTaskTimeout: 10 * time.Second,
-		Memo: map[string]interface{}{
+		Memo: map[string]any{
 			"schedule_id":  input.ScheduleID,
 			"user_id":      input.UserID,
 			"tenant_id":    input.TenantID,

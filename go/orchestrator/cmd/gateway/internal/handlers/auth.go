@@ -84,8 +84,8 @@ type RegisterResponse struct {
 	APIKey       string                 `json:"api_key"`                 // Only for NEW registrations (empty for existing users)
 	Tier         string                 `json:"tier"`
 	IsNewUser    bool                   `json:"is_new_user"`             // True if user was just created
-	Quotas       map[string]interface{} `json:"quotas"`
-	User         UserInfo               `json:"user"`
+	Quotas       map[string]any `json:"quotas"`
+	User         UserInfo       `json:"user"`
 }
 
 // UserInfo represents user profile information
@@ -98,15 +98,15 @@ type UserInfo struct {
 
 // MeResponse represents the /auth/me response
 type MeResponse struct {
-	UserID     string                 `json:"user_id"`
-	TenantID   string                 `json:"tenant_id"`
-	Email      string                 `json:"email"`
-	Username   string                 `json:"username"`
-	Name       *string                `json:"name,omitempty"`
-	Picture    string                 `json:"picture,omitempty"`
-	Tier       string                 `json:"tier"`
-	Quotas     map[string]interface{} `json:"quotas"`
-	RateLimits map[string]interface{} `json:"rate_limits"`
+	UserID     string         `json:"user_id"`
+	TenantID   string         `json:"tenant_id"`
+	Email      string         `json:"email"`
+	Username   string         `json:"username"`
+	Name       *string        `json:"name,omitempty"`
+	Picture    string         `json:"picture,omitempty"`
+	Tier       string         `json:"tier"`
+	Quotas     map[string]any `json:"quotas"`
+	RateLimits map[string]any `json:"rate_limits"`
 }
 
 // RefreshRequest represents the token refresh request
@@ -249,7 +249,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		APIKey:       result.APIKey, // Only set for new users
 		Tier:         tenant.Plan,
 		IsNewUser:    result.IsNewUser,
-		Quotas: map[string]interface{}{
+		Quotas: map[string]any{
 			"monthly_tokens":    tenant.TokenLimit,
 			"monthly_usage":     tenant.MonthlyTokenUsage,
 			"rate_limit_minute": rpm,
@@ -353,18 +353,18 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		Name:     user.FullName,
 		Picture:  getPicture(user.Metadata),
 		Tier:     tenant.Plan,
-		Quotas: map[string]interface{}{
+		Quotas: map[string]any{
 			"monthly_tokens":    tenant.TokenLimit,
 			"monthly_usage":     tenant.MonthlyTokenUsage,
 			"rate_limit_minute": rpm,
 			"rate_limit_hour":   rph,
 		},
-		RateLimits: map[string]interface{}{
-			"minute": map[string]interface{}{
+		RateLimits: map[string]any{
+			"minute": map[string]any{
 				"limit":     rpm,
 				"remaining": rpm, // TODO: Get actual values from Redis
 			},
-			"hour": map[string]interface{}{
+			"hour": map[string]any{
 				"limit":     rph,
 				"remaining": rph,
 			},
@@ -596,7 +596,7 @@ func (h *AuthHandler) RevokeKey(w http.ResponseWriter, r *http.Request) {
 		zap.String("key_id", keyID.String()))
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"success": true,
 		"message": "API key revoked successfully",
 	})

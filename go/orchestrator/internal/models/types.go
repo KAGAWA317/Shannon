@@ -27,14 +27,14 @@ const (
 
 // TaskRequest represents an incoming task request
 type TaskRequest struct {
-	TaskID      string                 `json:"task_id"`
-	UserID      string                 `json:"user_id"`
-	SessionID   string                 `json:"session_id"`
-	TenantID    string                 `json:"tenant_id"`
-	Query       string                 `json:"query"`
-	Context     map[string]interface{} `json:"context"`
-	MaxAgents   int                    `json:"max_agents"`
-	TokenBudget float64                `json:"token_budget"`
+	TaskID      string         `json:"task_id"`
+	UserID      string         `json:"user_id"`
+	SessionID   string         `json:"session_id"`
+	TenantID    string         `json:"tenant_id"`
+	Query       string         `json:"query"`
+	Context     map[string]any `json:"context"`
+	MaxAgents   int            `json:"max_agents"`
+	TokenBudget float64        `json:"token_budget"`
 }
 
 // TaskResponse represents the result of task execution
@@ -105,13 +105,13 @@ type TokenUsage struct {
 
 // SessionContext maintains context across requests
 type SessionContext struct {
-	SessionID   string                 `json:"session_id"`
-	UserID      string                 `json:"user_id"`
-	Context     map[string]interface{} `json:"context"`
-	RecentTasks []TaskSummary          `json:"recent_tasks"`
-	TokenUsage  *TokenUsage            `json:"token_usage"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
+	SessionID   string         `json:"session_id"`
+	UserID      string         `json:"user_id"`
+	Context     map[string]any `json:"context"`
+	RecentTasks []TaskSummary  `json:"recent_tasks"`
+	TokenUsage  *TokenUsage    `json:"token_usage"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
 }
 
 // TaskSummary provides a summary of a task

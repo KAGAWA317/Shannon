@@ -75,7 +75,7 @@ func CompressAndStoreContext(ctx context.Context, in CompressContextInput) (Comp
 	// 调用 llm-service 的 /context/compress。
 	base := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := base + "/context/compress"
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"messages":      in.History,
 		"target_tokens": in.TargetTokens,
 	}
@@ -157,7 +157,7 @@ func CompressAndStoreContext(ctx context.Context, in CompressContextInput) (Comp
 			// Generate a deterministic summary ID for deduplication
 			// 生成确定性的 summary ID，用于去重。
 			summaryID := uuid.New().String()
-			payload := map[string]interface{}{
+			payload := map[string]any{
 				"session_id": in.SessionID,
 				"tenant_id":  in.TenantID, // Add tenant_id for filtering
 				// 带上 tenant_id 以便按租户过滤。

@@ -10,7 +10,7 @@ import (
 )
 
 // JSONB represents a PostgreSQL jsonb column
-type JSONB map[string]interface{}
+type JSONB map[string]any
 
 // ErrConcurrentAccess is returned when JSONB cloning fails due to concurrent map access
 // JSONB 克隆因并发 map 访问失败时返回 ErrConcurrentAccess
@@ -72,7 +72,7 @@ func (j JSONB) Value() (driver.Value, error) {
 }
 
 // Scan implements the sql.Scanner interface
-func (j *JSONB) Scan(value interface{}) error {
+func (j *JSONB) Scan(value any) error {
 	if value == nil {
 		*j = nil
 		return nil

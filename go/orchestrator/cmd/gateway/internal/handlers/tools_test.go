@@ -14,7 +14,7 @@ import (
 func TestToolsHandler_FetchMetadata_DangerousFlag(t *testing.T) {
 	mockLLM := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/metadata") {
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			json.NewEncoder(w).Encode(map[string]any{
 				"name":      "bash_executor",
 				"dangerous": true,
 				"category":  "system",
@@ -70,7 +70,7 @@ func TestToolsHandler_FetchMetadata_CacheHit(t *testing.T) {
 	callCount := 0
 	mockLLM := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"name":      "calculator",
 			"dangerous": false,
 			"category":  "calculation",
@@ -96,8 +96,8 @@ func TestToolsHandler_FetchMetadata_CacheHit(t *testing.T) {
 func TestToolsHandler_ProxyRequestShape(t *testing.T) {
 	req := toolExecuteProxyRequest{
 		ToolName:   "web_search",
-		Parameters: map[string]interface{}{"query": "test"},
-		SessionContext: map[string]interface{}{
+		Parameters: map[string]any{"query": "test"},
+		SessionContext: map[string]any{
 			"user_id": "u-123",
 		},
 	}
@@ -107,17 +107,17 @@ func TestToolsHandler_ProxyRequestShape(t *testing.T) {
 		t.Fatalf("marshal error: %v", err)
 	}
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	json.Unmarshal(data, &parsed)
 
 	if parsed["tool_name"] != "web_search" {
 		t.Errorf("expected tool_name=web_search, got %v", parsed["tool_name"])
 	}
-	params := parsed["parameters"].(map[string]interface{})
+	params := parsed["parameters"].(map[string]any)
 	if params["query"] != "test" {
 		t.Errorf("expected query=test, got %v", params["query"])
 	}
-	ctx := parsed["session_context"].(map[string]interface{})
+	ctx := parsed["session_context"].(map[string]any)
 	if ctx["user_id"] != "u-123" {
 		t.Errorf("expected user_id=u-123, got %v", ctx["user_id"])
 	}

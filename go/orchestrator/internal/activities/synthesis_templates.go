@@ -55,7 +55,7 @@ var templateFuncs = template.FuncMap{
 	"add": func(a, b int) int { return a + b },
 	"sub": func(a, b int) int { return a - b },
 	"mul": func(a, b int) int { return a * b },
-	"len": func(s interface{}) int {
+	"len": func(s any) int {
 		switch v := s.(type) {
 		case []string:
 			return len(v)
@@ -74,9 +74,9 @@ var templateFuncs = template.FuncMap{
 // SynthesisLogger 是 synthesis templates 中用于日志输出的 interface。
 // 同时接受 zap.Logger 与 Temporal workflow logger。
 type SynthesisLogger interface {
-	Info(msg string, fields ...interface{})
-	Warn(msg string, fields ...interface{})
-	Debug(msg string, fields ...interface{})
+	Info(msg string, fields ...any)
+	Warn(msg string, fields ...any)
+	Debug(msg string, fields ...any)
 }
 
 // LoadSynthesisTemplate loads a synthesis template by name.
@@ -205,7 +205,7 @@ func RenderSynthesisTemplate(tmpl *template.Template, data SynthesisTemplateData
 // 6. context["synthesis_style"] == "concise" -> research_concise
 // 7. len(research_areas) > 0 -> research_comprehensive
 // 8. Default -> normal_default
-func SelectSynthesisTemplate(context map[string]interface{}) (templateName string, explicit bool) {
+func SelectSynthesisTemplate(context map[string]any) (templateName string, explicit bool) {
 	if context == nil {
 		return "normal_default", false
 	}
@@ -247,7 +247,7 @@ func SelectSynthesisTemplate(context map[string]interface{}) (templateName strin
 			if len(t) > 0 {
 				return "research_comprehensive", false
 			}
-		case []interface{}:
+		case []any:
 			if len(t) > 0 {
 				return "research_comprehensive", false
 			}

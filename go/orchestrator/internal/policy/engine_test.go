@@ -196,7 +196,7 @@ default decision := {
 
 func TestLoadConfigFromShannon(t *testing.T) {
 	// Test Shannon config parsing
-	shannonPolicy := map[string]interface{}{
+	shannonPolicy := map[string]any{
 		"enabled":     true,
 		"mode":        "enforce",
 		"path":        "/test/path",
@@ -225,7 +225,7 @@ func TestLoadConfigFromShannon(t *testing.T) {
 
 func TestLoadConfigFromShannon_InvalidMode(t *testing.T) {
 	// Test invalid mode handling
-	shannonPolicy := map[string]interface{}{
+	shannonPolicy := map[string]any{
 		"enabled": true,
 		"mode":    "invalid_mode",
 		"path":    "/test/path",

@@ -24,7 +24,7 @@ type Registry struct {
 
 	// watcher is reserved for future hot-reload; nil in the MVP implementation.
 	// watcher 预留给将来的热重载；MVP 实现中为 nil。
-	watcher interface{}
+	watcher any
 }
 
 // Entry captures a loaded template alongside bookkeeping data.
@@ -457,11 +457,11 @@ func cloneStringSlice(values []string) []string {
 	return out
 }
 
-func cloneMetadata(m map[string]interface{}) map[string]interface{} {
+func cloneMetadata(m map[string]any) map[string]any {
 	if len(m) == 0 {
 		return nil
 	}
-	out := make(map[string]interface{}, len(m))
+	out := make(map[string]any, len(m))
 	for k, v := range m {
 		out[k] = v
 	}

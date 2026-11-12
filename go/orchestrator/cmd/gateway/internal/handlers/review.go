@@ -66,27 +66,27 @@ type reviewRound struct {
 
 // reviewState is the Redis-stored conversation state.
 type reviewState struct {
-	WorkflowID    string                 `json:"workflow_id"`
-	Query         string                 `json:"query"`
-	Context       map[string]interface{} `json:"context"`
-	Status        string                 `json:"status"`
-	Round         int                    `json:"round"`
-	Version       int                    `json:"version"`
-	OwnerUserID   string                 `json:"owner_user_id"`
-	OwnerTenantID string                 `json:"owner_tenant_id"`
-	Rounds        []reviewRound          `json:"rounds"`
-	CurrentPlan   string                 `json:"current_plan"`
-	ResearchBrief string                 `json:"research_brief,omitempty"`
+	WorkflowID    string         `json:"workflow_id"`
+	Query         string         `json:"query"`
+	Context       map[string]any `json:"context"`
+	Status        string         `json:"status"`
+	Round         int            `json:"round"`
+	Version       int            `json:"version"`
+	OwnerUserID   string         `json:"owner_user_id"`
+	OwnerTenantID string         `json:"owner_tenant_id"`
+	Rounds        []reviewRound  `json:"rounds"`
+	CurrentPlan   string         `json:"current_plan"`
+	ResearchBrief string         `json:"research_brief,omitempty"`
 }
 
 // llmResearchPlanRequest is the request to the LLM service.
 type llmResearchPlanRequest struct {
-	Query        string                 `json:"query"`
-	Context      map[string]interface{} `json:"context"`
-	Conversation []reviewRound          `json:"conversation"`
-	IsFinalRound bool                   `json:"is_final_round,omitempty"`
-	CurrentRound int                    `json:"current_round"`
-	MaxRounds    int                    `json:"max_rounds"`
+	Query        string         `json:"query"`
+	Context      map[string]any `json:"context"`
+	Conversation []reviewRound  `json:"conversation"`
+	IsFinalRound bool           `json:"is_final_round,omitempty"`
+	CurrentRound int            `json:"current_round"`
+	MaxRounds    int            `json:"max_rounds"`
 }
 
 // llmResearchPlanResponse is the response from the LLM service.
@@ -335,17 +335,17 @@ func (h *ReviewHandler) handleFeedback(
 	// Publish review events to Redis stream so they're captured by SSE and persisted.
 	// This makes the review conversation visible in session history on page reload.
 	// 把评审 event 发布到 Redis stream，以便 SSE 捕获并持久化，页面刷新后评审对话仍能在 session history 中看到。
-	roundPayload := map[string]interface{}{"round": state.Round, "version": state.Version}
+	roundPayload := map[string]any{"round": state.Round, "version": state.Version}
 	h.publishStreamEvent(workflowID, "REVIEW_USER_FEEDBACK", "user", req.Message, roundPayload)
 	h.publishStreamEvent(workflowID, "RESEARCH_PLAN_UPDATED", "research-planner", plan.Message,
-		map[string]interface{}{"round": state.Round, "version": state.Version, "intent": intent})
+		map[string]any{"round": state.Round, "version": state.Version, "intent": intent})
 
 	// Response
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("ETag", strconv.Itoa(state.Version))
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"status": "reviewing",
-		"plan": map[string]interface{}{
+		"plan": map[string]any{
 			"message": plan.Message,
 			"round":   state.Round,
 			"version": state.Version,
@@ -360,7 +360,7 @@ func (h *ReviewHandler) handleApprove(
 ) {
 	if state.Status == "approved" {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"status":  "approved",
 			"message": "Research started",
 		})
@@ -455,7 +455,7 @@ func (h *ReviewHandler) handleApprove(
 	)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"status":  "approved",
 		"message": "Research started",
 	})
@@ -464,7 +464,7 @@ func (h *ReviewHandler) handleApprove(
 func (h *ReviewHandler) callResearchPlan(
 	ctx context.Context,
 	query string,
-	taskCtx map[string]interface{},
+	taskCtx map[string]any,
 	rounds []reviewRound,
 	isFinalRound bool,
 	currentRound int,
@@ -571,7 +571,7 @@ func (h *ReviewHandler) HandleGetReview(w http.ResponseWriter, r *http.Request) 
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("ETag", strconv.Itoa(state.Version))
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"status":       state.Status,
 		"round":        state.Round,
 		"version":      state.Version,
@@ -586,7 +586,7 @@ func (h *ReviewHandler) HandleGetReview(w http.ResponseWriter, r *http.Request) 
 // This makes review conversation messages first-class citizens in the event system.
 // publishStreamEvent 把评审 event 发布到 Redis event stream，由 SSE 捕获并持久化到 DB，格式与 orchestrator event 一致，
 // 使评审对话成为 event 系统中的一等公民。
-func (h *ReviewHandler) publishStreamEvent(workflowID, eventType, agentID, message string, payload map[string]interface{}) {
+func (h *ReviewHandler) publishStreamEvent(workflowID, eventType, agentID, message string, payload map[string]any) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -610,7 +610,7 @@ func (h *ReviewHandler) publishStreamEvent(workflowID, eventType, agentID, messa
 		Stream: streamKey,
 		MaxLen: 256,
 		Approx: true,
-		Values: map[string]interface{}{
+		Values: map[string]any{
 			"workflow_id": workflowID,
 			"type":        eventType,
 			"agent_id":    agentID,

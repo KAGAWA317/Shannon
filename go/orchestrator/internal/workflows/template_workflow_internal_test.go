@@ -50,9 +50,9 @@ func TestDetermineNodeQuery(t *testing.T) {
 	tests := []struct {
 		name        string
 		defaultQ    string
-		metadata    map[string]interface{}
+		metadata    map[string]any
 		nodeOutputs map[string]string
-		nodeContext map[string]interface{}
+		nodeContext map[string]any
 		want        string
 	}{
 		{
@@ -66,7 +66,7 @@ func TestDetermineNodeQuery(t *testing.T) {
 		{
 			name:     "prefer prompt_template over query",
 			defaultQ: "default",
-			metadata: map[string]interface{}{
+			metadata: map[string]any{
 				"prompt_template": "template query",
 				"query":           "metadata query",
 			},
@@ -77,7 +77,7 @@ func TestDetermineNodeQuery(t *testing.T) {
 		{
 			name:     "substitute node results",
 			defaultQ: "default",
-			metadata: map[string]interface{}{
+			metadata: map[string]any{
 				"prompt_template": "News data: {fetch_news_results}\nAlerts: {detect_alerts_results}",
 			},
 			nodeOutputs: map[string]string{
@@ -90,11 +90,11 @@ func TestDetermineNodeQuery(t *testing.T) {
 		{
 			name:     "substitute context fields",
 			defaultQ: "default",
-			metadata: map[string]interface{}{
+			metadata: map[string]any{
 				"prompt_template": "Threshold: {alert_threshold}, Include: {include_filings}",
 			},
 			nodeOutputs: nil,
-			nodeContext: map[string]interface{}{
+			nodeContext: map[string]any{
 				"alert_threshold": 0.3,
 				"include_filings": true,
 			},
@@ -103,13 +103,13 @@ func TestDetermineNodeQuery(t *testing.T) {
 		{
 			name:     "combined substitution",
 			defaultQ: "default",
-			metadata: map[string]interface{}{
+			metadata: map[string]any{
 				"prompt_template": "Data: {fetch_news_results}, Threshold: {alert_threshold}",
 			},
 			nodeOutputs: map[string]string{
 				"fetch_news": "news data",
 			},
-			nodeContext: map[string]interface{}{
+			nodeContext: map[string]any{
 				"alert_threshold": 0.5,
 			},
 			want: "Data: news data, Threshold: 0.5",
@@ -129,19 +129,19 @@ func TestDetermineNodeQuery(t *testing.T) {
 func TestExpandParallelByTasks(t *testing.T) {
 	tests := []struct {
 		name        string
-		nodeContext map[string]interface{}
-		metadata    map[string]interface{}
+		nodeContext map[string]any
+		metadata    map[string]any
 		parallelBy  string
 		wantLen     int
 		wantIDs     []string
 	}{
 		{
 			name: "expand tickers array",
-			nodeContext: map[string]interface{}{
-				"tickers":         []interface{}{"NVDA", "AAPL", "MSFT"},
+			nodeContext: map[string]any{
+				"tickers":         []any{"NVDA", "AAPL", "MSFT"},
 				"include_filings": true,
 			},
-			metadata: map[string]interface{}{
+			metadata: map[string]any{
 				"prompt_template": "Analyze {ticker} stock. Include filings: {include_filings}",
 			},
 			parallelBy: "tickers",
@@ -150,10 +150,10 @@ func TestExpandParallelByTasks(t *testing.T) {
 		},
 		{
 			name: "expand string slice with special chars",
-			nodeContext: map[string]interface{}{
+			nodeContext: map[string]any{
 				"urls": []string{"http://a.com", "http://b.com"},
 			},
-			metadata: map[string]interface{}{
+			metadata: map[string]any{
 				"prompt_template": "Fetch {item}",
 			},
 			parallelBy: "urls",
@@ -162,40 +162,40 @@ func TestExpandParallelByTasks(t *testing.T) {
 		},
 		{
 			name: "missing parallel_by field",
-			nodeContext: map[string]interface{}{
+			nodeContext: map[string]any{
 				"other": "value",
 			},
-			metadata:   map[string]interface{}{},
+			metadata:   map[string]any{},
 			parallelBy: "tickers",
 			wantLen:    0,
 			wantIDs:    nil,
 		},
 		{
 			name: "empty array",
-			nodeContext: map[string]interface{}{
-				"tickers": []interface{}{},
+			nodeContext: map[string]any{
+				"tickers": []any{},
 			},
-			metadata:   map[string]interface{}{},
+			metadata:   map[string]any{},
 			parallelBy: "tickers",
 			wantLen:    0,
 			wantIDs:    nil,
 		},
 		{
 			name: "default prompt template",
-			nodeContext: map[string]interface{}{
-				"items": []interface{}{"one", "two"},
+			nodeContext: map[string]any{
+				"items": []any{"one", "two"},
 			},
-			metadata:   map[string]interface{}{},
+			metadata:   map[string]any{},
 			parallelBy: "items",
 			wantLen:    2,
 			wantIDs:    []string{"items_0_one", "items_1_two"},
 		},
 		{
 			name: "special characters in tickers",
-			nodeContext: map[string]interface{}{
-				"tickers": []interface{}{"BRK.A", "BRK.B", "S&P500"},
+			nodeContext: map[string]any{
+				"tickers": []any{"BRK.A", "BRK.B", "S&P500"},
 			},
-			metadata:   map[string]interface{}{},
+			metadata:   map[string]any{},
 			parallelBy: "tickers",
 			wantLen:    3,
 			wantIDs:    []string{"tickers_0_brk_a", "tickers_1_brk_b", "tickers_2_s_p500"},
@@ -203,17 +203,17 @@ func TestExpandParallelByTasks(t *testing.T) {
 		{
 			name:        "nil nodeContext",
 			nodeContext: nil,
-			metadata:    map[string]interface{}{},
+			metadata:    map[string]any{},
 			parallelBy:  "tickers",
 			wantLen:     0,
 			wantIDs:     nil,
 		},
 		{
 			name: "empty parallelBy",
-			nodeContext: map[string]interface{}{
-				"tickers": []interface{}{"NVDA"},
+			nodeContext: map[string]any{
+				"tickers": []any{"NVDA"},
 			},
-			metadata:   map[string]interface{}{},
+			metadata:   map[string]any{},
 			parallelBy: "",
 			wantLen:    0,
 			wantIDs:    nil,
@@ -238,13 +238,13 @@ func TestExpandParallelByTasks(t *testing.T) {
 }
 
 func TestExpandParallelByTasks_ContextSubstitution(t *testing.T) {
-	nodeContext := map[string]interface{}{
-		"tickers":          []interface{}{"NVDA"},
+	nodeContext := map[string]any{
+		"tickers":          []any{"NVDA"},
 		"include_filings":  true,
 		"include_twitter":  false,
 		"alert_threshold":  0.3,
 	}
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"prompt_template": "Analyze {ticker}. Filings: {include_filings}. Twitter: {include_twitter}. Threshold: {alert_threshold}",
 	}
 
@@ -260,15 +260,15 @@ func TestExpandParallelByTasks_ContextSubstitution(t *testing.T) {
 }
 
 func TestParseHybridTasks(t *testing.T) {
-	metadata := map[string]interface{}{
-		"tasks": []interface{}{
-			map[string]interface{}{
+	metadata := map[string]any{
+		"tasks": []any{
+			map[string]any{
 				"id":          "t1",
 				"description": "task one",
-				"depends_on":  []interface{}{"root"},
-				"tools":       []interface{}{"web_search"},
+				"depends_on":  []any{"root"},
+				"tools":       []any{"web_search"},
 			},
-			map[string]interface{}{
+			map[string]any{
 				"id":    "t2",
 				"query": "execute",
 			},

@@ -70,17 +70,17 @@ func NewSessionHandler(
 
 // SessionResponse represents a session metadata response
 type SessionResponse struct {
-	SessionID         string                 `json:"session_id"`
-	UserID            string                 `json:"user_id"`
-	Context           map[string]interface{} `json:"context,omitempty"`
-	TokenBudget       int                    `json:"token_budget,omitempty"`
-	TokensUsed        int                    `json:"tokens_used"`
-	TaskCount         int                    `json:"task_count"`
-	CreatedAt         time.Time              `json:"created_at"`
-	UpdatedAt         *time.Time             `json:"updated_at,omitempty"`
-	ExpiresAt         *time.Time             `json:"expires_at,omitempty"`
-	IsResearchSession bool                   `json:"is_research_session"`
-	ResearchStrategy  string                 `json:"research_strategy,omitempty"`
+	SessionID         string         `json:"session_id"`
+	UserID            string         `json:"user_id"`
+	Context           map[string]any `json:"context,omitempty"`
+	TokenBudget       int            `json:"token_budget,omitempty"`
+	TokensUsed        int            `json:"tokens_used"`
+	TaskCount         int            `json:"task_count"`
+	CreatedAt         time.Time      `json:"created_at"`
+	UpdatedAt         *time.Time     `json:"updated_at,omitempty"`
+	ExpiresAt         *time.Time     `json:"expires_at,omitempty"`
+	IsResearchSession bool           `json:"is_research_session"`
+	ResearchStrategy  string         `json:"research_strategy,omitempty"`
 }
 
 // SessionHistoryResponse represents session task history
@@ -98,16 +98,16 @@ type ListSessionsResponse struct {
 
 // SessionSummary represents a single session in listing
 type SessionSummary struct {
-	SessionID   string                 `json:"session_id"`
-	UserID      string                 `json:"user_id"`
-	Title       string                 `json:"title,omitempty"`
-	TaskCount   int                    `json:"task_count"`
-	TokensUsed  int                    `json:"tokens_used"`
-	TokenBudget int                    `json:"token_budget,omitempty"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   *time.Time             `json:"updated_at,omitempty"`
-	ExpiresAt   *time.Time             `json:"expires_at,omitempty"`
-	Context     map[string]interface{} `json:"context,omitempty"`
+	SessionID   string         `json:"session_id"`
+	UserID      string         `json:"user_id"`
+	Title       string         `json:"title,omitempty"`
+	TaskCount   int            `json:"task_count"`
+	TokensUsed  int            `json:"tokens_used"`
+	TokenBudget int            `json:"token_budget,omitempty"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   *time.Time     `json:"updated_at,omitempty"`
+	ExpiresAt   *time.Time     `json:"expires_at,omitempty"`
+	Context     map[string]any `json:"context,omitempty"`
 
 	// Activity tracking
 	LastActivityAt *time.Time `json:"last_activity_at,omitempty"`
@@ -139,21 +139,21 @@ type SessionSummary struct {
 
 // TaskHistory represents a task in session history
 type TaskHistory struct {
-	TaskID       string                 `json:"task_id"`
-	WorkflowID   string                 `json:"workflow_id"`
-	Query        string                 `json:"query"`
-	Status       string                 `json:"status"`
-	Mode         string                 `json:"mode,omitempty"`
-	Result       string                 `json:"result,omitempty"`
-	ErrorMessage string                 `json:"error_message,omitempty"`
-	TotalTokens  int                    `json:"total_tokens"`
-	TotalCostUSD float64                `json:"total_cost_usd"`
-	DurationMs   int                    `json:"duration_ms,omitempty"`
-	AgentsUsed   int                    `json:"agents_used"`
-	ToolsInvoked int                    `json:"tools_invoked"`
-	StartedAt    time.Time              `json:"started_at"`
-	CompletedAt  *time.Time             `json:"completed_at,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	TaskID       string         `json:"task_id"`
+	WorkflowID   string         `json:"workflow_id"`
+	Query        string         `json:"query"`
+	Status       string         `json:"status"`
+	Mode         string         `json:"mode,omitempty"`
+	Result       string         `json:"result,omitempty"`
+	ErrorMessage string         `json:"error_message,omitempty"`
+	TotalTokens  int            `json:"total_tokens"`
+	TotalCostUSD float64        `json:"total_cost_usd"`
+	DurationMs   int            `json:"duration_ms,omitempty"`
+	AgentsUsed   int            `json:"agents_used"`
+	ToolsInvoked int            `json:"tools_invoked"`
+	StartedAt    time.Time      `json:"started_at"`
+	CompletedAt  *time.Time     `json:"completed_at,omitempty"`
+	Metadata     map[string]any `json:"metadata,omitempty"`
 }
 
 // GetSession handles GET /api/v1/sessions/{sessionId}
@@ -209,7 +209,7 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 	// 注意：访问控制已写入查询条件（user_id 与 tenant_id 的 WHERE 子句）。
 
 	// Parse context JSON first to get external_id if present
-	var contextData map[string]interface{}
+	var contextData map[string]any
 	if len(session.Context) > 0 {
 		json.Unmarshal(session.Context, &contextData)
 	}
@@ -278,7 +278,7 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 
 		for _, redisKey := range keysToTry {
 			if data, err := h.redis.Get(ctx, redisKey).Result(); err == nil {
-				var sessionData map[string]interface{}
+				var sessionData map[string]any
 				if err := json.Unmarshal([]byte(data), &sessionData); err == nil {
 					if tokens, ok := sessionData["total_tokens_used"].(float64); ok {
 						tokensUsed = int(tokens)
@@ -326,9 +326,9 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 			`, session.ID, userCtx.UserID.String(), userCtx.TenantID)
 		}
 		if err == nil && firstTaskMetadata.Valid && firstTaskMetadata.String != "" {
-			var metadata map[string]interface{}
+			var metadata map[string]any
 			if err := json.Unmarshal([]byte(firstTaskMetadata.String), &metadata); err == nil {
-				if taskContext, ok := metadata["task_context"].(map[string]interface{}); ok {
+				if taskContext, ok := metadata["task_context"].(map[string]any); ok {
 					// Only set values that weren't found in session context
 					if !foundResearchInContext {
 						if fr, ok := taskContext["force_research"].(bool); ok && fr {
@@ -508,7 +508,7 @@ func (h *SessionHandler) GetSessionHistory(w http.ResponseWriter, r *http.Reques
 		}
 
 		// Parse metadata JSON
-		var metadata map[string]interface{}
+		var metadata map[string]any
 		if len(task.Metadata) > 0 {
 			json.Unmarshal(task.Metadata, &metadata)
 		}
@@ -641,10 +641,10 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 		Timestamp   time.Time `json:"timestamp"`
 		Events      []Event   `json:"events"`
 		Metadata    struct {
-			TokensUsed      int                      `json:"tokens_used"`
-			ExecutionTimeMs int                      `json:"execution_time_ms"`
-			AgentsInvolved  []string                 `json:"agents_involved"`
-			Attachments     []map[string]interface{} `json:"attachments,omitempty"`
+			TokensUsed      int              `json:"tokens_used"`
+			ExecutionTimeMs int              `json:"execution_time_ms"`
+			AgentsInvolved  []string         `json:"agents_involved"`
+			Attachments     []map[string]any `json:"attachments,omitempty"`
 		} `json:"metadata"`
 	}
 
@@ -858,33 +858,33 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 	})
 }
 
-func extractTurnAttachmentsFromTaskMetadata(raw sql.NullString) []map[string]interface{} {
+func extractTurnAttachmentsFromTaskMetadata(raw sql.NullString) []map[string]any {
 	if !raw.Valid || strings.TrimSpace(raw.String) == "" {
 		return nil
 	}
 
-	var metadata map[string]interface{}
+	var metadata map[string]any
 	if err := json.Unmarshal([]byte(raw.String), &metadata); err != nil {
 		return nil
 	}
 
-	taskContext, ok := metadata["task_context"].(map[string]interface{})
+	taskContext, ok := metadata["task_context"].(map[string]any)
 	if !ok || taskContext == nil {
 		return nil
 	}
-	rawAttachments, ok := taskContext["attachments"].([]interface{})
+	rawAttachments, ok := taskContext["attachments"].([]any)
 	if !ok || len(rawAttachments) == 0 {
 		return nil
 	}
 
-	attachments := make([]map[string]interface{}, 0, len(rawAttachments))
+	attachments := make([]map[string]any, 0, len(rawAttachments))
 	for _, item := range rawAttachments {
-		am, ok := item.(map[string]interface{})
+		am, ok := item.(map[string]any)
 		if !ok {
 			continue
 		}
 
-		out := map[string]interface{}{}
+		out := map[string]any{}
 		if id, ok := am["id"].(string); ok && id != "" {
 			out["id"] = id
 		}
@@ -1050,7 +1050,7 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 		// Parse context JSON
 		if sess.Context.Valid && sess.Context.String != "" {
-			var ctxMap map[string]interface{}
+			var ctxMap map[string]any
 			if err := json.Unmarshal([]byte(sess.Context.String), &ctxMap); err == nil {
 				summary.Context = ctxMap
 			}
@@ -1123,10 +1123,10 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 		// Fall back to first task's metadata.task_context.force_research
 		if !isResearch && sess.FirstTaskMetadata.Valid && sess.FirstTaskMetadata.String != "" {
-			var metadata map[string]interface{}
+			var metadata map[string]any
 			if err := json.Unmarshal([]byte(sess.FirstTaskMetadata.String), &metadata); err == nil {
 				// Check task_context.force_research (explicit research mode flag)
-				if taskContext, ok := metadata["task_context"].(map[string]interface{}); ok {
+				if taskContext, ok := metadata["task_context"].(map[string]any); ok {
 					if fr, ok := taskContext["force_research"].(bool); ok && fr {
 						isResearch = true
 					}
@@ -1194,7 +1194,7 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 					// Redis returns interface{}, needs type assertion
 					if strVal, ok := val.(string); ok {
-						var sessionData map[string]interface{}
+						var sessionData map[string]any
 						if err := json.Unmarshal([]byte(strVal), &sessionData); err == nil {
 							if tokens, ok := sessionData["total_tokens_used"].(float64); ok {
 								// Update if Redis has more current data
@@ -1316,14 +1316,14 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Parse existing context
-	var contextData map[string]interface{}
+	var contextData map[string]any
 	if len(session.Context) > 0 {
 		if err := json.Unmarshal(session.Context, &contextData); err != nil {
 			h.logger.Error("Failed to parse session context", zap.Error(err))
-			contextData = make(map[string]interface{})
+			contextData = make(map[string]any)
 		}
 	} else {
-		contextData = make(map[string]interface{})
+		contextData = make(map[string]any)
 	}
 
 	// Update title in context
@@ -1375,7 +1375,7 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 				continue // Try next key
 			}
 
-			var redisSession map[string]interface{}
+			var redisSession map[string]any
 			if err := json.Unmarshal([]byte(sessionData), &redisSession); err != nil {
 				h.logger.Warn("Failed to unmarshal Redis session data",
 					zap.String("redis_key", redisKey),
@@ -1386,10 +1386,10 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 
 			// Update context in Redis session (lowercase "context" to match Session struct)
 			// 更新 Redis session 中的 context（键名用小写 "context" 以匹配 Session 结构体）。
-			if redisCtx, ok := redisSession["context"].(map[string]interface{}); ok {
+			if redisCtx, ok := redisSession["context"].(map[string]any); ok {
 				redisCtx[SessionContextKeyTitle] = title
 			} else {
-				redisSession["context"] = map[string]interface{}{SessionContextKeyTitle: title}
+				redisSession["context"] = map[string]any{SessionContextKeyTitle: title}
 			}
 
 			// Write back to Redis with KeepTTL to preserve expiration

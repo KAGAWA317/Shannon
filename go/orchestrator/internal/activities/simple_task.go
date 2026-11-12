@@ -9,15 +9,15 @@ import (
 
 // ExecuteSimpleTaskInput contains everything needed for a simple task
 type ExecuteSimpleTaskInput struct {
-	Query          string                 `json:"query"`
-	UserID         string                 `json:"user_id"`
-	SessionID      string                 `json:"session_id"`
-	Context        map[string]interface{} `json:"context"`
-	SessionCtx     map[string]interface{} `json:"session_ctx"`
-	History        []string               `json:"history"`
-	PersonaID      string                 `json:"persona_id"`
-	SuggestedTools []string               `json:"suggested_tools,omitempty"`
-	ToolParameters map[string]interface{} `json:"tool_parameters,omitempty"`
+	Query          string         `json:"query"`
+	UserID         string         `json:"user_id"`
+	SessionID      string         `json:"session_id"`
+	Context        map[string]any `json:"context"`
+	SessionCtx     map[string]any `json:"session_ctx"`
+	History        []string       `json:"history"`
+	PersonaID      string         `json:"persona_id"`
+	SuggestedTools []string       `json:"suggested_tools,omitempty"`
+	ToolParameters map[string]any `json:"tool_parameters,omitempty"`
 	// Parent workflow ID for unified event streaming
 	// 父 workflow ID，用于统一 event streaming。
 	ParentWorkflowID string `json:"parent_workflow_id,omitempty"`
@@ -61,7 +61,7 @@ func ExecuteSimpleTask(ctx context.Context, input ExecuteSimpleTaskInput) (Execu
 
 	// Step 1: Merge context (no separate activity)
 	// Step 1：合并 context，不单独开一个 activity。
-	mergedContext := make(map[string]interface{})
+	mergedContext := make(map[string]any)
 	for k, v := range input.Context {
 		mergedContext[k] = v
 	}

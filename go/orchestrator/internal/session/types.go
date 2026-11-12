@@ -22,15 +22,15 @@ var (
 // Session represents a user session with context continuity
 // Session 表示具有 context 连续性的用户 session
 type Session struct {
-	ID        string                 `json:"id"`
-	UserID    string                 `json:"user_id"`
-	TenantID  string                 `json:"tenant_id"`
-	CreatedAt time.Time              `json:"created_at"`
-	UpdatedAt time.Time              `json:"updated_at"`
-	ExpiresAt time.Time              `json:"expires_at"`
-	Metadata  map[string]interface{} `json:"metadata"`
-	Context   map[string]interface{} `json:"context"`
-	History   []Message              `json:"history"`
+	ID        string         `json:"id"`
+	UserID    string         `json:"user_id"`
+	TenantID  string         `json:"tenant_id"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	ExpiresAt time.Time      `json:"expires_at"`
+	Metadata  map[string]any `json:"metadata"`
+	Context   map[string]any `json:"context"`
+	History   []Message      `json:"history"`
 
 	// Agent-specific context
 	AgentStates map[string]*AgentState `json:"agent_states,omitempty"`
@@ -43,11 +43,11 @@ type Session struct {
 // Message represents a message in the session history
 // Message 表示 session 历史中的一条消息
 type Message struct {
-	ID        string                 `json:"id"`
-	Role      string                 `json:"role"` // "user", "assistant", "system"
-	Content   string                 `json:"content"`
-	Timestamp time.Time              `json:"timestamp"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	ID        string         `json:"id"`
+	Role      string         `json:"role"` // "user", "assistant", "system"
+	Content   string         `json:"content"`
+	Timestamp time.Time      `json:"timestamp"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
 
 	// Token tracking for this message
 	TokensUsed int     `json:"tokens_used,omitempty"`
@@ -57,12 +57,12 @@ type Message struct {
 // AgentState represents the state of a specific agent in the session
 // AgentState 表示 session 中某个 agent 的状态
 type AgentState struct {
-	AgentID    string                 `json:"agent_id"`
-	LastActive time.Time              `json:"last_active"`
-	State      string                 `json:"state"`
-	Memory     map[string]interface{} `json:"memory"`
-	ToolsUsed  []string               `json:"tools_used"`
-	TokensUsed int                    `json:"tokens_used"`
+	AgentID    string         `json:"agent_id"`
+	LastActive time.Time      `json:"last_active"`
+	State      string         `json:"state"`
+	Memory     map[string]any `json:"memory"`
+	ToolsUsed  []string       `json:"tools_used"`
+	TokensUsed int            `json:"tokens_used"`
 }
 
 // IsExpired checks if the session has expired
@@ -73,7 +73,7 @@ func (s *Session) IsExpired() bool {
 
 // GetContextValue retrieves a value from the session context
 // GetContextValue 从 session context 中取值
-func (s *Session) GetContextValue(key string) (interface{}, bool) {
+func (s *Session) GetContextValue(key string) (any, bool) {
 	if s.Context == nil {
 		return nil, false
 	}
@@ -83,9 +83,9 @@ func (s *Session) GetContextValue(key string) (interface{}, bool) {
 
 // SetContextValue sets a value in the session context
 // SetContextValue 在 session context 中设值
-func (s *Session) SetContextValue(key string, value interface{}) {
+func (s *Session) SetContextValue(key string, value any) {
 	if s.Context == nil {
-		s.Context = make(map[string]interface{})
+		s.Context = make(map[string]any)
 	}
 	s.Context[key] = value
 	s.UpdatedAt = time.Now()

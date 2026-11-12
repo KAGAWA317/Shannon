@@ -9,12 +9,12 @@ import (
 // TeamActionInput captures a dynamic team action request for policy evaluation
 // TeamActionInput 承载一次动态 team action request，用于 policy 评估。
 type TeamActionInput struct {
-	Action    string                 `json:"action"` // "recruit" | "retire"
-	SessionID string                 `json:"session_id"`
-	UserID    string                 `json:"user_id"`
-	AgentID   string                 `json:"agent_id"`
-	Role      string                 `json:"role"`
-	Metadata  map[string]interface{} `json:"metadata"`
+	Action    string         `json:"action"` // "recruit" | "retire"
+	SessionID string         `json:"session_id"`
+	UserID    string         `json:"user_id"`
+	AgentID   string         `json:"agent_id"`
+	Role      string         `json:"role"`
+	Metadata  map[string]any `json:"metadata"`
 }
 
 // TeamActionDecision is a minimal decision wrapper
@@ -45,7 +45,7 @@ func AuthorizeTeamAction(ctx context.Context, in TeamActionInput) (TeamActionDec
 // policyInputForTeam adapts team action to the existing PolicyInput
 // policyInputForTeam 把 team action 适配成既有的 PolicyInput。
 func policyInputForTeam(in TeamActionInput) *policy.PolicyInput {
-	ctx := map[string]interface{}{}
+	ctx := map[string]any{}
 	for k, v := range in.Metadata {
 		ctx[k] = v
 	}

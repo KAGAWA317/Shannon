@@ -48,7 +48,7 @@ func (reactPattern) Execute(ctx workflow.Context, input PatternInput) (*PatternR
 	if err != nil {
 		return nil, err
 	}
-	return &PatternResult{Result: res.FinalResult, TokensUsed: res.TotalTokens, Confidence: 0.6, Metadata: map[string]interface{}{"iterations": res.Iterations}}, nil
+	return &PatternResult{Result: res.FinalResult, TokensUsed: res.TotalTokens, Confidence: 0.6, Metadata: map[string]any{"iterations": res.Iterations}}, nil
 }
 
 // chainOfThoughtPattern wraps ChainOfThought
@@ -247,7 +247,7 @@ func (reflectionPattern) Execute(ctx workflow.Context, input PatternInput) (*Pat
 			Provider:     provider,
 			InputTokens:  inTok,
 			OutputTokens: outTok,
-			Metadata:     map[string]interface{}{"phase": "reflection_initial"},
+			Metadata:     map[string]any{"phase": "reflection_initial"},
 		}).Get(recCtx, nil)
 		wopts.RecordToolCostEntries(ctx, initial, input.UserID, input.SessionID, wid)
 	}

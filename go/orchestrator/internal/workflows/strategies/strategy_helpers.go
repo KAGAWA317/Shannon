@@ -22,7 +22,7 @@ func convertHistoryForAgent(history []Message) []string {
 }
 
 // determineModelTier selects a model tier based on context and default
-func determineModelTier(context map[string]interface{}, defaultTier string) string {
+func determineModelTier(context map[string]any, defaultTier string) string {
 	// Check for explicit model tier in context (highest priority)
 	if tier, ok := context["model_tier"].(string); ok && strings.TrimSpace(tier) != "" {
 		return strings.ToLower(strings.TrimSpace(tier))
@@ -100,7 +100,7 @@ func validateInput(input TaskInput) error {
 }
 
 // getBudgetMax extracts the budget maximum from context
-func getBudgetMax(context map[string]interface{}) int {
+func getBudgetMax(context map[string]any) int {
 	if v, ok := context["budget_agent_max"].(int); ok {
 		return v
 	}
@@ -135,7 +135,7 @@ func getWorkflowConfig(ctx workflow.Context) activities.WorkflowConfig {
 }
 
 // extractPersonaHints extracts persona suggestions from context
-func extractPersonaHints(context map[string]interface{}) []string {
+func extractPersonaHints(context map[string]any) []string {
 	hints := []string{}
 
 	// Check for domain keywords
@@ -211,7 +211,7 @@ func emitTaskUpdate(ctx workflow.Context, input TaskInput, eventType activities.
 }
 
 // emitTaskUpdatePayload sends a task update event with an optional payload
-func emitTaskUpdatePayload(ctx workflow.Context, input TaskInput, eventType activities.StreamEventType, agentID, message string, payload map[string]interface{}) {
+func emitTaskUpdatePayload(ctx workflow.Context, input TaskInput, eventType activities.StreamEventType, agentID, message string, payload map[string]any) {
     emitCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
         StartToCloseTimeout: 30 * time.Second,
     })

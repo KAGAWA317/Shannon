@@ -9,18 +9,18 @@ import (
 
 // sanitizeForStructpb converts values to types compatible with structpb.NewStruct.
 // sanitizeForStructpb 把值转换为 structpb.NewStruct 兼容的类型。
-func sanitizeForStructpb(m map[string]interface{}) map[string]interface{} {
+func sanitizeForStructpb(m map[string]any) map[string]any {
 	if m == nil {
 		return nil
 	}
-	result := make(map[string]interface{}, len(m))
+	result := make(map[string]any, len(m))
 	for k, v := range m {
 		result[k] = sanitizeValue(v)
 	}
 	return result
 }
 
-func sanitizeValue(v interface{}) interface{} {
+func sanitizeValue(v any) any {
 	if v == nil {
 		return nil
 	}
@@ -28,13 +28,13 @@ func sanitizeValue(v interface{}) interface{} {
 	switch val := v.(type) {
 	case bool, int, int32, int64, float32, float64, string:
 		return val
-	case []interface{}:
-		result := make([]interface{}, len(val))
+	case []any:
+		result := make([]any, len(val))
 		for i, elem := range val {
 			result[i] = sanitizeValue(elem)
 		}
 		return result
-	case map[string]interface{}:
+	case map[string]any:
 		return sanitizeForStructpb(val)
 	default:
 		rv := reflect.ValueOf(v)
@@ -49,20 +49,20 @@ func sanitizeValue(v interface{}) interface{} {
 	}
 }
 
-func sanitizeSliceValue(rv reflect.Value) []interface{} {
+func sanitizeSliceValue(rv reflect.Value) []any {
 	length := rv.Len()
-	result := make([]interface{}, length)
+	result := make([]any, length)
 	for i := 0; i < length; i++ {
 		result[i] = sanitizeValue(rv.Index(i).Interface())
 	}
 	return result
 }
 
-func sanitizeMapValue(rv reflect.Value) map[string]interface{} {
+func sanitizeMapValue(rv reflect.Value) map[string]any {
 	if rv.Type().Key().Kind() != reflect.String {
 		return nil
 	}
-	result := make(map[string]interface{}, rv.Len())
+	result := make(map[string]any, rv.Len())
 	iter := rv.MapRange()
 	for iter.Next() {
 		key := iter.Key().String()
@@ -73,7 +73,7 @@ func sanitizeMapValue(rv reflect.Value) map[string]interface{} {
 
 func main() {
 	fmt.Println("=== Test 1: []string (the original bug) ===")
-	m1 := map[string]interface{}{
+	m1 := map[string]any{
 		"stop": []string{"a", "b", "c"},
 	}
 	st1, err1 := structpb.NewStruct(m1)
@@ -84,7 +84,7 @@ func main() {
 	fmt.Printf("After fix:  st=%v err=%v\n\n", st1Fixed, err1Fixed)
 
 	fmt.Println("=== Test 2: []map[string]string (conversation history) ===")
-	m2 := map[string]interface{}{
+	m2 := map[string]any{
 		"conversation_history": []map[string]string{
 			{"role": "user", "content": "hello"},
 			{"role": "assistant", "content": "hi"},
@@ -98,8 +98,8 @@ func main() {
 	fmt.Printf("After fix:  st=%v err=%v\n\n", st2Fixed, err2Fixed)
 
 	fmt.Println("=== Test 3: Nested structures ===")
-	m3 := map[string]interface{}{
-		"nested": map[string]interface{}{
+	m3 := map[string]any{
+		"nested": map[string]any{
 			"tags": []string{"tag1", "tag2"},
 		},
 	}

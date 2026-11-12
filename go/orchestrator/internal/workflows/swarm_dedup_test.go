@@ -61,40 +61,40 @@ func TestTruncateToSentence(t *testing.T) {
 func TestExtractURLsFromParams(t *testing.T) {
 	tests := []struct {
 		name     string
-		params   map[string]interface{}
+		params   map[string]any
 		expected []string
 	}{
 		{
 			"single url string",
-			map[string]interface{}{"url": "https://example.com"},
+			map[string]any{"url": "https://example.com"},
 			[]string{"https://example.com"},
 		},
 		{
 			"urls array",
-			map[string]interface{}{"urls": []interface{}{"https://a.com", "https://b.com"}},
+			map[string]any{"urls": []any{"https://a.com", "https://b.com"}},
 			[]string{"https://a.com", "https://b.com"},
 		},
 		{
 			"both url and urls",
-			map[string]interface{}{
+			map[string]any{
 				"url":  "https://single.com",
-				"urls": []interface{}{"https://a.com"},
+				"urls": []any{"https://a.com"},
 			},
 			[]string{"https://single.com", "https://a.com"},
 		},
 		{
 			"empty params",
-			map[string]interface{}{},
+			map[string]any{},
 			nil,
 		},
 		{
 			"url is empty string",
-			map[string]interface{}{"url": ""},
+			map[string]any{"url": ""},
 			nil,
 		},
 		{
 			"urls with non-string elements",
-			map[string]interface{}{"urls": []interface{}{42, "https://valid.com", nil}},
+			map[string]any{"urls": []any{42, "https://valid.com", nil}},
 			[]string{"https://valid.com"},
 		},
 	}
@@ -180,26 +180,26 @@ func TestMergeTeamKnowledge(t *testing.T) {
 func TestFetchTracker_CheckCache(t *testing.T) {
 	ft := newFetchTracker(nil)
 	// Write some entries
-	ft.writeCache("web_fetch", map[string]interface{}{"url": "https://example.com/page1"}, "content1", "agent-0")
-	ft.writeCache("web_fetch", map[string]interface{}{"url": "https://example.com/page2"}, "content2", "agent-0")
+	ft.writeCache("web_fetch", map[string]any{"url": "https://example.com/page1"}, "content1", "agent-0")
+	ft.writeCache("web_fetch", map[string]any{"url": "https://example.com/page2"}, "content2", "agent-0")
 
 	// Hit
-	if cached, hit := ft.checkCache("web_fetch", map[string]interface{}{"url": "https://example.com/page1"}); !hit || cached != "content1" {
+	if cached, hit := ft.checkCache("web_fetch", map[string]any{"url": "https://example.com/page1"}); !hit || cached != "content1" {
 		t.Errorf("expected cache hit with content1, got hit=%v cached=%q", hit, cached)
 	}
 	// Miss
-	if _, hit := ft.checkCache("web_fetch", map[string]interface{}{"url": "https://example.com/page3"}); hit {
+	if _, hit := ft.checkCache("web_fetch", map[string]any{"url": "https://example.com/page3"}); hit {
 		t.Error("expected cache miss for unknown URL")
 	}
 	// Non-fetch tool always misses
 	// cache 只对 fetch 类 tool 生效，search 结果不复用。
-	if _, hit := ft.checkCache("web_search", map[string]interface{}{"url": "https://example.com/page1"}); hit {
+	if _, hit := ft.checkCache("web_search", map[string]any{"url": "https://example.com/page1"}); hit {
 		t.Error("expected miss for non-fetch tool")
 	}
 	// Nil tracker is safe
 	// nil receiver 直接 miss，调用方不必判空。
 	var nilFT *fetchTracker
-	if _, hit := nilFT.checkCache("web_fetch", map[string]interface{}{"url": "https://example.com"}); hit {
+	if _, hit := nilFT.checkCache("web_fetch", map[string]any{"url": "https://example.com"}); hit {
 		t.Error("nil tracker should never hit")
 	}
 }
@@ -215,9 +215,9 @@ func TestFetchTracker_WriteCacheCap(t *testing.T) {
 	_ = originalMax // cap is a const, test with the struct directly
 
 	// Write 3 URLs
-	ft.writeCache("web_fetch", map[string]interface{}{"url": "https://a.com"}, "a", "agent-0")
-	ft.writeCache("web_fetch", map[string]interface{}{"url": "https://b.com"}, "b", "agent-0")
-	ft.writeCache("web_fetch", map[string]interface{}{"url": "https://c.com"}, "c", "agent-0")
+	ft.writeCache("web_fetch", map[string]any{"url": "https://a.com"}, "a", "agent-0")
+	ft.writeCache("web_fetch", map[string]any{"url": "https://b.com"}, "b", "agent-0")
+	ft.writeCache("web_fetch", map[string]any{"url": "https://c.com"}, "c", "agent-0")
 
 	if len(ft.cache) != 3 {
 		t.Errorf("expected 3 cache entries, got %d", len(ft.cache))
@@ -226,7 +226,7 @@ func TestFetchTracker_WriteCacheCap(t *testing.T) {
 		t.Errorf("expected 3 knowledge entries, got %d", len(ft.knowledge))
 	}
 	// Duplicate should not add
-	ft.writeCache("web_fetch", map[string]interface{}{"url": "https://a.com"}, "a-new", "agent-1")
+	ft.writeCache("web_fetch", map[string]any{"url": "https://a.com"}, "a-new", "agent-1")
 	if len(ft.cache) != 3 {
 		t.Errorf("duplicate should not increase count, got %d", len(ft.cache))
 	}
@@ -234,17 +234,17 @@ func TestFetchTracker_WriteCacheCap(t *testing.T) {
 
 func TestFetchTracker_QueryStringDistinction(t *testing.T) {
 	ft := newFetchTracker(nil)
-	ft.writeCache("web_fetch", map[string]interface{}{"url": "https://api.com/search?q=react"}, "react-data", "agent-0")
-	ft.writeCache("web_fetch", map[string]interface{}{"url": "https://api.com/search?q=vue"}, "vue-data", "agent-0")
+	ft.writeCache("web_fetch", map[string]any{"url": "https://api.com/search?q=react"}, "react-data", "agent-0")
+	ft.writeCache("web_fetch", map[string]any{"url": "https://api.com/search?q=vue"}, "vue-data", "agent-0")
 
 	// Different query params = different cache entries
 	if len(ft.cache) != 2 {
 		t.Errorf("different query params should be separate entries, got %d", len(ft.cache))
 	}
-	if cached, hit := ft.checkCache("web_fetch", map[string]interface{}{"url": "https://api.com/search?q=react"}); !hit || cached != "react-data" {
+	if cached, hit := ft.checkCache("web_fetch", map[string]any{"url": "https://api.com/search?q=react"}); !hit || cached != "react-data" {
 		t.Errorf("expected react-data, got hit=%v cached=%q", hit, cached)
 	}
-	if cached, hit := ft.checkCache("web_fetch", map[string]interface{}{"url": "https://api.com/search?q=vue"}); !hit || cached != "vue-data" {
+	if cached, hit := ft.checkCache("web_fetch", map[string]any{"url": "https://api.com/search?q=vue"}); !hit || cached != "vue-data" {
 		t.Errorf("expected vue-data, got hit=%v cached=%q", hit, cached)
 	}
 }

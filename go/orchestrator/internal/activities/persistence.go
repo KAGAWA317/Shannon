@@ -27,17 +27,17 @@ func NewPersistenceActivities(dbClient *db.Client, logger *zap.Logger) *Persiste
 
 // PersistAgentExecutionInput contains data to persist for an agent execution
 type PersistAgentExecutionInput struct {
-	ID         string                 `json:"id,omitempty"` // Optional pre-generated ID for correlation with tool executions
-	WorkflowID string                 `json:"workflow_id"`
-	AgentID    string                 `json:"agent_id"`
-	Input      string                 `json:"input"`
-	Output     string                 `json:"output"`
-	State      string                 `json:"state"`
-	TokensUsed int                    `json:"tokens_used"`
-	ModelUsed  string                 `json:"model_used"`
-	DurationMs int64                  `json:"duration_ms"`
-	Error      string                 `json:"error,omitempty"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	ID         string         `json:"id,omitempty"` // Optional pre-generated ID for correlation with tool executions
+	WorkflowID string         `json:"workflow_id"`
+	AgentID    string         `json:"agent_id"`
+	Input      string         `json:"input"`
+	Output     string         `json:"output"`
+	State      string         `json:"state"`
+	TokensUsed int            `json:"tokens_used"`
+	ModelUsed  string         `json:"model_used"`
+	DurationMs int64          `json:"duration_ms"`
+	Error      string         `json:"error,omitempty"`
+	Metadata   map[string]any `json:"metadata,omitempty"`
 }
 
 // PersistAgentExecutionStandalone is a standalone function that persists agent execution
@@ -97,7 +97,7 @@ func (p *PersistenceActivities) PersistAgentExecution(ctx context.Context, input
 	// Ensure metadata map exists and enrich with session/user if available via DB
 	// 确保 metadata map 存在；能通过数据库查到 session/user 时补充进去。
 	if input.Metadata == nil {
-		input.Metadata = make(map[string]interface{})
+		input.Metadata = make(map[string]any)
 	}
 
 	// Attempt to look up session_id and user_id via task_executions for this workflow
@@ -179,17 +179,17 @@ func (p *PersistenceActivities) PersistAgentExecution(ctx context.Context, input
 
 // PersistToolExecutionInput contains data to persist for a tool execution
 type PersistToolExecutionInput struct {
-	WorkflowID       string                 `json:"workflow_id"`
-	AgentID          string                 `json:"agent_id"`
-	AgentExecutionID string                 `json:"agent_execution_id,omitempty"` // Links to agent_executions.id
-	ToolName         string                 `json:"tool_name"`
-	InputParams      map[string]interface{} `json:"input_params"`
-	Output           string                 `json:"output"`
-	Success          bool                   `json:"success"`
-	TokensConsumed   int                    `json:"tokens_consumed"`
-	DurationMs       int64                  `json:"duration_ms"`
-	Error            string                 `json:"error,omitempty"`
-	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+	WorkflowID       string         `json:"workflow_id"`
+	AgentID          string         `json:"agent_id"`
+	AgentExecutionID string         `json:"agent_execution_id,omitempty"` // Links to agent_executions.id
+	ToolName         string         `json:"tool_name"`
+	InputParams      map[string]any `json:"input_params"`
+	Output           string         `json:"output"`
+	Success          bool           `json:"success"`
+	TokensConsumed   int            `json:"tokens_consumed"`
+	DurationMs       int64          `json:"duration_ms"`
+	Error            string         `json:"error,omitempty"`
+	Metadata         map[string]any `json:"metadata,omitempty"`
 }
 
 // PersistToolExecution persists a tool execution to the database

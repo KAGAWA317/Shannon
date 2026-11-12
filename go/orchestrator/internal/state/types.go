@@ -8,14 +8,14 @@ import (
 // AgentState represents the complete state of an agent execution
 // AgentState 表示 agent 执行的完整状态
 type AgentState struct {
-	Query               string                 `json:"query" validate:"required,min=1"`
-	Context             map[string]interface{} `json:"context"`
-	PlanningState       PlanningState          `json:"planning_state"`
-	ExecutionState      ExecutionState         `json:"execution_state"`
-	BeliefState         BeliefState            `json:"belief_state"`
-	ToolResults         []ToolResult           `json:"tool_results"`
-	IntermediateResults []string               `json:"intermediate_results"`
-	Errors              []ErrorRecord          `json:"errors"`
+	Query               string         `json:"query" validate:"required,min=1"`
+	Context             map[string]any `json:"context"`
+	PlanningState       PlanningState  `json:"planning_state"`
+	ExecutionState      ExecutionState `json:"execution_state"`
+	BeliefState         BeliefState    `json:"belief_state"`
+	ToolResults         []ToolResult   `json:"tool_results"`
+	IntermediateResults []string       `json:"intermediate_results"`
+	Errors              []ErrorRecord  `json:"errors"`
 }
 
 // PlanningState represents the planning phase state
@@ -41,11 +41,11 @@ type ExecutionState struct {
 // BeliefState represents the agent's belief and confidence state
 // BeliefState 表示 agent 的信念与置信度状态
 type BeliefState struct {
-	Confidence     float64                `json:"confidence" validate:"min=0,max=1"`
-	Assumptions    []string               `json:"assumptions"`
-	KnowledgeGaps  []string               `json:"knowledge_gaps"`
-	UpdatedBeliefs map[string]interface{} `json:"updated_beliefs"`
-	Hypotheses     []Hypothesis           `json:"hypotheses"`
+	Confidence     float64        `json:"confidence" validate:"min=0,max=1"`
+	Assumptions    []string       `json:"assumptions"`
+	KnowledgeGaps  []string       `json:"knowledge_gaps"`
+	UpdatedBeliefs map[string]any `json:"updated_beliefs"`
+	Hypotheses     []Hypothesis   `json:"hypotheses"`
 }
 
 // Hypothesis represents a working hypothesis
@@ -75,11 +75,11 @@ type ToolResult struct {
 // ErrorRecord represents an error that occurred during execution
 // ErrorRecord 表示执行期间发生的错误
 type ErrorRecord struct {
-	Timestamp    time.Time              `json:"timestamp"`
-	ErrorType    string                 `json:"error_type"`
-	ErrorMessage string                 `json:"error_message"`
-	Context      map[string]interface{} `json:"context"`
-	Recoverable  bool                   `json:"recoverable"`
+	Timestamp    time.Time      `json:"timestamp"`
+	ErrorType    string         `json:"error_type"`
+	ErrorMessage string         `json:"error_message"`
+	Context      map[string]any `json:"context"`
+	Recoverable  bool           `json:"recoverable"`
 }
 
 // Validate validates the AgentState

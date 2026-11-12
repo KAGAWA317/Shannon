@@ -91,17 +91,17 @@ func TestTemplateCompilation_DAGNode(t *testing.T) {
 				BudgetMax: intPtr(3000),
 				DependsOn: []string{},
 				Metadata: map[string]any{
-					"tasks": []interface{}{
-						map[string]interface{}{
+					"tasks": []any{
+						map[string]any{
 							"id":         "task1",
 							"query":      "First task",
-							"tools":      []interface{}{"web_search"},
-							"depends_on": []interface{}{},
+							"tools":      []any{"web_search"},
+							"depends_on": []any{},
 						},
-						map[string]interface{}{
+						map[string]any{
 							"id":         "task2",
 							"query":      "Second task",
-							"depends_on": []interface{}{"task1"},
+							"depends_on": []any{"task1"},
 						},
 					},
 				},

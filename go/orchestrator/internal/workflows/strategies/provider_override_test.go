@@ -11,12 +11,12 @@ import (
 func TestProviderOverridePrecedence(t *testing.T) {
 	tests := []struct {
 		name             string
-		context          map[string]interface{}
+		context          map[string]any
 		expectedProvider string
 	}{
 		{
 			name: "provider_override takes precedence",
-			context: map[string]interface{}{
+			context: map[string]any{
 				"provider_override": "anthropic",
 				"provider":          "openai",
 				"llm_provider":      "google",
@@ -25,7 +25,7 @@ func TestProviderOverridePrecedence(t *testing.T) {
 		},
 		{
 			name: "provider used when provider_override absent",
-			context: map[string]interface{}{
+			context: map[string]any{
 				"provider":     "openai",
 				"llm_provider": "google",
 			},
@@ -33,14 +33,14 @@ func TestProviderOverridePrecedence(t *testing.T) {
 		},
 		{
 			name: "llm_provider used when both provider_override and provider absent",
-			context: map[string]interface{}{
+			context: map[string]any{
 				"llm_provider": "google",
 			},
 			expectedProvider: "google",
 		},
 		{
 			name:             "empty when all absent",
-			context:          map[string]interface{}{},
+			context:          map[string]any{},
 			expectedProvider: "",
 		},
 	}

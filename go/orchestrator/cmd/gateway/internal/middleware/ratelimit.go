@@ -295,7 +295,7 @@ func (rl *RateLimiter) sendRateLimitError(w http.ResponseWriter, window string) 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusTooManyRequests)
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"error":   "Rate limit exceeded",
 		"message": fmt.Sprintf("Too many requests. %s limit exceeded. Please retry after the rate limit window resets.", window),
 		"window":  window,
@@ -309,7 +309,7 @@ func (rl *RateLimiter) sendUnauthorizedError(w http.ResponseWriter, message stri
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"error":   "Unauthorized",
 		"message": message,
 	}

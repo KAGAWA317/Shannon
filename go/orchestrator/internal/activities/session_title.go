@@ -154,7 +154,7 @@ func (a *Activities) GenerateSessionTitle(ctx context.Context, input GenerateSes
 
 		// Build updated context JSON with title
 		// 组装带 title 的 context JSON。
-		contextData := make(map[string]interface{})
+		contextData := make(map[string]any)
 
 		// First load PostgreSQL context (to preserve external_id)
 		// 先加载 PostgreSQL 的 context（保留 external_id）。
@@ -234,14 +234,14 @@ Query: %s`, query)
 	llmServiceURL := getEnvOrDefaultTitle("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"query":       prompt,
 		"max_tokens":  9126, // Increased for long input queries + output
 		// 为长 query 输入加输出留出余量。
 		"temperature": 0.3,  // Low temperature for consistency
 		// 低 temperature，保证输出稳定。
 		"agent_id":    "title_generator",
-		"context": map[string]interface{}{
+		"context": map[string]any{
 			"system_prompt": "You are a multilingual title generator. Generate concise, descriptive titles for chat sessions in the SAME LANGUAGE as the user's input. For CJK languages (Chinese, Japanese, Korean), use 5-15 characters. For English and other Western languages, use 3-5 words in Title Case. No quotes, no trailing punctuation, no emojis. Output ONLY the title.",
 		},
 	}

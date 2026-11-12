@@ -21,7 +21,7 @@ type FetchSessionMemoryInput struct {
 
 // FetchSessionMemoryResult contains retrieved items for merging
 type FetchSessionMemoryResult struct {
-	Items []map[string]interface{} `json:"items"`
+	Items []map[string]any `json:"items"`
 }
 
 // FetchSessionMemory fetches recent items for a session from Qdrant
@@ -59,12 +59,12 @@ func FetchSessionMemory(ctx context.Context, in FetchSessionMemoryInput) (FetchS
 			Type:       string(StreamEventProgress),
 			AgentID:    "memory",
 			Message:    msg,
-			Payload:    map[string]interface{}{"operation": "fetch", "hits": len(items)},
+			Payload:    map[string]any{"operation": "fetch", "hits": len(items)},
 			Timestamp:  time.Now(),
 		})
 	}
 
-	out := make([]map[string]interface{}, 0, len(items))
+	out := make([]map[string]any, 0, len(items))
 	for _, it := range items {
 		out = append(out, it.Payload)
 	}

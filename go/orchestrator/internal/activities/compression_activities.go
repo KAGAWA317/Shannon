@@ -56,7 +56,7 @@ func (a *Activities) CheckCompressionNeeded(ctx context.Context, in CheckCompres
 		if err == nil && sessData != nil && sessData.Metadata != nil {
 			// Check compression state for rate limiting
 			// 读取 compression 状态以判断是否触发过于频繁。
-			if compState, ok := sessData.Metadata["compression_state"].(map[string]interface{}); ok {
+			if compState, ok := sessData.Metadata["compression_state"].(map[string]any); ok {
 				// Check message count since last compression
 				// 检查距上次 compression 的消息条数。
 				if lastCount, ok := compState["last_message_count"].(int); ok {
@@ -137,10 +137,10 @@ func (a *Activities) UpdateCompressionStateActivity(ctx context.Context, in Upda
 	// 取出或创建 compression 状态。
 	totalCompressions := 0
 	if sessData.Metadata == nil {
-		sessData.Metadata = make(map[string]interface{})
+		sessData.Metadata = make(map[string]any)
 	}
 
-	if compState, ok := sessData.Metadata["compression_state"].(map[string]interface{}); ok {
+	if compState, ok := sessData.Metadata["compression_state"].(map[string]any); ok {
 		if total, ok := compState["total_compressions"].(int); ok {
 			totalCompressions = total
 		}
@@ -149,7 +149,7 @@ func (a *Activities) UpdateCompressionStateActivity(ctx context.Context, in Upda
 
 	// Update compression state
 	// 更新 compression 状态。
-	sessData.Metadata["compression_state"] = map[string]interface{}{
+	sessData.Metadata["compression_state"] = map[string]any{
 		"last_compressed_at": time.Now().Unix(),
 		"last_message_count": in.MessageCount,
 		"total_compressions": totalCompressions,

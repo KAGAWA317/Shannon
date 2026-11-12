@@ -151,7 +151,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	marshal := func(v interface{}) []byte {
+	marshal := func(v any) []byte {
 		b, err := json.Marshal(v)
 		if err != nil {
 			return []byte("{}")
@@ -162,7 +162,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 	mapEvent := func(ev streaming.Event) (string, []byte) {
 		switch ev.Type {
 		case "LLM_PARTIAL":
-			return "thread.message.delta", marshal(map[string]interface{}{
+			return "thread.message.delta", marshal(map[string]any{
 				"delta":       ev.Message,
 				"workflow_id": ev.WorkflowID,
 				"agent_id":    ev.AgentID,
@@ -170,7 +170,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 				"stream_id":   ev.StreamID,
 			})
 		case "LLM_OUTPUT":
-			payload := map[string]interface{}{
+			payload := map[string]any{
 				"response":    ev.Message,
 				"workflow_id": ev.WorkflowID,
 				"agent_id":    ev.AgentID,
@@ -186,7 +186,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 		case "STREAM_END":
 			return "done", []byte("[DONE]")
 		case "WORKFLOW_PAUSING":
-			return "workflow.pausing", marshal(map[string]interface{}{
+			return "workflow.pausing", marshal(map[string]any{
 				"workflow_id": ev.WorkflowID,
 				"agent_id":    ev.AgentID,
 				"message":     ev.Message,
@@ -198,20 +198,20 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 					checkpoint = cp
 				}
 			}
-			return "workflow.paused", marshal(map[string]interface{}{
+			return "workflow.paused", marshal(map[string]any{
 				"workflow_id": ev.WorkflowID,
 				"agent_id":    ev.AgentID,
 				"checkpoint":  checkpoint,
 				"message":     ev.Message,
 			})
 		case "WORKFLOW_RESUMED":
-			return "workflow.resumed", marshal(map[string]interface{}{
+			return "workflow.resumed", marshal(map[string]any{
 				"workflow_id": ev.WorkflowID,
 				"agent_id":    ev.AgentID,
 				"message":     ev.Message,
 			})
 		case "WORKFLOW_CANCELLING":
-			return "workflow.cancelling", marshal(map[string]interface{}{
+			return "workflow.cancelling", marshal(map[string]any{
 				"workflow_id": ev.WorkflowID,
 				"agent_id":    ev.AgentID,
 				"message":     ev.Message,
@@ -227,7 +227,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 					wasPaused = wp
 				}
 			}
-			return "workflow.cancelled", marshal(map[string]interface{}{
+			return "workflow.cancelled", marshal(map[string]any{
 				"workflow_id": ev.WorkflowID,
 				"agent_id":    ev.AgentID,
 				"message":     ev.Message,

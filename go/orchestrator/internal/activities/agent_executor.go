@@ -39,15 +39,15 @@ var base64FieldsToStore = []string{
 // Returns the sanitized output and whether any fields were stored.
 // 递归遍历 map，把体积过大的 base64 字段存入 Redis 并替换为引用键；
 // 返回清洗后的输出以及是否发生过存储。
-func storeOversizedBase64Fields(ctx context.Context, workflowID string, output interface{}, path string) (interface{}, bool) {
+func storeOversizedBase64Fields(ctx context.Context, workflowID string, output any, path string) (any, bool) {
 	if output == nil {
 		return nil, false
 	}
 
 	switch v := output.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		stored := false
-		result := make(map[string]interface{}, len(v))
+		result := make(map[string]any, len(v))
 		for key, val := range v {
 			// Build the path for nested fields
 			fieldPath := key
@@ -73,7 +73,7 @@ func storeOversizedBase64Fields(ctx context.Context, workflowID string, output i
 						result[key] = fmt.Sprintf("[STORAGE_FAILED: %d bytes - %v]", len(strVal), err)
 					} else {
 						// Replace with reference object containing key and size
-						result[key+"_ref"] = map[string]interface{}{
+						result[key+"_ref"] = map[string]any{
 							"redis_key": refKey,
 							"size":      len(strVal),
 							"ttl_days":  7,
@@ -95,9 +95,9 @@ func storeOversizedBase64Fields(ctx context.Context, workflowID string, output i
 		}
 		return result, stored
 
-	case []interface{}:
+	case []any:
 		stored := false
-		result := make([]interface{}, len(v))
+		result := make([]any, len(v))
 		for i, item := range v {
 			itemPath := fmt.Sprintf("%s[%d]", path, i)
 			newItem, childStored := storeOversizedBase64Fields(ctx, workflowID, item, itemPath)
@@ -115,21 +115,21 @@ func storeOversizedBase64Fields(ctx context.Context, workflowID string, output i
 
 // AgentDefinition represents the configuration for a single agent
 type AgentDefinition struct {
-	Name         string                 `yaml:"name"`
-	Description  string                 `yaml:"description"`
-	Tool         string                 `yaml:"tool"`
-	Category     string                 `yaml:"category"`
-	InputSchema  map[string]interface{} `yaml:"input_schema"`
-	OutputSchema map[string]interface{} `yaml:"output_schema"`
-	CostPerCall  float64                `yaml:"cost_per_call"`
-	TimeoutSecs  int                    `yaml:"timeout_seconds"`
+	Name         string         `yaml:"name"`
+	Description  string         `yaml:"description"`
+	Tool         string         `yaml:"tool"`
+	Category     string         `yaml:"category"`
+	InputSchema  map[string]any `yaml:"input_schema"`
+	OutputSchema map[string]any `yaml:"output_schema"`
+	CostPerCall  float64        `yaml:"cost_per_call"`
+	TimeoutSecs  int            `yaml:"timeout_seconds"`
 }
 
 // AgentsYAMLConfig represents the full agents.yaml configuration
 type AgentsYAMLConfig struct {
 	Version  string                     `yaml:"version"`
 	Agents   map[string]AgentDefinition `yaml:"agents"`
-	Settings map[string]interface{}     `yaml:"settings"`
+	Settings map[string]any             `yaml:"settings"`
 }
 
 var (
@@ -195,24 +195,24 @@ func ListAgentIDs() ([]string, error) {
 
 // ExecuteAgentInput is the input for ExecuteAgentActivity
 type ExecuteAgentInput struct {
-	AgentID    string                 `json:"agent_id"`
-	Input      map[string]interface{} `json:"input"`
-	WorkflowID string                 `json:"workflow_id"`
-	UserID     string                 `json:"user_id"`
-	TenantID   string                 `json:"tenant_id"`
+	AgentID    string         `json:"agent_id"`
+	Input      map[string]any `json:"input"`
+	WorkflowID string         `json:"workflow_id"`
+	UserID     string         `json:"user_id"`
+	TenantID   string         `json:"tenant_id"`
 }
 
 // ExecuteAgentOutput is the output from ExecuteAgentActivity
 type ExecuteAgentOutput struct {
-	Success       bool                   `json:"success"`
-	Output        interface{}            `json:"output"`
-	Error         string                 `json:"error,omitempty"`
-	AgentID       string                 `json:"agent_id"`
-	ToolName      string                 `json:"tool_name"`
-	ExecutionTime int                    `json:"execution_time_ms"`
-	CostUSD       float64                `json:"cost_usd"`
-	TokensUsed    int                    `json:"tokens_used,omitempty"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	Success       bool           `json:"success"`
+	Output        any            `json:"output"`
+	Error         string         `json:"error,omitempty"`
+	AgentID       string         `json:"agent_id"`
+	ToolName      string         `json:"tool_name"`
+	ExecutionTime int            `json:"execution_time_ms"`
+	CostUSD       float64        `json:"cost_usd"`
+	TokensUsed    int            `json:"tokens_used,omitempty"`
+	Metadata      map[string]any `json:"metadata,omitempty"`
 }
 
 // ExecuteAgentActivity executes a single agent by calling its underlying tool
@@ -253,7 +253,7 @@ func ExecuteAgentActivity(ctx context.Context, input ExecuteAgentInput) (*Execut
 
 	params := input.Input
 	if params == nil {
-		params = map[string]interface{}{}
+		params = map[string]any{}
 	}
 
 	// Special handling for keyword_extract (uses LLM activity directly)
@@ -307,7 +307,7 @@ func ExecuteAgentActivity(ctx context.Context, input ExecuteAgentInput) (*Execut
 		}
 	}
 	// Also check output for cost
-	if outputMap, ok := result.Output.(map[string]interface{}); ok {
+	if outputMap, ok := result.Output.(map[string]any); ok {
 		if cost, ok := outputMap["api_cost_usd"].(float64); ok {
 			costUSD = cost
 		}
@@ -341,7 +341,7 @@ func ExecuteAgentActivity(ctx context.Context, input ExecuteAgentInput) (*Execut
 			"workflow_id", input.WorkflowID)
 		refKey, storeErr := streaming.Get().StoreBlob(ctx, input.WorkflowID, "full_output", string(serialized))
 		if storeErr == nil {
-			sanitizedOutput = map[string]interface{}{
+			sanitizedOutput = map[string]any{
 				"_stored_in_redis": true,
 				"redis_key":        refKey,
 				"size_bytes":       len(serialized),
@@ -349,7 +349,7 @@ func ExecuteAgentActivity(ctx context.Context, input ExecuteAgentInput) (*Execut
 			}
 		} else {
 			logger.Error("Failed to store oversized output in Redis", "error", storeErr)
-			sanitizedOutput = map[string]interface{}{
+			sanitizedOutput = map[string]any{
 				"_error":     "output_too_large_redis_failed",
 				"size_bytes": len(serialized),
 				"agent_id":   input.AgentID,
@@ -382,7 +382,7 @@ func executeKeywordExtractAgent(ctx context.Context, input ExecuteAgentInput, ag
 	// Extract parameters
 	params := input.Input
 	if params == nil {
-		params = map[string]interface{}{}
+		params = map[string]any{}
 	}
 
 	query, _ := params["query"].(string)
@@ -424,7 +424,7 @@ func executeKeywordExtractAgent(ctx context.Context, input ExecuteAgentInput, ag
 	totalTokens := extractOutput.InputTokens + extractOutput.OutputTokens
 	estimatedCost := float64(totalTokens) * 0.000001 // Rough estimate
 
-	output := map[string]interface{}{
+	output := map[string]any{
 		"keywords":          extractOutput.Keywords,
 		"detected_language": extractOutput.DetectedLanguage,
 		"detected_country":  extractOutput.DetectedCountry,
@@ -443,15 +443,15 @@ func executeKeywordExtractAgent(ctx context.Context, input ExecuteAgentInput, ag
 }
 
 type toolExecuteRequestWithSessionContext struct {
-	ToolName       string                 `json:"tool_name"`
-	Parameters     map[string]interface{} `json:"parameters"`
-	SessionContext map[string]interface{} `json:"session_context,omitempty"`
+	ToolName       string         `json:"tool_name"`
+	Parameters     map[string]any `json:"parameters"`
+	SessionContext map[string]any `json:"session_context,omitempty"`
 }
 
 func executeBrowserScreenshotAgent(ctx context.Context, input ExecuteAgentInput, agentDef *AgentDefinition, startTime time.Time, timeout time.Duration) (*ExecuteAgentOutput, error) {
 	params := input.Input
 	if params == nil {
-		params = map[string]interface{}{}
+		params = map[string]any{}
 	}
 
 	url, _ := params["url"].(string)
@@ -489,15 +489,15 @@ func executeBrowserScreenshotAgent(ctx context.Context, input ExecuteAgentInput,
 		}, nil
 	}
 
-	sessionCtx := map[string]interface{}{
+	sessionCtx := map[string]any{
 		"session_id": fmt.Sprintf("agent-%s-%s", input.WorkflowID, input.AgentID),
 	}
 	// Use context.Background() for cleanup to ensure browser is closed even if parent context is cancelled
 	defer func() {
-		_, _ = callToolForAgentExec(context.Background(), "browser", map[string]interface{}{"action": "close"}, sessionCtx, 10*time.Second)
+		_, _ = callToolForAgentExec(context.Background(), "browser", map[string]any{"action": "close"}, sessionCtx, 10*time.Second)
 	}()
 
-	_, err := callToolForAgentExec(ctx, "browser", map[string]interface{}{
+	_, err := callToolForAgentExec(ctx, "browser", map[string]any{
 		"action":     "navigate",
 		"url":        url,
 		"wait_until": waitUntil,
@@ -513,7 +513,7 @@ func executeBrowserScreenshotAgent(ctx context.Context, input ExecuteAgentInput,
 		}, nil
 	}
 
-	result, err := callToolForAgentExec(ctx, "browser", map[string]interface{}{
+	result, err := callToolForAgentExec(ctx, "browser", map[string]any{
 		"action":    "screenshot",
 		"full_page": fullPage,
 	}, sessionCtx, timeout)
@@ -541,9 +541,9 @@ func executeBrowserScreenshotAgent(ctx context.Context, input ExecuteAgentInput,
 
 // callToolForAgentExec is a helper that calls the LLM service tool endpoint.
 // When sessionContext is provided, it is forwarded as request.session_context.
-func callToolForAgentExec(ctx context.Context, toolName string, params map[string]interface{}, sessionContext map[string]interface{}, timeout time.Duration) (*ToolExecuteResponse, error) {
+func callToolForAgentExec(ctx context.Context, toolName string, params map[string]any, sessionContext map[string]any, timeout time.Duration) (*ToolExecuteResponse, error) {
 	if params == nil {
-		params = map[string]interface{}{}
+		params = map[string]any{}
 	}
 	if sessionContext == nil {
 		return callToolWithTimeout(ctx, toolName, params, timeout)
@@ -619,7 +619,7 @@ func validateBrowserURL(rawURL string) error {
 // callToolWithHeartbeat calls a tool and sends periodic heartbeats to Temporal
 // to prevent heartbeat timeout for long-running tools like LP analysis.
 // 调用 tool 并周期性向 Temporal 发送心跳，避免 LP 分析这类长耗时 tool 触发心跳 timeout。
-func callToolWithHeartbeat(ctx context.Context, toolName string, params map[string]interface{}, timeout time.Duration, agentID string) (*ToolExecuteResponse, error) {
+func callToolWithHeartbeat(ctx context.Context, toolName string, params map[string]any, timeout time.Duration, agentID string) (*ToolExecuteResponse, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("callToolWithHeartbeat starting", "tool", toolName, "agent_id", agentID, "timeout", timeout.String())
 
@@ -651,7 +651,7 @@ func callToolWithHeartbeat(ctx context.Context, toolName string, params map[stri
 		case <-ticker.C:
 			// Record heartbeat to prevent Temporal heartbeat timeout
 			logger.Info("Sending heartbeat", "tool", toolName, "elapsed", time.Since(startTime).String())
-			activity.RecordHeartbeat(ctx, map[string]interface{}{
+			activity.RecordHeartbeat(ctx, map[string]any{
 				"agent_id": agentID,
 				"tool":     toolName,
 				"status":   "executing",
@@ -690,7 +690,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 	logger := activity.GetLogger(ctx)
 	params := input.Input
 	if params == nil {
-		params = map[string]interface{}{}
+		params = map[string]any{}
 	}
 
 	// Apply agent-level timeout as overall deadline
@@ -709,7 +709,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 
 	var platformsList []string
 	if pRaw, ok := params["platforms"]; ok {
-		if pSlice, ok := pRaw.([]interface{}); ok {
+		if pSlice, ok := pRaw.([]any); ok {
 			for _, p := range pSlice {
 				if s, ok := p.(string); ok {
 					platformsList = append(platformsList, s)
@@ -744,7 +744,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 
 	type platformResult struct {
 		name   string
-		output interface{}
+		output any
 		err    error
 		cost   float64
 	}
@@ -755,7 +755,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 		results []platformResult
 	)
 
-	collect := func(name string, output interface{}, err error, cost float64) {
+	collect := func(name string, output any, err error, cost float64) {
 		mu.Lock()
 		results = append(results, platformResult{name: name, output: output, err: err, cost: cost})
 		mu.Unlock()
@@ -767,7 +767,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 		go func() {
 			defer wg.Done()
 			activity.RecordHeartbeat(ctx, "google_transparency")
-			googleParams := map[string]interface{}{}
+			googleParams := map[string]any{}
 			if advertiserID != "" {
 				googleParams["advertiser_id"] = advertiserID
 			}
@@ -791,7 +791,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 			}
 			result, err := callToolWithTimeout(ctx, "ads_transparency_search", googleParams, 30*time.Second)
 			var cost float64
-			var output interface{}
+			var output any
 			if err == nil && result != nil {
 				output = result.Output
 				cost = extractCostFromResult(result)
@@ -814,14 +814,14 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 				collect("yahoo_jp", nil, fmt.Errorf("no domain or advertiser_id for Yahoo search"), 0)
 				return
 			}
-			yahooParams := map[string]interface{}{
+			yahooParams := map[string]any{
 				"keywords":     []string{keyword},
 				"max_results":  20,
 				"resolve_urls": false,
 			}
 			result, err := callToolWithTimeout(ctx, "yahoo_jp_ads_discover", yahooParams, 120*time.Second)
 			var cost float64
-			var output interface{}
+			var output any
 			if err == nil && result != nil {
 				output = result.Output
 				cost = extractCostFromResult(result)
@@ -844,7 +844,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 				collect("meta", nil, fmt.Errorf("no domain or advertiser_id for Meta search"), 0)
 				return
 			}
-			metaParams := map[string]interface{}{
+			metaParams := map[string]any{
 				"query":       query,
 				"ad_status":   "active",
 				"max_results": 20,
@@ -857,7 +857,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 			}
 			result, err := callToolWithTimeout(ctx, "meta_ad_library_search", metaParams, 30*time.Second)
 			var cost float64
-			var output interface{}
+			var output any
 			if err == nil && result != nil {
 				output = result.Output
 				cost = extractCostFromResult(result)
@@ -868,7 +868,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 
 	wg.Wait()
 
-	merged := map[string]interface{}{}
+	merged := map[string]any{}
 	errors := map[string]string{}
 	queried := []string{}
 	var totalCost float64
@@ -931,7 +931,7 @@ func extractCostFromResult(result *ToolExecuteResponse) float64 {
 			return c
 		}
 	}
-	if outputMap, ok := result.Output.(map[string]interface{}); ok {
+	if outputMap, ok := result.Output.(map[string]any); ok {
 		if c, ok := outputMap["api_cost_usd"].(float64); ok {
 			return c
 		}

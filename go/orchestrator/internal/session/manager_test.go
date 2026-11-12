@@ -54,7 +54,7 @@ func TestSessionCacheSizeGaugeUpdatesOnCreateAndDelete(t *testing.T) {
 
 	base := getGauge("shannon_session_cache_size")
 
-	s, err := mgr.CreateSession(context.Background(), "u", "t", map[string]interface{}{"x": 1})
+	s, err := mgr.CreateSession(context.Background(), "u", "t", map[string]any{"x": 1})
 	if err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestSessionCacheEvictionIncrementsCounter(t *testing.T) {
 
 	// Create multiple sessions
 	for i := 0; i < 4; i++ {
-		_, err := mgr.CreateSession(context.Background(), "u", "t", map[string]interface{}{"i": i})
+		_, err := mgr.CreateSession(context.Background(), "u", "t", map[string]any{"i": i})
 		if err != nil {
 			t.Fatalf("CreateSession %d failed: %v", i, err)
 		}

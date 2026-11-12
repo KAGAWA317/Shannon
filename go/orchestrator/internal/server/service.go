@@ -486,7 +486,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 	}
 
 	// Prepare session context for PostgreSQL persistence
-	var sessionContext map[string]interface{}
+	var sessionContext map[string]any
 
 	// Create new session if needed
 	if sess == nil {
@@ -494,7 +494,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 
 		// Build initial session context with task context for first task
 		// 为第一个 task 构建带 task context 的初始 session context
-		sessionContext = map[string]interface{}{
+		sessionContext = map[string]any{
 			"created_from": "orchestrator",
 		}
 
@@ -583,15 +583,15 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 	// 同时持久化附件 metadata，使前端在加载 session 历史时（Redis TTL 过期后）
 	// 仍能渲染缩略图。
 	userContent := req.Query
-	var msgMetadata map[string]interface{}
+	var msgMetadata map[string]any
 	if req.Context != nil {
 		ctxMap := req.Context.AsMap()
 		if atts, ok := ctxMap["attachments"]; ok {
-			if attList, ok := atts.([]interface{}); ok && len(attList) > 0 {
+			if attList, ok := atts.([]any); ok && len(attList) > 0 {
 				var descs []string
-				var attsMeta []map[string]interface{}
+				var attsMeta []map[string]any
 				for _, a := range attList {
-					if am, ok := a.(map[string]interface{}); ok {
+					if am, ok := a.(map[string]any); ok {
 						filename, _ := am["filename"].(string)
 						if filename == "" {
 							filename = "file"
@@ -600,7 +600,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 						descs = append(descs, fmt.Sprintf("[Attached: %s (%s)]", filename, mediaType))
 						// Persist lightweight metadata (no binary data) for frontend rendering
 						// 持久化轻量 metadata（不含二进制数据）供前端渲染
-						meta := map[string]interface{}{
+						meta := map[string]any{
 							"filename":   filename,
 							"media_type": mediaType,
 						}
@@ -622,7 +622,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 					userContent += "\n" + strings.Join(descs, " ")
 				}
 				if len(attsMeta) > 0 {
-					msgMetadata = map[string]interface{}{
+					msgMetadata = map[string]any{
 						"attachments": attsMeta,
 					}
 				}
@@ -667,7 +667,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 		return n
 	}
 
-	parseBoolish := func(v interface{}) bool {
+	parseBoolish := func(v any) bool {
 		switch val := v.(type) {
 		case bool:
 			return val
@@ -690,7 +690,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 		}
 	}
 
-	ctxMap := map[string]interface{}{}
+	ctxMap := map[string]any{}
 	if req.Context != nil {
 		ctxMap = req.Context.AsMap()
 	}
@@ -894,7 +894,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 
 	// Store metadata in workflow memo for retrieval later
 	// 把 metadata 存入 workflow memo 以便后续读取
-	memo := map[string]interface{}{
+	memo := map[string]any{
 		"user_id":    userID,
 		"session_id": runtimeSessionID,
 		"tenant_id":  tenantID,
@@ -1127,7 +1127,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 		// Persist submission context early so GET status can surface it while running
 		// 提前持久化提交 context，使运行中的 GET status 也能返回它
 		if len(ctxMap) > 0 {
-			taskCtx := make(map[string]interface{}, len(ctxMap))
+			taskCtx := make(map[string]any, len(ctxMap))
 			for k, v := range ctxMap {
 				taskCtx[k] = v
 			}
@@ -1553,17 +1553,17 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 				// 防止 circuit breaker 返回 nil 行
 				if row != nil {
 					if err := row.Scan(&origMetadataJSON); err == nil && origMetadataJSON.Valid && origMetadataJSON.String != "" {
-						var origMetadata map[string]interface{}
+						var origMetadata map[string]any
 						if jsonErr := json.Unmarshal([]byte(origMetadataJSON.String), &origMetadata); jsonErr == nil {
-							if origTaskCtx, ok := origMetadata["task_context"].(map[string]interface{}); ok {
+							if origTaskCtx, ok := origMetadata["task_context"].(map[string]any); ok {
 								// Ensure metadata + task_context map exist before merge.
 								// 合并前确保 metadata 与 task_context map 都存在。
 								if result.Metadata == nil {
-									result.Metadata = make(map[string]interface{})
+									result.Metadata = make(map[string]any)
 								}
-								resultTaskCtx, hasResultCtx := result.Metadata["task_context"].(map[string]interface{})
+								resultTaskCtx, hasResultCtx := result.Metadata["task_context"].(map[string]any)
 								if !hasResultCtx {
-									resultTaskCtx = make(map[string]interface{})
+									resultTaskCtx = make(map[string]any)
 								}
 								// Preserve request-level fields that shouldn't be overwritten by runtime fields.
 								// 保留不应被运行时字段覆盖的 request 级字段。
@@ -1646,7 +1646,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 				if au, ok := result.Metadata["agent_usages"]; ok {
 					// If existing usages contain any non-zero totals, keep them
 					// 已有 usages 含非零总数时保留它们
-					if list, ok2 := au.([]map[string]interface{}); ok2 {
+					if list, ok2 := au.([]map[string]any); ok2 {
 						for _, m := range list {
 							if v, ok := m["total_tokens"]; ok {
 								switch t := v.(type) {
@@ -1685,13 +1685,13 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
                         ORDER BY total_tokens DESC`, workflowID)
 				if err == nil {
 					defer rows.Close()
-					var usages []map[string]interface{}
+					var usages []map[string]any
 					for rows.Next() {
 						var r agentUsageRow
 						if scanErr := rows.Scan(&r.AgentID, &r.Model, &r.Provider, &r.InputTokens, &r.OutputTokens, &r.TotalTokens, &r.CacheAwareTotalTokens, &r.CostUSD); scanErr != nil {
 							continue
 						}
-						usage := map[string]interface{}{}
+						usage := map[string]any{}
 						if r.AgentID.Valid {
 							usage["agent_id"] = r.AgentID.String
 						}
@@ -1717,7 +1717,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 					}
 					if len(usages) > 0 {
 						if result.Metadata == nil {
-							result.Metadata = make(map[string]interface{})
+							result.Metadata = make(map[string]any)
 						}
 						result.Metadata["agent_usages"] = usages
 						taskExecution.Metadata = db.JSONB(result.Metadata)
@@ -1849,7 +1849,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 			// Ensure task_id is set in metadata so unified response includes it
 			// 确保 metadata 中设置 task_id，使统一 response 包含它
 			if result.Metadata == nil {
-				result.Metadata = make(map[string]interface{})
+				result.Metadata = make(map[string]any)
 			}
 			if _, ok := result.Metadata["task_id"]; !ok {
 				result.Metadata["task_id"] = workflowID
@@ -1859,7 +1859,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 			// 构建统一 response 之前，用 DB 聚合值更新 result.Metadata
 			if hasDBMetrics {
 				if result.Metadata == nil {
-					result.Metadata = make(map[string]interface{})
+					result.Metadata = make(map[string]any)
 				}
 				if dbTotalTokens > 0 {
 					result.Metadata["total_tokens"] = dbTotalTokens
@@ -2426,7 +2426,7 @@ func (s *OrchestratorService) ListTasks(ctx context.Context, req *pb.ListTasksRe
 
 	// Build filters
 	where := []string{"1=1"}
-	args := []interface{}{}
+	args := []any{}
 	ai := 1
 
 	if tenantFilter != nil {
@@ -2646,7 +2646,7 @@ func (s *OrchestratorService) loadRecentSessionTasks(ctx context.Context, sessio
 	}
 
 	where := []string{"session_id = $1"}
-	args := []interface{}{sessionID, limit}
+	args := []any{sessionID, limit}
 	if tenantID != nil {
 		where = append(where, "tenant_id = $3")
 		args = append(args, *tenantID)
@@ -2757,7 +2757,7 @@ func (s *OrchestratorService) loadRecentSessionTasksByIDs(ctx context.Context, s
 	}
 
 	where := []string{"(session_id = $1 OR session_id = $2)"}
-	args := []interface{}{ids[0], ids[1], limit}
+	args := []any{ids[0], ids[1], limit}
 	if tenantID != nil {
 		where = append(where, "tenant_id = $4")
 		args = append(args, *tenantID)
@@ -2929,7 +2929,7 @@ func (s *OrchestratorService) watchAndPersist(workflowID, runID string) {
 
 		// Try to wait for workflow completion
 		we := s.temporalClient.GetWorkflow(waitCtx, workflowID, runID)
-		var tmp interface{}
+		var tmp any
 		waitErr := we.Get(waitCtx, &tmp)
 		waitCancel()
 
@@ -3169,7 +3169,7 @@ func RegisterOrchestratorServiceServer(s *grpc.Server, srv pb.OrchestratorServic
 
 // calculateTokenCost calculates the cost based on token count and model
 // calculateTokenCost 按 token 数与模型计算成本
-func calculateTokenCost(tokens int, metadata map[string]interface{}) float64 {
+func calculateTokenCost(tokens int, metadata map[string]any) float64 {
 	// Prefer centralized pricing config (model-specific) with sensible fallback.
 	// 优先使用集中式定价配置（按模型），并带合理兜底。
 	var model string
@@ -3707,7 +3707,7 @@ func (s *OrchestratorService) UpdateSchedule(ctx context.Context, req *pb.Update
 	if req.ClearTaskContext {
 		// Explicit clear: set to empty map (not nil) to overwrite existing
 		// 显式清除：设为空 map（而非 nil）以覆盖现有值
-		updateInput.TaskContext = make(map[string]interface{})
+		updateInput.TaskContext = make(map[string]any)
 	} else if len(req.TaskContext) > 0 {
 		// New values provided: decode JSON-encoded values and set
 		// 提供了新值：解码 JSON 编码的值并设置
@@ -3937,16 +3937,16 @@ const jsonEncodedPrefix = "\x00json:"
 // decodeTaskContext 把 proto 的 map[string]string 转为 map[string]interface{}，
 // 只把带 JSON 前缀标记的值解码回原类型。
 // 普通字符串值（含 "true"、"123"）保持为字符串。
-func decodeTaskContext(ctx map[string]string) map[string]interface{} {
+func decodeTaskContext(ctx map[string]string) map[string]any {
 	if ctx == nil {
 		return nil
 	}
-	result := make(map[string]interface{}, len(ctx))
+	result := make(map[string]any, len(ctx))
 	for k, v := range ctx {
 		if strings.HasPrefix(v, jsonEncodedPrefix) {
 			// JSON-encoded value: decode it
 			jsonStr := strings.TrimPrefix(v, jsonEncodedPrefix)
-			var decoded interface{}
+			var decoded any
 			if err := json.Unmarshal([]byte(jsonStr), &decoded); err == nil {
 				result[k] = decoded
 			} else {

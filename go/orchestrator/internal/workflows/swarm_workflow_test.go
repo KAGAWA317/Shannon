@@ -39,7 +39,7 @@ func TestCollaborativeActionsDoNotTriggerConvergence(t *testing.T) {
 					Action:      "send_message",
 					To:          "teammate-1",
 					MessageType: "info",
-					Payload:     map[string]interface{}{"message": "sharing findings"},
+					Payload:     map[string]any{"message": "sharing findings"},
 					TokensUsed:  100,
 				}, nil
 			}
@@ -253,7 +253,7 @@ func TestMailboxSinceSeqIncrementsPerIteration(t *testing.T) {
 					From:    "teammate",
 					To:      "test-agent",
 					Type:    "info",
-					Payload: map[string]interface{}{"message": "hello"},
+					Payload: map[string]any{"message": "hello"},
 				},
 			}, nil
 		},
@@ -268,7 +268,7 @@ func TestMailboxSinceSeqIncrementsPerIteration(t *testing.T) {
 				return activities.AgentLoopStepResult{
 					Action:     "tool_call",
 					Tool:       "web_search",
-					ToolParams: map[string]interface{}{"query": "test"},
+					ToolParams: map[string]any{"query": "test"},
 					TokensUsed: 100,
 				}, nil
 			}
@@ -650,7 +650,7 @@ func TestAgentLoop_PassesModelTierToStep(t *testing.T) {
 		WorkflowID:    "test-wf",
 		Task:          "test task",
 		MaxIterations: 3,
-		Context:       map[string]interface{}{"model_tier": "small"},
+		Context:       map[string]any{"model_tier": "small"},
 	})
 
 	require.True(t, env.IsWorkflowCompleted())
@@ -675,7 +675,7 @@ func TestAgentLoopReportsIterationsOnFailure(t *testing.T) {
 				return activities.AgentLoopStepResult{
 					Action:     "tool_call",
 					Tool:       "web_search",
-					ToolParams: map[string]interface{}{"query": "test"},
+					ToolParams: map[string]any{"query": "test"},
 					TokensUsed: 100,
 				}, nil
 			}
@@ -814,7 +814,7 @@ func TestAgentLoopReturnsFallbackResponseOnFailure(t *testing.T) {
 				return activities.AgentLoopStepResult{
 					Action:          "tool_call",
 					Tool:            "web_search",
-					ToolParams:      map[string]interface{}{"query": "shoes"},
+					ToolParams:      map[string]any{"query": "shoes"},
 					TokensUsed:      100,
 					DecisionSummary: "Searching for Japanese shoe market data",
 				}, nil

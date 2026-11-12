@@ -16,13 +16,13 @@ import (
 // SubqueryGeneratorInput is the input for generating gap-filling subqueries
 // SubqueryGeneratorInput 是生成补缺 subquery 的入参。
 type SubqueryGeneratorInput struct {
-	Query            string                 `json:"query"`
-	CoverageGaps     []CoverageGap          `json:"coverage_gaps"`
-	CurrentSynthesis string                 `json:"current_synthesis,omitempty"`
-	Iteration        int                    `json:"iteration"`
-	MaxSubqueries    int                    `json:"max_subqueries"` // Limit new queries per iteration
-	Context          map[string]interface{} `json:"context,omitempty"`
-	ParentWorkflowID string                 `json:"parent_workflow_id,omitempty"`
+	Query            string         `json:"query"`
+	CoverageGaps     []CoverageGap  `json:"coverage_gaps"`
+	CurrentSynthesis string         `json:"current_synthesis,omitempty"`
+	Iteration        int            `json:"iteration"`
+	MaxSubqueries    int            `json:"max_subqueries"` // Limit new queries per iteration
+	Context          map[string]any `json:"context,omitempty"`
+	ParentWorkflowID string         `json:"parent_workflow_id,omitempty"`
 	// Deep Research 2.0: Source-type aware search
 	// Deep Research 2.0：检索时感知 source type。
 	EntityName       string   `json:"entity_name,omitempty"`        // Primary entity being researched
@@ -39,7 +39,7 @@ type GeneratedSubquery struct {
 	Priority       string                 `json:"priority"`         // "high", "medium", "low"
 	SuggestedTools []string               `json:"suggested_tools"`  // Tools to use
 	SourceTypes    []string               `json:"source_types"`     // Source types to target
-	ToolParameters map[string]interface{} `json:"tool_parameters"`  // Pre-structured tool params
+	ToolParameters map[string]any `json:"tool_parameters"`  // Pre-structured tool params
 	// Task contract fields
 	// Task contract 字段。
 	OutputFormat   *OutputFormatSpec   `json:"output_format,omitempty"`
@@ -89,13 +89,13 @@ func (a *Activities) GenerateSubqueries(ctx context.Context, input SubqueryGener
 	llmServiceURL := getenvDefault("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"query":       userContent,
 		"max_tokens":  8192, // Extended for structured JSON output with multiple subqueries
 		"temperature": 0.3,
 		"agent_id":    "subquery_generator",
 		"model_tier":  "small",
-		"context": map[string]interface{}{
+		"context": map[string]any{
 			"system_prompt":      systemPrompt,
 			"parent_workflow_id": input.ParentWorkflowID,
 		},
@@ -304,15 +304,15 @@ func parseSubqueryGenerationResponse(response string, result *SubqueryGeneratorR
 
 	var parsed struct {
 		Subqueries []struct {
-			ID             string                 `json:"id"`
-			Query          string                 `json:"query"`
-			TargetGap      string                 `json:"target_gap"`
-			Priority       string                 `json:"priority"`
-			SuggestedTools []string               `json:"suggested_tools"`
-			SourceTypes    []string               `json:"source_types"`
-			ToolParameters map[string]interface{} `json:"tool_parameters"`
-			SourceGuidance map[string][]string    `json:"source_guidance"`
-			Boundaries     map[string][]string    `json:"boundaries"`
+			ID             string              `json:"id"`
+			Query          string              `json:"query"`
+			TargetGap      string              `json:"target_gap"`
+			Priority       string              `json:"priority"`
+			SuggestedTools []string            `json:"suggested_tools"`
+			SourceTypes    []string            `json:"source_types"`
+			ToolParameters map[string]any      `json:"tool_parameters"`
+			SourceGuidance map[string][]string `json:"source_guidance"`
+			Boundaries     map[string][]string `json:"boundaries"`
 		} `json:"subqueries"`
 		Reasoning string `json:"reasoning"`
 	}
@@ -451,7 +451,7 @@ func generateFallbackSubqueries(input SubqueryGeneratorInput, maxSub int) []Gene
 					Priority:       gap.Importance,
 					SuggestedTools: []string{"web_search"},
 					SourceTypes:    []string{"aggregator"},
-					ToolParameters: map[string]interface{}{
+					ToolParameters: map[string]any{
 						"tool":  "web_search",
 						"query": aggregatorQuery,
 					},
@@ -477,7 +477,7 @@ func generateFallbackSubqueries(input SubqueryGeneratorInput, maxSub int) []Gene
 				Priority:       gap.Importance,
 				SuggestedTools: []string{"web_search"},
 				SourceTypes:    sourceTypes,
-				ToolParameters: map[string]interface{}{
+				ToolParameters: map[string]any{
 					"tool":  "web_search",
 					"query": query,
 				},
@@ -509,7 +509,7 @@ func generateFallbackSubqueries(input SubqueryGeneratorInput, maxSub int) []Gene
 								Priority:       "medium",
 								SuggestedTools: []string{"web_search"},
 								SourceTypes:    []string{srcName},
-								ToolParameters: map[string]interface{}{
+								ToolParameters: map[string]any{
 									"tool":  "web_search",
 									"query": regionalQuery,
 								},
@@ -720,7 +720,7 @@ func generateEntityGapQueries(stConfig *config.SourceTypesConfig, entityName, in
 			Priority:       "high", // Entity gap queries are high priority
 			SuggestedTools: []string{"web_search"},
 			SourceTypes:    sourceTypes,
-			ToolParameters: map[string]interface{}{
+			ToolParameters: map[string]any{
 				"tool":  "web_search",
 				"query": query,
 			},

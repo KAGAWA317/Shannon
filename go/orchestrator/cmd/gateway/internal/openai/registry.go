@@ -11,10 +11,10 @@ import (
 
 // ModelConfig represents a single model's configuration.
 type ModelConfig struct {
-	WorkflowMode     string                 `yaml:"workflow_mode"`      // simple, research, supervisor
-	Context          map[string]interface{} `yaml:"context"`            // Shannon context to inject
-	Description      string                 `yaml:"description"`        // Human-readable description
-	MaxTokensDefault int                    `yaml:"max_tokens_default"` // Default max_tokens
+	WorkflowMode     string         `yaml:"workflow_mode"`      // simple, research, supervisor
+	Context          map[string]any `yaml:"context"`            // Shannon context to inject
+	Description      string         `yaml:"description"`        // Human-readable description
+	MaxTokensDefault int            `yaml:"max_tokens_default"` // Default max_tokens
 }
 
 // RegistryConfig represents the full model registry configuration.
@@ -103,7 +103,7 @@ func newDefaultRegistry() *Registry {
 		Models: map[string]ModelConfig{
 			"shannon-deep-research": {
 				WorkflowMode: "research",
-				Context: map[string]interface{}{
+				Context: map[string]any{
 					"force_research":             true,
 					"research_strategy":          "deep",
 					"iterative_research_enabled": true,
@@ -114,7 +114,7 @@ func newDefaultRegistry() *Registry {
 			},
 			"shannon-standard-research": {
 				WorkflowMode: "research",
-				Context: map[string]interface{}{
+				Context: map[string]any{
 					"force_research":    true,
 					"research_strategy": "standard",
 				},
@@ -123,7 +123,7 @@ func newDefaultRegistry() *Registry {
 			},
 			"shannon-quick-research": {
 				WorkflowMode: "research",
-				Context: map[string]interface{}{
+				Context: map[string]any{
 					"force_research":    true,
 					"research_strategy": "quick",
 				},
@@ -132,13 +132,13 @@ func newDefaultRegistry() *Registry {
 			},
 			"shannon-chat": {
 				WorkflowMode:     "simple",
-				Context:          map[string]interface{}{},
+				Context:          map[string]any{},
 				Description:      "General chat completion",
 				MaxTokensDefault: 4096,
 			},
 			"shannon-complex": {
 				WorkflowMode:     "supervisor",
-				Context:          map[string]interface{}{},
+				Context:          map[string]any{},
 				Description:      "Multi-agent orchestration for complex tasks",
 				MaxTokensDefault: 8192,
 			},

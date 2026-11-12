@@ -61,7 +61,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 		AgentID:    "orchestrator",
 		Message:    activities.MsgWorkflowStarted(),
 		Timestamp:  workflow.Now(ctx),
-		Payload: map[string]interface{}{
+		Payload: map[string]any{
 			"task_context": input.Context, // Include context for frontend
 		},
 	}).Get(ctx, nil); err != nil {
@@ -119,7 +119,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 				templateEntry = entry
 				templateFound = true
 				if input.Context == nil {
-					input.Context = map[string]interface{}{}
+					input.Context = map[string]any{}
 				}
 				input.Context["template_resolved"] = entry.Key
 				input.Context["template_content_hash"] = entry.ContentHash
@@ -137,7 +137,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			return TaskResult{
 				Success:      false,
 				ErrorMessage: msg,
-				Metadata: map[string]interface{}{
+				Metadata: map[string]any{
 					"template_requested": requestedTemplateName,
 					"template_version":   requestedTemplateVersion,
 				},
@@ -155,7 +155,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	if learningVersionGate >= 1 && !templateFound && cfg.ContinuousLearningEnabled {
 		if rec, err := recommendStrategy(ctx, input); err == nil && rec != nil && rec.Strategy != "" {
 			if input.Context == nil {
-				input.Context = map[string]interface{}{}
+				input.Context = map[string]any{}
 			}
 			input.Context["learning_strategy"] = rec.Strategy
 			input.Context["learning_confidence"] = rec.Confidence
@@ -400,7 +400,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 				AgentID:    "planner",
 				Message:    plan.Message,
 				Timestamp:  workflow.Now(ctx),
-				Payload:    map[string]interface{}{"round": plan.Round, "intent": plan.Intent},
+				Payload:    map[string]any{"round": plan.Round, "intent": plan.Intent},
 			}).Get(ctx, nil)
 
 			// 3) Wait for user approval Signal or timeout
@@ -480,12 +480,12 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			if res, err := BudgetPreflight(ctx, input, est); err == nil && res != nil {
 				if !res.CanProceed {
 					scheduleStreamEnd(ctx)
-					out := TaskResult{Success: false, ErrorMessage: res.Reason, Metadata: map[string]interface{}{"budget_blocked": true}}
+					out := TaskResult{Success: false, ErrorMessage: res.Reason, Metadata: map[string]any{"budget_blocked": true}}
 					out = AddTaskContextToMetadata(out, input.Context)
 					return out, nil
 				}
 				if input.Context == nil {
-					input.Context = map[string]interface{}{}
+					input.Context = map[string]any{}
 				}
 				input.Context["budget_remaining"] = res.RemainingTaskBudget
 				// ResearchWorkflow distributes budget internally; pass full remaining.
@@ -565,7 +565,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 
 	// 1) Decompose the task (planning + complexity)
 	// Add history to context for decomposition to be context-aware
-	decompContext := make(map[string]interface{})
+	decompContext := make(map[string]any)
 	if input.Context != nil {
 		for k, v := range input.Context {
 			decompContext[k] = v
@@ -603,7 +603,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			// for setup conversations so the agent can resolve company names to URLs).
 			var agentTools []string
 			if toolsVal, ok := input.Context["suggested_tools"]; ok {
-				if arr, ok := toolsVal.([]interface{}); ok {
+				if arr, ok := toolsVal.([]any); ok {
 					for _, v := range arr {
 						if s, ok := v.(string); ok {
 							agentTools = append(agentTools, s)
@@ -624,7 +624,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 						Dependencies:    []string{},
 						EstimatedTokens: 0,
 						SuggestedTools:  agentTools,
-						ToolParameters:  map[string]interface{}{},
+						ToolParameters:  map[string]any{},
 					},
 				},
 				TotalEstimatedTokens: 0,
@@ -652,7 +652,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 				AgentID:    role,
 				Message:    activities.MsgRoleAssigned(role),
 				Timestamp:  workflow.Now(ctx),
-				Payload: map[string]interface{}{
+				Payload: map[string]any{
 					"role":       role,
 					"tools":      roleTools,
 					"tool_count": len(roleTools),
@@ -672,7 +672,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 						Dependencies:    []string{},
 						EstimatedTokens: 5000,
 						SuggestedTools:  append([]string(nil), roleTools...),
-						ToolParameters:  map[string]interface{}{}, // Agent constructs from context
+						ToolParameters:  map[string]any{}, // Agent constructs from context
 					},
 				},
 				TotalEstimatedTokens: 5000,
@@ -763,7 +763,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			OutputTokens:        outTok,
 			CacheReadTokens:     decomp.CacheReadTokens,
 			CacheCreationTokens: decomp.CacheCreationTokens,
-			Metadata:            map[string]interface{}{"phase": "decompose"},
+			Metadata:            map[string]any{"phase": "decompose"},
 		}).Get(ctx, nil)
 	}
 
@@ -776,10 +776,10 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 
 	// Emit a human-friendly plan summary with payload (steps + deps)
 	{
-		steps := make([]map[string]interface{}, 0, len(decomp.Subtasks))
+		steps := make([]map[string]any, 0, len(decomp.Subtasks))
 		deps := make([]map[string]string, 0, 4)
 		for _, st := range decomp.Subtasks {
-			steps = append(steps, map[string]interface{}{
+			steps = append(steps, map[string]any{
 				"id":   st.ID,
 				"name": st.Description,
 				"type": st.TaskType,
@@ -794,7 +794,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			AgentID:    "planner",
 			Message:    activities.MsgPlanCreated(len(steps)),
 			Timestamp:  workflow.Now(ctx),
-			Payload:    map[string]interface{}{"plan": steps, "deps": deps},
+			Payload:    map[string]any{"plan": steps, "deps": deps},
 		}).Get(ctx, nil)
 	}
 
@@ -808,13 +808,13 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			if !res.CanProceed {
 				// Best-effort title generation even when budget preflight blocks execution
 				scheduleStreamEnd(ctx)
-				out := TaskResult{Success: false, ErrorMessage: res.Reason, Metadata: map[string]interface{}{"budget_blocked": true}}
+				out := TaskResult{Success: false, ErrorMessage: res.Reason, Metadata: map[string]any{"budget_blocked": true}}
 				out = AddTaskContextToMetadata(out, input.Context)
 				return out, nil
 			}
 			// Pass budget info to child workflows via context
 			if input.Context == nil {
-				input.Context = map[string]interface{}{}
+				input.Context = map[string]any{}
 			}
 			// Propagate current_date to all child workflows (if not already set)
 			if _, hasDate := input.Context["current_date"]; !hasDate {
@@ -964,7 +964,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	if autoDetectVersion >= 1 && !rolePresent && detectBrowserIntent(input.Query) {
 		logger.Info("Auto-detected browser intent, assigning browser_use role")
 		if input.Context == nil {
-			input.Context = map[string]interface{}{}
+			input.Context = map[string]any{}
 		}
 		input.Context["role"] = "browser_use"
 		input.Context["role_auto_detected"] = true
@@ -978,7 +978,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			AgentID:    "browser_use",
 			Message:    activities.MsgRoleAssigned("browser_use (auto-detected)"),
 			Timestamp:  workflow.Now(ctx),
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"role":          "browser_use",
 				"auto_detected": true,
 			},
@@ -1349,7 +1349,7 @@ func routeStrategyWorkflow(ctx workflow.Context, input TaskInput, strategy strin
 			}
 		}
 		var wfName string
-		var wfFunc interface{}
+		var wfFunc any
 		switch strategyLower {
 		case "react":
 			wfName = "ReactWorkflow"
@@ -1465,7 +1465,7 @@ func recommendStrategy(ctx workflow.Context, input TaskInput) (*activities.Recom
 	workflow.ExecuteActivity(
 		metricsCtx,
 		"RecordLearningRouterMetrics",
-		map[string]interface{}{
+		map[string]any{
 			"latency_seconds": latency,
 			"strategy":        strategy,
 			"source":          source,

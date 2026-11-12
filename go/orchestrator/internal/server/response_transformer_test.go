@@ -122,7 +122,7 @@ func TestExtractToolErrors(t *testing.T) {
 		{
 			name: "typed map format with short errors",
 			result: workflows.TaskResult{
-				Metadata: map[string]interface{}{
+				Metadata: map[string]any{
 					"tool_errors": []map[string]string{
 						{"agent_id": "a1", "tool": "web_search", "error": "Rate limit exceeded"},
 						{"agent_id": "a2", "tool": "calculator", "error": "Division by zero"},
@@ -137,7 +137,7 @@ func TestExtractToolErrors(t *testing.T) {
 		{
 			name: "long error gets truncated",
 			result: workflows.TaskResult{
-				Metadata: map[string]interface{}{
+				Metadata: map[string]any{
 					"tool_errors": []map[string]string{
 						{
 							"agent_id": "a1",
@@ -158,14 +158,14 @@ func TestExtractToolErrors(t *testing.T) {
 		{
 			name: "interface format with mixed errors",
 			result: workflows.TaskResult{
-				Metadata: map[string]interface{}{
-					"tool_errors": []interface{}{
-						map[string]interface{}{
+				Metadata: map[string]any{
+					"tool_errors": []any{
+						map[string]any{
 							"agent_id": "a1",
 							"tool":     "short",
 							"error":    "OK",
 						},
-						map[string]interface{}{
+						map[string]any{
 							"agent_id": "a2",
 							"tool":     "long",
 							"error":    strings.Repeat("x", 600),
@@ -188,7 +188,7 @@ func TestExtractToolErrors(t *testing.T) {
 		{
 			name: "missing tool_errors key returns nil",
 			result: workflows.TaskResult{
-				Metadata: map[string]interface{}{
+				Metadata: map[string]any{
 					"other": "value",
 				},
 			},
@@ -197,7 +197,7 @@ func TestExtractToolErrors(t *testing.T) {
 		{
 			name: "empty tool_errors array",
 			result: workflows.TaskResult{
-				Metadata: map[string]interface{}{
+				Metadata: map[string]any{
 					"tool_errors": []map[string]string{},
 				},
 			},
@@ -244,7 +244,7 @@ func TestExtractToolErrorsTruncation(t *testing.T) {
 	// 测试超过 500 字符的消息会被正确截断
 	longError := strings.Repeat("ERROR ", 200) // 1200 chars
 	result := workflows.TaskResult{
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"tool_errors": []map[string]string{
 				{
 					"agent_id": "test-agent",
@@ -377,7 +377,7 @@ func TestUnifiedRespToJSONB(t *testing.T) {
 
 	// usage.total_tokens (JSON numbers unmarshal as float64)
 	// usage.total_tokens（JSON 数字反序列化为 float64）
-	usage, ok := jsonb["usage"].(map[string]interface{})
+	usage, ok := jsonb["usage"].(map[string]any)
 	if !ok {
 		t.Fatalf("usage missing or wrong type: %T", jsonb["usage"])
 	}
@@ -386,7 +386,7 @@ func TestUnifiedRespToJSONB(t *testing.T) {
 	}
 
 	// performance.execution_time_ms
-	perf, ok := jsonb["performance"].(map[string]interface{})
+	perf, ok := jsonb["performance"].(map[string]any)
 	if !ok {
 		t.Fatalf("performance missing or wrong type: %T", jsonb["performance"])
 	}

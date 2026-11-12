@@ -128,9 +128,9 @@ func extractToolErrors(result workflows.TaskResult) []ToolError {
 		return out
 	}
 	// Fallback to []interface{} of maps
-	if arr, ok := raw.([]interface{}); ok {
+	if arr, ok := raw.([]any); ok {
 		for _, v := range arr {
-			if m, ok := v.(map[string]interface{}); ok {
+			if m, ok := v.(map[string]any); ok {
 				te := ToolError{}
 				if a, ok := m["agent_id"].(string); ok {
 					te.AgentID = a
@@ -459,7 +459,7 @@ func extractUniqueModelsFromUsages(usages []activities.AgentUsage) []string {
 // (Go JSON unmarshals numbers as float64 for interface{}).
 // getIntFromMetadata 从 metadata map 中提取 int，同时处理 int 与 float64
 // （Go 的 JSON 反序列化会把 interface{} 中的数字解析为 float64）。
-func getIntFromMetadata(m map[string]interface{}, key string) int {
+func getIntFromMetadata(m map[string]any, key string) int {
 	if v, ok := m[key]; ok {
 		switch n := v.(type) {
 		case int:

@@ -19,7 +19,7 @@ import (
 )
 
 // getContextBool extracts a boolean from context, handling both bool and string "true"
-func getContextBool(ctx map[string]interface{}, key string) bool {
+func getContextBool(ctx map[string]any, key string) bool {
 	return util.GetContextBool(ctx, key)
 }
 
@@ -49,7 +49,7 @@ type ReactLoopResult struct {
 func ReactLoop(
 	ctx workflow.Context,
 	query string,
-	baseContext map[string]interface{},
+	baseContext map[string]any,
 	sessionID string,
 	history []string,
 	config ReactConfig,
@@ -127,7 +127,7 @@ func ReactLoop(
 			Timestamp:  workflow.Now(ctx),
 		})
 
-		reasonContext := make(map[string]interface{})
+		reasonContext := make(map[string]any)
 		for k, v := range baseContext {
 			reasonContext[k] = v
 		}
@@ -250,7 +250,7 @@ func ReactLoop(
 				Provider:     provider,
 				InputTokens:  inTok,
 				OutputTokens: outTok,
-				Metadata:     map[string]interface{}{"phase": "react_reason"},
+				Metadata:     map[string]any{"phase": "react_reason"},
 			}).Get(recCtx, nil)
 			wopts.RecordToolCostEntries(ctx, reasonResult, opts.UserID, sessionID, wid)
 		}
@@ -292,7 +292,7 @@ func ReactLoop(
 		}
 
 		// Phase 2: ACT - Execute the planned action
-		actionContext := make(map[string]interface{})
+		actionContext := make(map[string]any)
 		for k, v := range baseContext {
 			actionContext[k] = v
 		}
@@ -338,7 +338,7 @@ func ReactLoop(
 						if len(t) > 0 {
 							quoted = strings.Join(t, " OR ")
 						}
-					case []interface{}:
+					case []any:
 						parts := make([]string, 0, len(t))
 						for _, it := range t {
 							if s, ok := it.(string); ok && s != "" {
@@ -364,7 +364,7 @@ func ReactLoop(
 							}
 							domains = strings.Join(prefixed, " OR ")
 						}
-					case []interface{}:
+					case []any:
 						parts := []string{}
 						for _, it := range t {
 							if s, ok := it.(string); ok && s != "" {
@@ -385,7 +385,7 @@ func ReactLoop(
 						if len(t) > 0 {
 							disamb = strings.Join(t, ", ")
 						}
-					case []interface{}:
+					case []any:
 						parts := []string{}
 						for _, it := range t {
 							if s, ok := it.(string); ok && s != "" {
@@ -571,7 +571,7 @@ func ReactLoop(
 					Provider:     provider,
 					InputTokens:  inTok,
 					OutputTokens: outTok,
-					Metadata:     map[string]interface{}{"phase": "react_action"},
+					Metadata:     map[string]any{"phase": "react_action"},
 				}).Get(recCtx, nil)
 				wopts.RecordToolCostEntries(ctx, actionResult, opts.UserID, sessionID, wid)
 			}
@@ -711,7 +711,7 @@ func ReactLoop(
 			Provider:     provider,
 			InputTokens:  inTok,
 			OutputTokens: outTok,
-			Metadata:     map[string]interface{}{"phase": "react_synth"},
+			Metadata:     map[string]any{"phase": "react_synth"},
 		}).Get(recCtx, nil)
 		wopts.RecordToolCostEntries(ctx, finalResult, opts.UserID, sessionID, wid)
 	}

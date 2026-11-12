@@ -71,7 +71,7 @@ func (d *DBOperations) GetSchedule(ctx context.Context, id uuid.UUID) (*Schedule
 	// Parse task context
 	_ = json.Unmarshal(contextJSON, &s.TaskContext)
 	if s.TaskContext == nil {
-		s.TaskContext = make(map[string]interface{})
+		s.TaskContext = make(map[string]any)
 	}
 
 	// Parse nullable timestamps
@@ -152,7 +152,7 @@ func (d *DBOperations) ListSchedules(ctx context.Context, userID, tenantID uuid.
 		// Parse task context
 		_ = json.Unmarshal(contextJSON, &s.TaskContext)
 		if s.TaskContext == nil {
-			s.TaskContext = make(map[string]interface{})
+			s.TaskContext = make(map[string]any)
 		}
 
 		// Parse nullable timestamps
@@ -193,7 +193,7 @@ func (d *DBOperations) UpdateSchedule(ctx context.Context, req *UpdateScheduleIn
 	// When nil, pass nil to SQL so COALESCE preserves existing value
 	// 仅在显式提供（非 nil）时才序列化 TaskContext
 	// 为 nil 时向 SQL 传 nil，使 COALESCE 保留原值
-	var contextJSON interface{}
+	var contextJSON any
 	if req.TaskContext != nil {
 		contextJSON, _ = json.Marshal(req.TaskContext)
 	}

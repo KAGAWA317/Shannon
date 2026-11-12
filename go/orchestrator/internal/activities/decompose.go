@@ -16,9 +16,9 @@ import (
 
 // DecompositionInput is the input for DecomposeTask activity
 type DecompositionInput struct {
-	Query          string                 `json:"query"`
-	Context        map[string]interface{} `json:"context"`
-	AvailableTools []string               `json:"available_tools"`
+	Query          string         `json:"query"`
+	Context        map[string]any `json:"context"`
+	AvailableTools []string       `json:"available_tools"`
 }
 
 // DecompositionResult is the result from the Python LLM service
@@ -57,7 +57,7 @@ func (a *Activities) DecomposeTask(ctx context.Context, in DecompositionInput) (
 	}
 	url := fmt.Sprintf("%s/agent/decompose", base)
 
-	body, _ := json.Marshal(map[string]interface{}{
+	body, _ := json.Marshal(map[string]any{
 		"query":   in.Query,
 		"context": in.Context,
 		"tools":   in.AvailableTools, // Fixed: "tools" not "available_tools"

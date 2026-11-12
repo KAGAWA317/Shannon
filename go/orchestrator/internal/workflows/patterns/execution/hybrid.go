@@ -14,7 +14,7 @@ import (
 type HybridConfig struct {
 	MaxConcurrency           int                                        // Maximum concurrent agents
 	EmitEvents               bool                                       // Whether to emit streaming events
-	Context                  map[string]interface{}                     // Base context for all agents
+	Context                  map[string]any                             // Base context for all agents
 	DependencyWaitTimeout    time.Duration                              // Max time to wait for dependencies
 	DependencyCheckInterval  time.Duration                              // Interval between dependency checks (default 30s)
 	PassDependencyResults    bool                                       // Pass dependency results to dependent tasks
@@ -27,20 +27,20 @@ type HybridTask struct {
 	ID             string
 	Description    string
 	SuggestedTools []string
-	ToolParameters map[string]interface{}
+	ToolParameters map[string]any
 	PersonaID      string
 	Role           string
 	ParentArea     string
 	Dependencies   []string // IDs of tasks this depends on
 	// Optional per-task context overrides (e.g., task contracts)
-	ContextOverrides map[string]interface{}
+	ContextOverrides map[string]any
 }
 
 // HybridResult contains results from hybrid execution
 type HybridResult struct {
 	Results     map[string]activities.AgentExecutionResult // Keyed by task ID
 	TotalTokens int
-	Metadata    map[string]interface{}
+	Metadata    map[string]any
 }
 
 // ExecuteHybrid runs tasks with dependency management.
@@ -171,7 +171,7 @@ func ExecuteHybrid(
 	return &HybridResult{
 		Results:     taskResults,
 		TotalTokens: totalTokens,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"total_tasks": len(tasks),
 			"successful":  successCount,
 			"failed":      errorCount,
@@ -236,7 +236,7 @@ func executeHybridTask(
 	defer semaphore.Release(1)
 
 	// Prepare task context
-	taskContext := make(map[string]interface{})
+	taskContext := make(map[string]any)
 	for k, v := range config.Context {
 		taskContext[k] = v
 	}
@@ -253,10 +253,10 @@ func executeHybridTask(
 
 	// Add dependency results if configured
 	if config.PassDependencyResults && len(task.Dependencies) > 0 {
-		depResults := make(map[string]interface{})
+		depResults := make(map[string]any)
 		for _, depID := range task.Dependencies {
 			if result, ok := taskResults[depID]; ok {
-				depResults[depID] = map[string]interface{}{
+				depResults[depID] = map[string]any{
 					"response": result.Response,
 					"tokens":   result.TokensUsed,
 					"success":  result.Success,

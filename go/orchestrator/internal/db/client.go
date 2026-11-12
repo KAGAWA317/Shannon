@@ -42,7 +42,7 @@ type Client struct {
 // WriteRequest represents an async write operation
 type WriteRequest struct {
 	Type     WriteType
-	Data     interface{}
+	Data     any
 	Callback func(error)
 }
 
@@ -337,7 +337,7 @@ func (c *Client) drainQueue(batchBuffer []WriteRequest) {
 
 // QueueWrite adds a write request to the async queue
 // QueueWrite 把写 request 加入异步队列
-func (c *Client) QueueWrite(writeType WriteType, data interface{}, callback func(error)) error {
+func (c *Client) QueueWrite(writeType WriteType, data any, callback func(error)) error {
 	select {
 	case c.writeQueue <- WriteRequest{
 		Type:     writeType,
@@ -365,7 +365,7 @@ func (c *Client) QueueWrite(writeType WriteType, data interface{}, callback func
 
 // QueueWriteWithRetry attempts to queue a write with limited retries before fallback
 // QueueWriteWithRetry 在回退前有限次 retry 入队
-func (c *Client) QueueWriteWithRetry(writeType WriteType, data interface{}, callback func(error)) error {
+func (c *Client) QueueWriteWithRetry(writeType WriteType, data any, callback func(error)) error {
 	const maxRetries = 3
 	const retryDelay = 10 * time.Millisecond
 

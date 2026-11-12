@@ -46,7 +46,7 @@ func (c *Client) SaveEventLog(ctx context.Context, e *EventLog) error {
 	return err
 }
 
-func nullIfEmpty(s string) interface{} {
+func nullIfEmpty(s string) any {
 	if s == "" {
 		return nil
 	}

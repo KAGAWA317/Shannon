@@ -18,7 +18,7 @@ type FetchAgentMemoryInput struct {
 // FetchAgentMemoryResult contains retrieved items for merging
 // FetchAgentMemoryResult 保存取回、待合并的条目。
 type FetchAgentMemoryResult struct {
-	Items []map[string]interface{} `json:"items"`
+	Items []map[string]any `json:"items"`
 }
 
 // FetchAgentMemory retrieves agent-specific memory by filtering in Qdrant.
@@ -48,7 +48,7 @@ func FetchAgentMemory(ctx context.Context, in FetchAgentMemoryInput) (FetchAgent
 
 	// Convert to map format
 	// 转成 map 形式。
-	out := make([]map[string]interface{}, 0, len(items))
+	out := make([]map[string]any, 0, len(items))
 	for _, item := range items {
 		if item.Payload != nil {
 			out = append(out, item.Payload)
@@ -60,16 +60,16 @@ func FetchAgentMemory(ctx context.Context, in FetchAgentMemoryInput) (FetchAgent
 // RecordAgentMemoryInput stores an agent-scoped interaction into the vector store via RecordQuery
 // RecordAgentMemoryInput 描述一次 agent 维度的交互，最终经 RecordQuery 写入向量库。
 type RecordAgentMemoryInput struct {
-	SessionID string                 `json:"session_id"`
-	UserID    string                 `json:"user_id"`
-	TenantID  string                 `json:"tenant_id"`
-	AgentID   string                 `json:"agent_id"`
-	Role      string                 `json:"role"`
-	Query     string                 `json:"query"`
-	Answer    string                 `json:"answer"`
-	Model     string                 `json:"model"`
-	RedactPII bool                   `json:"redact_pii"`
-	Extra     map[string]interface{} `json:"extra"`
+	SessionID string         `json:"session_id"`
+	UserID    string         `json:"user_id"`
+	TenantID  string         `json:"tenant_id"`
+	AgentID   string         `json:"agent_id"`
+	Role      string         `json:"role"`
+	Query     string         `json:"query"`
+	Answer    string         `json:"answer"`
+	Model     string         `json:"model"`
+	RedactPII bool           `json:"redact_pii"`
+	Extra     map[string]any `json:"extra"`
 }
 
 // RecordAgentMemory stores agent-specific memory in the vector database
@@ -77,7 +77,7 @@ type RecordAgentMemoryInput struct {
 // RecordAgentMemory 把 agent 专属 memory 写入向量库；
 // 作为 Temporal activity 复用共享的向量存储逻辑。
 func RecordAgentMemory(ctx context.Context, in RecordAgentMemoryInput) (RecordQueryResult, error) {
-	meta := map[string]interface{}{
+	meta := map[string]any{
 		"agent_id": in.AgentID,
 		"role":     in.Role,
 		"source":   "agent",

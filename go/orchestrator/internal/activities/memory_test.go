@@ -135,7 +135,7 @@ func TestChunkingPipeline(t *testing.T) {
 				Query:     tt.query,
 				Answer:    tt.answer,
 				Model:     "gpt-4",
-				Metadata: map[string]interface{}{
+				Metadata: map[string]any{
 					"test": true,
 				},
 			}
@@ -494,7 +494,7 @@ func generateLongText(tokens int) string {
 	return strings.Repeat(base, repeats)
 }
 
-func extractQueries(items []map[string]interface{}) []string {
+func extractQueries(items []map[string]any) []string {
 	queries := make([]string, 0, len(items))
 	for _, item := range items {
 		if q, ok := item["query"].(string); ok {

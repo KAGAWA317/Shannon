@@ -103,27 +103,27 @@ func TestExtractCostFromResult(t *testing.T) {
 	}{
 		{
 			name:     "cost from metadata api_cost_usd",
-			result:   &ToolExecuteResponse{Metadata: map[string]interface{}{"api_cost_usd": 0.015}},
+			result:   &ToolExecuteResponse{Metadata: map[string]any{"api_cost_usd": 0.015}},
 			wantCost: 0.015,
 		},
 		{
 			name:     "cost from metadata cost_usd",
-			result:   &ToolExecuteResponse{Metadata: map[string]interface{}{"cost_usd": 0.004}},
+			result:   &ToolExecuteResponse{Metadata: map[string]any{"cost_usd": 0.004}},
 			wantCost: 0.004,
 		},
 		{
 			name:     "cost from output body cost_usd",
-			result:   &ToolExecuteResponse{Output: map[string]interface{}{"cost_usd": 0.01, "data": "stuff"}},
+			result:   &ToolExecuteResponse{Output: map[string]any{"cost_usd": 0.01, "data": "stuff"}},
 			wantCost: 0.01,
 		},
 		{
 			name:     "metadata takes precedence over output",
-			result:   &ToolExecuteResponse{Metadata: map[string]interface{}{"api_cost_usd": 0.02}, Output: map[string]interface{}{"cost_usd": 0.01}},
+			result:   &ToolExecuteResponse{Metadata: map[string]any{"api_cost_usd": 0.02}, Output: map[string]any{"cost_usd": 0.01}},
 			wantCost: 0.02,
 		},
 		{
 			name:     "no cost anywhere returns zero",
-			result:   &ToolExecuteResponse{Output: map[string]interface{}{"data": "stuff"}},
+			result:   &ToolExecuteResponse{Output: map[string]any{"data": "stuff"}},
 			wantCost: 0,
 		},
 		{

@@ -155,7 +155,7 @@ func (a *Activities) UpdateSessionResult(ctx context.Context, input SessionUpdat
 	// Update session metadata
 	// 更新 session metadata。
 	if sess.Metadata == nil {
-		sess.Metadata = make(map[string]interface{})
+		sess.Metadata = make(map[string]any)
 	}
 	sess.Metadata["last_agents_used"] = input.AgentsUsed
 	sess.Metadata["last_workflow_result"] = util.TruncateString(input.Result, 200, false)

@@ -14,10 +14,10 @@ import (
 
 // AgentWorkflowInput is the input for AgentWorkflow
 type AgentWorkflowInput struct {
-	AgentID  string                 `json:"agent_id"`
-	Input    map[string]interface{} `json:"input"`
-	UserID   string                 `json:"user_id"`
-	TenantID string                 `json:"tenant_id"`
+	AgentID  string         `json:"agent_id"`
+	Input    map[string]any `json:"input"`
+	UserID   string         `json:"user_id"`
+	TenantID string         `json:"tenant_id"`
 	// Optional: stream output events
 	Stream bool `json:"stream,omitempty"`
 	// ParentWorkflowID is used for unified event streaming when running as child workflow.
@@ -27,14 +27,14 @@ type AgentWorkflowInput struct {
 
 // AgentWorkflowOutput is the output from AgentWorkflow
 type AgentWorkflowOutput struct {
-	Success       bool        `json:"success"`
-	Output        interface{} `json:"output"`
-	Error         string      `json:"error,omitempty"`
-	AgentID       string      `json:"agent_id"`
-	ToolName      string      `json:"tool_name"`
-	ExecutionTime int         `json:"execution_time_ms"`
-	CostUSD       float64     `json:"cost_usd"`
-	TokensUsed    int         `json:"tokens_used,omitempty"`
+	Success       bool    `json:"success"`
+	Output        any     `json:"output"`
+	Error         string  `json:"error,omitempty"`
+	AgentID       string  `json:"agent_id"`
+	ToolName      string  `json:"tool_name"`
+	ExecutionTime int     `json:"execution_time_ms"`
+	CostUSD       float64 `json:"cost_usd"`
+	TokensUsed    int     `json:"tokens_used,omitempty"`
 }
 
 // AgentWorkflow executes a single agent deterministically
@@ -92,7 +92,7 @@ func AgentWorkflow(ctx workflow.Context, input AgentWorkflowInput) (*AgentWorkfl
 		AgentID:    input.AgentID,
 		Message:    activities.MsgAgentStarted(input.AgentID),
 		Timestamp:  workflow.Now(ctx),
-		Payload: map[string]interface{}{
+		Payload: map[string]any{
 			"agent_id": input.AgentID,
 		},
 	}).Get(ctx, nil)
@@ -156,7 +156,7 @@ func AgentWorkflow(ctx workflow.Context, input AgentWorkflowInput) (*AgentWorkfl
 		AgentID:    input.AgentID,
 		Message:    activities.MsgAgentCompleted(input.AgentID),
 		Timestamp:  workflow.Now(ctx),
-		Payload: map[string]interface{}{
+		Payload: map[string]any{
 			"agent_id":       input.AgentID,
 			"tool_name":      execOutput.ToolName,
 			"execution_time": execOutput.ExecutionTime,
@@ -203,10 +203,10 @@ func ConvertAgentInputFromTask(input TaskInput) (*AgentWorkflowInput, error) {
 	// Build set of allowed fields and their schema definitions
 	schemaProperties := getSchemaProperties(agentDef.InputSchema)
 
-	agentInput := make(map[string]interface{})
+	agentInput := make(map[string]any)
 
 	// Merge agent_input from context with type validation.
-	if ai, ok := input.Context["agent_input"].(map[string]interface{}); ok && ai != nil {
+	if ai, ok := input.Context["agent_input"].(map[string]any); ok && ai != nil {
 		for k, v := range ai {
 			// Only copy fields that are defined in the agent's schema
 			propSchema, allowed := schemaProperties[k]
@@ -366,7 +366,7 @@ func AgentWorkflowOutputToTaskResult(output *AgentWorkflowOutput) TaskResult {
 	return TaskResult{
 		Success: true,
 		Result:  resultStr,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"agent_id":       output.AgentID,
 			"tool_name":      output.ToolName,
 			"execution_time": output.ExecutionTime,
@@ -378,19 +378,19 @@ func AgentWorkflowOutputToTaskResult(output *AgentWorkflowOutput) TaskResult {
 
 // getSchemaProperties extracts property definitions from an InputSchema
 // Returns a map of field name -> property schema for type validation
-func getSchemaProperties(schema map[string]interface{}) map[string]map[string]interface{} {
-	result := make(map[string]map[string]interface{})
+func getSchemaProperties(schema map[string]any) map[string]map[string]any {
+	result := make(map[string]map[string]any)
 	if schema == nil {
 		return result
 	}
 
-	properties, ok := schema["properties"].(map[string]interface{})
+	properties, ok := schema["properties"].(map[string]any)
 	if !ok {
 		return result
 	}
 
 	for propName, propDef := range properties {
-		if propSchema, ok := propDef.(map[string]interface{}); ok {
+		if propSchema, ok := propDef.(map[string]any); ok {
 			result[propName] = propSchema
 		}
 	}
@@ -399,7 +399,7 @@ func getSchemaProperties(schema map[string]interface{}) map[string]map[string]in
 
 // validateSchemaFieldType validates a value against its schema definition
 // Returns nil if valid, error if type mismatch
-func validateSchemaFieldType(fieldName string, value interface{}, propSchema map[string]interface{}) error {
+func validateSchemaFieldType(fieldName string, value any, propSchema map[string]any) error {
 	if value == nil {
 		return nil // nil values are acceptable (will be caught by required check)
 	}
@@ -433,7 +433,7 @@ func validateSchemaFieldType(fieldName string, value interface{}, propSchema map
 	case "array":
 		valid = actualType != nil && actualType.Kind() == reflect.Slice
 	case "object":
-		_, valid = value.(map[string]interface{})
+		_, valid = value.(map[string]any)
 	default:
 		valid = true // Unknown type, allow
 	}
@@ -483,7 +483,7 @@ func normalizeToDomain(input string) string {
 
 // normalizeAgentInput applies URL/domain normalization based on agent type.
 // This ensures users can provide URLs in any format and the backend handles it correctly.
-func normalizeAgentInput(agentID string, agentInput map[string]interface{}) {
+func normalizeAgentInput(agentID string, agentInput map[string]any) {
 	switch agentID {
 	// URL-required tools: ensure full URL with scheme
 	case "browser-screenshot", "lp-visual-analyze":
@@ -492,8 +492,8 @@ func normalizeAgentInput(agentID string, agentInput map[string]interface{}) {
 		}
 
 	case "lp-batch-analyze":
-		if urls, ok := agentInput["urls"].([]interface{}); ok {
-			normalized := make([]interface{}, len(urls))
+		if urls, ok := agentInput["urls"].([]any); ok {
+			normalized := make([]any, len(urls))
 			for i, u := range urls {
 				if urlStr, ok := u.(string); ok {
 					normalized[i] = normalizeToFullURL(urlStr)

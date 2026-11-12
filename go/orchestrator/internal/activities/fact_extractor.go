@@ -39,7 +39,7 @@ type FactExtractionInput struct {
 	SynthesisResult  string                   `json:"synthesis_result"`
 	Citations        []FactExtractionCitation `json:"citations,omitempty"`
 	ResearchAreas    []string                 `json:"research_areas,omitempty"`
-	Context          map[string]interface{}   `json:"context,omitempty"`
+	Context          map[string]any           `json:"context,omitempty"`
 	ParentWorkflowID string                   `json:"parent_workflow_id,omitempty"`
 }
 
@@ -75,7 +75,7 @@ func (a *Activities) ExtractFacts(ctx context.Context, input FactExtractionInput
 	llmServiceURL := getenvDefault("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"query":       userContent,
 		"max_tokens":  8192, // Extended for detailed fact extraction
 		// 加大到 8192，以容纳详细的 fact 抽取输出。
@@ -83,7 +83,7 @@ func (a *Activities) ExtractFacts(ctx context.Context, input FactExtractionInput
 		// 低 temperature，保证事实抽取稳定。
 		"agent_id":    "fact_extractor",
 		"model_tier":  "small",
-		"context": map[string]interface{}{
+		"context": map[string]any{
 			"system_prompt":      systemPrompt,
 			"parent_workflow_id": input.ParentWorkflowID,
 		},

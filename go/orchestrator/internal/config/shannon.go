@@ -578,7 +578,7 @@ func DefaultShannonConfig() *ShannonConfig {
 }
 
 // ValidateShannonConfig validates the Shannon configuration
-func ValidateShannonConfig(config map[string]interface{}) error {
+func ValidateShannonConfig(config map[string]any) error {
 	// Convert to ShannonConfig struct for validation (placeholder for future unmarshalling)
 	// shannonConfig := &ShannonConfig{}
 	// 转换为 ShannonConfig 结构体以便校验（占位，供后续反序列化使用）
@@ -587,7 +587,7 @@ func ValidateShannonConfig(config map[string]interface{}) error {
 	// unmarshaling and validation library like go-playground/validator
 	// 这是简化校验——生产环境应使用正规的反序列化与校验库（如 go-playground/validator）
 
-	if service, ok := config["service"].(map[string]interface{}); ok {
+	if service, ok := config["service"].(map[string]any); ok {
 		if port, ok := service["port"].(float64); ok && (port < 1 || port > 65535) {
 			return fmt.Errorf("service port must be between 1 and 65535, got %v", port)
 		}
@@ -596,13 +596,13 @@ func ValidateShannonConfig(config map[string]interface{}) error {
 		}
 	}
 
-	if degradation, ok := config["degradation"].(map[string]interface{}); ok {
+	if degradation, ok := config["degradation"].(map[string]any); ok {
 		if enabled, ok := degradation["enabled"].(bool); ok && enabled {
-			if thresholds, ok := degradation["thresholds"].(map[string]interface{}); ok {
+			if thresholds, ok := degradation["thresholds"].(map[string]any); ok {
 				// Validate threshold configuration
 				levels := []string{"minor", "moderate", "severe"}
 				for _, level := range levels {
-					if levelConfig, ok := thresholds[level].(map[string]interface{}); ok {
+					if levelConfig, ok := thresholds[level].(map[string]any); ok {
 						if errorRate, ok := levelConfig["error_rate_percentage"].(float64); ok {
 							if errorRate < 0 || errorRate > 100 {
 								return fmt.Errorf("error rate percentage for %s level must be between 0 and 100, got %v", level, errorRate)
@@ -614,7 +614,7 @@ func ValidateShannonConfig(config map[string]interface{}) error {
 		}
 	}
 
-	if agents, ok := config["agents"].(map[string]interface{}); ok {
+	if agents, ok := config["agents"].(map[string]any); ok {
 		if maxConcurrent, ok := agents["max_concurrent"].(float64); ok && maxConcurrent < 1 {
 			return fmt.Errorf("max concurrent agents must be at least 1, got %v", maxConcurrent)
 		}
@@ -625,7 +625,7 @@ func ValidateShannonConfig(config map[string]interface{}) error {
 
 	// Validate session-related context windows and token budgets
 	// 校验 session 相关的 context 窗口与 token budget
-	if session, ok := config["session"].(map[string]interface{}); ok {
+	if session, ok := config["session"].(map[string]any); ok {
 		// Context windows must be [5, 200]
 		inWindow := func(v float64) bool { return v >= 5 && v <= 200 }
 		if v, ok := session["context_window_default"].(float64); ok {
@@ -750,11 +750,11 @@ func (scm *ShannonConfigManager) handleConfigChange(event ChangeEvent) error {
 
 // updateConfigFromMap updates the current config from a map
 // updateConfigFromMap 从 map 更新当前配置
-func (scm *ShannonConfigManager) updateConfigFromMap(configMap map[string]interface{}) error {
+func (scm *ShannonConfigManager) updateConfigFromMap(configMap map[string]any) error {
 	newConfig := DefaultShannonConfig()
 
 	// Update service config
-	if service, ok := configMap["service"].(map[string]interface{}); ok {
+	if service, ok := configMap["service"].(map[string]any); ok {
 		if port, ok := service["port"].(float64); ok {
 			newConfig.Service.Port = int(port)
 		}
@@ -779,47 +779,47 @@ func (scm *ShannonConfigManager) updateConfigFromMap(configMap map[string]interf
 	}
 
 	// Update circuit breaker configs
-	if cb, ok := configMap["circuit_breakers"].(map[string]interface{}); ok {
+	if cb, ok := configMap["circuit_breakers"].(map[string]any); ok {
 		scm.updateCircuitBreakerConfig(cb, &newConfig.CircuitBreakers)
 	}
 
 	// Update degradation config
-	if degradation, ok := configMap["degradation"].(map[string]interface{}); ok {
+	if degradation, ok := configMap["degradation"].(map[string]any); ok {
 		scm.updateDegradationConfig(degradation, &newConfig.Degradation)
 	}
 
 	// Update health config
-	if health, ok := configMap["health"].(map[string]interface{}); ok {
+	if health, ok := configMap["health"].(map[string]any); ok {
 		scm.updateHealthConfig(health, &newConfig.Health)
 	}
 
 	// Update agents config
-	if agents, ok := configMap["agents"].(map[string]interface{}); ok {
+	if agents, ok := configMap["agents"].(map[string]any); ok {
 		scm.updateAgentsConfig(agents, &newConfig.Agents)
 	}
 
 	// Update temporal config
-	if temporal, ok := configMap["temporal"].(map[string]interface{}); ok {
+	if temporal, ok := configMap["temporal"].(map[string]any); ok {
 		scm.updateTemporalConfig(temporal, &newConfig.Temporal)
 	}
 
 	// Update logging config
-	if logging, ok := configMap["logging"].(map[string]interface{}); ok {
+	if logging, ok := configMap["logging"].(map[string]any); ok {
 		scm.updateLoggingConfig(logging, &newConfig.Logging)
 	}
 
 	// Update auth config
-	if auth, ok := configMap["auth"].(map[string]interface{}); ok {
+	if auth, ok := configMap["auth"].(map[string]any); ok {
 		scm.updateAuthConfig(auth, &newConfig.Auth)
 	}
 
 	// Update policy config
-	if policy, ok := configMap["policy"].(map[string]interface{}); ok {
+	if policy, ok := configMap["policy"].(map[string]any); ok {
 		scm.updatePolicyConfig(policy, &newConfig.Policy)
 	}
 
 	// Update streaming config
-	if streaming, ok := configMap["streaming"].(map[string]interface{}); ok {
+	if streaming, ok := configMap["streaming"].(map[string]any); ok {
 		if capv, ok := streaming["ring_capacity"].(float64); ok {
 			if capv > 0 {
 				newConfig.Streaming.RingCapacity = int(capv)
@@ -828,14 +828,14 @@ func (scm *ShannonConfigManager) updateConfigFromMap(configMap map[string]interf
 	}
 
 	// Update workflow config
-	if wf, ok := configMap["workflow"].(map[string]interface{}); ok {
+	if wf, ok := configMap["workflow"].(map[string]any); ok {
 		if v, ok := wf["bypass_single_result"].(bool); ok {
 			newConfig.Workflow.BypassSingleResult = v
 		}
 	}
 
 	// Update session config
-	if session, ok := configMap["session"].(map[string]interface{}); ok {
+	if session, ok := configMap["session"].(map[string]any); ok {
 		if v, ok := session["max_history"].(float64); ok {
 			newConfig.Session.MaxHistory = int(v)
 		}
@@ -868,12 +868,12 @@ func (scm *ShannonConfigManager) updateConfigFromMap(configMap map[string]interf
 	}
 
 	// Update vector config
-	if vector, ok := configMap["vector"].(map[string]interface{}); ok {
+	if vector, ok := configMap["vector"].(map[string]any); ok {
 		scm.updateVectorConfig(vector, &newConfig.Vector)
 	}
 
 	// Update embeddings config
-	if embeddings, ok := configMap["embeddings"].(map[string]interface{}); ok {
+	if embeddings, ok := configMap["embeddings"].(map[string]any); ok {
 		scm.updateEmbeddingsConfig(embeddings, &newConfig.Embeddings)
 	}
 
@@ -891,21 +891,21 @@ func (scm *ShannonConfigManager) updateConfigFromMap(configMap map[string]interf
 }
 
 // updateCircuitBreakerConfig updates circuit breaker configuration
-func (scm *ShannonConfigManager) updateCircuitBreakerConfig(cbMap map[string]interface{}, config *CircuitBreakersConfig) {
-	if redis, ok := cbMap["redis"].(map[string]interface{}); ok {
+func (scm *ShannonConfigManager) updateCircuitBreakerConfig(cbMap map[string]any, config *CircuitBreakersConfig) {
+	if redis, ok := cbMap["redis"].(map[string]any); ok {
 		scm.updateSingleCircuitBreakerConfig(redis, &config.Redis)
 	}
-	if database, ok := cbMap["database"].(map[string]interface{}); ok {
+	if database, ok := cbMap["database"].(map[string]any); ok {
 		scm.updateSingleCircuitBreakerConfig(database, &config.Database)
 	}
-	if grpc, ok := cbMap["grpc"].(map[string]interface{}); ok {
+	if grpc, ok := cbMap["grpc"].(map[string]any); ok {
 		scm.updateSingleCircuitBreakerConfig(grpc, &config.GRPC)
 	}
 }
 
 // updateSingleCircuitBreakerConfig updates a single circuit breaker config
 // updateSingleCircuitBreakerConfig 更新单个 circuit breaker 配置
-func (scm *ShannonConfigManager) updateSingleCircuitBreakerConfig(cbMap map[string]interface{}, config *CircuitBreakerConfig) {
+func (scm *ShannonConfigManager) updateSingleCircuitBreakerConfig(cbMap map[string]any, config *CircuitBreakerConfig) {
 	if maxReq, ok := cbMap["max_requests"].(float64); ok {
 		config.MaxRequests = uint32(maxReq)
 	}
@@ -928,7 +928,7 @@ func (scm *ShannonConfigManager) updateSingleCircuitBreakerConfig(cbMap map[stri
 }
 
 // updateDegradationConfig updates degradation configuration
-func (scm *ShannonConfigManager) updateDegradationConfig(degMap map[string]interface{}, config *DegradationConfig) {
+func (scm *ShannonConfigManager) updateDegradationConfig(degMap map[string]any, config *DegradationConfig) {
 	if enabled, ok := degMap["enabled"].(bool); ok {
 		config.Enabled = enabled
 	}
@@ -939,17 +939,17 @@ func (scm *ShannonConfigManager) updateDegradationConfig(degMap map[string]inter
 	}
 
 	// Update thresholds
-	if thresholds, ok := degMap["thresholds"].(map[string]interface{}); ok {
+	if thresholds, ok := degMap["thresholds"].(map[string]any); ok {
 		scm.updateDegradationThresholds(thresholds, &config.ThresholdConfig)
 	}
 
 	// Update partial results config
-	if partial, ok := degMap["partial_results"].(map[string]interface{}); ok {
+	if partial, ok := degMap["partial_results"].(map[string]any); ok {
 		scm.updatePartialResultsConfig(partial, &config.PartialResults)
 	}
 
 	// Update fallback behaviors
-	if behaviors, ok := degMap["fallback_behaviors"].(map[string]interface{}); ok {
+	if behaviors, ok := degMap["fallback_behaviors"].(map[string]any); ok {
 		config.FallbackBehaviors = make(map[string]string)
 		for k, v := range behaviors {
 			if str, ok := v.(string); ok {
@@ -960,20 +960,20 @@ func (scm *ShannonConfigManager) updateDegradationConfig(degMap map[string]inter
 }
 
 // updateDegradationThresholds updates degradation threshold configuration
-func (scm *ShannonConfigManager) updateDegradationThresholds(thresholds map[string]interface{}, config *DegradationThresholds) {
-	if minor, ok := thresholds["minor"].(map[string]interface{}); ok {
+func (scm *ShannonConfigManager) updateDegradationThresholds(thresholds map[string]any, config *DegradationThresholds) {
+	if minor, ok := thresholds["minor"].(map[string]any); ok {
 		scm.updateSingleThreshold(minor, &config.Minor)
 	}
-	if moderate, ok := thresholds["moderate"].(map[string]interface{}); ok {
+	if moderate, ok := thresholds["moderate"].(map[string]any); ok {
 		scm.updateSingleThreshold(moderate, &config.Moderate)
 	}
-	if severe, ok := thresholds["severe"].(map[string]interface{}); ok {
+	if severe, ok := thresholds["severe"].(map[string]any); ok {
 		scm.updateSingleThreshold(severe, &config.Severe)
 	}
 }
 
 // updateSingleThreshold updates a single degradation threshold
-func (scm *ShannonConfigManager) updateSingleThreshold(threshold map[string]interface{}, config *DegradationLevelThreshold) {
+func (scm *ShannonConfigManager) updateSingleThreshold(threshold map[string]any, config *DegradationLevelThreshold) {
 	if cb, ok := threshold["circuit_breakers_open"].(float64); ok {
 		config.CircuitBreakersOpen = int(cb)
 	}
@@ -992,11 +992,11 @@ func (scm *ShannonConfigManager) updateSingleThreshold(threshold map[string]inte
 }
 
 // updatePartialResultsConfig updates partial results configuration
-func (scm *ShannonConfigManager) updatePartialResultsConfig(partial map[string]interface{}, config *PartialResultsConfig) {
+func (scm *ShannonConfigManager) updatePartialResultsConfig(partial map[string]any, config *PartialResultsConfig) {
 	if enabled, ok := partial["enabled"].(bool); ok {
 		config.Enabled = enabled
 	}
-	if thresholds, ok := partial["success_thresholds"].(map[string]interface{}); ok {
+	if thresholds, ok := partial["success_thresholds"].(map[string]any); ok {
 		config.SuccessThresholds = make(map[string]float64)
 		for k, v := range thresholds {
 			if f, ok := v.(float64); ok {
@@ -1007,7 +1007,7 @@ func (scm *ShannonConfigManager) updatePartialResultsConfig(partial map[string]i
 }
 
 // updateHealthConfig updates health configuration
-func (scm *ShannonConfigManager) updateHealthConfig(healthMap map[string]interface{}, config *HealthConfig) {
+func (scm *ShannonConfigManager) updateHealthConfig(healthMap map[string]any, config *HealthConfig) {
 	if enabled, ok := healthMap["enabled"].(bool); ok {
 		config.Enabled = enabled
 	}
@@ -1026,10 +1026,10 @@ func (scm *ShannonConfigManager) updateHealthConfig(healthMap map[string]interfa
 	}
 
 	// Update per-check configuration
-	if checks, ok := healthMap["checks"].(map[string]interface{}); ok {
+	if checks, ok := healthMap["checks"].(map[string]any); ok {
 		config.Checks = make(map[string]HealthCheckConfig)
 		for checkName, checkData := range checks {
-			if checkMap, ok := checkData.(map[string]interface{}); ok {
+			if checkMap, ok := checkData.(map[string]any); ok {
 				var checkConfig HealthCheckConfig
 				if enabled, ok := checkMap["enabled"].(bool); ok {
 					checkConfig.Enabled = enabled
@@ -1054,7 +1054,7 @@ func (scm *ShannonConfigManager) updateHealthConfig(healthMap map[string]interfa
 }
 
 // updateAgentsConfig updates agents configuration
-func (scm *ShannonConfigManager) updateAgentsConfig(agentsMap map[string]interface{}, config *AgentsConfig) {
+func (scm *ShannonConfigManager) updateAgentsConfig(agentsMap map[string]any, config *AgentsConfig) {
 	if maxConcurrent, ok := agentsMap["max_concurrent"].(float64); ok {
 		config.MaxConcurrent = int(maxConcurrent)
 	}
@@ -1083,7 +1083,7 @@ func (scm *ShannonConfigManager) updateAgentsConfig(agentsMap map[string]interfa
 }
 
 // updateTemporalConfig updates temporal configuration
-func (scm *ShannonConfigManager) updateTemporalConfig(temporalMap map[string]interface{}, config *TemporalConfig) {
+func (scm *ShannonConfigManager) updateTemporalConfig(temporalMap map[string]any, config *TemporalConfig) {
 	if hostPort, ok := temporalMap["host_port"].(string); ok {
 		config.HostPort = hostPort
 	}
@@ -1101,7 +1101,7 @@ func (scm *ShannonConfigManager) updateTemporalConfig(temporalMap map[string]int
 }
 
 // updateLoggingConfig updates logging configuration
-func (scm *ShannonConfigManager) updateLoggingConfig(loggingMap map[string]interface{}, config *LoggingConfig) {
+func (scm *ShannonConfigManager) updateLoggingConfig(loggingMap map[string]any, config *LoggingConfig) {
 	if level, ok := loggingMap["level"].(string); ok {
 		config.Level = level
 	}
@@ -1111,7 +1111,7 @@ func (scm *ShannonConfigManager) updateLoggingConfig(loggingMap map[string]inter
 	if encoding, ok := loggingMap["encoding"].(string); ok {
 		config.Encoding = encoding
 	}
-	if paths, ok := loggingMap["output_paths"].([]interface{}); ok {
+	if paths, ok := loggingMap["output_paths"].([]any); ok {
 		config.OutputPaths = make([]string, len(paths))
 		for i, p := range paths {
 			if str, ok := p.(string); ok {
@@ -1119,7 +1119,7 @@ func (scm *ShannonConfigManager) updateLoggingConfig(loggingMap map[string]inter
 			}
 		}
 	}
-	if paths, ok := loggingMap["error_output_paths"].([]interface{}); ok {
+	if paths, ok := loggingMap["error_output_paths"].([]any); ok {
 		config.ErrorOutputPaths = make([]string, len(paths))
 		for i, p := range paths {
 			if str, ok := p.(string); ok {
@@ -1130,7 +1130,7 @@ func (scm *ShannonConfigManager) updateLoggingConfig(loggingMap map[string]inter
 }
 
 // updateAuthConfig updates authentication configuration
-func (scm *ShannonConfigManager) updateAuthConfig(authMap map[string]interface{}, config *AuthConfig) {
+func (scm *ShannonConfigManager) updateAuthConfig(authMap map[string]any, config *AuthConfig) {
 	if enabled, ok := authMap["enabled"].(bool); ok {
 		config.Enabled = enabled
 	}
@@ -1216,7 +1216,7 @@ func (scm *ShannonConfigManager) RegisterCallback(callback ConfigurationCallback
 }
 
 // updatePolicyConfig updates policy configuration
-func (scm *ShannonConfigManager) updatePolicyConfig(policyMap map[string]interface{}, config *PolicyConfig) {
+func (scm *ShannonConfigManager) updatePolicyConfig(policyMap map[string]any, config *PolicyConfig) {
 	if enabled, ok := policyMap["enabled"].(bool); ok {
 		config.Enabled = enabled
 	}
@@ -1234,7 +1234,7 @@ func (scm *ShannonConfigManager) updatePolicyConfig(policyMap map[string]interfa
 	}
 
 	// Update audit config
-	if audit, ok := policyMap["audit"].(map[string]interface{}); ok {
+	if audit, ok := policyMap["audit"].(map[string]any); ok {
 		if enabled, ok := audit["enabled"].(bool); ok {
 			config.Audit.Enabled = enabled
 		}
@@ -1251,7 +1251,7 @@ func (scm *ShannonConfigManager) updatePolicyConfig(policyMap map[string]interfa
 }
 
 // updateVectorConfig updates vector configuration
-func (scm *ShannonConfigManager) updateVectorConfig(vectorMap map[string]interface{}, config *VectorConfig) {
+func (scm *ShannonConfigManager) updateVectorConfig(vectorMap map[string]any, config *VectorConfig) {
 	if enabled, ok := vectorMap["enabled"].(bool); ok {
 		config.Enabled = enabled
 	}
@@ -1307,7 +1307,7 @@ func (scm *ShannonConfigManager) updateVectorConfig(vectorMap map[string]interfa
 }
 
 // updateEmbeddingsConfig updates embeddings configuration
-func (scm *ShannonConfigManager) updateEmbeddingsConfig(embeddingsMap map[string]interface{}, config *EmbeddingsConfig) {
+func (scm *ShannonConfigManager) updateEmbeddingsConfig(embeddingsMap map[string]any, config *EmbeddingsConfig) {
 	if baseURL, ok := embeddingsMap["base_url"].(string); ok {
 		config.BaseURL = baseURL
 	}
@@ -1328,7 +1328,7 @@ func (scm *ShannonConfigManager) updateEmbeddingsConfig(embeddingsMap map[string
 		config.MaxLRU = int(maxLRU)
 	}
 	// Parse chunking configuration
-	if chunking, ok := embeddingsMap["chunking"].(map[string]interface{}); ok {
+	if chunking, ok := embeddingsMap["chunking"].(map[string]any); ok {
 		if enabled, ok := chunking["enabled"].(bool); ok {
 			config.Chunking.Enabled = enabled
 		}

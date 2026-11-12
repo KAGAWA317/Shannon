@@ -213,7 +213,7 @@ func main() {
 			close(cfgReady)
 
 			// Register pricing validator and hot-reload handler for models.yaml
-			configMgr.RegisterValidator("models.yaml", func(m map[string]interface{}) error { return pricing.ValidateMap(m) })
+			configMgr.RegisterValidator("models.yaml", func(m map[string]any) error { return pricing.ValidateMap(m) })
 			configMgr.RegisterHandler("models.yaml", func(ev cfg.ChangeEvent) error {
 				pricing.Reload()
 				logger.Info("Pricing configuration reloaded", zap.String("file", ev.File), zap.String("action", ev.Action))

@@ -54,7 +54,7 @@ func (w *WorkflowHTTPRoundTripper) RoundTrip(req *http.Request) (*http.Response,
 // WorkflowUnaryClientInterceptor adds workflow metadata to outgoing gRPC requests
 // WorkflowUnaryClientInterceptor 为出站 gRPC request 附加 workflow metadata
 func WorkflowUnaryClientInterceptor() grpc.UnaryClientInterceptor {
-	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		// Add workflow metadata if available
 		info := activity.GetInfo(ctx)
 		if info.WorkflowExecution.ID != "" {

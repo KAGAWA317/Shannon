@@ -12,13 +12,13 @@ import (
 // PersistDebateConsensusInput stores the outcome of a debate
 // PersistDebateConsensusInput 用于存储一次 debate 的结果
 type PersistDebateConsensusInput struct {
-	SessionID        string                 `json:"session_id"`
-	Topic            string                 `json:"topic"`            // Original query/topic
-	WinningPosition  string                 `json:"winning_position"` // The consensus or winning argument
-	ConsensusReached bool                   `json:"consensus_reached"`
-	Confidence       float64                `json:"confidence"`
-	Positions        []string               `json:"positions"` // All debate positions
-	Metadata         map[string]interface{} `json:"metadata"`
+	SessionID        string         `json:"session_id"`
+	Topic            string         `json:"topic"`            // Original query/topic
+	WinningPosition  string         `json:"winning_position"` // The consensus or winning argument
+	ConsensusReached bool           `json:"consensus_reached"`
+	Confidence       float64        `json:"confidence"`
+	Positions        []string       `json:"positions"` // All debate positions
+	Metadata         map[string]any `json:"metadata"`
 }
 
 // PersistDebateConsensusResult indicates storage success
@@ -50,7 +50,7 @@ func PersistDebateConsensus(ctx context.Context, in PersistDebateConsensusInput)
 	}
 
 	// Build payload with consensus metadata
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"type":              "consensus", // IMPORTANT: Identifies this as consensus memory
 		// IMPORTANT: 标记此条为 consensus memory
 		"session_id":        in.SessionID,
@@ -132,7 +132,7 @@ func FetchConsensusMemory(ctx context.Context, in FetchConsensusMemoryInput) (Fe
 	}
 
 	// Search with type filter for consensus items
-	filter := map[string]interface{}{
+	filter := map[string]any{
 		"type": "consensus",
 	}
 

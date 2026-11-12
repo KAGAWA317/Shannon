@@ -79,7 +79,7 @@ var (
 type SupervisorMemoryContext struct {
 	// Raw conversation history (what we have now)
 	// 原始对话历史（目前已有的内容）
-	ConversationHistory []map[string]interface{} `json:"conversation_history"`
+	ConversationHistory []map[string]any `json:"conversation_history"`
 
 	// Strategic memory (what we need)
 	// 战略记忆（真正需要的内容）
@@ -188,10 +188,10 @@ func getLoggerSafe(ctx context.Context) (logger log.Logger) {
 // fallbackLogger implements log.Logger for non-activity contexts
 type fallbackLogger struct{}
 
-func (f *fallbackLogger) Debug(msg string, keyvals ...interface{}) {}
-func (f *fallbackLogger) Info(msg string, keyvals ...interface{})  {}
-func (f *fallbackLogger) Warn(msg string, keyvals ...interface{})  {}
-func (f *fallbackLogger) Error(msg string, keyvals ...interface{}) {}
+func (f *fallbackLogger) Debug(msg string, keyvals ...any) {}
+func (f *fallbackLogger) Info(msg string, keyvals ...any)  {}
+func (f *fallbackLogger) Warn(msg string, keyvals ...any)  {}
+func (f *fallbackLogger) Error(msg string, keyvals ...any) {}
 
 // FetchSupervisorMemory fetches and enriches memory for strategic decisions
 // FetchSupervisorMemory fetches enhanced supervisor memory with strategic insights.
@@ -210,7 +210,7 @@ func FetchSupervisorMemory(ctx context.Context, input FetchSupervisorMemoryInput
 		DecompositionHistory: []DecompositionMemory{},
 		TeamCompositions:     []TeamMemory{},
 		FailurePatterns:      []FailurePattern{},
-		ConversationHistory:  []map[string]interface{}{},
+		ConversationHistory:  []map[string]any{},
 	}
 
 	// 1. Get conversation history (existing implementation)
@@ -302,7 +302,7 @@ func fetchDecompositionPatterns(ctx context.Context, memory *SupervisorMemoryCon
 			}
 
 			// Extract subtasks
-			if subtasks, ok := result.Payload["subtasks"].([]interface{}); ok {
+			if subtasks, ok := result.Payload["subtasks"].([]any); ok {
 				for _, st := range subtasks {
 					if s, ok := st.(string); ok {
 						dm.Subtasks = append(dm.Subtasks, s)
@@ -870,7 +870,7 @@ func RecordDecomposition(ctx context.Context, input RecordDecompositionInput) er
 	}
 
 	// Prepare payload
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"pattern":     input.Query,
 		"subtasks":    input.Subtasks,
 		"strategy":    input.Strategy,
@@ -984,7 +984,7 @@ func cleanupStrategyPerformance(memory *SupervisorMemoryContext, logger log.Logg
 }
 
 // RecordLearningRouterMetrics records metrics for learning router recommendations
-func RecordLearningRouterMetrics(ctx context.Context, input map[string]interface{}) error {
+func RecordLearningRouterMetrics(ctx context.Context, input map[string]any) error {
 	latency, _ := input["latency_seconds"].(float64)
 	strategy, _ := input["strategy"].(string)
 	source, _ := input["source"].(string)

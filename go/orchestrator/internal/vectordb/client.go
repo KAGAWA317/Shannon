@@ -66,19 +66,19 @@ func (c *Client) GetConfig() Config {
 
 // qdrant search request/response (simplified)
 type qdrantQueryRequest struct {
-	Query          []float32              `json:"query"`
-	Limit          int                    `json:"limit"`
-	ScoreThreshold *float64               `json:"score_threshold,omitempty"`
-	WithPayload    bool                   `json:"with_payload"`
-	Filter         map[string]interface{} `json:"filter,omitempty"`
-	WithVector     bool                   `json:"with_vector,omitempty"`
+	Query          []float32      `json:"query"`
+	Limit          int            `json:"limit"`
+	ScoreThreshold *float64       `json:"score_threshold,omitempty"`
+	WithPayload    bool           `json:"with_payload"`
+	Filter         map[string]any `json:"filter,omitempty"`
+	WithVector     bool           `json:"with_vector,omitempty"`
 }
 
 type qdrantPoint struct {
-	ID      interface{}            `json:"id"`
-	Score   float64                `json:"score"`
-	Payload map[string]interface{} `json:"payload"`
-	Vector  []float64              `json:"vector,omitempty"`
+	ID      any            `json:"id"`
+	Score   float64        `json:"score"`
+	Payload map[string]any `json:"payload"`
+	Vector  []float64      `json:"vector,omitempty"`
 }
 
 type qdrantSearchResponse struct {
@@ -95,7 +95,7 @@ type qdrantQueryResponse struct {
 	Status string `json:"status"`
 }
 
-func (c *Client) search(ctx context.Context, collection string, vec []float32, limit int, threshold float64, filter map[string]interface{}) ([]qdrantPoint, error) {
+func (c *Client) search(ctx context.Context, collection string, vec []float32, limit int, threshold float64, filter map[string]any) ([]qdrantPoint, error) {
 	if c == nil || !c.cfg.Enabled {
 		return nil, fmt.Errorf("vectordb: search called while disabled")
 	}
@@ -135,7 +135,7 @@ func (c *Client) search(ctx context.Context, collection string, vec []float32, l
 		// fallback to /points/search
 		urlSearch := fmt.Sprintf("%s/collections/%s/points/search", c.base, collection)
 		// map to search payload {vector: ...}
-		legacy := map[string]interface{}{"vector": vec, "limit": limit, "with_payload": true, "with_vector": c.cfg.MMREnabled}
+		legacy := map[string]any{"vector": vec, "limit": limit, "with_payload": true, "with_vector": c.cfg.MMREnabled}
 		if threshold > 0 {
 			legacy["score_threshold"] = threshold
 		}
@@ -184,7 +184,7 @@ func (c *Client) Upsert(ctx context.Context, collection string, points []UpsertI
 	ctx, span := tracing.StartHTTPSpan(ctx, "PUT", url)
 	defer span.End()
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"points": points,
 	}
 	buf, _ := json.Marshal(body)
@@ -211,7 +211,7 @@ func (c *Client) Upsert(ctx context.Context, collection string, points []UpsertI
 
 // UpsertTaskEmbedding helper for inserting a query/answer embedding into TaskEmbeddings collection
 // UpsertTaskEmbedding 把查询/答案的 embedding 写入 TaskEmbeddings 集合的辅助函数
-func (c *Client) UpsertTaskEmbedding(ctx context.Context, vec []float32, payload map[string]interface{}) (*UpsertResponse, error) {
+func (c *Client) UpsertTaskEmbedding(ctx context.Context, vec []float32, payload map[string]any) (*UpsertResponse, error) {
 	p := UpsertItem{
 		ID:      uuid.New().String(),
 		Vector:  vec,
@@ -224,7 +224,7 @@ func (c *Client) UpsertTaskEmbedding(ctx context.Context, vec []float32, payload
 // Falls back to TaskEmbeddings if Summaries collection is not configured.
 // UpsertSummaryEmbedding 把摘要写入配置的 summaries 集合
 // 未配置 Summaries 集合时回退到 TaskEmbeddings。
-func (c *Client) UpsertSummaryEmbedding(ctx context.Context, vec []float32, payload map[string]interface{}) (*UpsertResponse, error) {
+func (c *Client) UpsertSummaryEmbedding(ctx context.Context, vec []float32, payload map[string]any) (*UpsertResponse, error) {
 	collection := c.cfg.Summaries
 	if collection == "" {
 		collection = c.cfg.TaskEmbeddings
@@ -248,10 +248,10 @@ func (c *Client) GetSessionContextSemanticByEmbedding(ctx context.Context, embed
 
 	// Build Qdrant-compliant filter with "must" clauses
 	// 构建符合 Qdrant 规范的 "must" 条件过滤器
-	mustClauses := []map[string]interface{}{
+	mustClauses := []map[string]any{
 		{
 			"key": "session_id",
-			"match": map[string]interface{}{
+			"match": map[string]any{
 				"value": sessionID,
 			},
 		},
@@ -260,16 +260,16 @@ func (c *Client) GetSessionContextSemanticByEmbedding(ctx context.Context, embed
 	// Add tenant filter if provided (for future multi-tenancy)
 	// 提供了 tenant 时加上租户过滤（为将来多租户预留）
 	if tenantID != "" {
-		mustClauses = append(mustClauses, map[string]interface{}{
+		mustClauses = append(mustClauses, map[string]any{
 			"key": "tenant_id",
-			"match": map[string]interface{}{
+			"match": map[string]any{
 				"value": tenantID,
 			},
 		})
 	}
 
 	// Create proper Qdrant filter structure
-	filter := map[string]interface{}{
+	filter := map[string]any{
 		"must": mustClauses,
 	}
 
@@ -293,7 +293,7 @@ func (c *Client) GetSessionContextSemanticByEmbedding(ctx context.Context, embed
 		// 把 point ID 加入 payload 以便去重
 		payload := point.Payload
 		if payload == nil {
-			payload = make(map[string]interface{})
+			payload = make(map[string]any)
 		}
 		// Include Qdrant point ID for strong deduplication
 		// 带上 Qdrant point ID 以实现强去重
@@ -327,10 +327,10 @@ func (c *Client) SearchSummaries(ctx context.Context, embedding []float32, sessi
 
 	// Build Qdrant-compliant filter with "must" clauses
 	// 构建符合 Qdrant 规范的 "must" 条件过滤器
-	mustClauses := []map[string]interface{}{
+	mustClauses := []map[string]any{
 		{
 			"key": "session_id",
-			"match": map[string]interface{}{
+			"match": map[string]any{
 				"value": sessionID,
 			},
 		},
@@ -338,16 +338,16 @@ func (c *Client) SearchSummaries(ctx context.Context, embedding []float32, sessi
 
 	// Add tenant filter if provided
 	if tenantID != "" {
-		mustClauses = append(mustClauses, map[string]interface{}{
+		mustClauses = append(mustClauses, map[string]any{
 			"key": "tenant_id",
-			"match": map[string]interface{}{
+			"match": map[string]any{
 				"value": tenantID,
 			},
 		})
 	}
 
 	// Create proper Qdrant filter structure
-	filter := map[string]interface{}{
+	filter := map[string]any{
 		"must": mustClauses,
 	}
 
@@ -371,7 +371,7 @@ func (c *Client) SearchSummaries(ctx context.Context, embedding []float32, sessi
 		// 把 point ID 加入 payload 以便去重
 		payload := point.Payload
 		if payload == nil {
-			payload = make(map[string]interface{})
+			payload = make(map[string]any)
 		}
 		// Include Qdrant point ID for strong deduplication
 		// 带上 Qdrant point ID 以实现强去重
@@ -405,23 +405,23 @@ func (c *Client) SearchDecompositionPatterns(ctx context.Context, embedding []fl
 
 	// Build Qdrant filter for session (and optional tenant)
 	// 构建按 session（及可选 tenant）的 Qdrant 过滤器
-	mustClauses := []map[string]interface{}{
+	mustClauses := []map[string]any{
 		{
 			"key": "session_id",
-			"match": map[string]interface{}{
+			"match": map[string]any{
 				"value": sessionID,
 			},
 		},
 	}
 	if tenantID != "" {
-		mustClauses = append(mustClauses, map[string]interface{}{
+		mustClauses = append(mustClauses, map[string]any{
 			"key": "tenant_id",
-			"match": map[string]interface{}{
+			"match": map[string]any{
 				"value": tenantID,
 			},
 		})
 	}
-	filter := map[string]interface{}{
+	filter := map[string]any{
 		"must": mustClauses,
 	}
 
@@ -442,7 +442,7 @@ func (c *Client) SearchDecompositionPatterns(ctx context.Context, embedding []fl
 	for _, point := range points {
 		payload := point.Payload
 		if payload == nil {
-			payload = make(map[string]interface{})
+			payload = make(map[string]any)
 		}
 		if point.ID != nil {
 			payload["_point_id"] = fmt.Sprintf("%v", point.ID)

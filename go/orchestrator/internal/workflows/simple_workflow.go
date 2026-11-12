@@ -110,7 +110,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 
 		if len(hierMemory.Items) > 0 {
 			if input.Context == nil {
-				input.Context = make(map[string]interface{})
+				input.Context = make(map[string]any)
 			}
 			input.Context["agent_memory"] = hierMemory.Items
 			// Emit memory recall metadata (no content)
@@ -139,7 +139,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 
 		if len(sessionMemory.Items) > 0 {
 			if input.Context == nil {
-				input.Context = make(map[string]interface{})
+				input.Context = make(map[string]any)
 			}
 			input.Context["agent_memory"] = sessionMemory.Items
 			// Emit memory recall metadata (no content)
@@ -267,7 +267,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 			).Get(ctx, &compressResult)
 			if compressResult.Summary != "" {
 				if input.Context == nil {
-					input.Context = make(map[string]interface{})
+					input.Context = make(map[string]any)
 				}
 				input.Context["context_summary"] = fmt.Sprintf("Previous context summary: %s", compressResult.Summary)
 				prim, rec := getPrimersRecents(input.Context, 3, 20)
@@ -334,7 +334,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 
 		// Pre-generate agent execution ID using SideEffect for replay safety
 		var agentExecutionID string
-		workflow.SideEffect(ctx, func(ctx workflow.Context) interface{} {
+		workflow.SideEffect(ctx, func(ctx workflow.Context) any {
 			return uuid.New().String()
 		}).Get(&agentExecutionID)
 
@@ -352,7 +352,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 				ModelUsed:  result.ModelUsed,
 				DurationMs: result.DurationMs,
 				Error:      result.Error,
-				Metadata: map[string]interface{}{
+				Metadata: map[string]any{
 					"workflow": "simple",
 					"strategy": "simple",
 				},
@@ -376,7 +376,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 			}
 
 			// Extract input params from tool execution
-			inputParamsMap, _ := tool.InputParams.(map[string]interface{})
+			inputParamsMap, _ := tool.InputParams.(map[string]any)
 
 			_ = workflow.ExecuteActivity(persistCtx,
 				activities.PersistToolExecutionStandalone,
@@ -406,7 +406,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 			Query:     input.Query,
 			Answer:    result.Response,
 			Model:     "simple-agent",
-			Metadata:  map[string]interface{}{"workflow": "simple", "mode": "simple", "tenant_id": input.TenantID},
+			Metadata:  map[string]any{"workflow": "simple", "mode": "simple", "tenant_id": input.TenantID},
 			RedactPII: true,
 		}).Get(ctx, nil)
 	}
@@ -477,12 +477,12 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 		// Collect citations from tool executions (best-effort)
 		var collectedCitations []metadata.Citation
 		if len(result.ToolExecutions) > 0 {
-			var resultsForCitations []interface{}
+			var resultsForCitations []any
 			for _, te := range result.ToolExecutions {
-				resultsForCitations = append(resultsForCitations, map[string]interface{}{
+				resultsForCitations = append(resultsForCitations, map[string]any{
 					"agent_id": agentName,
-					"tool_executions": []interface{}{
-						map[string]interface{}{
+					"tool_executions": []any{
+						map[string]any{
 							"tool":    te.Tool,
 							"success": te.Success,
 							"output":  te.Output,
@@ -496,7 +496,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 		}
 
 		// Build context for synthesis and inject citations for inline formatting
-		ctxForSynth := make(map[string]interface{})
+		ctxForSynth := make(map[string]any)
 		if input.Context != nil {
 			for k, v := range input.Context {
 				ctxForSynth[k] = v
@@ -519,9 +519,9 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 			ctxForSynth["available_citations"] = strings.TrimRight(b.String(), "\n")
 			ctxForSynth["citation_count"] = len(collectedCitations)
 
-			out := make([]map[string]interface{}, 0, len(collectedCitations))
+			out := make([]map[string]any, 0, len(collectedCitations))
 			for _, c := range collectedCitations {
-				out = append(out, map[string]interface{}{
+				out = append(out, map[string]any{
 					"url":               c.URL,
 					"title":             c.Title,
 					"source":            c.Source,
@@ -598,7 +598,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 			Provider:     provider,
 			InputTokens:  inTok,
 			OutputTokens: outTok,
-			Metadata:     map[string]interface{}{"workflow": "simple"},
+			Metadata:     map[string]any{"workflow": "simple"},
 		}).Get(ctx, nil)
 	}
 
@@ -625,7 +625,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 			AgentID:    "final_output",
 			Message:    finalResult,
 			Timestamp:  workflow.Now(ctx),
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"tokens_used": totalTokens,
 				"model_used":  result.ModelUsed,
 			},
@@ -650,7 +650,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 		Timestamp:  workflow.Now(ctx),
 	}).Get(ctx, nil)
 
-	meta := map[string]interface{}{
+	meta := map[string]any{
 		"mode":       "simple",
 		"num_agents": 1,
 	}
@@ -704,7 +704,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 // deriveModelTier intelligently determines the model tier based on context
 // Priority: explicit model_tier > per-agent budget > default "medium"
 // 优先级：显式 model_tier > 单 agent budget > 默认 "medium"。
-func deriveModelTier(ctx map[string]interface{}) string {
+func deriveModelTier(ctx map[string]any) string {
 	if ctx == nil {
 		return "medium"
 	}

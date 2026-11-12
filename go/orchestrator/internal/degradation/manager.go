@@ -237,7 +237,7 @@ func (m *Manager) AggregatePartialResults(
 func (m *Manager) CreatePartialResult(
 	source string,
 	success bool,
-	result interface{},
+	result any,
 	err error,
 	confidence float64,
 	degraded bool,

@@ -54,7 +54,7 @@ func buildTaskMetricsPayload(task *TaskExecution) JSONB {
 		metrics["complexity_score"] = task.ComplexityScore
 	}
 	if task.Metadata != nil && len(task.Metadata) > 0 {
-		metrics["metadata"] = map[string]interface{}(task.Metadata)
+		metrics["metadata"] = map[string]any(task.Metadata)
 	}
 
 	if len(metrics) == 0 {
@@ -76,13 +76,13 @@ func (c *Client) SaveTaskExecution(ctx context.Context, task *TaskExecution) err
 
 	// Insert or update canonical record in task_executions
 	// 在 task_executions 中插入或更新规范记录
-	var userID interface{}
+	var userID any
 	if task.UserID != nil {
 		userID = task.UserID
 	} else {
 		userID = nil
 	}
-	var tenantID interface{}
+	var tenantID any
 	if task.TenantID != nil {
 		tenantID = task.TenantID
 	} else {
@@ -259,14 +259,14 @@ func (c *Client) BatchSaveTaskExecutions(ctx context.Context, tasks []*TaskExecu
 			}
 
 			// Prepare args for task_executions
-			var userID interface{}
+			var userID any
 			if task.UserID != nil {
 				userID = task.UserID
 			} else {
 				userID = nil
 			}
 			sessionID := task.SessionID
-			var tenantID interface{}
+			var tenantID any
 			if task.TenantID != nil {
 				tenantID = task.TenantID
 			} else {
@@ -362,7 +362,7 @@ func (c *Client) BatchSaveAgentExecutions(ctx context.Context, agents []*AgentEx
 	}
 
 	valueStrings := make([]string, 0, len(agents))
-	valueArgs := make([]interface{}, 0, len(agents)*14)
+	valueArgs := make([]any, 0, len(agents)*14)
 
 	for i, agent := range agents {
 		if agent.ID == "" {
@@ -499,7 +499,7 @@ func (c *Client) BatchSaveToolExecutions(ctx context.Context, tools []*ToolExecu
 // If sessionContext is nil, a minimal default context will be used
 // CreateSession 在数据库中创建 session（租户感知）
 // sessionContext 为 nil 时使用最小的默认 context
-func (c *Client) CreateSession(ctx context.Context, sessionID string, userID string, tenantID string, sessionContext map[string]interface{}) error {
+func (c *Client) CreateSession(ctx context.Context, sessionID string, userID string, tenantID string, sessionContext map[string]any) error {
 	// Parse tenant ID once for reuse
 	var tid *uuid.UUID
 	if tenantID != "" {
@@ -557,14 +557,14 @@ func (c *Client) CreateSession(ctx context.Context, sessionID string, userID str
 
 	// Use provided context or create a minimal default
 	// 使用提供的 context，或创建最小的默认 context
-	var contextMap map[string]interface{}
+	var contextMap map[string]any
 	if sessionContext != nil && len(sessionContext) > 0 {
-		contextMap = make(map[string]interface{})
+		contextMap = make(map[string]any)
 		for k, v := range sessionContext {
 			contextMap[k] = v
 		}
 	} else {
-		contextMap = map[string]interface{}{"created_from": "orchestrator"}
+		contextMap = map[string]any{"created_from": "orchestrator"}
 	}
 
 	if parsed, err := uuid.Parse(sessionID); err == nil {

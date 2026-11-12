@@ -363,7 +363,7 @@ func GetWorkflowConfig(ctx context.Context) (*WorkflowConfig, error) {
 
 // LoadWorkflowConfig loads configuration at workflow start
 // LoadWorkflowConfig 在 workflow 启动时加载配置。
-func LoadWorkflowConfig(ctx context.Context) (map[string]interface{}, error) {
+func LoadWorkflowConfig(ctx context.Context) (map[string]any, error) {
 	config, err := GetWorkflowConfig(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load workflow config: %w", err)
@@ -371,56 +371,56 @@ func LoadWorkflowConfig(ctx context.Context) (map[string]interface{}, error) {
 
 	// Convert to map for easier access
 	// 转成 map，便于按 key 访问。
-	return map[string]interface{}{
-		"exploratory": map[string]interface{}{
+	return map[string]any{
+		"exploratory": map[string]any{
 			"max_iterations":        config.ExploratoryMaxIterations,
 			"confidence_threshold":  config.ExploratoryConfidenceThreshold,
 			"branch_factor":         config.ExploratoryBranchFactor,
 			"max_concurrent_agents": config.ExploratoryMaxConcurrentAgents,
 		},
-		"react": map[string]interface{}{
+		"react": map[string]any{
 			"max_iterations":     config.ReactMaxIterations,
 			"observation_window": config.ReactObservationWindow,
 		},
-		"research": map[string]interface{}{
+		"research": map[string]any{
 			"research_depth":        config.ResearchDepth,
 			"sources_per_round":     config.ResearchSourcesPerRound,
 			"min_sources":           config.ResearchMinSources,
 			"max_concurrent_agents": config.ResearchMaxConcurrentAgents,
 		},
-		"scientific": map[string]interface{}{
+		"scientific": map[string]any{
 			"max_hypotheses":          config.ScientificMaxHypotheses,
 			"max_iterations":          config.ScientificMaxIterations,
 			"confidence_threshold":    config.ScientificConfidenceThreshold,
 			"contradiction_threshold": config.ScientificContradictionThreshold,
 		},
-		"reflection": map[string]interface{}{
+		"reflection": map[string]any{
 			"enabled":              config.ReflectionEnabled,
 			"max_retries":          config.ReflectionMaxRetries,
 			"confidence_threshold": config.ReflectionConfidenceThreshold,
 			"criteria":             config.ReflectionCriteria,
 			"timeout_ms":           config.ReflectionTimeoutMs,
 		},
-		"dag": map[string]interface{}{
+		"dag": map[string]any{
 			"simple_threshold":    config.SimpleThreshold,
 			"max_parallel_agents": config.MaxParallelAgents,
 		},
-		"approval": map[string]interface{}{
+		"approval": map[string]any{
 			"enabled":              config.ApprovalEnabled,
 			"complexity_threshold": config.ApprovalComplexityThreshold,
 			"dangerous_tools":      config.ApprovalDangerousTools,
 		},
-		"execution": map[string]interface{}{
+		"execution": map[string]any{
 			"parallel_max_concurrency":   config.ParallelMaxConcurrency,
 			"hybrid_dependency_timeout":  config.HybridDependencyTimeout,
 			"sequential_pass_results":    config.SequentialPassResults,
 			"sequential_extract_numeric": config.SequentialExtractNumeric,
 		},
-		"p2p": map[string]interface{}{
+		"p2p": map[string]any{
 			"enabled":         config.P2PCoordinationEnabled,
 			"timeout_seconds": config.P2PTimeoutSeconds,
 		},
-		"swarm": map[string]interface{}{
+		"swarm": map[string]any{
 			"enabled":                  config.SwarmEnabled,
 			"max_agents":               config.SwarmMaxAgents,
 			"max_iterations_per_agent": config.SwarmMaxIterationsPerAgent,

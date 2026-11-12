@@ -56,7 +56,7 @@ func TestSwarmTaskSerialization_CompletedAt(t *testing.T) {
 		Status: "pending",
 	}
 	b, _ := json.Marshal(task)
-	var m map[string]interface{}
+	var m map[string]any
 	json.Unmarshal(b, &m)
 	if _, ok := m["completed_at"]; ok {
 		t.Error("completed_at should be omitted when empty")

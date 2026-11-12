@@ -13,7 +13,7 @@ import (
 func TestStrategiesBasicWorkflows(t *testing.T) {
 	testCases := []struct {
 		name      string
-		workflow  interface{}
+		workflow  any
 		input     strategies.TaskInput
 		expectErr bool
 	}{
@@ -24,7 +24,7 @@ func TestStrategiesBasicWorkflows(t *testing.T) {
 				Query:     "What are the emerging trends in AI?",
 				UserID:    "test-user",
 				SessionID: "test-session",
-				Context:   map[string]interface{}{},
+				Context:   map[string]any{},
 			},
 			expectErr: false,
 		},

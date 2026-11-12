@@ -66,9 +66,9 @@ func TestExecutionModeRouting(t *testing.T) {
 			mockWorkflowRun.On("GetRunID").Return("test-run-id")
 
 			// Capture the workflow function used
-			var capturedWorkflow interface{}
+			var capturedWorkflow any
 			var capturedInput workflows.TaskInput
-			var capturedMemo map[string]interface{}
+			var capturedMemo map[string]any
 
 			mockClient.On("ExecuteWorkflow",
 				mock.Anything, // context
@@ -163,7 +163,7 @@ func TestDefaultExecutionMode(t *testing.T) {
 	mockWorkflowRun.On("GetRunID").Return("test-run-id")
 
 	var capturedInput workflows.TaskInput
-	var capturedWorkflow interface{}
+	var capturedWorkflow any
 	mockClient.On("ExecuteWorkflow",
 		mock.Anything,
 		mock.MatchedBy(func(opts client.StartWorkflowOptions) bool {

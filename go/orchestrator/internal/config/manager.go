@@ -25,10 +25,10 @@ const (
 
 // ChangeEvent represents a configuration change event
 type ChangeEvent struct {
-	File      string                 `json:"file"`
-	Action    string                 `json:"action"` // create, modify, delete
-	Config    map[string]interface{} `json:"config"`
-	Timestamp time.Time              `json:"timestamp"`
+	File      string         `json:"file"`
+	Action    string         `json:"action"` // create, modify, delete
+	Config    map[string]any `json:"config"`
+	Timestamp time.Time      `json:"timestamp"`
 }
 
 // ChangeHandler is called when configuration changes
@@ -38,7 +38,7 @@ type ChangeHandler func(event ChangeEvent) error
 // ConfigManager 管理基于文件的配置并支持热重载
 type ConfigManager struct {
 	configDir      string
-	configs        map[string]map[string]interface{}
+	configs        map[string]map[string]any
 	handlers       map[string][]ChangeHandler
 	policyHandlers []func() error // Policy reload handlers for .rego files
 	watcher        *fsnotify.Watcher
@@ -49,7 +49,7 @@ type ConfigManager struct {
 	watcherMu      sync.Mutex
 
 	// Configuration validation
-	validators map[string]func(map[string]interface{}) error
+	validators map[string]func(map[string]any) error
 
 	// Polling fallback for when fsnotify isn't reliable
 	// fsnotify 不可靠时的轮询兜底
@@ -75,9 +75,9 @@ func NewConfigManager(configDir string, logger *zap.Logger) (*ConfigManager, err
 
 	return &ConfigManager{
 		configDir:     configDir,
-		configs:       make(map[string]map[string]interface{}),
+		configs:       make(map[string]map[string]any),
 		handlers:      make(map[string][]ChangeHandler),
-		validators:    make(map[string]func(map[string]interface{}) error),
+		validators:    make(map[string]func(map[string]any) error),
 		watcher:       watcher,
 		stopCh:        make(chan struct{}),
 		logger:        logger,
@@ -174,7 +174,7 @@ func (cm *ConfigManager) RegisterHandler(filename string, handler ChangeHandler)
 
 // RegisterValidator registers a configuration validator for a specific file
 // RegisterValidator 为指定文件注册配置校验器
-func (cm *ConfigManager) RegisterValidator(filename string, validator func(map[string]interface{}) error) {
+func (cm *ConfigManager) RegisterValidator(filename string, validator func(map[string]any) error) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
@@ -194,7 +194,7 @@ func (cm *ConfigManager) RegisterPolicyHandler(handler func() error) {
 
 // GetConfig returns the current configuration for a file
 // GetConfig 返回某个文件的当前配置
-func (cm *ConfigManager) GetConfig(filename string) (map[string]interface{}, bool) {
+func (cm *ConfigManager) GetConfig(filename string) (map[string]any, bool) {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 
@@ -205,7 +205,7 @@ func (cm *ConfigManager) GetConfig(filename string) (map[string]interface{}, boo
 
 	// Return a copy to prevent concurrent modification
 	// 返回副本，防止并发修改
-	result := make(map[string]interface{})
+	result := make(map[string]any)
 	for k, v := range config {
 		result[k] = v
 	}
@@ -214,13 +214,13 @@ func (cm *ConfigManager) GetConfig(filename string) (map[string]interface{}, boo
 }
 
 // GetAllConfigs returns all loaded configurations
-func (cm *ConfigManager) GetAllConfigs() map[string]map[string]interface{} {
+func (cm *ConfigManager) GetAllConfigs() map[string]map[string]any {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 
-	result := make(map[string]map[string]interface{})
+	result := make(map[string]map[string]any)
 	for filename, config := range cm.configs {
-		configCopy := make(map[string]interface{})
+		configCopy := make(map[string]any)
 		for k, v := range config {
 			configCopy[k] = v
 		}
@@ -244,7 +244,7 @@ func (cm *ConfigManager) ReloadAllConfigs() error {
 
 // SetConfig programmatically sets a configuration (useful for testing)
 // SetConfig 以编程方式设置配置（便于测试）
-func (cm *ConfigManager) SetConfig(filename string, config map[string]interface{}) error {
+func (cm *ConfigManager) SetConfig(filename string, config map[string]any) error {
 	// Get validator with minimal lock time
 	cm.mu.RLock()
 	validator, hasValidator := cm.validators[filename]
@@ -259,7 +259,7 @@ func (cm *ConfigManager) SetConfig(filename string, config map[string]interface{
 
 	// Create a deep copy of the config for handlers
 	// 为 handler 深拷贝配置
-	configCopy := make(map[string]interface{})
+	configCopy := make(map[string]any)
 	for k, v := range config {
 		configCopy[k] = v
 	}
@@ -492,7 +492,7 @@ func (cm *ConfigManager) loadConfigFile(filePath, action string) error {
 	}
 
 	filename := filepath.Base(filePath)
-	config := make(map[string]interface{})
+	config := make(map[string]any)
 
 	// Parse based on file extension (no lock needed for these pure functions)
 	// 按文件扩展名解析（这些纯函数无需加锁）
@@ -524,7 +524,7 @@ func (cm *ConfigManager) loadConfigFile(filePath, action string) error {
 
 	// Create a deep copy of the config for handlers to avoid sharing mutable data
 	// 为 handler 深拷贝配置，避免共享可变数据
-	configCopy := make(map[string]interface{})
+	configCopy := make(map[string]any)
 	for k, v := range config {
 		configCopy[k] = v
 	}
@@ -589,9 +589,9 @@ func (cm *ConfigManager) handleFileRemoval(filename string) {
 
 	// Create a copy of the last known config for handlers
 	// 为 handler 复制最后已知的配置
-	var configCopy map[string]interface{}
+	var configCopy map[string]any
 	if config != nil {
-		configCopy = make(map[string]interface{})
+		configCopy = make(map[string]any)
 		for k, v := range config {
 			configCopy[k] = v
 		}

@@ -90,7 +90,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	)
 
 	// Ensure parent workflow ID is included in context for downstream activities
-	cotCtx := make(map[string]interface{})
+	cotCtx := make(map[string]any)
 	for k, v := range input.Context {
 		cotCtx[k] = v
 	}
@@ -107,7 +107,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	hierarchicalVersion := workflow.GetVersion(ctx, "memory_retrieval_v1", workflow.DefaultVersion, 1)
 	sessionVersion := workflow.GetVersion(ctx, "session_memory_v1", workflow.DefaultVersion, 1)
 
-	var memoryItems []map[string]interface{}
+	var memoryItems []map[string]any
 	if hierarchicalVersion >= 1 && input.SessionID != "" {
 		// Use hierarchical memory (combines recent + semantic)
 		var hierMemory activities.FetchHierarchicalMemoryResult
@@ -203,7 +203,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	}
 
 	// Prepare debate context with hypotheses
-	debateContext := make(map[string]interface{})
+	debateContext := make(map[string]any)
 	for k, v := range input.Context {
 		debateContext[k] = v
 	}
@@ -275,7 +275,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 		input.Query,
 	)
 
-	totContext := make(map[string]interface{})
+	totContext := make(map[string]any)
 	for k, v := range input.Context {
 		totContext[k] = v
 	}
@@ -453,7 +453,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 			AgentID:    "final_output",
 			Message:    finalResult,
 			Timestamp:  workflow.Now(ctx),
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"tokens_used": totalTokens,
 			},
 		}).Get(ctx, nil)
@@ -469,7 +469,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	}).Get(ctx, nil)
 
 	// Build metadata with agent information
-	meta := map[string]interface{}{
+	meta := map[string]any{
 		"workflow_type":     "scientific",
 		"patterns_used":     []string{"chain_of_thought", "debate", "tree_of_thoughts", "reflection"},
 		"hypotheses_count":  len(hypotheses),

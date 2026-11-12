@@ -54,7 +54,7 @@ func truncateDecisionSummary(s string) string {
 }
 
 // buildObservationText creates a frozen tool result digest for multi-turn cache replay.
-func buildObservationText(action string, result interface{}) string {
+func buildObservationText(action string, result any) string {
 	resultStr := fmt.Sprintf("%v", result)
 	const maxLen = 3000
 	if len(resultStr) > maxLen {
@@ -202,7 +202,7 @@ func buildToolsUsedSummary(history []activities.AgentLoopTurn) string {
 }
 
 // toFloat64 safely converts interface{} to float64 (JSON numbers are float64).
-func toFloat64(v interface{}) float64 {
+func toFloat64(v any) float64 {
 	switch n := v.(type) {
 	case float64:
 		return n
@@ -217,7 +217,7 @@ func toFloat64(v interface{}) float64 {
 
 // convertHistoryForLead converts session conversation history into a concise format for Lead.
 // Keeps last few exchanges, truncates long assistant responses to avoid bloating Lead's context.
-func convertHistoryForLead(messages []Message) []map[string]interface{} {
+func convertHistoryForLead(messages []Message) []map[string]any {
 	const maxMessages = 6   // Last 3 turns (user + assistant)
 	const maxAssistantLen = 800
 
@@ -226,13 +226,13 @@ func convertHistoryForLead(messages []Message) []map[string]interface{} {
 		start = len(messages) - maxMessages
 	}
 
-	result := make([]map[string]interface{}, 0, len(messages)-start)
+	result := make([]map[string]any, 0, len(messages)-start)
 	for _, msg := range messages[start:] {
 		content := msg.Content
 		if msg.Role == "assistant" && len(content) > maxAssistantLen {
 			content = content[:maxAssistantLen] + "\n... [truncated — use file_read to check workspace for full details]"
 		}
-		result = append(result, map[string]interface{}{
+		result = append(result, map[string]any{
 			"role":    msg.Role,
 			"content": content,
 		})
@@ -272,7 +272,7 @@ func newFetchTracker(seed []activities.TeamKnowledgeEntry) *fetchTracker {
 
 // checkCache returns cached content if ALL requested URLs are cached (L1).
 // Returns ("", false) when ft is nil, tool is not a fetch, or any URL is uncached.
-func (ft *fetchTracker) checkCache(tool string, params map[string]interface{}) (string, bool) {
+func (ft *fetchTracker) checkCache(tool string, params map[string]any) (string, bool) {
 	if ft == nil || (tool != "web_fetch" && tool != "web_subpage_fetch") {
 		return "", false
 	}
@@ -297,7 +297,7 @@ func (ft *fetchTracker) checkCache(tool string, params map[string]interface{}) (
 
 // writeCache stores fetch results and updates knowledge + discovered (L1 write).
 // Returns URLs that were newly added (for logging).
-func (ft *fetchTracker) writeCache(tool string, params map[string]interface{}, response interface{}, agentID string) []string {
+func (ft *fetchTracker) writeCache(tool string, params map[string]any, response any, agentID string) []string {
 	if ft == nil || (tool != "web_fetch" && tool != "web_subpage_fetch") {
 		return nil
 	}
@@ -326,7 +326,7 @@ func (ft *fetchTracker) writeCache(tool string, params map[string]interface{}, r
 }
 
 // checkSearchOverlap registers new URLs and returns overlap stats (L3).
-func (ft *fetchTracker) checkSearchOverlap(result interface{}, agentID string) (overlapPct float64, known, total int) {
+func (ft *fetchTracker) checkSearchOverlap(result any, agentID string) (overlapPct float64, known, total int) {
 	if ft == nil || result == nil {
 		return 0, 0, 0
 	}
@@ -410,12 +410,12 @@ func truncateToSentence(text string, maxLen int) string {
 }
 
 // extractURLsFromParams extracts URLs from tool_call params (handles both "url" string and "urls" array).
-func extractURLsFromParams(params map[string]interface{}) []string {
+func extractURLsFromParams(params map[string]any) []string {
 	var urls []string
 	if u, ok := params["url"].(string); ok && u != "" {
 		urls = append(urls, u)
 	}
-	if arr, ok := params["urls"].([]interface{}); ok {
+	if arr, ok := params["urls"].([]any); ok {
 		for _, v := range arr {
 			if s, ok := v.(string); ok && s != "" {
 				urls = append(urls, s)
@@ -458,7 +458,7 @@ type AgentLoopInput struct {
 	MaxIterations         int                    `json:"max_iterations"`
 	SessionID             string                 `json:"session_id,omitempty"`
 	UserID                string                 `json:"user_id,omitempty"`
-	Context               map[string]interface{} `json:"context,omitempty"`
+	Context               map[string]any `json:"context,omitempty"`
 	TeamRoster            []TeamMember           `json:"team_roster,omitempty"`
 	WorkspaceMaxEntries   int                    `json:"workspace_max_entries,omitempty"`
 	WorkspaceSnippetChars int                    `json:"workspace_snippet_chars,omitempty"`
@@ -528,7 +528,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 		AgentID:    input.AgentID,
 		Message:    activities.MsgAgentStarted(input.AgentID),
 		Timestamp:  workflow.Now(ctx),
-		Payload:    map[string]interface{}{"role": input.Role},
+		Payload:    map[string]any{"role": input.Role},
 	}).Get(ctx, nil)
 
 	// Convert team roster to activity-level type
@@ -787,7 +787,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 				CacheCreationTokens:   stepResult.CacheCreationTokens,
 				CacheCreation1hTokens: 0, // AgentLoopStepResult doesn't carry per-TTL breakdown
 				CallSequence:        iteration, // Use Go iteration (per-agent), not Python global counter
-				Metadata:            map[string]interface{}{"workflow": "swarm", "phase": "agent_step", "iteration": iteration},
+				Metadata:            map[string]any{"workflow": "swarm", "phase": "agent_step", "iteration": iteration},
 			}).Get(ctx, nil)
 		}
 		if stepResult.ResponseID != "" {
@@ -971,7 +971,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 			}
 
 			// L1 fetch cache check
-			turnResult := interface{}(nil)
+			turnResult := any(nil)
 			if cached, hit := ft.checkCache(stepResult.Tool, stepResult.ToolParams); hit {
 				logger.Info("L1 fetch cache hit — skipping ExecuteAgent",
 					"agent_id", input.AgentID,
@@ -990,8 +990,8 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 			toolErr := workflow.ExecuteActivity(ctx, activities.ExecuteAgent, activities.AgentExecutionInput{
 				Query:            fmt.Sprintf("Execute tool %s with params: %v", stepResult.Tool, stepResult.ToolParams),
 				AgentID:          input.AgentID,
-				Context: func() map[string]interface{} {
-					c := map[string]interface{}{"force_swarm": true}
+				Context: func() map[string]any {
+					c := map[string]any{"force_swarm": true}
 					if toolModelOverride != "" {
 						c["model_override"] = toolModelOverride
 					}
@@ -1033,7 +1033,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 						CacheCreationTokens:   toolRes.CacheCreationTokens,
 						CacheCreation1hTokens: toolRes.CacheCreation1hTokens,
 						CallSequence:        iteration, // Use Go iteration (per-agent)
-						Metadata:            map[string]interface{}{"workflow": "swarm", "phase": "tool_exec", "tool": stepResult.Tool},
+						Metadata:            map[string]any{"workflow": "swarm", "phase": "tool_exec", "tool": stepResult.Tool},
 					}).Get(ctx, nil)
 				}
 
@@ -1250,7 +1250,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 				_ = workflow.ExecuteActivity(p2pCtx, constants.WorkspaceAppendActivity, activities.WorkspaceAppendInput{
 					WorkflowID: input.WorkflowID,
 					Topic:      stepResult.Topic,
-					Entry: map[string]interface{}{
+					Entry: map[string]any{
 						"author": input.AgentID,
 						"data":   stepResult.Data,
 					},
@@ -1306,7 +1306,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 				// Build enriched completion report for Lead
 				completionReport := stepResult.CompletionReport
 				if completionReport == nil {
-					completionReport = map[string]interface{}{}
+					completionReport = map[string]any{}
 				}
 				if len(filesWritten) > 0 {
 					completionReport["files_written"] = filesWritten
@@ -1315,7 +1315,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 					completionReport["summary"] = idleSummary
 				}
 
-				idlePayload := map[string]interface{}{
+				idlePayload := map[string]any{
 					"agent_id":          input.AgentID,
 					"result_summary":    idleSummary,
 					"iterations":        iteration + 1,
@@ -1469,7 +1469,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 				params := stepResult.ToolParams
 				if len(params) == 0 {
 					// Some actions put params in payload or data fields
-					params = make(map[string]interface{})
+					params = make(map[string]any)
 					if stepResult.Data != "" {
 						params["content"] = stepResult.Data
 					}
@@ -1478,7 +1478,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 					}
 				}
 				// L1 fetch cache check (default case)
-				turnResult := interface{}(nil)
+				turnResult := any(nil)
 				if cached, hit := ft.checkCache(toolName, params); hit {
 					logger.Info("L1 fetch cache hit — skipping ExecuteAgent",
 						"agent_id", input.AgentID,
@@ -1496,8 +1496,8 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 				toolErr := workflow.ExecuteActivity(ctx, activities.ExecuteAgent, activities.AgentExecutionInput{
 					Query:            fmt.Sprintf("Execute tool %s with params: %v", toolName, params),
 					AgentID:          input.AgentID,
-					Context: func() map[string]interface{} {
-						c := map[string]interface{}{"force_swarm": true}
+					Context: func() map[string]any {
+						c := map[string]any{"force_swarm": true}
 						if toolModelOverride != "" {
 							c["model_override"] = toolModelOverride
 						}
@@ -1539,7 +1539,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 							CacheCreationTokens:   toolRes.CacheCreationTokens,
 						CacheCreation1hTokens: toolRes.CacheCreation1hTokens,
 							CallSequence:        iteration, // Use Go iteration (per-agent)
-							Metadata:            map[string]interface{}{"workflow": "swarm", "phase": "tool_exec", "tool": toolName},
+							Metadata:            map[string]any{"workflow": "swarm", "phase": "tool_exec", "tool": toolName},
 						}).Get(ctx, nil)
 					}
 
@@ -1830,7 +1830,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	memoryPromptVersion := workflow.GetVersion(ctx, "swarm_user_memory_prompt_v1", workflow.DefaultVersion, 1)
 	if memoryPromptVersion == workflow.DefaultVersion && input.UserID != "" {
 		if input.Context == nil {
-			input.Context = make(map[string]interface{})
+			input.Context = make(map[string]any)
 		}
 		input.Context["user_memory_prompt"] = "You have access to a persistent memory directory at /memory/. " +
 			"This contains knowledge from past sessions with this user.\n\n" +
@@ -1884,7 +1884,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	agentStates := make(map[string]activities.LeadAgentState)
 	agentTaskStartTimes := make(map[string]time.Time) // agentID → when current task started
 	agentTaskMap := make(map[string]string)            // agentID → current taskID
-	leadHistory := make([]map[string]interface{}, 0) // Must be non-nil for JSON → Pydantic List
+	leadHistory := make([]map[string]any, 0) // Must be non-nil for JSON → Pydantic List
 
 	// Version gate for Lead tool_call support (Temporal replay safety)
 	leadToolCallV := workflow.GetVersion(ctx, "lead-tool-call-v1", workflow.DefaultVersion, 1)
@@ -1921,7 +1921,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}).Get(ctx, nil)
 
 	// Convert session history for Lead multi-turn context
-	var conversationHistory []map[string]interface{}
+	var conversationHistory []map[string]any
 	if len(input.History) > 0 {
 		conversationHistory = convertHistoryForLead(input.History)
 	}
@@ -1983,11 +1983,11 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 				CacheCreationTokens:   planDecision.CacheCreationTokens,
 				CacheCreation1hTokens: 0, // LeadDecisionResult doesn't carry per-TTL breakdown
 				CallSequence:        planDecision.CallSequence,
-				Metadata:            map[string]interface{}{"workflow": "swarm", "phase": "initial_plan"},
+				Metadata:            map[string]any{"workflow": "swarm", "phase": "initial_plan"},
 			}).Get(ctx, nil)
 		}
 
-		leadHistory = append(leadHistory, map[string]interface{}{
+		leadHistory = append(leadHistory, map[string]any{
 			"decision_summary": planDecision.DecisionSummary,
 			"event":            "initial_plan",
 			"actions":          len(planDecision.Actions),
@@ -2016,7 +2016,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 						EventType:  activities.StreamEventLLMOutput,
 						AgentID:    "swarm-lead",
 						Message:    action.Content,
-						Payload: map[string]interface{}{
+						Payload: map[string]any{
 							"role":    "lead",
 							"interim": true,
 						},
@@ -2086,7 +2086,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 					EventType:  activities.StreamEventLeadToolCall,
 					AgentID:    "swarm-lead",
 					Message:    fmt.Sprintf("Lead executing %s", tc.Tool),
-					Payload: map[string]interface{}{"tool": tc.Tool, "phase": "initial_plan"},
+					Payload: map[string]any{"tool": tc.Tool, "phase": "initial_plan"},
 					Timestamp: workflow.Now(ctx),
 				}).Get(ctx, nil)
 				var toolResult activities.LeadToolResult
@@ -2191,7 +2191,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		EventType:  activities.StreamEventLeadDecision,
 		AgentID:    "swarm-lead",
 		Message:    leadDisplayMessage(planDecision),
-		Payload: map[string]interface{}{
+		Payload: map[string]any{
 			"event_type": "initial_plan",
 			"actions":    len(planDecision.Actions),
 		},
@@ -2221,7 +2221,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		// preventing fallthrough to budget_agent_max which incorrectly maps to "small".
 		// swarm agent 在 Lead 未指定 model_tier 时默认 "medium"，
 		// 避免落到 budget_agent_max 而被错误映射为 "small"。
-		agentCtx := make(map[string]interface{}, len(input.Context)+1)
+		agentCtx := make(map[string]any, len(input.Context)+1)
 		for k, v := range input.Context {
 			agentCtx[k] = v
 		}
@@ -2322,7 +2322,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 					CreatedBy:   "lead",
 				}
 				// Parse depends_on for task dependency enforcement
-				if deps, ok := newTask["depends_on"].([]interface{}); ok {
+				if deps, ok := newTask["depends_on"].([]any); ok {
 					for _, d := range deps {
 						task.DependsOn = append(task.DependsOn, fmt.Sprintf("%v", d))
 					}
@@ -2371,7 +2371,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 					EventType:  activities.StreamEventLLMOutput,
 					AgentID:    "swarm-lead",
 					Message:    action.Content,
-					Payload: map[string]interface{}{
+					Payload: map[string]any{
 						"role":    "lead",
 						"interim": true,
 					},
@@ -2485,13 +2485,13 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		// Agent idle notification — agent finished task and is waiting for reassignment
 		sel.AddReceive(agentIdleCh, func(ch workflow.ReceiveChannel, more bool) {
 			timerCancel()
-			var idleInfo map[string]interface{}
+			var idleInfo map[string]any
 			ch.Receive(ctx, &idleInfo)
 			agentID, _ := idleInfo["agent_id"].(string)
 			resultSummary, _ := idleInfo["result_summary"].(string)
 			iterations, _ := idleInfo["iterations"].(float64) // JSON numbers → float64
 			toolsUsed, _ := idleInfo["tools_used"].(string)
-			completionReport, _ := idleInfo["completion_report"].(map[string]interface{})
+			completionReport, _ := idleInfo["completion_report"].(map[string]any)
 
 			// Filter raw tool JSON from result_summary (P4 fix)
 			if resultSummary != "" && looksLikeToolJSON(resultSummary) {
@@ -2517,7 +2517,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 				if filesRaw, ok := completionReport["files_written"]; ok {
 					if files, ok := filesRaw.([]string); ok {
 						s.FilesWritten = files
-					} else if filesArr, ok := filesRaw.([]interface{}); ok {
+					} else if filesArr, ok := filesRaw.([]any); ok {
 						for _, f := range filesArr {
 							if fs, ok := f.(string); ok {
 								s.FilesWritten = append(s.FilesWritten, fs)
@@ -2565,10 +2565,10 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 
 			// Merge agent's team knowledge into global accumulator (L2 cross-agent dedup)
 			if tkRaw, ok := idleInfo["team_knowledge"]; ok {
-				if tkSlice, ok := tkRaw.([]interface{}); ok {
+				if tkSlice, ok := tkRaw.([]any); ok {
 					var agentTK []activities.TeamKnowledgeEntry
 					for _, item := range tkSlice {
-						if m, ok := item.(map[string]interface{}); ok {
+						if m, ok := item.(map[string]any); ok {
 							agentTK = append(agentTK, activities.TeamKnowledgeEntry{
 								URL:       fmt.Sprintf("%v", m["url"]),
 								Agent:     fmt.Sprintf("%v", m["agent"]),
@@ -2729,7 +2729,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		// simultaneously. ReceiveAsync is deterministic — only drains buffered signals.
 		if event.Type == "agent_idle" {
 			for {
-				var extraIdle map[string]interface{}
+				var extraIdle map[string]any
 				if !agentIdleCh.ReceiveAsync(&extraIdle) {
 					break
 				}
@@ -2737,7 +2737,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 				extraSummary, _ := extraIdle["result_summary"].(string)
 				extraIter, _ := extraIdle["iterations"].(float64)
 				extraToolsUsed, _ := extraIdle["tools_used"].(string)
-				extraReport, _ := extraIdle["completion_report"].(map[string]interface{})
+				extraReport, _ := extraIdle["completion_report"].(map[string]any)
 
 				if extraSummary != "" && looksLikeToolJSON(extraSummary) {
 					logger.Warn("Filtering tool JSON from coalesced idle result_summary",
@@ -2756,7 +2756,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 						if filesRaw, ok := extraReport["files_written"]; ok {
 							if files, ok := filesRaw.([]string); ok {
 								s.FilesWritten = files
-							} else if filesArr, ok := filesRaw.([]interface{}); ok {
+							} else if filesArr, ok := filesRaw.([]any); ok {
 								for _, f := range filesArr {
 									if fs, ok := f.(string); ok {
 										s.FilesWritten = append(s.FilesWritten, fs)
@@ -2769,10 +2769,10 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 				}
 				// Merge coalesced agent's team knowledge into global accumulator (L2 dedup)
 				if tkRaw, ok := extraIdle["team_knowledge"]; ok {
-					if tkSlice, ok := tkRaw.([]interface{}); ok {
+					if tkSlice, ok := tkRaw.([]any); ok {
 						var agentTK []activities.TeamKnowledgeEntry
 						for _, item := range tkSlice {
-							if m, ok := item.(map[string]interface{}); ok {
+							if m, ok := item.(map[string]any); ok {
 								agentTK = append(agentTK, activities.TeamKnowledgeEntry{
 									URL:       fmt.Sprintf("%v", m["url"]),
 									Agent:     fmt.Sprintf("%v", m["agent"]),
@@ -2946,10 +2946,10 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 				SinceSeq:   lastLeadMailboxSeq,
 			}).Get(ctx, &leadMessages)
 
-		var leadMsgMaps []map[string]interface{}
+		var leadMsgMaps []map[string]any
 		if leadMailboxErr == nil {
 			for _, m := range leadMessages {
-				leadMsgMaps = append(leadMsgMaps, map[string]interface{}{
+				leadMsgMaps = append(leadMsgMaps, map[string]any{
 					"from":    m.From,
 					"type":    string(m.Type),
 					"payload": m.Payload,
@@ -3054,11 +3054,11 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 					CacheCreationTokens:   decision.CacheCreationTokens,
 					CacheCreation1hTokens: 0, // LeadDecisionResult doesn't carry per-TTL breakdown
 					CallSequence:        decision.CallSequence,
-					Metadata:            map[string]interface{}{"workflow": "swarm", "phase": "lead_decision"},
+					Metadata:            map[string]any{"workflow": "swarm", "phase": "lead_decision"},
 				}).Get(ctx, nil)
 			}
 
-			leadHistory = append(leadHistory, map[string]interface{}{
+			leadHistory = append(leadHistory, map[string]any{
 				"decision_summary": decision.DecisionSummary,
 				"event":            event.Type,
 				"actions":          len(decision.Actions),
@@ -3148,7 +3148,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 						EventType:  activities.StreamEventLeadToolCall,
 						AgentID:    "swarm-lead",
 						Message:    fmt.Sprintf("Lead executing %s", tc.Tool),
-						Payload: map[string]interface{}{
+						Payload: map[string]any{
 							"tool": tc.Tool, "phase": "lead_tool_call",
 						},
 						Timestamp: workflow.Now(ctx),
@@ -3217,7 +3217,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			EventType:  activities.StreamEventLeadDecision,
 			AgentID:    "swarm-lead",
 			Message:    leadDisplayMessage(decision),
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"event_type": event.Type,
 				"actions":    len(decision.Actions),
 			},
@@ -3368,7 +3368,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 						EventType:  activities.StreamEventAgentStarted,
 						AgentID:    action.AgentID,
 						Message:    fmt.Sprintf("%s got a new task", action.AgentID),
-						Payload: map[string]interface{}{
+						Payload: map[string]any{
 							"role": action.Role,
 						},
 					}).Get(ctx, nil)
@@ -3400,7 +3400,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 						From:       "lead",
 						To:         action.To,
 						Type:       activities.MessageTypeInfo,
-						Payload:    map[string]interface{}{"message": action.Content},
+						Payload:    map[string]any{"message": action.Content},
 						Timestamp:  workflow.Now(ctx),
 					}).Get(ctx, nil)
 				}
@@ -3432,7 +3432,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 								From:       "lead",
 								To:         s.AgentID,
 								Type:       activities.MessageTypeInfo,
-								Payload:    map[string]interface{}{"message": action.Content},
+								Payload:    map[string]any{"message": action.Content},
 								Timestamp:  workflow.Now(ctx),
 							}).Get(ctx, nil)
 						}
@@ -3460,7 +3460,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 						CreatedBy:   "lead",
 					}
 					// Parse depends_on for task dependency enforcement (matches initial planning)
-					if deps, ok := newTask["depends_on"].([]interface{}); ok {
+					if deps, ok := newTask["depends_on"].([]any); ok {
 						for _, d := range deps {
 							task.DependsOn = append(task.DependsOn, fmt.Sprintf("%v", d))
 						}
@@ -3556,7 +3556,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 							EventType:  activities.StreamEventLLMOutput,
 							AgentID:    "swarm-lead",
 							Message:    action.Content,
-							Payload: map[string]interface{}{
+							Payload: map[string]any{
 								"role":    "lead",
 								"interim": true,
 							},
@@ -3640,7 +3640,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 						}
 					})
 					drainSel.AddReceive(agentIdleCh, func(ch workflow.ReceiveChannel, more bool) {
-						var m map[string]interface{}
+						var m map[string]any
 						ch.Receive(ctx, &m) // discard
 					})
 					drainSel.AddFuture(drainTimer, func(f workflow.Future) {
@@ -3858,11 +3858,11 @@ synthesis:
 				CacheCreationTokens:   closingDecision.CacheCreationTokens,
 				CacheCreation1hTokens: 0, // LeadDecisionResult doesn't carry per-TTL breakdown
 				CallSequence:        closingDecision.CallSequence,
-				Metadata:            map[string]interface{}{"workflow": "swarm", "phase": "closing_decision"},
+				Metadata:            map[string]any{"workflow": "swarm", "phase": "closing_decision"},
 			}).Get(ctx, nil)
 		}
 
-		leadHistory = append(leadHistory, map[string]interface{}{
+		leadHistory = append(leadHistory, map[string]any{
 			"decision_summary": closingDecision.DecisionSummary,
 			"event":            "closing_checkpoint",
 			"actions":          len(closingDecision.Actions),
@@ -3980,7 +3980,7 @@ synthesis:
 						AgentID:    "swarm-supervisor",
 						Message:    replyContent,
 						Timestamp:  workflow.Now(ctx),
-						Payload: map[string]interface{}{
+						Payload: map[string]any{
 							"tokens_used": closingDecision.TokensUsed,
 							"model_used":  closingDecision.ModelUsed,
 							"provider":    closingDecision.Provider,
@@ -4070,7 +4070,7 @@ synthesis:
 	}
 
 	// LLM synthesis — use medium model tier for swarm (agents already did heavy lifting)
-	synthContext := make(map[string]interface{}, len(input.Context)+1)
+	synthContext := make(map[string]any, len(input.Context)+1)
 	for k, v := range input.Context {
 		synthContext[k] = v
 	}
@@ -4113,7 +4113,7 @@ synthesis:
 			InputTokens:  synth.InputTokens,
 			OutputTokens: synth.CompletionTokens,
 			CallSequence: synth.CallSequence,
-			Metadata:     map[string]interface{}{"workflow": "swarm", "phase": "synthesis"},
+			Metadata:     map[string]any{"workflow": "swarm", "phase": "synthesis"},
 		}).Get(ctx, nil)
 	}
 
@@ -4169,8 +4169,8 @@ synthesis:
 }
 
 // buildSwarmMetadata builds metadata from swarm agent results.
-func buildSwarmMetadata(results map[string]AgentLoopResult) map[string]interface{} {
-	agentSummaries := make([]map[string]interface{}, 0, len(results))
+func buildSwarmMetadata(results map[string]AgentLoopResult) map[string]any {
+	agentSummaries := make([]map[string]any, 0, len(results))
 	metaIDs := make([]string, 0, len(results))
 	for id := range results {
 		metaIDs = append(metaIDs, id)
@@ -4180,7 +4180,7 @@ func buildSwarmMetadata(results map[string]AgentLoopResult) map[string]interface
 	var totalCost float64
 	for _, id := range metaIDs {
 		r := results[id]
-		agentSummaries = append(agentSummaries, map[string]interface{}{
+		agentSummaries = append(agentSummaries, map[string]any{
 			"agent_id":   r.AgentID,
 			"iterations": r.Iterations,
 			"tokens":     r.TokensUsed,
@@ -4202,7 +4202,7 @@ func buildSwarmMetadata(results map[string]AgentLoopResult) map[string]interface
 	// resulting in empty metadata and zero cost/tokens in persistence.
 	// 只用扁平 key：嵌套结构（如 agentSummaries）会让 Temporal JSON codec
 	// 反序列化 map[string]interface{} 失败，导致 metadata 为空、持久化的成本/token 归零。
-	meta := map[string]interface{}{
+	meta := map[string]any{
 		"workflow_type":          "swarm",
 		"total_agents":          len(results),
 		"num_agents":            len(results),

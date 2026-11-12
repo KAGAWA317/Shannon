@@ -118,7 +118,7 @@ func EstimateTokensWithConfig(decomp activities.DecompositionResult, cfg *activi
 	return int(float64(base*n) * mul)
 }
 
-func resolveProviderFromContext(ctx map[string]interface{}) string {
+func resolveProviderFromContext(ctx map[string]any) string {
 	if ctx == nil {
 		return "unknown"
 	}

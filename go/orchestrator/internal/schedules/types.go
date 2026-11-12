@@ -23,7 +23,7 @@ type Schedule struct {
 	CronExpression      string                 `json:"cron_expression"`
 	Timezone            string                 `json:"timezone"`
 	TaskQuery           string                 `json:"task_query"`
-	TaskContext         map[string]interface{} `json:"task_context"`
+	TaskContext         map[string]any `json:"task_context"`
 	MaxBudgetPerRunUSD  float64                `json:"max_budget_per_run_usd"`
 	TimeoutSeconds      int                    `json:"timeout_seconds"`
 	TemporalScheduleID  string                 `json:"temporal_schedule_id"`
@@ -47,7 +47,7 @@ type CreateScheduleInput struct {
 	CronExpression     string
 	Timezone           string
 	TaskQuery          string
-	TaskContext        map[string]interface{}
+	TaskContext        map[string]any
 	MaxBudgetPerRunUSD float64
 	TimeoutSeconds     int
 }
@@ -61,17 +61,17 @@ type UpdateScheduleInput struct {
 	CronExpression     *string
 	Timezone           *string
 	TaskQuery          *string
-	TaskContext        map[string]interface{}
+	TaskContext        map[string]any
 	MaxBudgetPerRunUSD *float64
 	TimeoutSeconds     *int
 }
 
 // ScheduledTaskInput is passed to ScheduledTaskWorkflow
 type ScheduledTaskInput struct {
-	ScheduleID         string                 `json:"schedule_id"`
-	TaskQuery          string                 `json:"task_query"`
-	TaskContext        map[string]interface{} `json:"task_context"`
-	MaxBudgetPerRunUSD float64                `json:"max_budget_per_run_usd"`
-	UserID             string                 `json:"user_id"`
-	TenantID           string                 `json:"tenant_id"`
+	ScheduleID         string         `json:"schedule_id"`
+	TaskQuery          string         `json:"task_query"`
+	TaskContext        map[string]any `json:"task_context"`
+	MaxBudgetPerRunUSD float64        `json:"max_budget_per_run_usd"`
+	UserID             string         `json:"user_id"`
+	TenantID           string         `json:"tenant_id"`
 }

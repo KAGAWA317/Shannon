@@ -54,7 +54,7 @@ type TreeOfThoughtsResult struct {
 func TreeOfThoughts(
 	ctx workflow.Context,
 	query string,
-	context map[string]interface{},
+	context map[string]any,
 	sessionID string,
 	history []string,
 	config TreeOfThoughtsConfig,
@@ -244,7 +244,7 @@ func generateBranches(
 	parent *ThoughtNode,
 	originalQuery string,
 	branchingFactor int,
-	context map[string]interface{},
+	context map[string]any,
 	sessionID string,
 	history []string,
 	tokenBudget int,
@@ -353,7 +353,7 @@ Format each as a clear, concise thought.`,
             Provider:     provider,
             InputTokens:  inTok,
             OutputTokens: outTok,
-            Metadata:     map[string]interface{}{"phase": "tree_of_thoughts"},
+            Metadata:     map[string]any{"phase": "tree_of_thoughts"},
         }).Get(recCtx, nil)
         wopts.RecordToolCostEntries(ctx, branchResult, opts.UserID, sessionID, wid)
     }

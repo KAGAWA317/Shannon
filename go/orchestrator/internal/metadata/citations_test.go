@@ -415,7 +415,7 @@ func TestCollectCitations(t *testing.T) {
 	now := time.Date(2025, 1, 6, 12, 0, 0, 0, time.UTC)
 
 	t.Run("empty results", func(t *testing.T) {
-		citations, stats := CollectCitations([]interface{}{}, now, 15)
+		citations, stats := CollectCitations([]any{}, now, 15)
 		if len(citations) != 0 {
 			t.Errorf("expected 0 citations, got %d", len(citations))
 		}
@@ -425,23 +425,23 @@ func TestCollectCitations(t *testing.T) {
 	})
 
 	t.Run("web_search results", func(t *testing.T) {
-		results := []interface{}{
-			map[string]interface{}{
+		results := []any{
+			map[string]any{
 				"agent_id": "researcher-1",
-				"tool_executions": []interface{}{
-					map[string]interface{}{
+				"tool_executions": []any{
+					map[string]any{
 						"tool":    "web_search",
 						"success": true,
-						"output": map[string]interface{}{
-							"results": []interface{}{
-								map[string]interface{}{
+						"output": map[string]any{
+							"results": []any{
+								map[string]any{
 									"url":            "https://arxiv.org/abs/2401.00001",
 									"title":          "Quantum Computing Breakthrough",
 									"text":           "A new quantum algorithm achieves...",
 									"score":          0.95,
 									"published_date": "2025-01-05T10:00:00Z",
 								},
-								map[string]interface{}{
+								map[string]any{
 									"url":   "https://nature.com/articles/quantum-2025",
 									"title": "Nature: Quantum Entanglement Study",
 									"text":  "Researchers discover sustained quantum entanglement effects in a 2025 study.",
@@ -482,28 +482,28 @@ func TestCollectCitations(t *testing.T) {
 	})
 
 	t.Run("deduplication", func(t *testing.T) {
-		results := []interface{}{
-			map[string]interface{}{
+		results := []any{
+			map[string]any{
 				"agent_id": "researcher-1",
-				"tool_executions": []interface{}{
-					map[string]interface{}{
+				"tool_executions": []any{
+					map[string]any{
 						"tool":    "web_search",
 						"success": true,
-						"output": map[string]interface{}{
-							"results": []interface{}{
-								map[string]interface{}{
+						"output": map[string]any{
+							"results": []any{
+								map[string]any{
 									"url":   "https://example.com/article",
 									"title": "Article 1",
 									"text":  "This is a detailed summary that exceeds the minimum snippet length for testing.",
 									"score": 0.9,
 								},
-								map[string]interface{}{
+								map[string]any{
 									"url":   "https://example.com/article?utm_source=google",
 									"title": "Article 1 Duplicate",
 									"text":  "This is a detailed summary that exceeds the minimum snippet length for testing.",
 									"score": 0.8,
 								},
-								map[string]interface{}{
+								map[string]any{
 									"url":   "https://www.example.com/article/",
 									"title": "Article 1 Another Duplicate",
 									"text":  "This is a detailed summary that exceeds the minimum snippet length for testing.",
@@ -529,40 +529,40 @@ func TestCollectCitations(t *testing.T) {
 
 	t.Run("diversity enforcement", func(t *testing.T) {
 		// Create 5 results from same domain
-		results := []interface{}{
-			map[string]interface{}{
+		results := []any{
+			map[string]any{
 				"agent_id": "researcher-1",
-				"tool_executions": []interface{}{
-					map[string]interface{}{
+				"tool_executions": []any{
+					map[string]any{
 						"tool":    "web_search",
 						"success": true,
-						"output": map[string]interface{}{
-							"results": []interface{}{
-								map[string]interface{}{
+						"output": map[string]any{
+							"results": []any{
+								map[string]any{
 									"url":   "https://example.com/article1",
 									"title": "Article 1",
 									"text":  "This is a sufficiently long snippet so the citation is not filtered as fallback.",
 									"score": 0.9,
 								},
-								map[string]interface{}{
+								map[string]any{
 									"url":   "https://example.com/article2",
 									"title": "Article 2",
 									"text":  "This is a sufficiently long snippet so the citation is not filtered as fallback.",
 									"score": 0.85,
 								},
-								map[string]interface{}{
+								map[string]any{
 									"url":   "https://example.com/article3",
 									"title": "Article 3",
 									"text":  "This is a sufficiently long snippet so the citation is not filtered as fallback.",
 									"score": 0.80,
 								},
-								map[string]interface{}{
+								map[string]any{
 									"url":   "https://example.com/article4",
 									"title": "Article 4",
 									"text":  "This is a sufficiently long snippet so the citation is not filtered as fallback.",
 									"score": 0.75,
 								},
-								map[string]interface{}{
+								map[string]any{
 									"url":   "https://example.com/article5",
 									"title": "Article 5",
 									"text":  "This is a sufficiently long snippet so the citation is not filtered as fallback.",
@@ -594,14 +594,14 @@ func TestCollectCitations(t *testing.T) {
 	})
 
 	t.Run("web_fetch integration", func(t *testing.T) {
-		results := []interface{}{
-			map[string]interface{}{
+		results := []any{
+			map[string]any{
 				"agent_id": "researcher-1",
-				"tool_executions": []interface{}{
-					map[string]interface{}{
+				"tool_executions": []any{
+					map[string]any{
 						"tool":    "web_fetch",
 						"success": true,
-						"output": map[string]interface{}{
+						"output": map[string]any{
 							"url":            "https://anthropic.com/news/claude-3-5",
 							"title":          "Claude 3.5 Announcement",
 							"content":        "Anthropic announces Claude 3.5 Sonnet...",
@@ -632,16 +632,16 @@ func TestCollectCitations(t *testing.T) {
 	})
 
 	t.Run("mixed web_search and web_fetch", func(t *testing.T) {
-		results := []interface{}{
-			map[string]interface{}{
+		results := []any{
+			map[string]any{
 				"agent_id": "researcher-1",
-				"tool_executions": []interface{}{
-					map[string]interface{}{
+				"tool_executions": []any{
+					map[string]any{
 						"tool":    "web_search",
 						"success": true,
-						"output": map[string]interface{}{
-							"results": []interface{}{
-								map[string]interface{}{
+						"output": map[string]any{
+							"results": []any{
+								map[string]any{
 									"url":   "https://arxiv.org/abs/2401.00001",
 									"title": "Quantum Research",
 									"text":  "This arXiv abstract snippet is long enough to pass the minimum snippet length.",
@@ -650,10 +650,10 @@ func TestCollectCitations(t *testing.T) {
 							},
 						},
 					},
-					map[string]interface{}{
+					map[string]any{
 						"tool":    "web_fetch",
 						"success": true,
-						"output": map[string]interface{}{
+						"output": map[string]any{
 							"url":     "https://nature.com/article/quantum-2025",
 							"title":   "Nature Article",
 							"content": "Detailed content that is long enough for snippet extraction in tests.",
@@ -674,8 +674,8 @@ func TestCollectCitations(t *testing.T) {
 	})
 
 	t.Run("plain text URL tag wrapper cleanup", func(t *testing.T) {
-		results := []interface{}{
-			map[string]interface{}{
+		results := []any{
+			map[string]any{
 				"agent_id": "researcher-1",
 				"response": "Source: <url>https://waylandz.com/blog/tensor-logic-brain-like-architecture</url>",
 			},
@@ -694,8 +694,8 @@ func TestCollectCitations(t *testing.T) {
 	})
 
 	t.Run("plain text URL encoded tag suffix cleanup", func(t *testing.T) {
-		results := []interface{}{
-			map[string]interface{}{
+		results := []any{
+			map[string]any{
 				"agent_id": "researcher-1",
 				"response": "Source: https://waylandz.com/blog/shannon-agentkit-alternative%3C/url",
 			},
@@ -715,9 +715,9 @@ func TestCollectCitations(t *testing.T) {
 
 	t.Run("limit to max citations", func(t *testing.T) {
 		// Create 20 search results
-		searchResults := make([]interface{}, 20)
+		searchResults := make([]any, 20)
 		for i := 0; i < 20; i++ {
-			searchResults[i] = map[string]interface{}{
+			searchResults[i] = map[string]any{
 				"url":   fmt.Sprintf("https://example%d.com/article", i),
 				"title": fmt.Sprintf("Article %d", i),
 				"text":  "This is a sufficiently long snippet so the citation is not filtered as fallback.",
@@ -725,14 +725,14 @@ func TestCollectCitations(t *testing.T) {
 			}
 		}
 
-		results := []interface{}{
-			map[string]interface{}{
+		results := []any{
+			map[string]any{
 				"agent_id": "researcher-1",
-				"tool_executions": []interface{}{
-					map[string]interface{}{
+				"tool_executions": []any{
+					map[string]any{
 						"tool":    "web_search",
 						"success": true,
-						"output": map[string]interface{}{
+						"output": map[string]any{
 							"results": searchResults,
 						},
 					},
@@ -758,7 +758,7 @@ func TestExtractCitationFromSearchResult(t *testing.T) {
 	now := time.Date(2025, 1, 6, 12, 0, 0, 0, time.UTC)
 
 	t.Run("valid result", func(t *testing.T) {
-		result := map[string]interface{}{
+		result := map[string]any{
 			"url":            "https://arxiv.org/abs/2401.00001",
 			"title":          "Quantum Computing",
 			"text":           "Abstract...",
@@ -783,7 +783,7 @@ func TestExtractCitationFromSearchResult(t *testing.T) {
 	})
 
 	t.Run("missing url", func(t *testing.T) {
-		result := map[string]interface{}{
+		result := map[string]any{
 			"title": "Article without URL",
 		}
 

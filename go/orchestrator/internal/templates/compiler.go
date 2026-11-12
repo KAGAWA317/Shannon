@@ -14,7 +14,7 @@ type ExecutableNode struct {
 	BudgetMax      int
 	ToolsAllowlist []string
 	OnFail         *TemplateNodeFailure
-	Metadata       map[string]interface{}
+	Metadata       map[string]any
 	DependsOn      []string
 }
 
@@ -163,11 +163,11 @@ func cloneFailure(f *TemplateNodeFailure) *TemplateNodeFailure {
 	return &clone
 }
 
-func cloneMap(in map[string]interface{}) map[string]interface{} {
+func cloneMap(in map[string]any) map[string]any {
 	if in == nil {
 		return nil
 	}
-	out := make(map[string]interface{}, len(in))
+	out := make(map[string]any, len(in))
 	for k, v := range in {
 		out[k] = v
 	}

@@ -63,7 +63,7 @@ func (r *RedisHealthChecker) Check(ctx context.Context) CheckResult {
 		result.Status = StatusUnhealthy
 		result.Error = err.Error()
 		result.Message = "Redis ping failed"
-		result.Details = map[string]interface{}{
+		result.Details = map[string]any{
 			"error":      err.Error(),
 			"latency_ms": result.Duration.Milliseconds(),
 		}
@@ -79,7 +79,7 @@ func (r *RedisHealthChecker) Check(ctx context.Context) CheckResult {
 		result.Message = "Redis healthy"
 	}
 
-	result.Details = map[string]interface{}{
+	result.Details = map[string]any{
 		"latency_ms":           result.Duration.Milliseconds(),
 		"circuit_breaker_open": false,
 	}
@@ -134,7 +134,7 @@ func (d *DatabaseHealthChecker) Check(ctx context.Context) CheckResult {
 		result.Status = StatusUnhealthy
 		result.Error = err.Error()
 		result.Message = "Database ping failed"
-		result.Details = map[string]interface{}{
+		result.Details = map[string]any{
 			"error":      err.Error(),
 			"latency_ms": result.Duration.Milliseconds(),
 		}
@@ -156,7 +156,7 @@ func (d *DatabaseHealthChecker) Check(ctx context.Context) CheckResult {
 		result.Message = "Database healthy"
 	}
 
-	result.Details = map[string]interface{}{
+	result.Details = map[string]any{
 		"latency_ms":           result.Duration.Milliseconds(),
 		"open_connections":     stats.OpenConnections,
 		"max_open_connections": stats.MaxOpenConnections,
@@ -234,7 +234,7 @@ func (a *AgentCoreHealthChecker) Check(ctx context.Context) CheckResult {
 		result.Message = "Agent Core healthy"
 	}
 
-	result.Details = map[string]interface{}{
+	result.Details = map[string]any{
 		"latency_ms":       result.Duration.Milliseconds(),
 		"connection_state": connState.String(),
 	}
@@ -279,7 +279,7 @@ func (l *LLMServiceHealthChecker) Check(ctx context.Context) CheckResult {
 	result.Status = StatusHealthy
 	result.Message = "LLM service assumed healthy (not implemented)"
 
-	result.Details = map[string]interface{}{
+	result.Details = map[string]any{
 		"base_url":   l.baseURL,
 		"latency_ms": result.Duration.Milliseconds(),
 		"note":       "Health check not fully implemented",

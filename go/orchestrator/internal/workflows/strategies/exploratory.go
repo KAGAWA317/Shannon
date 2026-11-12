@@ -82,7 +82,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	)
 
 	// Ensure parent workflow ID is available in context passed to patterns
-	ctxMap := make(map[string]interface{})
+	ctxMap := make(map[string]any)
 	for k, v := range input.Context {
 		ctxMap[k] = v
 	}
@@ -95,7 +95,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	hierarchicalVersion := workflow.GetVersion(ctx, "memory_retrieval_v1", workflow.DefaultVersion, 1)
 	sessionVersion := workflow.GetVersion(ctx, "session_memory_v1", workflow.DefaultVersion, 1)
 
-	var memoryItems []map[string]interface{}
+	var memoryItems []map[string]any
 	if hierarchicalVersion >= 1 && input.SessionID != "" {
 		// Use hierarchical memory (combines recent + semantic)
 		var hierMemory activities.FetchHierarchicalMemoryResult
@@ -250,7 +250,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 		}
 
 		// Prepare debate context with exploration findings
-		debateContext := make(map[string]interface{})
+		debateContext := make(map[string]any)
 		for k, v := range input.Context {
 			debateContext[k] = v
 		}
@@ -365,7 +365,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 			AgentID:    "final_output",
 			Message:    finalResult,
 			Timestamp:  workflow.Now(ctx),
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"tokens_used": totalTokens,
 			},
 		}).Get(ctx, nil)
@@ -381,7 +381,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	}).Get(ctx, nil)
 
 	// Build metadata with agent information
-	meta := map[string]interface{}{
+	meta := map[string]any{
 		"workflow_type":      "exploratory",
 		"pattern_used":       "tree_of_thoughts",
 		"total_thoughts":     totResult.TotalThoughts,

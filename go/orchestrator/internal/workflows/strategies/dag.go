@@ -82,7 +82,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Prepare base context
-	baseContext := make(map[string]interface{})
+	baseContext := make(map[string]any)
 	for k, v := range input.Context {
 		baseContext[k] = v
 	}
@@ -226,7 +226,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		}
 
 		// Build metadata aligned with other workflows (model/provider/tokens/cost)
-		meta := map[string]interface{}{
+		meta := map[string]any{
 			"complexity_score": decomp.ComplexityScore,
 			"mode":             "simple",
 			"num_agents":       1,
@@ -472,7 +472,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 					Provider:     synthesis.Provider,
 					InputTokens:  inTok,
 					OutputTokens: outTok,
-					Metadata: map[string]interface{}{
+					Metadata: map[string]any{
 						"phase":    "synthesis",
 						"workflow": "dag",
 					},
@@ -556,7 +556,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 						Provider:     synthesis.Provider,
 						InputTokens:  inTok,
 						OutputTokens: outTok,
-						Metadata: map[string]interface{}{
+						Metadata: map[string]any{
 							"phase":    "synthesis",
 							"workflow": "dag",
 						},
@@ -610,7 +610,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 					Provider:     synthesis.Provider,
 					InputTokens:  inTok,
 					OutputTokens: outTok,
-					Metadata: map[string]interface{}{
+					Metadata: map[string]any{
 						"phase":    "synthesis",
 						"workflow": "dag",
 					},
@@ -673,7 +673,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 				Provider:     synthesis.Provider,
 				InputTokens:  inTok,
 				OutputTokens: outTok,
-				Metadata: map[string]interface{}{
+				Metadata: map[string]any{
 					"phase":    "synthesis",
 					"workflow": "dag",
 				},
@@ -843,9 +843,9 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		verifyEnabled = v
 	}
 	if verifyEnabled && len(collectedCitations) > 0 {
-		var verCitations []interface{}
+		var verCitations []any
 		for _, c := range collectedCitations {
-			m := map[string]interface{}{
+			m := map[string]any{
 				"url":               c.URL,
 				"title":             c.Title,
 				"source":            c.Source,
@@ -908,7 +908,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		}
 	}
 
-	meta := map[string]interface{}{
+	meta := map[string]any{
 		"version":        "v2",
 		"complexity":     decomp.ComplexityScore,
 		"quality_score":  qualityScore,
@@ -917,9 +917,9 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		"had_reflection": shouldReflect(decomp.ComplexityScore, &config),
 	}
 	if len(collectedCitations) > 0 {
-		out := make([]map[string]interface{}, 0, len(collectedCitations))
+		out := make([]map[string]any, 0, len(collectedCitations))
 		for _, c := range collectedCitations {
-			out = append(out, map[string]interface{}{
+			out = append(out, map[string]any{
 				"url":               c.URL,
 				"title":             c.Title,
 				"source":            c.Source,
@@ -1041,7 +1041,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	// Emit final clean LLM_OUTPUT for OpenAI-compatible streaming.
 	// Agent ID "final_output" signals the streamer to always show this content.
 	if finalResult != "" {
-		payload := map[string]interface{}{
+		payload := map[string]any{
 			"tokens_used": totalTokens,
 		}
 		if model, ok := meta["model_used"].(string); ok && model != "" {
@@ -1080,12 +1080,12 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 // collectAndFormatCitations extracts citations from agentResults and returns the
 // citations along with a formatted list suitable for synthesis prompts.
 func collectAndFormatCitations(ctx workflow.Context, agentResults []activities.AgentExecutionResult) ([]metadata.Citation, string) {
-	var resultsForCitations []interface{}
+	var resultsForCitations []any
 	for _, ar := range agentResults {
-		var toolExecs []interface{}
+		var toolExecs []any
 		if len(ar.ToolExecutions) > 0 {
 			for _, te := range ar.ToolExecutions {
-				toolExecs = append(toolExecs, map[string]interface{}{
+				toolExecs = append(toolExecs, map[string]any{
 					"tool":    te.Tool,
 					"success": te.Success,
 					"output":  te.Output,
@@ -1093,7 +1093,7 @@ func collectAndFormatCitations(ctx workflow.Context, agentResults []activities.A
 				})
 			}
 		}
-		resultsForCitations = append(resultsForCitations, map[string]interface{}{
+		resultsForCitations = append(resultsForCitations, map[string]any{
 			"agent_id":        ar.AgentID,
 			"tool_executions": toolExecs,
 			"response":        ar.Response,
@@ -1121,10 +1121,10 @@ func collectAndFormatCitations(ctx workflow.Context, agentResults []activities.A
 }
 
 // citationsToStructuredMap converts citations to a structured map format for SSE emission
-func citationsToStructuredMap(citations []metadata.Citation) []map[string]interface{} {
-	out := make([]map[string]interface{}, 0, len(citations))
+func citationsToStructuredMap(citations []metadata.Citation) []map[string]any {
+	out := make([]map[string]any, 0, len(citations))
 	for _, c := range citations {
-		out = append(out, map[string]interface{}{
+		out = append(out, map[string]any{
 			"url":               c.URL,
 			"title":             c.Title,
 			"source":            c.Source,
@@ -1140,7 +1140,7 @@ func executeParallelPattern(
 	ctx workflow.Context,
 	decomp activities.DecompositionResult,
 	input TaskInput,
-	baseContext map[string]interface{},
+	baseContext map[string]any,
 	agentMaxTokens int,
 	modelTier string,
 	config activities.WorkflowConfig,
@@ -1204,7 +1204,7 @@ func executeSequentialPattern(
 	ctx workflow.Context,
 	decomp activities.DecompositionResult,
 	input TaskInput,
-	baseContext map[string]interface{},
+	baseContext map[string]any,
 	agentMaxTokens int,
 	modelTier string,
 	config activities.WorkflowConfig,
@@ -1265,7 +1265,7 @@ func executeHybridPattern(
 	ctx workflow.Context,
 	decomp activities.DecompositionResult,
 	input TaskInput,
-	baseContext map[string]interface{},
+	baseContext map[string]any,
 	agentMaxTokens int,
 	modelTier string,
 	config activities.WorkflowConfig,
@@ -1380,7 +1380,7 @@ func recordToVectorStore(ctx workflow.Context, input TaskInput, answer, mode str
 			Query:     input.Query,
 			Answer:    answer,
 			Model:     mode,
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"workflow":   "dag_v2",
 				"complexity": complexity,
 				"tenant_id":  input.TenantID,

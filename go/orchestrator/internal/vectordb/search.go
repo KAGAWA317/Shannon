@@ -21,11 +21,11 @@ func (c *Client) FindSimilarQueries(ctx context.Context, embedding []float32, li
 	}
 	// Extract tenant_id from context for filtering if available
 	// 可用时从 context 中提取 tenant_id 用于过滤
-	var filter map[string]interface{}
+	var filter map[string]any
 	if userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext); ok && userCtx.TenantID.String() != "00000000-0000-0000-0000-000000000000" {
-		filter = map[string]interface{}{
-			"must": []map[string]interface{}{
-				{"key": "tenant_id", "match": map[string]interface{}{"value": userCtx.TenantID.String()}},
+		filter = map[string]any{
+			"must": []map[string]any{
+				{"key": "tenant_id", "match": map[string]any{"value": userCtx.TenantID.String()}},
 			},
 		}
 	}
@@ -64,11 +64,11 @@ func (c *Client) GetSessionContext(ctx context.Context, sessionID string, tenant
 	// 为 session context 检索启动 tracing span
 	ctx, span := tracing.StartHTTPSpan(ctx, "POST", url)
 	defer span.End()
-	must := []map[string]interface{}{
-		{"key": "session_id", "match": map[string]interface{}{"value": sessionID}},
+	must := []map[string]any{
+		{"key": "session_id", "match": map[string]any{"value": sessionID}},
 	}
 	if tenantID != "" {
-		must = append(must, map[string]interface{}{"key": "tenant_id", "match": map[string]interface{}{"value": tenantID}})
+		must = append(must, map[string]any{"key": "tenant_id", "match": map[string]any{"value": tenantID}})
 	}
 	// Fetch more than topK to allow for sorting/MMR reranking
 	// 多取一些以留出排序/MMR 重排的余地
@@ -80,10 +80,10 @@ func (c *Client) GetSessionContext(ctx context.Context, sessionID string, tenant
 	if limit > 100 {
 		limit = 100 // Cap to prevent excessive data transfer
 	}
-	body := map[string]interface{}{
+	body := map[string]any{
 		"limit":        limit,
 		"with_payload": true,
-		"filter":       map[string]interface{}{"must": must},
+		"filter":       map[string]any{"must": must},
 	}
 	buf, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(buf))
@@ -103,8 +103,8 @@ func (c *Client) GetSessionContext(ctx context.Context, sessionID string, tenant
 	var r struct {
 		Result struct {
 			Points []struct {
-				Payload map[string]interface{} `json:"payload"`
-				Score   float64                `json:"score,omitempty"`
+				Payload map[string]any `json:"payload"`
+				Score   float64        `json:"score,omitempty"`
 			} `json:"points"`
 		} `json:"result"`
 	}
@@ -163,12 +163,12 @@ func (c *Client) GetAgentContext(ctx context.Context, sessionID string, agentID 
 	defer span.End()
 
 	// Build filters for session_id AND agent_id
-	must := []map[string]interface{}{
-		{"key": "session_id", "match": map[string]interface{}{"value": sessionID}},
-		{"key": "agent_id", "match": map[string]interface{}{"value": agentID}},
+	must := []map[string]any{
+		{"key": "session_id", "match": map[string]any{"value": sessionID}},
+		{"key": "agent_id", "match": map[string]any{"value": agentID}},
 	}
 	if tenantID != "" {
-		must = append(must, map[string]interface{}{"key": "tenant_id", "match": map[string]interface{}{"value": tenantID}})
+		must = append(must, map[string]any{"key": "tenant_id", "match": map[string]any{"value": tenantID}})
 	}
 
 	// Sort by timestamp descending to get most recent first
@@ -183,10 +183,10 @@ func (c *Client) GetAgentContext(ctx context.Context, sessionID string, agentID 
 	if limit > 100 {
 		limit = 100 // Cap to prevent excessive data transfer
 	}
-	body := map[string]interface{}{
+	body := map[string]any{
 		"limit":        limit,
 		"with_payload": true,
-		"filter":       map[string]interface{}{"must": must},
+		"filter":       map[string]any{"must": must},
 	}
 
 	buf, _ := json.Marshal(body)
@@ -207,8 +207,8 @@ func (c *Client) GetAgentContext(ctx context.Context, sessionID string, agentID 
 	var r struct {
 		Result struct {
 			Points []struct {
-				Payload map[string]interface{} `json:"payload"`
-				Score   float64                `json:"score,omitempty"`
+				Payload map[string]any `json:"payload"`
+				Score   float64        `json:"score,omitempty"`
 			} `json:"points"`
 		} `json:"result"`
 	}

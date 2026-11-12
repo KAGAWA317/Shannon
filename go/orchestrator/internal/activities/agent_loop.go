@@ -50,7 +50,7 @@ type AgentLoopStepInput struct {
 	MaxIterations   int                    `json:"max_iterations,omitempty"` // Total iterations for budget display
 	Messages        []AgentMailboxMsg      `json:"messages,omitempty"`       // Inbox messages from other agents
 	History         []AgentLoopTurn        `json:"history,omitempty"`        // Previous turns in this agent's loop
-	Context         map[string]interface{} `json:"context,omitempty"`
+	Context         map[string]any `json:"context,omitempty"`
 	SessionID       string                 `json:"session_id,omitempty"`
 	TeamRoster      []TeamMemberInfo       `json:"team_roster,omitempty"`    // Teammates and their tasks
 	WorkspaceData   []WorkspaceSnippet     `json:"workspace_data,omitempty"` // Recent KV workspace entries
@@ -71,20 +71,20 @@ type AgentLoopStepInput struct {
 // AgentMailboxMsg is a message received from another agent's mailbox.
 // AgentMailboxMsg 是从其他 agent mailbox 收到的消息。
 type AgentMailboxMsg struct {
-	From    string                 `json:"from"`
-	Type    string                 `json:"type"`
-	Payload map[string]interface{} `json:"payload"`
+	From    string         `json:"from"`
+	Type    string         `json:"type"`
+	Payload map[string]any `json:"payload"`
 }
 
 // AgentLoopTurn records a previous action in the agent's loop for context.
 // AgentLoopTurn 记录 agent 循环中的上一步动作，用于提供 context。
 type AgentLoopTurn struct {
-	Iteration       int         `json:"iteration"`
-	Action          string      `json:"action"`
-	Result          interface{} `json:"result,omitempty"`
-	DecisionSummary string      `json:"decision_summary,omitempty"`
-	AssistantReplay string      `json:"assistant_replay,omitempty"` // Compact JSON for multi-turn cache replay
-	ObservationText string      `json:"observation_text,omitempty"` // Frozen tool result digest
+	Iteration       int    `json:"iteration"`
+	Action          string `json:"action"`
+	Result          any    `json:"result,omitempty"`
+	DecisionSummary string `json:"decision_summary,omitempty"`
+	AssistantReplay string `json:"assistant_replay,omitempty"` // Compact JSON for multi-turn cache replay
+	ObservationText string `json:"observation_text,omitempty"` // Frozen tool result digest
 }
 
 // AgentLoopStepResult is the LLM's decision for one iteration.
@@ -94,14 +94,14 @@ type AgentLoopStepResult struct {
 	DecisionSummary string `json:"decision_summary,omitempty"` // 1-3 sentence reasoning (D7: controlled, not unlimited chain-of-thought)
 
 	// tool_call fields
-	Tool       string                 `json:"tool,omitempty"`
-	ToolParams map[string]interface{} `json:"tool_params,omitempty"`
-	ToolResult interface{}            `json:"tool_result,omitempty"` // Populated after execution
+	Tool       string         `json:"tool,omitempty"`
+	ToolParams map[string]any `json:"tool_params,omitempty"`
+	ToolResult any            `json:"tool_result,omitempty"` // Populated after execution
 
 	// send_message fields
-	To          string                 `json:"to,omitempty"`
-	MessageType string                 `json:"message_type,omitempty"`
-	Payload     map[string]interface{} `json:"payload,omitempty"`
+	To          string         `json:"to,omitempty"`
+	MessageType string         `json:"message_type,omitempty"`
+	Payload     map[string]any `json:"payload,omitempty"`
 
 	// publish_data fields
 	Topic string `json:"topic,omitempty"`
@@ -130,9 +130,9 @@ type AgentLoopStepResult struct {
 	ModelUsed           string `json:"model_used,omitempty"`
 	Provider            string `json:"provider,omitempty"`
 	ResponseID          string                 `json:"response_id,omitempty"` // OpenAI Responses API ID for chaining
-	CompletionReport    map[string]interface{} `json:"completion_report,omitempty"`
-	Notes               string                 `json:"notes,omitempty"`            // Agent's updated running notes for next iteration
-	AssistantReplay     string                 `json:"assistant_replay,omitempty"` // Compact JSON for multi-turn cache replay
+	CompletionReport    map[string]any `json:"completion_report,omitempty"`
+	Notes               string         `json:"notes,omitempty"`            // Agent's updated running notes for next iteration
+	AssistantReplay     string         `json:"assistant_replay,omitempty"` // Compact JSON for multi-turn cache replay
 }
 
 // AgentLoopStep calls the Python LLM service's /agent/loop endpoint

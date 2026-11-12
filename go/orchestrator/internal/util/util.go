@@ -102,7 +102,7 @@ func lastSpaceBeforeRune(s string, pos int) int {
 // This is needed because proto map<string, string> converts booleans to strings.
 // GetContextBool 从 context map 中提取布尔值，同时处理 bool 与字符串 "true"/"false"。
 // 这是因为 proto 的 map<string, string> 会把布尔值转成字符串。
-func GetContextBool(ctx map[string]interface{}, key string) bool {
+func GetContextBool(ctx map[string]any, key string) bool {
 	if ctx == nil {
 		return false
 	}
@@ -127,7 +127,7 @@ func GetContextBool(ctx map[string]interface{}, key string) bool {
 // Handles int, float64 (JSON numbers), and string representations.
 // GetContextInt 从 context map 中提取整数，带默认值兜底。
 // 处理 int、float64（JSON 数字）与字符串表示。
-func GetContextInt(ctx map[string]interface{}, key string, defaultVal int) int {
+func GetContextInt(ctx map[string]any, key string, defaultVal int) int {
 	if ctx == nil {
 		return defaultVal
 	}

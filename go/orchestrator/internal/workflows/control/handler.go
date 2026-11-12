@@ -163,7 +163,7 @@ func (h *SignalHandler) handleCancel(ctx workflow.Context, req CancelRequest) {
 }
 
 // propagateSignalToChildren sends signal to all registered child workflows
-func (h *SignalHandler) propagateSignalToChildren(ctx workflow.Context, signalName string, payload interface{}) {
+func (h *SignalHandler) propagateSignalToChildren(ctx workflow.Context, signalName string, payload any) {
 	if len(h.childWorkflowIDs) == 0 {
 		return
 	}
@@ -205,7 +205,7 @@ func (h *SignalHandler) CheckPausePoint(ctx workflow.Context, checkpoint string)
 			AgentID:    h.AgentID,
 			Message:    activities.MsgWorkflowCancelled(h.State.CancelReason),
 			Timestamp:  workflow.Now(ctx),
-			Payload:    map[string]interface{}{"checkpoint": checkpoint},
+			Payload:    map[string]any{"checkpoint": checkpoint},
 		}).Get(ctx, nil)
 		// Return Temporal's CanceledError so workflow status is CANCELLED not FAILED
 		// 返回 Temporal 的 CanceledError，使 workflow 状态为 CANCELLED 而非 FAILED。
@@ -222,7 +222,7 @@ func (h *SignalHandler) CheckPausePoint(ctx workflow.Context, checkpoint string)
 			AgentID:    h.AgentID,
 			Message:    activities.MsgWorkflowPaused(),
 			Timestamp:  workflow.Now(ctx),
-			Payload:    map[string]interface{}{"checkpoint": checkpoint},
+			Payload:    map[string]any{"checkpoint": checkpoint},
 		}).Get(ctx, nil)
 
 		// Block until resumed or cancelled using Await (no polling, single history event)
@@ -239,7 +239,7 @@ func (h *SignalHandler) CheckPausePoint(ctx workflow.Context, checkpoint string)
 				AgentID:    h.AgentID,
 				Message:    activities.MsgWorkflowCancelled(h.State.CancelReason),
 				Timestamp:  workflow.Now(ctx),
-				Payload:    map[string]interface{}{"checkpoint": checkpoint, "was_paused": true},
+				Payload:    map[string]any{"checkpoint": checkpoint, "was_paused": true},
 			}).Get(ctx, nil)
 			// Return Temporal's CanceledError so workflow status is CANCELLED not FAILED
 			// 同上：返回 CanceledError，避免被记为 FAILED。
@@ -280,6 +280,6 @@ func (h *SignalHandler) EmitCancelledIfNeeded(ctx workflow.Context, reason strin
 		AgentID:    h.AgentID,
 		Message:    activities.MsgWorkflowCancelled(cancelReason),
 		Timestamp:  workflow.Now(ctx),
-		Payload:    map[string]interface{}{"reason": cancelReason, "at_return": true},
+		Payload:    map[string]any{"reason": cancelReason, "at_return": true},
 	}).Get(ctx, nil)
 }

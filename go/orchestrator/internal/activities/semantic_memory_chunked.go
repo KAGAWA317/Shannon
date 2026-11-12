@@ -119,11 +119,11 @@ func FetchSemanticMemoryChunked(ctx context.Context, in FetchSemanticMemoryInput
 		Chunks    []vectordb.ContextItem
 		BestScore float64
 		Query     string
-		Payload   map[string]interface{}
+		Payload   map[string]any
 	}
 
 	qaGroups := make(map[string]*QAGroup)
-	singleItems := make([]map[string]interface{}, 0)
+	singleItems := make([]map[string]any, 0)
 
 	for _, item := range items {
 		payload := item.Payload
@@ -227,7 +227,7 @@ func FetchSemanticMemoryChunked(ctx context.Context, in FetchSemanticMemoryInput
 
 		// Create aggregated item
 		// 构造聚合后的条目。
-		aggregated := make(map[string]interface{})
+		aggregated := make(map[string]any)
 
 		// Copy base fields from first chunk's payload
 		// 从第一个 chunk 的 payload 复制基础字段。

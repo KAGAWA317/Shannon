@@ -183,7 +183,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 			// Store conversation history in context
 			if len(supervisorMemory.ConversationHistory) > 0 {
 				if input.Context == nil {
-					input.Context = make(map[string]interface{})
+					input.Context = make(map[string]any)
 				}
 				input.Context["agent_memory"] = supervisorMemory.ConversationHistory
 			}
@@ -234,7 +234,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 					var dec activities.TeamActionDecision
 					if err := workflow.ExecuteActivity(ctx, activities.AuthorizeTeamAction, activities.TeamActionInput{
 						Action: "recruit", SessionID: input.SessionID, UserID: input.UserID, AgentID: "supervisor", Role: role,
-						Metadata: map[string]interface{}{"reason": "dynamic recruit", "description": req.Description},
+						Metadata: map[string]any{"reason": "dynamic recruit", "description": req.Description},
 					}).Get(ctx, &dec); err != nil {
 						logger.Error("Team action authorization failed", "error", err)
 						return
@@ -264,7 +264,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 					var res TaskResult
 					simpleTaskFuture := workflow.ExecuteChildWorkflow(childOpts, SimpleTaskWorkflow, TaskInput{
 						Query: req.Description, UserID: input.UserID, SessionID: input.SessionID,
-						Context: map[string]interface{}{"role": role}, Mode: input.Mode, History: input.History, SessionCtx: input.SessionCtx,
+						Context: map[string]any{"role": role}, Mode: input.Mode, History: input.History, SessionCtx: input.SessionCtx,
 						ParentWorkflowID: workflowID, // Preserve parent workflow ID for event streaming
 					})
 					var dynamicChildExec workflow.Execution
@@ -287,7 +287,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 					var dec activities.TeamActionDecision
 					if err := workflow.ExecuteActivity(ctx, activities.AuthorizeTeamAction, activities.TeamActionInput{
 						Action: "retire", SessionID: input.SessionID, UserID: input.UserID, AgentID: req.AgentID,
-						Metadata: map[string]interface{}{"reason": "dynamic retire"},
+						Metadata: map[string]any{"reason": "dynamic retire"},
 					}).Get(ctx, &dec); err != nil {
 						logger.Error("Team action authorization failed", "error", err)
 						return
@@ -331,7 +331,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 		if decompositionSuggestion.UsesPreviousSuccess {
 			// Add suggested subtasks to context for LLM to consider
 			if decomposeInput.Context == nil {
-				decomposeInput.Context = make(map[string]interface{})
+				decomposeInput.Context = make(map[string]any)
 			}
 			decomposeInput.Context["suggested_subtasks"] = decompositionSuggestion.SuggestedSubtasks
 			decomposeInput.Context["suggested_strategy"] = decompositionSuggestion.Strategy
@@ -377,7 +377,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 				Provider:     decomp.Provider,
 				InputTokens:  inTok,
 				OutputTokens: outTok,
-				Metadata:     map[string]interface{}{"phase": "decompose"},
+				Metadata:     map[string]any{"phase": "decompose"},
 			}).Get(recCtx, nil)
 		}
 	}
@@ -500,11 +500,11 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 		}
 		return s[:max] + "...(truncated)"
 	}
-	sanitizeToolExecutions := func(exec []activities.ToolExecution) []map[string]interface{} {
+	sanitizeToolExecutions := func(exec []activities.ToolExecution) []map[string]any {
 		const maxLen = 512
-		out := make([]map[string]interface{}, 0, len(exec))
+		out := make([]map[string]any, 0, len(exec))
 		for _, te := range exec {
-			entry := map[string]interface{}{
+			entry := map[string]any{
 				"tool":    te.Tool,
 				"success": te.Success,
 			}
@@ -550,7 +550,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 		}
 
 		// Build context, injecting role when enabled
-		childCtx := make(map[string]interface{})
+		childCtx := make(map[string]any)
 		for k, v := range input.Context {
 			childCtx[k] = v
 		}
@@ -777,10 +777,10 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 
 		// Add previous results to context for sequential dependencies
 		if len(childResults) > 0 {
-			previousResults := make(map[string]interface{})
+			previousResults := make(map[string]any)
 			for j, prevResult := range childResults {
 				if j < i && j < len(decomp.Subtasks) {
-					resultMap := map[string]interface{}{
+					resultMap := map[string]any{
 						"response":        prevResult.Response,
 						"tokens":          prevResult.TokensUsed,
 						"success":         prevResult.Success,
@@ -898,7 +898,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 				// Persist agent execution (fire-and-forget)
 				// Pre-generate agent execution ID using SideEffect for replay safety
 				var agentExecutionID string
-				workflow.SideEffect(ctx, func(ctx workflow.Context) interface{} {
+				workflow.SideEffect(ctx, func(ctx workflow.Context) any {
 					return uuid.New().String()
 				}).Get(&agentExecutionID)
 
@@ -921,7 +921,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 						ModelUsed:  res.ModelUsed,
 						DurationMs: res.DurationMs,
 						Error:      res.Error,
-						Metadata: map[string]interface{}{
+						Metadata: map[string]any{
 							"workflow": "supervisor",
 							"strategy": "supervisor",
 							"task_id":  st.ID,
@@ -942,7 +942,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 							}
 						}
 						// Extract input params from tool execution
-						inputParamsMap, _ := texec.InputParams.(map[string]interface{})
+						inputParamsMap, _ := texec.InputParams.(map[string]any)
 
 						workflow.ExecuteActivity(
 							persistCtx,
@@ -958,7 +958,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 								TokensConsumed:   0,
 								DurationMs:       texec.DurationMs,
 								Error:            texec.Error,
-								Metadata: map[string]interface{}{
+								Metadata: map[string]any{
 									"workflow": "supervisor",
 									"task_id":  st.ID,
 								},
@@ -1029,7 +1029,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 				if err := workflow.ExecuteActivity(ctx, constants.WorkspaceAppendActivity, activities.WorkspaceAppendInput{
 					WorkflowID: workflowID,
 					Topic:      topic,
-					Entry:      map[string]interface{}{"subtask_id": st.ID, "summary": res.Response},
+					Entry:      map[string]any{"subtask_id": st.ID, "summary": res.Response},
 					Timestamp:  workflow.Now(ctx),
 				}).Get(ctx, &wr); err != nil {
 					logger.Warn("Failed to append to workspace", "topic", topic, "error", err)
@@ -1077,7 +1077,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	var synth activities.SynthesisResult
 
 	// Prepare synthesis context with collected citations from child results
-	ctxForSynth := make(map[string]interface{})
+	ctxForSynth := make(map[string]any)
 	if input.Context != nil {
 		for k, v := range input.Context {
 			ctxForSynth[k] = v
@@ -1085,12 +1085,12 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	}
 	var collectedCitations []metadata.Citation
 	{
-		var resultsForCitations []interface{}
+		var resultsForCitations []any
 		for _, ar := range childResults {
-			var toolExecs []interface{}
+			var toolExecs []any
 			if len(ar.ToolExecutions) > 0 {
 				for _, te := range ar.ToolExecutions {
-					toolExecs = append(toolExecs, map[string]interface{}{
+					toolExecs = append(toolExecs, map[string]any{
 						"tool":    te.Tool,
 						"success": te.Success,
 						"output":  te.Output,
@@ -1098,7 +1098,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 					})
 				}
 			}
-			resultsForCitations = append(resultsForCitations, map[string]interface{}{
+			resultsForCitations = append(resultsForCitations, map[string]any{
 				"agent_id":        ar.AgentID,
 				"tool_executions": toolExecs,
 				"response":        ar.Response,
@@ -1157,9 +1157,9 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 			ctxForSynth["citation_count"] = len(citations)
 
 			// Also store structured citations for SSE emission
-			out := make([]map[string]interface{}, 0, len(citations))
+			out := make([]map[string]any, 0, len(citations))
 			for _, c := range citations {
-				out = append(out, map[string]interface{}{
+				out = append(out, map[string]any{
 					"url":               c.URL,
 					"title":             c.Title,
 					"source":            c.Source,
@@ -1396,7 +1396,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 			AgentID:    "final_output",
 			Message:    synth.FinalResult,
 			Timestamp:  workflow.Now(ctx),
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"tokens_used": synth.TokensUsed,
 				"model_used":  synth.ModelUsed,
 			},
@@ -1430,7 +1430,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 			Provider:     synth.Provider,
 			InputTokens:  inTok,
 			OutputTokens: outTok,
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"phase":    "synthesis",
 				"workflow": "supervisor",
 			},
@@ -1543,9 +1543,9 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 		}
 	}
 	if verifyEnabled && len(collectedCitations) > 0 {
-		var verCitations []interface{}
+		var verCitations []any
 		for _, c := range collectedCitations {
-			m := map[string]interface{}{
+			m := map[string]any{
 				"url":               c.URL,
 				"title":             c.Title,
 				"source":            c.Source,
@@ -1559,13 +1559,13 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 			Citations: verCitations,
 		}).Get(ctx, &verification)
 	}
-	meta := map[string]interface{}{
+	meta := map[string]any{
 		"num_children": len(childResults),
 	}
 	if len(collectedCitations) > 0 {
-		out := make([]map[string]interface{}, 0, len(collectedCitations))
+		out := make([]map[string]any, 0, len(collectedCitations))
 		for _, c := range collectedCitations {
-			out = append(out, map[string]interface{}{
+			out = append(out, map[string]any{
 				"url":               c.URL,
 				"title":             c.Title,
 				"source":            c.Source,

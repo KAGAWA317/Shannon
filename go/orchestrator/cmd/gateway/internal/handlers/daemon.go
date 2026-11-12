@@ -123,7 +123,7 @@ func (dh *DaemonHandler) signalWorkflow(ctx context.Context, meta daemon.ClaimMe
 		return
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"workflow_id":     meta.WorkflowID,
 		"workflow_run_id": meta.WorkflowRunID,
 		"reply":           reply,

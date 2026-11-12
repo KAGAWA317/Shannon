@@ -264,7 +264,7 @@ var (
 // 从 0.85 提高到 0.92，以保留更多不重复的内容。
 const similarityThresh = 0.92
 
-func preprocessAgentResults(results []AgentExecutionResult, logger interface{}) []AgentExecutionResult {
+func preprocessAgentResults(results []AgentExecutionResult, logger any) []AgentExecutionResult {
 	if len(results) == 0 {
 		return results
 	}
@@ -521,7 +521,7 @@ func SynthesizeResults(ctx context.Context, input SynthesisInput) (SynthesisResu
 	// 这个顺序保证内容先可见，状态再切到 "ready"。
 	if wfID != "" {
 		// Event 1: LLM_OUTPUT with final content (simple path)
-		payload := map[string]interface{}{
+		payload := map[string]any{
 			"tokens_used":          res.TokensUsed,
 			"model_used":           res.ModelUsed,
 			"provider":             res.Provider,
@@ -534,7 +534,7 @@ func SynthesizeResults(ctx context.Context, input SynthesisInput) (SynthesisResu
 
 		// Include citations if available in context
 		if input.Context != nil {
-			if citations, ok := input.Context["citations"].([]map[string]interface{}); ok && len(citations) > 0 {
+			if citations, ok := input.Context["citations"].([]map[string]any); ok && len(citations) > 0 {
 				payload["citations"] = citations
 			}
 		}
@@ -732,7 +732,7 @@ func SynthesizeResultsLLM(ctx context.Context, input SynthesisInput) (SynthesisR
 
 	// Extract context for role-aware synthesis
 	role := ""
-	contextMap := make(map[string]interface{})
+	contextMap := make(map[string]any)
 	// Track citation payload size for diagnostics and save for later appending
 	// 记录 citation payload 大小便于诊断，并留存以便后面追加。
 	removedCitations := false
@@ -910,7 +910,7 @@ func SynthesizeResultsLLM(ctx context.Context, input SynthesisInput) (SynthesisR
 			switch t := rawAreas.(type) {
 			case []string:
 				areas = t
-			case []interface{}:
+			case []any:
 				for _, it := range t {
 					if s, ok := it.(string); ok && strings.TrimSpace(s) != "" {
 						areas = append(areas, s)
@@ -1407,7 +1407,7 @@ Section requirements:
 				Type:       string(StreamEventLLMOutput),
 				AgentID:    "synthesis",
 				Message:    truncateQuery(res.FinalResult, MaxSynthesisOutputChars),
-				Payload: map[string]interface{}{
+				Payload: map[string]any{
 					"tokens_used": res.TokensUsed,
 				},
 				Timestamp: time.Now(),
@@ -1453,7 +1453,7 @@ Section requirements:
 		zap.Int("max_tokens", maxTokens),
 	)
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"query":         b.String(),
 		"context":       contextMap,
 		"allowed_tools": []string{},  // Disable tools during synthesis - we only want formatting
@@ -1480,18 +1480,18 @@ Section requirements:
 			reqBody["model_override"] = mo
 		}
 		if po, ok := contextMap["agent_provider_override"].(string); ok && po != "" {
-			reqBody["context"].(map[string]interface{})["provider_override"] = po
+			reqBody["context"].(map[string]any)["provider_override"] = po
 		}
 	}
 
 	// If role is present, ensure it's in context
 	if role != "" {
-		reqBody["context"].(map[string]interface{})["role"] = role
+		reqBody["context"].(map[string]any)["role"] = role
 		logger.Info("Synthesis using role-aware endpoint", zap.String("role", role))
 	}
 
 	// Add synthesis mode for observability
-	reqBody["context"].(map[string]interface{})["mode"] = "synthesis"
+	reqBody["context"].(map[string]any)["mode"] = "synthesis"
 
 	// Debug prompt stats (approximate token estimate)
 	promptStr := b.String()
@@ -1557,7 +1557,7 @@ Section requirements:
 				Type:       string(StreamEventLLMOutput),
 				AgentID:    "synthesis",
 				Message:    truncateQuery(res.FinalResult, MaxSynthesisOutputChars),
-				Payload: map[string]interface{}{
+				Payload: map[string]any{
 					"tokens_used": res.TokensUsed,
 				},
 				Timestamp: time.Now(),
@@ -1607,7 +1607,7 @@ Section requirements:
 				Type:       string(StreamEventLLMOutput),
 				AgentID:    "synthesis",
 				Message:    truncateQuery(res.FinalResult, MaxSynthesisOutputChars),
-				Payload: map[string]interface{}{
+				Payload: map[string]any{
 					"tokens_used": res.TokensUsed,
 				},
 				Timestamp: time.Now(),
@@ -1645,7 +1645,7 @@ Section requirements:
 		}
 		// Emit standard 3-event sequence (fallback path)
 		if wfID != "" {
-			payload := map[string]interface{}{
+			payload := map[string]any{
 				"tokens_used": res.TokensUsed,
 			}
 			// Include citations if available (already in correct format from workflow)
@@ -1679,10 +1679,10 @@ Section requirements:
 	}
 
 	var out struct {
-		Response   string                 `json:"response"`
-		Metadata   map[string]interface{} `json:"metadata"`
-		TokensUsed int                    `json:"tokens_used"`
-		ModelUsed  string                 `json:"model_used"`
+		Response   string         `json:"response"`
+		Metadata   map[string]any `json:"metadata"`
+		TokensUsed int            `json:"tokens_used"`
+		ModelUsed  string         `json:"model_used"`
 	}
 	if err := json.Unmarshal(rawBody, &out); err != nil {
 		logger.Warn("LLM synthesis: decode error, falling back",
@@ -1714,7 +1714,7 @@ Section requirements:
 				Type:       string(StreamEventLLMOutput),
 				AgentID:    "synthesis",
 				Message:    truncateQuery(res.FinalResult, MaxSynthesisOutputChars),
-				Payload: map[string]interface{}{
+				Payload: map[string]any{
 					"tokens_used": res.TokensUsed,
 				},
 				Timestamp: time.Now(),
@@ -1766,7 +1766,7 @@ Section requirements:
 				Type:       string(StreamEventLLMOutput),
 				AgentID:    "synthesis",
 				Message:    truncateQuery(res.FinalResult, MaxSynthesisOutputChars),
-				Payload: map[string]interface{}{
+				Payload: map[string]any{
 					"tokens_used": res.TokensUsed,
 				},
 				Timestamp: time.Now(),
@@ -1797,7 +1797,7 @@ Section requirements:
 			model = m
 		}
 		// Also check allowed_tools to confirm role was applied
-		if tools, ok := out.Metadata["allowed_tools"].([]interface{}); ok && len(tools) > 0 {
+		if tools, ok := out.Metadata["allowed_tools"].([]any); ok && len(tools) > 0 {
 			logger.Info("Role-aware synthesis applied", zap.Int("allowed_tools_count", len(tools)))
 		}
 	}
@@ -1889,7 +1889,7 @@ Section requirements:
 						switch t := rawAreas.(type) {
 						case []string:
 							areaCount = len(t)
-						case []interface{}:
+						case []any:
 							areaCount = len(t)
 						}
 						if areaCount > 0 {
@@ -1983,7 +1983,7 @@ Section requirements:
 			contMax = 4096
 		}
 
-		contBody, _ := json.Marshal(map[string]interface{}{
+		contBody, _ := json.Marshal(map[string]any{
 			"query":         contQuery,
 			"context":       contextMap,
 			"allowed_tools": []string{},
@@ -2066,7 +2066,7 @@ Section requirements:
 	// This ordering ensures content is visible before status changes to "ready"
 	if wfID != "" {
 		// Event 1: LLM_OUTPUT with final content (LLM path)
-		payload := map[string]interface{}{
+		payload := map[string]any{
 			"tokens_used":          out.TokensUsed,
 			"model_used":           model,
 			"provider":             provider,
@@ -2271,7 +2271,7 @@ func simpleSynthesis(ctx context.Context, input SynthesisInput) (SynthesisResult
 			Type:       string(StreamEventLLMOutput),
 			AgentID:    "synthesis",
 			Message:    truncateQuery(res.FinalResult, MaxSynthesisOutputChars),
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"tokens_used": res.TokensUsed,
 			},
 			Timestamp: time.Now(),
@@ -2304,7 +2304,7 @@ func cleanAgentOutput(response string) string {
 
 	// Try to parse as JSON array (common for web_search results)
 	// 尝试按 JSON 数组解析（web_search 结果常见这种格式）。
-	var results []map[string]interface{}
+	var results []map[string]any
 	if err := json.Unmarshal([]byte(response), &results); err == nil && len(results) > 0 {
 		// Format search results as a readable list (without header to avoid injection)
 		// 把检索结果格式化成可读列表；不加标题，避免注入式内容混入。

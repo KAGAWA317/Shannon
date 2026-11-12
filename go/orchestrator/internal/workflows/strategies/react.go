@@ -71,7 +71,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Prepare base context
-	baseContext := make(map[string]interface{})
+	baseContext := make(map[string]any)
 	for k, v := range input.Context {
 		baseContext[k] = v
 	}
@@ -328,12 +328,12 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	// Optional: collect citations and append Sources section when enabled
 	var collectedCitations []metadata.Citation
 	if v, ok := baseContext["enable_citations"].(bool); ok && v {
-		var resultsForCitations []interface{}
+		var resultsForCitations []any
 		for _, ar := range reactResult.AgentResults {
-			var toolExecs []interface{}
+			var toolExecs []any
 			if len(ar.ToolExecutions) > 0 {
 				for _, te := range ar.ToolExecutions {
-					toolExecs = append(toolExecs, map[string]interface{}{
+					toolExecs = append(toolExecs, map[string]any{
 						"tool":    te.Tool,
 						"success": te.Success,
 						"output":  te.Output,
@@ -341,7 +341,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 					})
 				}
 			}
-			resultsForCitations = append(resultsForCitations, map[string]interface{}{
+			resultsForCitations = append(resultsForCitations, map[string]any{
 				"agent_id":        ar.AgentID,
 				"tool_executions": toolExecs,
 				"response":        ar.Response,
@@ -400,7 +400,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 				Query:     input.Query,
 				Answer:    finalResult,
 				Model:     approxModel,
-				Metadata: map[string]interface{}{
+				Metadata: map[string]any{
 					"workflow":      "react_v2",
 					"iterations":    reactResult.Iterations,
 					"quality_score": qualityScore,
@@ -448,7 +448,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		}
 	}
 
-	meta := map[string]interface{}{
+	meta := map[string]any{
 		"version":       "v2",
 		"iterations":    reactResult.Iterations,
 		"quality_score": qualityScore,
@@ -457,9 +457,9 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		"observations":  len(reactResult.Observations),
 	}
 	if len(collectedCitations) > 0 {
-		out := make([]map[string]interface{}, 0, len(collectedCitations))
+		out := make([]map[string]any, 0, len(collectedCitations))
 		for _, c := range collectedCitations {
-			out = append(out, map[string]interface{}{
+			out = append(out, map[string]any{
 				"url":               c.URL,
 				"title":             c.Title,
 				"source":            c.Source,
@@ -510,7 +510,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			AgentID:    "final_output",
 			Message:    finalResult,
 			Timestamp:  workflow.Now(ctx),
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"tokens_used": totalTokens,
 				"model_used":  approxModel,
 			},

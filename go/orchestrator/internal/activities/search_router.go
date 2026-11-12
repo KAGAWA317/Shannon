@@ -16,7 +16,7 @@ type SearchRouteInput struct {
 	Dimension       string                 `json:"dimension,omitempty"`       // Research dimension (e.g., "funding", "technology")
 	SourceTypes     []string               `json:"source_types,omitempty"`    // Explicit source types to use
 	Priority        string                 `json:"priority,omitempty"`        // "high", "medium", "low"
-	Context         map[string]interface{} `json:"context,omitempty"`         // Additional context
+	Context         map[string]any `json:"context,omitempty"`         // Additional context
 	LocalizationCtx *LocalizationContext   `json:"localization_ctx,omitempty"` // For multi-language queries
 }
 

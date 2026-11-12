@@ -20,9 +20,9 @@ import (
 // researchPlanLLMRequest is the HTTP request body for the LLM service
 // researchPlanLLMRequest 是发给 LLM service 的 HTTP request body。
 type researchPlanLLMRequest struct {
-	Query        string                 `json:"query"`
-	Context      map[string]interface{} `json:"context"`
-	Conversation []ReviewRound          `json:"conversation"`
+	Query        string         `json:"query"`
+	Context      map[string]any `json:"context"`
+	Conversation []ReviewRound  `json:"conversation"`
 }
 
 // researchPlanLLMResponse is the HTTP response from the LLM service
@@ -40,17 +40,17 @@ type researchPlanLLMResponse struct {
 // reviewRedisState is the state stored in Redis for the review conversation
 // reviewRedisState 是 review session 存在 Redis 中的状态。
 type reviewRedisState struct {
-	WorkflowID    string                 `json:"workflow_id"`
-	Query         string                 `json:"query"`
-	Context       map[string]interface{} `json:"context"`
-	Status        string                 `json:"status"`
-	Round         int                    `json:"round"`
-	Version       int                    `json:"version"`
-	OwnerUserID   string                 `json:"owner_user_id"`
-	OwnerTenantID string                 `json:"owner_tenant_id"`
-	Rounds        []ReviewRound          `json:"rounds"`
-	CurrentPlan   string                 `json:"current_plan"`
-	ResearchBrief string                 `json:"research_brief,omitempty"`
+	WorkflowID    string         `json:"workflow_id"`
+	Query         string         `json:"query"`
+	Context       map[string]any `json:"context"`
+	Status        string         `json:"status"`
+	Round         int            `json:"round"`
+	Version       int            `json:"version"`
+	OwnerUserID   string         `json:"owner_user_id"`
+	OwnerTenantID string         `json:"owner_tenant_id"`
+	Rounds        []ReviewRound  `json:"rounds"`
+	CurrentPlan   string         `json:"current_plan"`
+	ResearchBrief string         `json:"research_brief,omitempty"`
 }
 
 // GenerateResearchPlan calls the LLM service to generate an initial research plan

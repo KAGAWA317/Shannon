@@ -38,7 +38,7 @@ func TestAggregateAgentMetadata_SingleAgent_WithSplitTokens(t *testing.T) {
 
 	// Single agent now includes agent_usages for consistency (deprecated in favor of model_breakdown)
 	// 单 agent 时也会附带 agent_usages 以保持一致（已由 model_breakdown 取代）
-	agentUsages, hasAgentUsages := meta["agent_usages"].([]map[string]interface{})
+	agentUsages, hasAgentUsages := meta["agent_usages"].([]map[string]any)
 	assert.True(t, hasAgentUsages, "should have agent_usages array")
 	assert.Equal(t, 1, len(agentUsages), "should have single agent usage entry")
 }
@@ -127,7 +127,7 @@ func TestAggregateAgentMetadata_MultipleAgents_ModelFrequency(t *testing.T) {
 	assert.Equal(t, 1200, meta["total_tokens"], "should sum all tokens")
 
 	// Multiple agents should have agent_usages array
-	agentUsages, ok := meta["agent_usages"].([]map[string]interface{})
+	agentUsages, ok := meta["agent_usages"].([]map[string]any)
 	assert.True(t, ok, "should have agent_usages for multiple agents")
 	assert.Equal(t, 3, len(agentUsages), "should have three agent usage entries")
 }
@@ -199,7 +199,7 @@ func TestAggregateAgentMetadata_MixedData(t *testing.T) {
 
 	// Should have agent_usages for multiple successful agents
 	// 多个成功 agent 时应带有 agent_usages
-	agentUsages, ok := meta["agent_usages"].([]map[string]interface{})
+	agentUsages, ok := meta["agent_usages"].([]map[string]any)
 	assert.True(t, ok, "should have agent_usages array")
 	assert.Equal(t, 4, len(agentUsages), "should have all four successful agents")
 
@@ -263,7 +263,7 @@ func TestAggregateAgentMetadata_FailedAgents(t *testing.T) {
 
 	// agent_usages includes only successful agents (now includes even single agent for consistency)
 	// agent_usages 只包含成功的 agent（为保持一致，现在单个 agent 也会包含）
-	agentUsages, hasAgentUsages := meta["agent_usages"].([]map[string]interface{})
+	agentUsages, hasAgentUsages := meta["agent_usages"].([]map[string]any)
 	assert.True(t, hasAgentUsages, "should have agent_usages array")
 	assert.Equal(t, 1, len(agentUsages), "should have single successful agent entry")
 	assert.Equal(t, "agent-success", agentUsages[0]["agent_id"], "should be the successful agent")

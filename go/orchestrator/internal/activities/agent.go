@@ -96,7 +96,7 @@ func getToolCostPerUse(ctx context.Context, baseURL, toolName string) float64 {
 }
 
 // parseFlexibleFloat attempts to parse a value as float64 from various JSON types
-func parseFlexibleFloat(v interface{}) (float64, bool) {
+func parseFlexibleFloat(v any) (float64, bool) {
 	switch val := v.(type) {
 	case float64:
 		return val, true
@@ -113,7 +113,7 @@ func parseFlexibleFloat(v interface{}) (float64, bool) {
 }
 
 // parseFlexibleInt attempts to parse a value as int from various JSON types
-func parseFlexibleInt(v interface{}) (int, bool) {
+func parseFlexibleInt(v any) (int, bool) {
 	switch val := v.(type) {
 	case float64:
 		return int(val), true
@@ -141,9 +141,9 @@ func parseFlexibleInt(v interface{}) (int, bool) {
 // 是 executeAgentCore 与 ExecuteAgentWithForcedTools 共用的唯一注入入口。
 // 安全：session_id 始终用 metadata 中的权威值覆盖——context 来自用户可控的 request body，
 // 若保留客户端传入的 session_id，攻击者就能引用其他 session 的附件。
-func ensureSessionContext(ctx map[string]interface{}, sessionID, agentID string) map[string]interface{} {
+func ensureSessionContext(ctx map[string]any, sessionID, agentID string) map[string]any {
 	if ctx == nil {
-		ctx = make(map[string]interface{})
+		ctx = make(map[string]any)
 	}
 
 	// ALWAYS overwrite session_id from the authoritative metadata value.
@@ -171,9 +171,9 @@ func ensureSessionContext(ctx map[string]interface{}, sessionID, agentID string)
 }
 
 // validateContext sanitizes user-provided context to prevent injection attacks
-func validateContext(ctx map[string]interface{}, logger *zap.Logger) map[string]interface{} {
+func validateContext(ctx map[string]any, logger *zap.Logger) map[string]any {
 	if ctx == nil {
-		return make(map[string]interface{})
+		return make(map[string]any)
 	}
 
 	// Blacklist of internal metadata fields that should never reach the LLM
@@ -192,7 +192,7 @@ func validateContext(ctx map[string]interface{}, logger *zap.Logger) map[string]
 		"completion_tokens":      true,
 	}
 
-	validated := make(map[string]interface{}, len(ctx))
+	validated := make(map[string]any, len(ctx))
 
 	for key, value := range ctx {
 		if key == "" {
@@ -227,7 +227,7 @@ func validateContext(ctx map[string]interface{}, logger *zap.Logger) map[string]
 }
 
 // sanitizeContextValue validates individual context values
-func sanitizeContextValue(value interface{}, key string, logger *zap.Logger) interface{} {
+func sanitizeContextValue(value any, key string, logger *zap.Logger) any {
 	switch v := value.(type) {
 	case nil:
 		return nil
@@ -243,9 +243,9 @@ func sanitizeContextValue(value interface{}, key string, logger *zap.Logger) int
 		return v
 	case int, int32, int64, float32, float64:
 		return v
-	case map[string]interface{}:
+	case map[string]any:
 		// Recursively validate nested maps
-		sanitized := make(map[string]interface{})
+		sanitized := make(map[string]any)
 		for k, nested := range v {
 			if len(k) > 100 {
 				logger.Warn("Skipping key with excessive length", zap.String("parent_key", key), zap.Int("key_length", len(k)))
@@ -256,7 +256,7 @@ func sanitizeContextValue(value interface{}, key string, logger *zap.Logger) int
 			}
 		}
 		return sanitized
-	case []interface{}:
+	case []any:
 		return sanitizeSlice(v, key, logger)
 	default:
 		reflected := reflect.ValueOf(v)
@@ -282,7 +282,7 @@ func sanitizeContextValue(value interface{}, key string, logger *zap.Logger) int
 }
 
 // getContextKeys returns keys for logging purposes
-func getContextKeys(ctx map[string]interface{}) []string {
+func getContextKeys(ctx map[string]any) []string {
 	if ctx == nil {
 		return nil
 	}
@@ -294,12 +294,12 @@ func getContextKeys(ctx map[string]interface{}) []string {
 }
 
 // sanitizeToolCall validates and sanitizes tool call maps before protobuf conversion
-func sanitizeToolCall(call map[string]interface{}, logger *zap.Logger) map[string]interface{} {
+func sanitizeToolCall(call map[string]any, logger *zap.Logger) map[string]any {
 	if call == nil {
 		return nil
 	}
 
-	sanitized := make(map[string]interface{})
+	sanitized := make(map[string]any)
 
 	// Validate required "tool" field
 	if tool, exists := call["tool"]; exists {
@@ -321,27 +321,27 @@ func sanitizeToolCall(call map[string]interface{}, logger *zap.Logger) map[strin
 		} else {
 			logger.Warn("Failed to sanitize tool parameters")
 			// Still proceed with empty parameters rather than failing entirely
-			sanitized["parameters"] = make(map[string]interface{})
+			sanitized["parameters"] = make(map[string]any)
 		}
 	} else {
-		sanitized["parameters"] = make(map[string]interface{})
+		sanitized["parameters"] = make(map[string]any)
 	}
 
 	return sanitized
 }
 
 // sanitizeToolParameters validates tool parameters recursively
-func sanitizeToolParameters(params interface{}, logger *zap.Logger) interface{} {
+func sanitizeToolParameters(params any, logger *zap.Logger) any {
 	switch p := params.(type) {
 	case nil:
 		return nil
 	case bool, string, int, int32, int64, float32, float64:
 		return p
-	case map[string]interface{}:
+	case map[string]any:
 		if len(p) > 20 {
 			logger.Warn("Tool parameters map too large, truncating", zap.Int("size", len(p)))
 			// Take first 20 items only
-			truncated := make(map[string]interface{})
+			truncated := make(map[string]any)
 			count := 0
 			for k, v := range p {
 				if count >= 20 {
@@ -358,7 +358,7 @@ func sanitizeToolParameters(params interface{}, logger *zap.Logger) interface{} 
 			return truncated
 		}
 
-		sanitized := make(map[string]interface{})
+		sanitized := make(map[string]any)
 		for k, v := range p {
 			if k == "" {
 				continue
@@ -377,7 +377,7 @@ func sanitizeToolParameters(params interface{}, logger *zap.Logger) interface{} 
 			}
 		}
 		return sanitized
-	case []interface{}:
+	case []any:
 		return sanitizeToolSlice(p, logger)
 	default:
 		reflected := reflect.ValueOf(p)
@@ -393,12 +393,12 @@ func sanitizeToolParameters(params interface{}, logger *zap.Logger) interface{} 
 	}
 }
 
-func sanitizeSlice(values []interface{}, key string, logger *zap.Logger) []interface{} {
+func sanitizeSlice(values []any, key string, logger *zap.Logger) []any {
 	if len(values) > 100 {
 		logger.Warn("Truncating oversized array", zap.String("key", key), zap.Int("original_length", len(values)))
 		values = values[:100]
 	}
-	sanitized := make([]interface{}, 0, len(values))
+	sanitized := make([]any, 0, len(values))
 	for idx, item := range values {
 		if sanitizedItem := sanitizeContextValue(item, fmt.Sprintf("%s[%d]", key, idx), logger); sanitizedItem != nil {
 			sanitized = append(sanitized, sanitizedItem)
@@ -407,13 +407,13 @@ func sanitizeSlice(values []interface{}, key string, logger *zap.Logger) []inter
 	return sanitized
 }
 
-func sanitizeReflectedSlice(reflected reflect.Value, key string, logger *zap.Logger) []interface{} {
+func sanitizeReflectedSlice(reflected reflect.Value, key string, logger *zap.Logger) []any {
 	length := reflected.Len()
 	if length > 100 {
 		logger.Warn("Truncating oversized array", zap.String("key", key), zap.Int("original_length", length))
 		length = 100
 	}
-	sanitized := make([]interface{}, 0, length)
+	sanitized := make([]any, 0, length)
 	for idx := 0; idx < length; idx++ {
 		item := reflected.Index(idx).Interface()
 		if sanitizedItem := sanitizeContextValue(item, fmt.Sprintf("%s[%d]", key, idx), logger); sanitizedItem != nil {
@@ -423,12 +423,12 @@ func sanitizeReflectedSlice(reflected reflect.Value, key string, logger *zap.Log
 	return sanitized
 }
 
-func sanitizeReflectedMap(reflected reflect.Value, key string, logger *zap.Logger) map[string]interface{} {
+func sanitizeReflectedMap(reflected reflect.Value, key string, logger *zap.Logger) map[string]any {
 	if reflected.Type().Key().Kind() != reflect.String {
 		logger.Warn("Skipping map with non-string keys", zap.String("key", key), zap.String("type", reflected.Type().String()))
 		return nil
 	}
-	sanitized := make(map[string]interface{}, reflected.Len())
+	sanitized := make(map[string]any, reflected.Len())
 	iter := reflected.MapRange()
 	for iter.Next() {
 		mapKey := iter.Key().String()
@@ -451,12 +451,12 @@ func sanitizeReflectedMap(reflected reflect.Value, key string, logger *zap.Logge
 	return sanitized
 }
 
-func sanitizeToolSlice(values []interface{}, logger *zap.Logger) []interface{} {
+func sanitizeToolSlice(values []any, logger *zap.Logger) []any {
 	if len(values) > 50 {
 		logger.Warn("Tool parameters array too large, truncating", zap.Int("size", len(values)))
 		values = values[:50]
 	}
-	sanitized := make([]interface{}, 0, len(values))
+	sanitized := make([]any, 0, len(values))
 	for _, item := range values {
 		if sanitizedItem := sanitizeToolParameters(item, logger); sanitizedItem != nil {
 			sanitized = append(sanitized, sanitizedItem)
@@ -465,13 +465,13 @@ func sanitizeToolSlice(values []interface{}, logger *zap.Logger) []interface{} {
 	return sanitized
 }
 
-func sanitizeToolReflectedSlice(reflected reflect.Value, logger *zap.Logger) []interface{} {
+func sanitizeToolReflectedSlice(reflected reflect.Value, logger *zap.Logger) []any {
 	length := reflected.Len()
 	if length > 50 {
 		logger.Warn("Tool parameters array too large, truncating", zap.Int("size", length))
 		length = 50
 	}
-	sanitized := make([]interface{}, 0, length)
+	sanitized := make([]any, 0, length)
 	for idx := 0; idx < length; idx++ {
 		if sanitizedItem := sanitizeToolParameters(reflected.Index(idx).Interface(), logger); sanitizedItem != nil {
 			sanitized = append(sanitized, sanitizedItem)
@@ -480,12 +480,12 @@ func sanitizeToolReflectedSlice(reflected reflect.Value, logger *zap.Logger) []i
 	return sanitized
 }
 
-func sanitizeToolReflectedMap(reflected reflect.Value, logger *zap.Logger) map[string]interface{} {
+func sanitizeToolReflectedMap(reflected reflect.Value, logger *zap.Logger) map[string]any {
 	if reflected.Type().Key().Kind() != reflect.String {
 		logger.Warn("Unsupported tool parameter map type", zap.String("type", reflected.Type().String()))
 		return nil
 	}
-	sanitized := make(map[string]interface{}, reflected.Len())
+	sanitized := make(map[string]any, reflected.Len())
 	iter := reflected.MapRange()
 	for iter.Next() {
 		k := iter.Key().String()
@@ -532,7 +532,7 @@ func InitializePolicyEngine() error {
 }
 
 // InitializePolicyEngineFromConfig initializes the global policy engine from Shannon config
-func InitializePolicyEngineFromConfig(shannonPolicyConfig interface{}) error {
+func InitializePolicyEngineFromConfig(shannonPolicyConfig any) error {
 	config := policy.LoadConfigFromShannon(shannonPolicyConfig)
 	logger := zap.L()
 
@@ -559,7 +559,7 @@ func InitializePolicyEngineFromConfig(shannonPolicyConfig interface{}) error {
 // InitializePolicyEngineFromShannonConfig initializes from typed Shannon config
 func InitializePolicyEngineFromShannonConfig(shannonPolicyConfig *config.PolicyConfig) error {
 	// Convert Shannon config to map format that LoadConfigFromShannon expects
-	shannonPolicyMap := map[string]interface{}{
+	shannonPolicyMap := map[string]any{
 		"enabled":     shannonPolicyConfig.Enabled,
 		"mode":        shannonPolicyConfig.Mode,
 		"path":        shannonPolicyConfig.Path,
@@ -740,7 +740,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 			// Apply persona configuration
 			if persona.SystemPrompt != "" {
 				if input.Context == nil {
-					input.Context = make(map[string]interface{})
+					input.Context = make(map[string]any)
 				}
 				input.Context["system_prompt"] = persona.SystemPrompt
 			}
@@ -769,7 +769,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 			// Apply temperature setting
 			if persona.Temperature > 0 {
 				if input.Context == nil {
-					input.Context = make(map[string]interface{})
+					input.Context = make(map[string]any)
 				}
 				input.Context["temperature"] = persona.Temperature
 			}
@@ -778,7 +778,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 			// tokenBudget := personas.GetTokenBudgetValue(persona.TokenBudget)
 			tokenBudget := 5000 // Default medium budget
 			if input.Context == nil {
-				input.Context = make(map[string]interface{})
+				input.Context = make(map[string]any)
 			}
 			input.Context["max_tokens"] = tokenBudget
 
@@ -1001,21 +1001,21 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 		// Only pass parameters if they're valid
 		if validParams {
 			if input.Context == nil {
-				input.Context = make(map[string]interface{})
+				input.Context = make(map[string]any)
 			}
 			input.Context["tool_parameters"] = input.ToolParameters
 
 			// Mirror critical body fields into prompt_params as a resilience fallback
 			// This helps Python OpenAPI tools reconstruct the body if arrays get lost upstream.
 			if bodyRaw, ok := input.ToolParameters["body"]; ok {
-				if body, ok2 := bodyRaw.(map[string]interface{}); ok2 {
+				if body, ok2 := bodyRaw.(map[string]any); ok2 {
 					// Type assert prompt_params with error handling
-					pp, ok := input.Context["prompt_params"].(map[string]interface{})
+					pp, ok := input.Context["prompt_params"].(map[string]any)
 					if !ok {
 						// prompt_params is missing or wrong type, create new map
 						logger.Warn("prompt_params missing or invalid type, creating new map",
 							zap.String("workflow_id", input.ParentWorkflowID))
-						pp = make(map[string]interface{})
+						pp = make(map[string]any)
 						input.Context["prompt_params"] = pp
 					}
 
@@ -1078,7 +1078,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 
 	// Auto-populate tool_calls via /tools/select only if tools were suggested by decomposition
 	// Respect the decomposition decision: if no tools suggested, don't override with tool selection
-	var selectedToolCalls []map[string]interface{}
+	var selectedToolCalls []map[string]any
 
 	// Detect research-style contexts where we prefer LLM-native tool selection
 	isResearch := false
@@ -1172,7 +1172,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	// Create protobuf struct from context AFTER adding tool_parameters and tool_calls
 	// Ensure context is not nil
 	if input.Context == nil {
-		input.Context = make(map[string]interface{})
+		input.Context = make(map[string]any)
 	}
 
 	// Inject session_id and agent_id for session-aware tools (browser_use, file_*, etc.)
@@ -1206,7 +1206,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 		}
 		if tp, ok := input.Context["tool_parameters"]; ok {
 			// Convert tool_parameters manually
-			if tpMap, ok := tp.(map[string]interface{}); ok {
+			if tpMap, ok := tp.(map[string]any); ok {
 				tpStruct, err := structpb.NewStruct(tpMap)
 				if err == nil {
 					st.Fields["tool_parameters"] = structpb.NewStructValue(tpStruct)
@@ -1323,7 +1323,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 			Type:       string(StreamEventLLMPrompt),
 			AgentID:    input.AgentID,
 			Message:    truncateQuery(input.Query, MaxPromptChars),
-			Payload:    map[string]interface{}{"role": role},
+			Payload:    map[string]any{"role": role},
 			Timestamp:  time.Now(),
 		})
 	}
@@ -1427,7 +1427,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 			if tr := upd.GetToolResult(); tr != nil {
 				toolName := tr.GetToolId()
 				if toolName == "usage_metrics" && tr.Output != nil {
-					if m, ok := tr.Output.AsInterface().(map[string]interface{}); ok {
+					if m, ok := tr.Output.AsInterface().(map[string]any); ok {
 						// Use flexible parsing to handle int/float/string from JSON
 						if v, ok := parseFlexibleInt(m["total_tokens"]); ok {
 							tokens = v
@@ -1458,7 +1458,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 						}
 					}
 				} else {
-					output := interface{}(nil)
+					output := any(nil)
 					if tr.Output != nil {
 						output = tr.Output.AsInterface()
 					}
@@ -1481,12 +1481,12 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 							msg = MsgToolFailed(toolName)
 						}
 
-						payload := map[string]interface{}{
+						payload := map[string]any{
 							"tool":    toolName,
 							"success": tr.Status == commonpb.StatusCode_STATUS_CODE_OK,
 						}
 						if toolName == "browser" && output != nil && input.SessionID != "" {
-							if outputMap, ok := output.(map[string]interface{}); ok {
+							if outputMap, ok := output.(map[string]any); ok {
 								// Case 1: Python already persisted
 								if pathVal, ok2 := outputMap["screenshot_path"].(string); ok2 && pathVal != "" {
 									streamScreenshotPaths = append(streamScreenshotPaths, pathVal)
@@ -1495,7 +1495,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 											WorkflowID: wfID,
 											Type:       string(StreamEventScreenshotSaved),
 											AgentID:    input.AgentID,
-											Payload: map[string]interface{}{
+											Payload: map[string]any{
 												"screenshot_path": pathVal,
 												"session_id":      input.SessionID,
 											},
@@ -1516,7 +1516,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 													WorkflowID: wfID,
 													Type:       string(StreamEventScreenshotSaved),
 													AgentID:    input.AgentID,
-													Payload: map[string]interface{}{
+													Payload: map[string]any{
 														"screenshot_path": relPath,
 														"session_id":      input.SessionID,
 													},
@@ -1530,7 +1530,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 								}
 							}
 						} else if toolName == "browser" && output != nil {
-							if outputMap, ok := output.(map[string]interface{}); ok {
+							if outputMap, ok := output.(map[string]any); ok {
 								if _, hasScreenshot := outputMap["screenshot"]; hasScreenshot {
 									payload["output"] = output
 								}
@@ -1634,7 +1634,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 				Type:       string(StreamEventLLMOutput),
 				AgentID:    input.AgentID,
 				Message:    truncateQuery(out, MaxLLMOutputChars),
-				Payload: map[string]interface{}{
+				Payload: map[string]any{
 					"tokens_used":              tokens,
 					"model_used":               model,
 					"provider":                 provider,
@@ -1725,14 +1725,14 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 		var screenshotPaths []string
 		for _, tr := range resp.ToolResults {
 			toolName := tr.GetToolId()
-			output := interface{}(nil)
+			output := any(nil)
 			if tr.Output != nil {
 				output = tr.Output.AsInterface()
 			}
 
 			// Collect/persist browser screenshots
 			if toolName == "browser" && output != nil && input.SessionID != "" {
-				if outputMap, ok := output.(map[string]interface{}); ok {
+				if outputMap, ok := output.(map[string]any); ok {
 					// Case 1: Python already persisted
 					if pathVal, ok2 := outputMap["screenshot_path"].(string); ok2 && pathVal != "" {
 						screenshotPaths = append(screenshotPaths, pathVal)
@@ -1741,7 +1741,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 								WorkflowID: wfID,
 								Type:       string(StreamEventScreenshotSaved),
 								AgentID:    input.AgentID,
-								Payload: map[string]interface{}{
+								Payload: map[string]any{
 									"screenshot_path": pathVal,
 									"session_id":      input.SessionID,
 								},
@@ -1761,7 +1761,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 										WorkflowID: wfID,
 										Type:       string(StreamEventScreenshotSaved),
 										AgentID:    input.AgentID,
-										Payload: map[string]interface{}{
+										Payload: map[string]any{
 											"screenshot_path": relPath,
 											"session_id":      input.SessionID,
 										},
@@ -1847,7 +1847,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 				Type:       string(StreamEventLLMOutput),
 				AgentID:    input.AgentID,
 				Message:    truncateQuery(out, MaxLLMOutputChars),
-				Payload: map[string]interface{}{
+				Payload: map[string]any{
 					"tokens_used":              tokens,
 					"model_used":               model,
 					"provider":                 provider,
@@ -1866,7 +1866,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 		}
 
 		// Extract agent metadata from gRPC response (carries tool_cost_entries, etc.)
-		var resultMetadata map[string]interface{}
+		var resultMetadata map[string]any
 		if resp.GetMetadata() != nil {
 			resultMetadata = resp.GetMetadata().AsMap()
 		}
@@ -2015,7 +2015,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 
 	// Build forced_tool_calls payload for /agent/query
 	// Strip metadata keys ("tool", "tool_name") from parameters — they're not actual tool params
-	cleanParams := make(map[string]interface{}, len(input.ToolParameters))
+	cleanParams := make(map[string]any, len(input.ToolParameters))
 	for k, v := range input.ToolParameters {
 		if k != "tool" && k != "tool_name" && k != "name" {
 			cleanParams[k] = v
@@ -2033,7 +2033,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 		return executeAgentCore(ctx, input, zapLogger)
 	}
 
-	forcedToolCalls := []map[string]interface{}{
+	forcedToolCalls := []map[string]any{
 		{
 			"tool":       toolName,
 			"parameters": cleanParams,
@@ -2071,7 +2071,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 		"has_session_id", input.Context["session_id"] != nil,
 	)
 
-	agentQueryPayload := map[string]interface{}{
+	agentQueryPayload := map[string]any{
 		"query":             input.Query,
 		"context":           input.Context,
 		"agent_id":          input.AgentID,
@@ -2095,8 +2095,8 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	}
 
 	// Helper to sanitize parameters for event emission
-	sanitizeParams := func(params map[string]interface{}) map[string]interface{} {
-		sanitized := make(map[string]interface{})
+	sanitizeParams := func(params map[string]any) map[string]any {
+		sanitized := make(map[string]any)
 		for k, v := range params {
 			// Redact common secret keys
 			keyLower := strings.ToLower(k)
@@ -2123,7 +2123,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 			Type:       string(StreamEventToolInvoked),
 			AgentID:    input.AgentID,
 			Message:    message,
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"tool":   toolName,
 				"params": sanitizeParams(input.ToolParameters),
 				"role":   role,
@@ -2145,7 +2145,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 				Type:       string(StreamEventToolObs),
 				AgentID:    input.AgentID,
 				Message:    "Tool failed to run",
-				Payload: map[string]interface{}{
+				Payload: map[string]any{
 					"tool":        toolName,
 					"success":     false,
 					"duration_ms": time.Since(toolStartTime).Milliseconds(),
@@ -2168,7 +2168,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 				Type:       string(StreamEventToolObs),
 				AgentID:    input.AgentID,
 				Message:    "Tool encountered an error",
-				Payload: map[string]interface{}{
+				Payload: map[string]any{
 					"tool":        toolName,
 					"success":     false,
 					"duration_ms": time.Since(toolStartTime).Milliseconds(),
@@ -2190,7 +2190,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 				Type:       string(StreamEventToolObs),
 				AgentID:    input.AgentID,
 				Message:    "Tool request failed",
-				Payload: map[string]interface{}{
+				Payload: map[string]any{
 					"tool":        toolName,
 					"success":     false,
 					"duration_ms": time.Since(toolStartTime).Milliseconds(),
@@ -2204,13 +2204,13 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 
 	// Parse response
 	var agentResponse struct {
-		Success      bool                   `json:"success"`
-		Response     string                 `json:"response"`
-		TokensUsed   int                    `json:"tokens_used"`
-		ModelUsed    string                 `json:"model_used"`
-		Provider     string                 `json:"provider"`
-		FinishReason string                 `json:"finish_reason"`
-		Metadata     map[string]interface{} `json:"metadata"`
+		Success      bool           `json:"success"`
+		Response     string         `json:"response"`
+		TokensUsed   int            `json:"tokens_used"`
+		ModelUsed    string         `json:"model_used"`
+		Provider     string         `json:"provider"`
+		FinishReason string         `json:"finish_reason"`
+		Metadata     map[string]any `json:"metadata"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&agentResponse); err != nil {
@@ -2222,7 +2222,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 				Type:       string(StreamEventToolObs),
 				AgentID:    input.AgentID,
 				Message:    "Tool returned an unexpected result",
-				Payload: map[string]interface{}{
+				Payload: map[string]any{
 					"tool":        toolName,
 					"success":     false,
 					"duration_ms": time.Since(toolStartTime).Milliseconds(),
@@ -2283,11 +2283,11 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	toolSuccess := agentResponse.Success
 	toolErrMsg := ""
 	if agentResponse.Metadata != nil {
-		if te, ok := agentResponse.Metadata["tool_executions"].([]interface{}); ok && len(te) > 0 {
+		if te, ok := agentResponse.Metadata["tool_executions"].([]any); ok && len(te) > 0 {
 			// Find the entry matching our tool name; fall back to first entry if no match.
-			var matchedEntry map[string]interface{}
+			var matchedEntry map[string]any
 			for _, raw := range te {
-				if m, ok2 := raw.(map[string]interface{}); ok2 {
+				if m, ok2 := raw.(map[string]any); ok2 {
 					if name, _ := m["tool"].(string); name == toolName {
 						matchedEntry = m
 						break
@@ -2296,7 +2296,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 			}
 			if matchedEntry == nil {
 				// No exact match — use first entry
-				if m, ok2 := te[0].(map[string]interface{}); ok2 {
+				if m, ok2 := te[0].(map[string]any); ok2 {
 					matchedEntry = m
 				}
 			}
@@ -2323,7 +2323,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 				msg = MsgToolFailed(toolName)
 			}
 		}
-		payload := map[string]interface{}{
+		payload := map[string]any{
 			"tool":        toolName,
 			"success":     toolSuccess,
 			"duration_ms": time.Since(toolStartTime).Milliseconds(),
@@ -2355,7 +2355,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 			Type:       string(StreamEventLLMOutput),
 			AgentID:    input.AgentID,
 			Message:    truncateQuery(agentResponse.Response, MaxLLMOutputChars),
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"tokens_used":              agentResponse.TokensUsed,
 				"model_used":               agentResponse.ModelUsed,
 				"provider":                 agentResponse.Provider,
@@ -2375,7 +2375,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	toolsUsed := []string{toolName}
 	var toolExecs []ToolExecution
 	if agentResponse.Metadata != nil {
-		if tu, ok := agentResponse.Metadata["tools_used"].([]interface{}); ok {
+		if tu, ok := agentResponse.Metadata["tools_used"].([]any); ok {
 			toolsUsed = toolsUsed[:0]
 			for _, t := range tu {
 				if s, ok2 := t.(string); ok2 && s != "" {
@@ -2383,9 +2383,9 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 				}
 			}
 		}
-		if te, ok := agentResponse.Metadata["tool_executions"].([]interface{}); ok {
+		if te, ok := agentResponse.Metadata["tool_executions"].([]any); ok {
 			for _, raw := range te {
-				if m, ok2 := raw.(map[string]interface{}); ok2 {
+				if m, ok2 := raw.(map[string]any); ok2 {
 					name, _ := m["tool"].(string)
 					success, _ := m["success"].(bool)
 					output := m["output"]
@@ -2422,7 +2422,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 			if te.Tool != "browser" || te.Output == nil {
 				continue
 			}
-			outputMap, ok := te.Output.(map[string]interface{})
+			outputMap, ok := te.Output.(map[string]any)
 			if !ok {
 				continue
 			}
@@ -2435,7 +2435,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 						WorkflowID: wfID,
 						Type:       string(StreamEventScreenshotSaved),
 						AgentID:    input.AgentID,
-						Payload: map[string]interface{}{
+						Payload: map[string]any{
 							"screenshot_path": pathVal,
 							"session_id":      input.SessionID,
 						},
@@ -2468,7 +2468,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 					WorkflowID: wfID,
 					Type:       string(StreamEventScreenshotSaved),
 					AgentID:    input.AgentID,
-					Payload: map[string]interface{}{
+					Payload: map[string]any{
 						"screenshot_path": relPath,
 						"session_id":      input.SessionID,
 					},
@@ -2531,15 +2531,15 @@ func fetchAvailableTools(ctx context.Context) []string {
 
 // selectToolsForQuery queries Python LLM service to select appropriate tools for the given query
 // and returns structured tool calls that can be executed in parallel by agent-core.
-func selectToolsForQuery(ctx context.Context, query string, availableTools []string, logger *zap.Logger, parentWorkflowID string) []map[string]interface{} {
+func selectToolsForQuery(ctx context.Context, query string, availableTools []string, logger *zap.Logger, parentWorkflowID string) []map[string]any {
 	base := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/tools/select", base)
 
 	// Prepare request payload compatible with llm-service ToolSelectRequest
 	// We pass the task (query), and limit max_tools to a small number to keep execution bounded.
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"task":              query,
-		"context":           map[string]interface{}{},
+		"context":           map[string]any{},
 		"exclude_dangerous": true,
 		"max_tools":         3,
 	}
@@ -2575,8 +2575,8 @@ func selectToolsForQuery(ctx context.Context, query string, availableTools []str
 
 	// Parse response: { selected_tools: [...], calls: [{tool_name, parameters}...] }
 	var sel struct {
-		SelectedTools []string                 `json:"selected_tools"`
-		Calls         []map[string]interface{} `json:"calls"`
+		SelectedTools []string         `json:"selected_tools"`
+		Calls         []map[string]any `json:"calls"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&sel); err != nil {
 		logger.Debug("Failed to decode tool selection response", zap.Error(err))
@@ -2584,7 +2584,7 @@ func selectToolsForQuery(ctx context.Context, query string, availableTools []str
 	}
 
 	// Transform calls into agent-core format: [{"tool": name, "parameters": {...}}]
-	out := make([]map[string]interface{}, 0, len(sel.Calls))
+	out := make([]map[string]any, 0, len(sel.Calls))
 	allow := map[string]struct{}{}
 	for _, t := range availableTools {
 		allow[t] = struct{}{}
@@ -2600,8 +2600,8 @@ func selectToolsForQuery(ctx context.Context, query string, availableTools []str
 				continue
 			}
 		}
-		params, _ := c["parameters"].(map[string]interface{})
-		out = append(out, map[string]interface{}{
+		params, _ := c["parameters"].(map[string]any)
+		out = append(out, map[string]any{
 			"tool":       name,
 			"parameters": params,
 		})
@@ -2674,7 +2674,7 @@ func emitAgentThinkingEvent(ctx context.Context, input AgentExecutionInput) {
 			Type:       string(eventData.EventType),
 			AgentID:    eventData.AgentID,
 			Message:    eventData.Message,
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"role": role,
 			},
 			Timestamp: eventData.Timestamp,
@@ -2683,7 +2683,7 @@ func emitAgentThinkingEvent(ctx context.Context, input AgentExecutionInput) {
 }
 
 // emitToolSelectionEvent emits events for selected tools
-func emitToolSelectionEvent(ctx context.Context, input AgentExecutionInput, toolCalls []map[string]interface{}) {
+func emitToolSelectionEvent(ctx context.Context, input AgentExecutionInput, toolCalls []map[string]any) {
 	if info := activity.GetInfo(ctx); info.WorkflowExecution.ID != "" {
 		// Determine the correct workflow ID for streaming (prefer parent)
 		wfID := ""
@@ -2729,7 +2729,7 @@ func emitToolSelectionEvent(ctx context.Context, input AgentExecutionInput, tool
 				Type:       string(eventData.EventType),
 				AgentID:    eventData.AgentID,
 				Message:    eventData.Message,
-				Payload: map[string]interface{}{
+				Payload: map[string]any{
 					"tool": toolName,
 					"role": role,
 				},
@@ -2740,8 +2740,8 @@ func emitToolSelectionEvent(ctx context.Context, input AgentExecutionInput, tool
 }
 
 // humanizeToolCall creates a human-readable description of a tool invocation
-func humanizeToolCall(toolName string, params interface{}) string {
-	paramsMap, _ := params.(map[string]interface{})
+func humanizeToolCall(toolName string, params any) string {
+	paramsMap, _ := params.(map[string]any)
 
 	switch toolName {
 	case "web_search":
@@ -2809,7 +2809,7 @@ func truncateURL(url string) string {
 
 // validateForcedToolParams checks that required parameters are present for a forced tool call.
 // Returns false if the tool has known required params that are missing or empty.
-func validateForcedToolParams(toolName string, params map[string]interface{}) bool {
+func validateForcedToolParams(toolName string, params map[string]any) bool {
 	switch toolName {
 	case "web_search":
 		q, ok := params["query"].(string)

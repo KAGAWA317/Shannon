@@ -362,7 +362,7 @@ func TestMemoryExtractActivityWritesTriples(t *testing.T) {
 		var err error
 		switch calls {
 		case 1:
-			payload, err = json.Marshal(map[string]interface{}{
+			payload, err = json.Marshal(map[string]any{
 				"worth_remembering": true,
 				"title":             "Rust memory preferences",
 				"summary":           "- Prefers Rust for systems work.\n- Uses Redis for caching.",
@@ -376,7 +376,7 @@ func TestMemoryExtractActivityWritesTriples(t *testing.T) {
 				},
 			})
 		case 2:
-			payload, err = json.Marshal(map[string]interface{}{
+			payload, err = json.Marshal(map[string]any{
 				"worth_remembering": true,
 				"title":             "Docker guidance",
 				"summary":           "- Running containers as non-root user is required in production.",

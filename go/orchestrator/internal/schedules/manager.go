@@ -126,7 +126,7 @@ func (m *Manager) CreateSchedule(ctx context.Context, req *CreateScheduleInput) 
 			Workflow:           "ScheduledTaskWorkflow",
 			TaskQueue:          "shannon-tasks",
 			WorkflowRunTimeout: time.Duration(req.TimeoutSeconds) * time.Second,
-			Args: []interface{}{
+			Args: []any{
 				ScheduledTaskInput{
 					ScheduleID:         scheduleID.String(),
 					TaskQuery:          req.TaskQuery,
@@ -136,7 +136,7 @@ func (m *Manager) CreateSchedule(ctx context.Context, req *CreateScheduleInput) 
 					TenantID:           req.TenantID.String(),
 				},
 			},
-			Memo: map[string]interface{}{
+			Memo: map[string]any{
 				"schedule_id": scheduleID.String(),
 				"user_id":     req.UserID.String(),
 				"tenant_id":   req.TenantID.String(),
@@ -390,7 +390,7 @@ func (m *Manager) UpdateSchedule(ctx context.Context, req *UpdateScheduleInput) 
 				// Update action args (query/context/budget/timeout)
 				// 更新 action 参数（query/context/budget/timeout）
 				if action, ok := input.Description.Schedule.Action.(*client.ScheduleWorkflowAction); ok {
-					action.Args = []interface{}{
+					action.Args = []any{
 						ScheduledTaskInput{
 							ScheduleID:         dbSchedule.ID.String(),
 							TaskQuery:          taskQuery,

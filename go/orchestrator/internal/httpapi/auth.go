@@ -58,8 +58,8 @@ func (h *AuthHTTPHandler) handleRegister(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Respond with a safe user view
-	resp := map[string]interface{}{
-		"user": map[string]interface{}{
+	resp := map[string]any{
+		"user": map[string]any{
 			"id":        user.ID,
 			"email":     user.Email,
 			"username":  user.Username,
@@ -126,7 +126,7 @@ func (h *AuthHTTPHandler) handleRefresh(w http.ResponseWriter, r *http.Request) 
 
 // writeJSON writes a JSON response with status and content-type.
 // writeJSON 按指定状态码与 content-type 写出 JSON response。
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)

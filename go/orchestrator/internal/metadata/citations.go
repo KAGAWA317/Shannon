@@ -441,7 +441,7 @@ func CalculateSourceDiversity(citations []Citation) float64 {
 
 // extractCitationFromSearchResult extracts a Citation from a web_search result
 // extractCitationFromSearchResult 从 web_search 结果中提取 Citation
-func extractCitationFromSearchResult(result map[string]interface{}, agentID string, now time.Time) (*Citation, error) {
+func extractCitationFromSearchResult(result map[string]any, agentID string, now time.Time) (*Citation, error) {
 	// Extract required fields
 	urlStr, ok := result["url"].(string)
 	if !ok || urlStr == "" {
@@ -522,7 +522,7 @@ func extractCitationFromSearchResult(result map[string]interface{}, agentID stri
 
 // extractCitationFromFetchResult extracts a Citation from a web_fetch result
 // extractCitationFromFetchResult 从 web_fetch 结果中提取 Citation
-func extractCitationFromFetchResult(result map[string]interface{}, agentID string, now time.Time) (*Citation, error) {
+func extractCitationFromFetchResult(result map[string]any, agentID string, now time.Time) (*Citation, error) {
 	// Extract required fields
 	urlStr, ok := result["url"].(string)
 	if !ok || urlStr == "" {
@@ -623,7 +623,7 @@ func extractCitationsFromResponse(response string, agentID string, now time.Time
 	// Common format: [{"url": "...", "title": "...", "snippet": "...", ...}, ...]
 	// 尝试把 response 当作 JSON 数组的搜索结果解析
 	// 常见格式：[{"url": "...", "title": "...", "snippet": "...", ...}, ...]
-	var results []map[string]interface{}
+	var results []map[string]any
 	if err := json.Unmarshal([]byte(response), &results); err != nil {
 		return citations // Not JSON array, no fallback possible
 	}
@@ -1022,7 +1022,7 @@ func extractCitationsFromPlainTextResponse(response string, agentID string, now 
 
 // extractCitationsFromToolOutput extracts citations from a tool execution output
 // extractCitationsFromToolOutput 从 tool 执行输出中提取引用
-func extractCitationsFromToolOutput(toolName string, output interface{}, agentID string, now time.Time) []Citation {
+func extractCitationsFromToolOutput(toolName string, output any, agentID string, now time.Time) []Citation {
 	var citations []Citation
 
 	if isCitationsDebugEnabled() {
@@ -1033,19 +1033,19 @@ func extractCitationsFromToolOutput(toolName string, output interface{}, agentID
 	case "web_search":
 		// Case 1: Direct array (proto sometimes returns []interface{} directly)
 		// 情况 1：直接是数组（proto 有时直接返回 []interface{}）
-		if arr, ok := output.([]interface{}); ok {
+		if arr, ok := output.([]any); ok {
 			for _, item := range arr {
-				if resultMap, ok := item.(map[string]interface{}); ok {
+				if resultMap, ok := item.(map[string]any); ok {
 					if citation, err := extractCitationFromSearchResult(resultMap, agentID, now); err == nil {
 						citations = append(citations, *citation)
 					}
 				}
 			}
 			// Case 2: Wrapped in map {"results": [...]}
-		} else if outputMap, ok := output.(map[string]interface{}); ok {
-			if results, ok := outputMap["results"].([]interface{}); ok {
+		} else if outputMap, ok := output.(map[string]any); ok {
+			if results, ok := outputMap["results"].([]any); ok {
 				for _, resultInterface := range results {
-					if resultMap, ok := resultInterface.(map[string]interface{}); ok {
+					if resultMap, ok := resultInterface.(map[string]any); ok {
 						if citation, err := extractCitationFromSearchResult(resultMap, agentID, now); err == nil {
 							citations = append(citations, *citation)
 						}
@@ -1055,20 +1055,20 @@ func extractCitationsFromToolOutput(toolName string, output interface{}, agentID
 			// Case 3: JSON string
 		} else if s, ok := output.(string); ok && s != "" {
 			// Fallback: output encoded as JSON string
-			var decoded interface{}
+			var decoded any
 			if err := json.Unmarshal([]byte(s), &decoded); err == nil {
-				if arr, ok := decoded.([]interface{}); ok {
+				if arr, ok := decoded.([]any); ok {
 					for _, item := range arr {
-						if resultMap, ok := item.(map[string]interface{}); ok {
+						if resultMap, ok := item.(map[string]any); ok {
 							if citation, err := extractCitationFromSearchResult(resultMap, agentID, now); err == nil {
 								citations = append(citations, *citation)
 							}
 						}
 					}
-				} else if m, ok := decoded.(map[string]interface{}); ok {
-					if results, ok := m["results"].([]interface{}); ok {
+				} else if m, ok := decoded.(map[string]any); ok {
+					if results, ok := m["results"].([]any); ok {
 						for _, item := range results {
-							if resultMap, ok := item.(map[string]interface{}); ok {
+							if resultMap, ok := item.(map[string]any); ok {
 								if citation, err := extractCitationFromSearchResult(resultMap, agentID, now); err == nil {
 									citations = append(citations, *citation)
 								}
@@ -1082,12 +1082,12 @@ func extractCitationsFromToolOutput(toolName string, output interface{}, agentID
 	case "web_fetch":
 		// Handle both single page and batch fetch formats
 		// 同时处理单页与批量抓取两种格式
-		if outputMap, ok := output.(map[string]interface{}); ok {
+		if outputMap, ok := output.(map[string]any); ok {
 			// Check for batch format: {pages: [...], succeeded: N, failed: M}
 			// 检查批量格式：{pages: [...], succeeded: N, failed: M}
-			if pages, ok := outputMap["pages"].([]interface{}); ok {
+			if pages, ok := outputMap["pages"].([]any); ok {
 				for _, page := range pages {
-					if pageMap, ok := page.(map[string]interface{}); ok {
+					if pageMap, ok := page.(map[string]any); ok {
 						// Only extract from successful pages
 						if success, _ := pageMap["success"].(bool); success {
 							if citation, err := extractCitationFromFetchResult(pageMap, agentID, now); err == nil {
@@ -1103,13 +1103,13 @@ func extractCitationsFromToolOutput(toolName string, output interface{}, agentID
 				}
 			}
 		} else if s, ok := output.(string); ok && s != "" {
-			var m map[string]interface{}
+			var m map[string]any
 			if err := json.Unmarshal([]byte(s), &m); err == nil {
 				// Check for batch format in JSON string
 				// 检查 JSON 字符串中的批量格式
-				if pages, ok := m["pages"].([]interface{}); ok {
+				if pages, ok := m["pages"].([]any); ok {
 					for _, page := range pages {
-						if pageMap, ok := page.(map[string]interface{}); ok {
+						if pageMap, ok := page.(map[string]any); ok {
 							if success, _ := pageMap["success"].(bool); success {
 								if citation, err := extractCitationFromFetchResult(pageMap, agentID, now); err == nil {
 									citations = append(citations, *citation)
@@ -1128,7 +1128,7 @@ func extractCitationsFromToolOutput(toolName string, output interface{}, agentID
 	case "web_subpage_fetch", "web_crawl":
 		// Multi-page tools: try to extract citations from metadata.urls
 		// 多页 tool：尝试从 metadata.urls 中提取引用
-		if outputMap, ok := output.(map[string]interface{}); ok {
+		if outputMap, ok := output.(map[string]any); ok {
 			multiCitations := extractCitationsFromMultiPageResult(outputMap, agentID, now)
 			if len(multiCitations) > 0 {
 				citations = append(citations, multiCitations...)
@@ -1139,7 +1139,7 @@ func extractCitationsFromToolOutput(toolName string, output interface{}, agentID
 				}
 			}
 		} else if s, ok := output.(string); ok && s != "" {
-			var m map[string]interface{}
+			var m map[string]any
 			if err := json.Unmarshal([]byte(s), &m); err == nil {
 				multiCitations := extractCitationsFromMultiPageResult(m, agentID, now)
 				if len(multiCitations) > 0 {
@@ -1163,7 +1163,7 @@ func extractCitationsFromToolOutput(toolName string, output interface{}, agentID
 // Returns top N citations with aggregate statistics
 // CollectCitations 从 agent 执行结果中提取、去重、评分并排序引用
 // 返回前 N 条引用及汇总统计
-func CollectCitations(results []interface{}, now time.Time, maxCitations int) ([]Citation, CitationStats) {
+func CollectCitations(results []any, now time.Time, maxCitations int) ([]Citation, CitationStats) {
 	if maxCitations <= 0 {
 		maxCitations = 200 // default
 	}
@@ -1174,7 +1174,7 @@ func CollectCitations(results []interface{}, now time.Time, maxCitations int) ([
 	for _, resultInterface := range results {
 		// Try to cast to map[string]interface{} first (common case)
 		// 先尝试断言为 map[string]interface{}（常见情况）
-		resultMap, ok := resultInterface.(map[string]interface{})
+		resultMap, ok := resultInterface.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -1186,15 +1186,15 @@ func CollectCitations(results []interface{}, now time.Time, maxCitations int) ([
 
 		// Extract tool_executions array if present; allow nil/missing
 		// 存在时提取 tool_executions 数组；允许为 nil/缺失
-		var toolExecutions []interface{}
+		var toolExecutions []any
 		if tev, ok := resultMap["tool_executions"]; ok && tev != nil {
-			if arr, ok := tev.([]interface{}); ok {
+			if arr, ok := tev.([]any); ok {
 				toolExecutions = arr
 			}
 		}
 
 		for _, toolExecInterface := range toolExecutions {
-			toolExecMap, ok := toolExecInterface.(map[string]interface{})
+			toolExecMap, ok := toolExecInterface.(map[string]any)
 			if !ok {
 				continue
 			}
@@ -1635,15 +1635,15 @@ type pageInfo struct {
 // that contain multiple pages merged into a single content with metadata.urls listing all page URLs
 // extractCitationsFromMultiPageResult 从 web_subpage_fetch 或 web_crawl 结果中提取引用，
 // 这些结果把多页合并为单个 content，并在 metadata.urls 中列出全部页面 URL
-func extractCitationsFromMultiPageResult(output map[string]interface{}, agentID string, now time.Time) []Citation {
+func extractCitationsFromMultiPageResult(output map[string]any, agentID string, now time.Time) []Citation {
 	var citations []Citation
 
 	// 1. Get metadata.urls
-	metadata, ok := output["metadata"].(map[string]interface{})
+	metadata, ok := output["metadata"].(map[string]any)
 	if !ok {
 		return nil
 	}
-	urlsRaw, ok := metadata["urls"].([]interface{})
+	urlsRaw, ok := metadata["urls"].([]any)
 	if !ok || len(urlsRaw) == 0 {
 		return nil
 	}

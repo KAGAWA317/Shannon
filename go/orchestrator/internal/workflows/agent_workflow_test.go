@@ -7,7 +7,7 @@ import (
 func TestGetSchemaProperties(t *testing.T) {
 	tests := []struct {
 		name         string
-		schema       map[string]interface{}
+		schema       map[string]any
 		expectedKeys []string
 	}{
 		{
@@ -17,23 +17,23 @@ func TestGetSchemaProperties(t *testing.T) {
 		},
 		{
 			name:         "empty schema",
-			schema:       map[string]interface{}{},
+			schema:       map[string]any{},
 			expectedKeys: []string{},
 		},
 		{
 			name: "schema with properties",
-			schema: map[string]interface{}{
-				"properties": map[string]interface{}{
-					"keywords": map[string]interface{}{"type": "string"},
-					"country":  map[string]interface{}{"type": "string"},
-					"device":   map[string]interface{}{"type": "string"},
+			schema: map[string]any{
+				"properties": map[string]any{
+					"keywords": map[string]any{"type": "string"},
+					"country":  map[string]any{"type": "string"},
+					"device":   map[string]any{"type": "string"},
 				},
 			},
 			expectedKeys: []string{"keywords", "country", "device"},
 		},
 		{
 			name: "schema with non-map properties (should handle gracefully)",
-			schema: map[string]interface{}{
+			schema: map[string]any{
 				"properties": "not a map",
 			},
 			expectedKeys: []string{},
@@ -59,78 +59,78 @@ func TestValidateSchemaFieldType(t *testing.T) {
 	tests := []struct {
 		name       string
 		fieldName  string
-		value      interface{}
-		propSchema map[string]interface{}
+		value      any
+		propSchema map[string]any
 		wantErr    bool
 	}{
 		{
 			name:       "valid string",
 			fieldName:  "name",
 			value:      "test",
-			propSchema: map[string]interface{}{"type": "string"},
+			propSchema: map[string]any{"type": "string"},
 			wantErr:    false,
 		},
 		{
 			name:       "invalid string (number)",
 			fieldName:  "name",
 			value:      123,
-			propSchema: map[string]interface{}{"type": "string"},
+			propSchema: map[string]any{"type": "string"},
 			wantErr:    true,
 		},
 		{
 			name:       "valid integer",
 			fieldName:  "count",
 			value:      float64(10),
-			propSchema: map[string]interface{}{"type": "integer"},
+			propSchema: map[string]any{"type": "integer"},
 			wantErr:    false,
 		},
 		{
 			name:       "invalid integer (float with decimal)",
 			fieldName:  "count",
 			value:      10.5,
-			propSchema: map[string]interface{}{"type": "integer"},
+			propSchema: map[string]any{"type": "integer"},
 			wantErr:    true,
 		},
 		{
 			name:       "valid boolean",
 			fieldName:  "enabled",
 			value:      true,
-			propSchema: map[string]interface{}{"type": "boolean"},
+			propSchema: map[string]any{"type": "boolean"},
 			wantErr:    false,
 		},
 		{
 			name:       "invalid boolean (string)",
 			fieldName:  "enabled",
 			value:      "true",
-			propSchema: map[string]interface{}{"type": "boolean"},
+			propSchema: map[string]any{"type": "boolean"},
 			wantErr:    true,
 		},
 		{
 			name:       "valid array",
 			fieldName:  "tags",
 			value:      []string{"a", "b"},
-			propSchema: map[string]interface{}{"type": "array"},
+			propSchema: map[string]any{"type": "array"},
 			wantErr:    false,
 		},
 		{
 			name:       "invalid array (string)",
 			fieldName:  "tags",
 			value:      "not an array",
-			propSchema: map[string]interface{}{"type": "array"},
+			propSchema: map[string]any{"type": "array"},
 			wantErr:    true,
 		},
 		{
 			name:       "nil value allowed",
 			fieldName:  "optional",
 			value:      nil,
-			propSchema: map[string]interface{}{"type": "string"},
+			propSchema: map[string]any{"type": "string"},
 			wantErr:    false,
 		},
 		{
 			name:       "no type in schema allows any",
 			fieldName:  "flexible",
 			value:      123,
-			propSchema: map[string]interface{}{},
+			propSchema: map[string]any{},
 			wantErr:    false,
 		},
 	}
@@ -164,27 +164,27 @@ func TestConvertAgentInputFromTask_NilContext(t *testing.T) {
 func TestConvertAgentInputFromTask_MissingAgentID(t *testing.T) {
 	tests := []struct {
 		name    string
-		context map[string]interface{}
+		context map[string]any
 	}{
 		{
 			name:    "empty context",
-			context: map[string]interface{}{},
+			context: map[string]any{},
 		},
 		{
 			name: "context without agent key",
-			context: map[string]interface{}{
+			context: map[string]any{
 				"other_key": "value",
 			},
 		},
 		{
 			name: "context with empty agent",
-			context: map[string]interface{}{
+			context: map[string]any{
 				"agent": "",
 			},
 		},
 		{
 			name: "context with non-string agent",
-			context: map[string]interface{}{
+			context: map[string]any{
 				"agent": 123,
 			},
 		},
@@ -212,7 +212,7 @@ func TestConvertAgentInputFromTask_MissingAgentID(t *testing.T) {
 func TestAgentWorkflowOutputToTaskResult_Success(t *testing.T) {
 	output := &AgentWorkflowOutput{
 		Success:       true,
-		Output:        map[string]interface{}{"keywords": []string{"test", "query"}},
+		Output:        map[string]any{"keywords": []string{"test", "query"}},
 		AgentID:       "keyword-extract",
 		ToolName:      "keyword_extract",
 		ExecutionTime: 150,

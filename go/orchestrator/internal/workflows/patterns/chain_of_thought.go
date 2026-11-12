@@ -38,7 +38,7 @@ type ChainOfThoughtResult struct {
 func ChainOfThought(
 	ctx workflow.Context,
 	query string,
-	context map[string]interface{},
+	context map[string]any,
 	sessionID string,
 	history []string,
 	config ChainOfThoughtConfig,
@@ -180,7 +180,7 @@ func ChainOfThought(
             Provider:     provider,
             InputTokens:  inTok,
             OutputTokens: outTok,
-            Metadata:     map[string]interface{}{"phase": "chain_of_thought"},
+            Metadata:     map[string]any{"phase": "chain_of_thought"},
         }).Get(recCtx, nil)
         wopts.RecordToolCostEntries(ctx, cotResult, opts.UserID, sessionID, wid)
     }
@@ -276,7 +276,7 @@ func ChainOfThought(
                         Provider:     provider,
                         InputTokens:  inTok,
                         OutputTokens: outTok,
-                        Metadata:     map[string]interface{}{"phase": "chain_of_thought_clarify"},
+                        Metadata:     map[string]any{"phase": "chain_of_thought_clarify"},
                     }).Get(recCtx, nil)
                     wopts.RecordToolCostEntries(ctx, clarifyResult, opts.UserID, sessionID, wid)
                 }

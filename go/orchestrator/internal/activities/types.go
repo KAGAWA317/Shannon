@@ -5,7 +5,7 @@ import "time"
 // ComplexityAnalysisInput is the input for complexity analysis
 type ComplexityAnalysisInput struct {
 	Query   string
-	Context map[string]interface{}
+	Context map[string]any
 }
 
 // ComplexityAnalysisResult is the result of complexity analysis
@@ -59,8 +59,8 @@ type Subtask struct {
 	ParentArea string `json:"parent_area,omitempty"`
 	// LLM-native tool selection
 	// 由 LLM 自行选择 tool。
-	SuggestedTools []string               `json:"suggested_tools"`
-	ToolParameters map[string]interface{} `json:"tool_parameters"`
+	SuggestedTools []string       `json:"suggested_tools"`
+	ToolParameters map[string]any `json:"tool_parameters"`
 	// Persona assignment for specialized agent behavior
 	// 指定 persona，以启用专门的 agent 行为。
 	SuggestedPersona string `json:"suggested_persona"`
@@ -81,15 +81,15 @@ type Subtask struct {
 type AgentExecutionInput struct {
 	Query     string
 	AgentID   string
-	Context   map[string]interface{}
+	Context   map[string]any
 	Mode      string
 	SessionID string   // Session identifier
 	UserID    string   // User identifier (for memory mount, audit)
 	History   []string // Conversation history
 	// LLM-native tool selection
 	// 由 LLM 自行选择 tool。
-	SuggestedTools []string               `json:"suggested_tools"`
-	ToolParameters map[string]interface{} `json:"tool_parameters"`
+	SuggestedTools []string       `json:"suggested_tools"`
+	ToolParameters map[string]any `json:"tool_parameters"`
 	// Persona for specialized agent behavior
 	PersonaID string `json:"persona_id"`
 	// Parent workflow ID for unified event streaming
@@ -115,9 +115,9 @@ type AgentExecutionResult struct {
 	Error               string
 	// Tools used and their outputs (when applicable)
 	// 使用过的 tools 及其输出（适用时）。
-	ToolsUsed      []string               `json:"tools_used,omitempty"`
-	ToolExecutions []ToolExecution        `json:"tool_executions,omitempty"`
-	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	ToolsUsed      []string        `json:"tools_used,omitempty"`
+	ToolExecutions []ToolExecution `json:"tool_executions,omitempty"`
+	Metadata       map[string]any  `json:"metadata,omitempty"`
 	// ScreenshotPaths holds relative paths of persisted browser screenshots (e.g. "screenshots/17093..._0.png")
 	// ScreenshotPaths 保存已持久化的浏览器截图相对路径（如 "screenshots/17093..._0.png"）。
 	ScreenshotPaths []string `json:"screenshot_paths,omitempty"`
@@ -126,22 +126,22 @@ type AgentExecutionResult struct {
 // ToolExecution summarizes a single tool invocation result returned by Agent-Core
 // ToolExecution 概括 Agent-Core 返回的单次 tool 调用结果。
 type ToolExecution struct {
-	Tool        string      `json:"tool"`
-	Success     bool        `json:"success"`
-	Output      interface{} `json:"output,omitempty"`
-	Error       string      `json:"error,omitempty"`
-	DurationMs  int64       `json:"duration_ms,omitempty"`
-	InputParams interface{} `json:"tool_input,omitempty"`
+	Tool        string `json:"tool"`
+	Success     bool   `json:"success"`
+	Output      any    `json:"output,omitempty"`
+	Error       string `json:"error,omitempty"`
+	DurationMs  int64  `json:"duration_ms,omitempty"`
+	InputParams any    `json:"tool_input,omitempty"`
 }
 
 // SynthesisInput is the input for result synthesis
 type SynthesisInput struct {
 	Query        string
 	AgentResults []AgentExecutionResult
-	Context      map[string]interface{} // Optional context for synthesis
+	Context      map[string]any // Optional context for synthesis
 	// Parent workflow ID for unified event streaming
-	ParentWorkflowID   string      `json:"parent_workflow_id,omitempty"`
-	CollectedCitations interface{} `json:"collected_citations,omitempty"` // []metadata.Citation to avoid import cycle
+	ParentWorkflowID   string `json:"parent_workflow_id,omitempty"`
+	CollectedCitations any    `json:"collected_citations,omitempty"` // []metadata.Citation to avoid import cycle
 	// SessionID for reading workspace files (swarm mode)
 	// SessionID 用于读取 workspace 文件（swarm 模式）。
 	SessionID string `json:"session_id,omitempty"`
@@ -178,8 +178,8 @@ type EvaluateResultOutput struct {
 
 // VerifyClaimsInput is the input for claim verification
 type VerifyClaimsInput struct {
-	Answer    string        // Synthesis result to verify
-	Citations []interface{} // Available citations (from metadata.CollectCitations)
+	Answer    string // Synthesis result to verify
+	Citations []any  // Available citations (from metadata.CollectCitations)
 }
 
 // VerificationResult contains claim verification analysis (V2 format with three-category classification)
@@ -277,13 +277,13 @@ type AgentUsage struct {
 
 // ResearchPlanInput is the input for the GenerateResearchPlan activity
 type ResearchPlanInput struct {
-	Query      string                 `json:"query"`
-	Context    map[string]interface{} `json:"context"`
-	WorkflowID string                 `json:"workflow_id"`
-	SessionID  string                 `json:"session_id"`
-	UserID     string                 `json:"user_id"`
-	TenantID   string                 `json:"tenant_id"`
-	TTL        time.Duration          `json:"ttl"`
+	Query      string         `json:"query"`
+	Context    map[string]any `json:"context"`
+	WorkflowID string         `json:"workflow_id"`
+	SessionID  string         `json:"session_id"`
+	UserID     string         `json:"user_id"`
+	TenantID   string         `json:"tenant_id"`
+	TTL        time.Duration  `json:"ttl"`
 }
 
 // ResearchPlanResult is the result of the GenerateResearchPlan activity

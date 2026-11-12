@@ -21,15 +21,15 @@ import (
 // ShannonSSEEvent 表示 Shannon 内部 SSE stream 中的 event，用于解析输入 event，
 // 与 types.go 中输出的 ShannonEvent 区分。
 type ShannonSSEEvent struct {
-	WorkflowID string                 `json:"workflow_id"`
-	Type       string                 `json:"type"`
-	AgentID    string                 `json:"agent_id,omitempty"`
-	Message    string                 `json:"message,omitempty"`
-	Seq        int64                  `json:"seq"`
-	StreamID   string                 `json:"stream_id,omitempty"`
-	Delta      string                 `json:"delta,omitempty"`    // For LLM_PARTIAL events
-	Response   string                 `json:"response,omitempty"` // For LLM_OUTPUT events
-	Payload    map[string]interface{} `json:"payload,omitempty"`  // Additional event data
+	WorkflowID string         `json:"workflow_id"`
+	Type       string         `json:"type"`
+	AgentID    string         `json:"agent_id,omitempty"`
+	Message    string         `json:"message,omitempty"`
+	Seq        int64          `json:"seq"`
+	StreamID   string         `json:"stream_id,omitempty"`
+	Delta      string         `json:"delta,omitempty"`    // For LLM_PARTIAL events
+	Response   string         `json:"response,omitempty"` // For LLM_OUTPUT events
+	Payload    map[string]any `json:"payload,omitempty"`  // Additional event data
 	Metadata   *struct {
 		TokensUsed   int     `json:"tokens_used,omitempty"`
 		InputTokens  int     `json:"input_tokens,omitempty"`

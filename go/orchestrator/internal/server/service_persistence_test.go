@@ -15,7 +15,7 @@ func TestWatchAndPersist_NilClients(t *testing.T) {
 	tests := []struct {
 		name           string
 		temporalClient client.Client
-		dbClient       interface{} // Using interface{} to avoid import cycles
+		dbClient       any // Using interface{} to avoid import cycles
 	}{
 		{
 			name:           "nil temporal client",

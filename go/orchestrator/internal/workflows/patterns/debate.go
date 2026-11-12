@@ -49,7 +49,7 @@ type DebatePosition struct {
 func Debate(
 	ctx workflow.Context,
 	query string,
-	context map[string]interface{},
+	context map[string]any,
 	sessionID string,
 	history []string,
 	config DebateConfig,
@@ -109,7 +109,7 @@ func Debate(
 		agentID := fmt.Sprintf("debater-%d-%s", i+1, perspective)
 
 		// Create debate context
-		debateContext := make(map[string]interface{})
+		debateContext := make(map[string]any)
 		for k, v := range context {
 			debateContext[k] = v
 		}
@@ -236,7 +236,7 @@ func Debate(
                 Provider:     provider,
                 InputTokens:  inTok,
                 OutputTokens: outTok,
-                Metadata:     map[string]interface{}{"phase": "debate_initial"},
+                Metadata:     map[string]any{"phase": "debate_initial"},
             }).Get(recCtx, nil)
             wopts.RecordToolCostEntries(ctx, agentResult, opts.UserID, sessionID, wid)
         }
@@ -273,7 +273,7 @@ func Debate(
 				debater.AgentID,
 			)
 
-			debateContext := map[string]interface{}{
+			debateContext := map[string]any{
 				"round":           round,
 				"debate_history":  debateHistory,
 				"other_positions": othersPositions,
@@ -393,7 +393,7 @@ func Debate(
                     Provider:     provider,
                     InputTokens:  inTok,
                     OutputTokens: outTok,
-                    Metadata:     map[string]interface{}{"phase": "debate_round", "round": round},
+                    Metadata:     map[string]any{"phase": "debate_round", "round": round},
                 }).Get(recCtx, nil)
                 wopts.RecordToolCostEntries(ctx, agentResult, opts.UserID, sessionID, wid)
             }
@@ -468,7 +468,7 @@ func Debate(
 				ConsensusReached: result.ConsensusReached,
 				Confidence:       consensusConfidence,
 				Positions:        positionTexts,
-				Metadata: map[string]interface{}{
+				Metadata: map[string]any{
 					"rounds":       result.Rounds,
 					"total_tokens": result.TotalTokens,
 					"num_debaters": config.NumDebaters,

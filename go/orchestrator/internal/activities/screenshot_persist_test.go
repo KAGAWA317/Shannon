@@ -155,29 +155,29 @@ func TestPersistScreenshot(t *testing.T) {
 
 func TestExtractScreenshotPathsFromMetadata(t *testing.T) {
 	t.Run("extracts paths from tool_execution_records", func(t *testing.T) {
-		meta := map[string]interface{}{
-			"tool_execution_records": []interface{}{
-				map[string]interface{}{
+		meta := map[string]any{
+			"tool_execution_records": []any{
+				map[string]any{
 					"tool":    "browser",
 					"success": true,
-					"output": map[string]interface{}{
+					"output": map[string]any{
 						"action":          "screenshot",
 						"screenshot":      "[stored:screenshots/123_0.png]",
 						"screenshot_path": "screenshots/123_0.png",
 					},
 				},
-				map[string]interface{}{
+				map[string]any{
 					"tool":    "browser",
 					"success": true,
-					"output": map[string]interface{}{
+					"output": map[string]any{
 						"action": "navigate",
 						"url":    "https://example.com",
 					},
 				},
-				map[string]interface{}{
+				map[string]any{
 					"tool":    "browser",
 					"success": true,
-					"output": map[string]interface{}{
+					"output": map[string]any{
 						"action":          "screenshot",
 						"screenshot_path": "screenshots/456_0.png",
 					},
@@ -203,12 +203,12 @@ func TestExtractScreenshotPathsFromMetadata(t *testing.T) {
 	})
 
 	t.Run("returns nil when no browser screenshots", func(t *testing.T) {
-		meta := map[string]interface{}{
-			"tool_execution_records": []interface{}{
-				map[string]interface{}{
+		meta := map[string]any{
+			"tool_execution_records": []any{
+				map[string]any{
 					"tool":    "web_search",
 					"success": true,
-					"output":  map[string]interface{}{"results": "..."},
+					"output":  map[string]any{"results": "..."},
 				},
 			},
 		}

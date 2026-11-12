@@ -419,7 +419,7 @@ Constraints:
 		TargetLanguages    []string            `json:"target_languages"`
 		// Use interface{} to flexibly handle both map[string]string and map[string][]string
 		// 用 interface{} 兼容 map[string]string 与 map[string][]string 两种返回形态。
-		LocalizedNames interface{} `json:"localized_names"`
+		LocalizedNames any `json:"localized_names"`
 	}
 	if err := json.Unmarshal([]byte(responseText), &refinedData); err != nil {
 		// If JSON parsing fails, fallback to using original query
@@ -457,13 +457,13 @@ Constraints:
 	// LLM 可能返回 map[string]string 或 map[string][]string，统一归一化为 map[string][]string。
 	localizedNames := make(map[string][]string)
 	if refinedData.LocalizedNames != nil {
-		if rawMap, ok := refinedData.LocalizedNames.(map[string]interface{}); ok {
+		if rawMap, ok := refinedData.LocalizedNames.(map[string]any); ok {
 			for lang, val := range rawMap {
 				switch v := val.(type) {
 				case string:
 					// Single string: convert to single-element array
 					localizedNames[lang] = []string{v}
-				case []interface{}:
+				case []any:
 					// Array of values: convert to string array
 					strs := make([]string, 0, len(v))
 					for _, elem := range v {
@@ -749,9 +749,9 @@ func (a *Activities) refineWithHITL(ctx context.Context, in RefineResearchQueryI
 	// Build conversation context (if available)
 	conversationText := ""
 	if convRaw, ok := in.Context["review_conversation"]; ok {
-		if convSlice, ok := convRaw.([]interface{}); ok {
+		if convSlice, ok := convRaw.([]any); ok {
 			for _, r := range convSlice {
-				if round, ok := r.(map[string]interface{}); ok {
+				if round, ok := r.(map[string]any); ok {
 					role, _ := round["role"].(string)
 					msg, _ := round["message"].(string)
 					if role != "" && msg != "" {
@@ -827,13 +827,13 @@ Return ONLY a JSON object:
   ]
 }`, in.Query, confirmedPlan, conversationSection)
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"query":       hitlPrompt,
 		"max_tokens":  4096,
 		"temperature": 0.3,
 		"agent_id":    "research-refiner-hitl",
 		"model_tier":  "small",
-		"context": map[string]interface{}{
+		"context": map[string]any{
 			"system_prompt": "You are a precise JSON parser. Return ONLY valid JSON, no markdown fences, no explanation.",
 		},
 	}

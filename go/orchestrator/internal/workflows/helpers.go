@@ -13,12 +13,12 @@ import (
 
 // GetContextBool is a convenience wrapper around util.GetContextBool for workflows.
 // It extracts a boolean value from context, handling both bool and string "true"/"false".
-func GetContextBool(ctx map[string]interface{}, key string) bool {
+func GetContextBool(ctx map[string]any, key string) bool {
 	return util.GetContextBool(ctx, key)
 }
 
 // GetContextString extracts a string value from a context map.
-func GetContextString(ctx map[string]interface{}, key string) string {
+func GetContextString(ctx map[string]any, key string) string {
 	if ctx == nil {
 		return ""
 	}
@@ -56,7 +56,7 @@ func convertHistoryMapForCompression(messages []Message) []map[string]string {
 }
 
 // getPrimersRecents extracts primers/recents counts from context with defaults.
-func getPrimersRecents(ctx map[string]interface{}, defPrimers, defRecents int) (int, int) {
+func getPrimersRecents(ctx map[string]any, defPrimers, defRecents int) (int, int) {
 	p, r := defPrimers, defRecents
 	if ctx == nil {
 		return p, r
@@ -86,7 +86,7 @@ func getPrimersRecents(ctx map[string]interface{}, defPrimers, defRecents int) (
 
 // getCompressionRatios reads compression trigger/target ratios from context
 // falling back to provided defaults. Values are clamped to sane bounds.
-func getCompressionRatios(ctx map[string]interface{}, defTrigger, defTarget float64) (float64, float64) {
+func getCompressionRatios(ctx map[string]any, defTrigger, defTarget float64) (float64, float64) {
 	tr, tg := defTrigger, defTarget
 	clamp := func(v float64, lo, hi float64) float64 {
 		if v < lo {
@@ -164,7 +164,7 @@ func fallbackToBasicMemory(ctx workflow.Context, input *TaskInput, logger log.Lo
 	if err := workflow.ExecuteActivity(ctx, "FetchHierarchicalMemory", memoryInput).Get(ctx, &memoryResult); err == nil {
 		if len(memoryResult.Items) > 0 {
 			if input.Context == nil {
-				input.Context = make(map[string]interface{})
+				input.Context = make(map[string]any)
 			}
 			input.Context["agent_memory"] = memoryResult.Items
 			logger.Info("Injected basic memory into supervisor context",
@@ -198,9 +198,9 @@ func detectProviderFromModel(model string) string {
 // from workflows to ensure context is persisted and available via GET /tasks/{id}.
 // 在返回前调用，把 task 提交 context（force_research、research_strategy 等）写入 metadata，
 // 确保其被持久化并可通过 GET /tasks/{id} 读取。
-func AddTaskContextToMetadata(result TaskResult, taskContext map[string]interface{}) TaskResult {
+func AddTaskContextToMetadata(result TaskResult, taskContext map[string]any) TaskResult {
 	if result.Metadata == nil {
-		result.Metadata = make(map[string]interface{})
+		result.Metadata = make(map[string]any)
 	}
 	if taskContext != nil && len(taskContext) > 0 {
 		result.Metadata["task_context"] = taskContext

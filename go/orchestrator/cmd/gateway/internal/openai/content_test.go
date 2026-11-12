@@ -78,7 +78,7 @@ func TestParseContent_RequestSizeLimit(t *testing.T) {
 	}
 	b64Str := base64.StdEncoding.EncodeToString(bigData)
 	dataURI := "data:image/png;base64," + b64Str
-	raw, _ := json.Marshal([]map[string]interface{}{
+	raw, _ := json.Marshal([]map[string]any{
 		{"type": "image_url", "image_url": map[string]string{"url": dataURI}},
 	})
 	_, err := ParseContent(json.RawMessage(raw))
@@ -150,7 +150,7 @@ func TestChatMessage_MarshalJSON_BackwardCompatible(t *testing.T) {
 	data, err := json.Marshal(&msg)
 	require.NoError(t, err)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	err = json.Unmarshal(data, &parsed)
 	require.NoError(t, err)
 	assert.Equal(t, "assistant", parsed["role"])

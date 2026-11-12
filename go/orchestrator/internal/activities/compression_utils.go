@@ -88,7 +88,7 @@ func ShouldCompressContext(
 		if err == nil && sessData != nil {
 			// Retrieve compression state from session metadata
 			if sessData.Metadata != nil {
-				if compState, ok := sessData.Metadata["compression_state"].(map[string]interface{}); ok {
+				if compState, ok := sessData.Metadata["compression_state"].(map[string]any); ok {
 					if lastTime, ok := compState["last_compressed_at"].(int64); ok {
 						state.LastCompressedAt = time.Unix(lastTime, 0)
 					}
@@ -183,7 +183,7 @@ func UpdateCompressionState(
 	// 先取现有 session 以保留压缩次数。
 	sessData, err := sessionMgr.GetSession(ctx, sessionID)
 	if err == nil && sessData != nil && sessData.Metadata != nil {
-		if compState, ok := sessData.Metadata["compression_state"].(map[string]interface{}); ok {
+		if compState, ok := sessData.Metadata["compression_state"].(map[string]any); ok {
 			if totalCount, ok := compState["total_compressions"].(int); ok {
 				state.TotalCompressions = totalCount
 			}
@@ -193,7 +193,7 @@ func UpdateCompressionState(
 
 	// Store updated state in session metadata
 	// 把更新后的状态写入 session metadata。
-	compStateMap := map[string]interface{}{
+	compStateMap := map[string]any{
 		"last_compressed_at": state.LastCompressedAt.Unix(),
 		"last_message_count": state.LastMessageCount,
 		"total_compressions": state.TotalCompressions,

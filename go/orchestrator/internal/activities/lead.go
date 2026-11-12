@@ -21,15 +21,15 @@ import (
 // LeadEvent describes what triggered the Lead to wake up.
 // LeadEvent 描述这次唤醒 Lead 的触发源。
 type LeadEvent struct {
-	Type             string                 `json:"type"` // "agent_completed", "agent_idle", "help_request", "checkpoint", "human_input"
-	AgentID          string                 `json:"agent_id"`
-	ResultSummary    string                 `json:"result_summary"`
-	HumanMessage     string                 `json:"human_message,omitempty"`
-	CompletionReport map[string]interface{} `json:"completion_report,omitempty"`
-	Error            string                 `json:"error,omitempty"`
-	Success          bool                   `json:"success,omitempty"`
-	FileContents     []FileReadResult       `json:"file_contents,omitempty"` // Lead file_read results
-	ToolResults      []ToolResultEntry      `json:"tool_results,omitempty"`  // Lead tool_call results
+	Type             string            `json:"type"` // "agent_completed", "agent_idle", "help_request", "checkpoint", "human_input"
+	AgentID          string            `json:"agent_id"`
+	ResultSummary    string            `json:"result_summary"`
+	HumanMessage     string            `json:"human_message,omitempty"`
+	CompletionReport map[string]any    `json:"completion_report,omitempty"`
+	Error            string            `json:"error,omitempty"`
+	Success          bool              `json:"success,omitempty"`
+	FileContents     []FileReadResult  `json:"file_contents,omitempty"` // Lead file_read results
+	ToolResults      []ToolResultEntry `json:"tool_results,omitempty"`  // Lead tool_call results
 }
 
 // FileReadResult holds the content of a file read by Lead.
@@ -78,10 +78,10 @@ type LeadDecisionInput struct {
 	TaskList      []SwarmTask              `json:"task_list"`
 	AgentStates   []LeadAgentState         `json:"agent_states"`
 	Budget        LeadBudget               `json:"budget"`
-	History       []map[string]interface{} `json:"history"`                    // Recent Lead decisions
-	Messages            []map[string]interface{} `json:"messages,omitempty"`              // Agent→Lead mailbox messages
+	History       []map[string]any `json:"history"`                    // Recent Lead decisions
+	Messages            []map[string]any `json:"messages,omitempty"`              // Agent→Lead mailbox messages
 	OriginalQuery       string                   `json:"original_query,omitempty"`        // User's original query (for language context)
-	ConversationHistory []map[string]interface{} `json:"conversation_history,omitempty"`   // Session history for multi-turn context
+	ConversationHistory []map[string]any `json:"conversation_history,omitempty"`   // Session history for multi-turn context
 	WorkspaceFiles      []string                 `json:"workspace_files,omitempty"`        // File paths in workspace (for planning context)
 	HitlMessages        []string                 `json:"hitl_messages,omitempty"`           // All HITL messages received during this execution
 	LeadModelOverride    string                  `json:"lead_model_override,omitempty"`     // Explicit model for Lead (e.g. "kimi-k2.5")
@@ -91,20 +91,20 @@ type LeadDecisionInput struct {
 // LeadAction is a single action the Lead wants to take.
 // LeadAction 是 Lead 想执行的一条动作。
 type LeadAction struct {
-	Type            string                   `json:"type"` // assign_task, spawn_agent, send_message, broadcast, revise_plan, file_read, done
-	TaskID          string                   `json:"task_id,omitempty"`
-	AgentID         string                   `json:"agent_id,omitempty"`
-	Role            string                   `json:"role,omitempty"`
-	TaskDescription string                   `json:"task_description,omitempty"`
-	To              string                   `json:"to,omitempty"`
-	Content         string                   `json:"content,omitempty"`
-	ModelTier       string                   `json:"model_tier,omitempty"` // small, medium, large
-	Create          []map[string]interface{} `json:"create,omitempty"`
+	Type            string           `json:"type"` // assign_task, spawn_agent, send_message, broadcast, revise_plan, file_read, done
+	TaskID          string           `json:"task_id,omitempty"`
+	AgentID         string           `json:"agent_id,omitempty"`
+	Role            string           `json:"role,omitempty"`
+	TaskDescription string           `json:"task_description,omitempty"`
+	To              string           `json:"to,omitempty"`
+	Content         string           `json:"content,omitempty"`
+	ModelTier       string           `json:"model_tier,omitempty"` // small, medium, large
+	Create          []map[string]any `json:"create,omitempty"`
 	Cancel          []string                 `json:"cancel,omitempty"`
-	Update          []map[string]interface{} `json:"update,omitempty"` // revise_plan: update existing task descriptions
+	Update          []map[string]any `json:"update,omitempty"` // revise_plan: update existing task descriptions
 	Path            string                   `json:"path,omitempty"`            // file_read target path
 	Tool               string                   `json:"tool,omitempty"`                // tool_call: web_search, web_fetch, calculator
-	ToolParams         map[string]interface{}   `json:"tool_params,omitempty"`         // tool_call: tool arguments
+	ToolParams         map[string]any   `json:"tool_params,omitempty"`         // tool_call: tool arguments
 	SkipAttachments bool `json:"skip_attachments,omitempty"` // spawn_agent: set true to NOT pass user files (e.g. web research agents)
 }
 
@@ -220,9 +220,9 @@ func ListWorkspaceFiles(ctx context.Context, in ListWorkspaceFilesInput) (ListWo
 
 // LeadToolInput is the input for direct tool execution by Lead.
 type LeadToolInput struct {
-	Tool       string                 `json:"tool"`
-	ToolParams map[string]interface{} `json:"tool_params"`
-	SessionID  string                 `json:"session_id,omitempty"`
+	Tool       string         `json:"tool"`
+	ToolParams map[string]any `json:"tool_params"`
+	SessionID  string         `json:"session_id,omitempty"`
 }
 
 // LeadToolResult is the output of direct tool execution.
@@ -248,7 +248,7 @@ func LeadExecuteTool(ctx context.Context, in LeadToolInput) (LeadToolResult, err
 
 	// Build request body matching Python ToolExecuteRequest field names
 	// 构造 request body，字段名与 Python 侧 ToolExecuteRequest 对齐。
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"tool_name":  in.Tool,
 		"parameters": in.ToolParams,
 	}
@@ -281,10 +281,10 @@ func LeadExecuteTool(ctx context.Context, in LeadToolInput) (LeadToolResult, err
 	}
 
 	var pyResp struct {
-		Success bool        `json:"success"`
-		Output  interface{} `json:"output"`
-		Text    string      `json:"text"`
-		Error   string      `json:"error"`
+		Success bool   `json:"success"`
+		Output  any    `json:"output"`
+		Text    string `json:"text"`
+		Error   string `json:"error"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&pyResp); err != nil {
 		return LeadToolResult{Error: fmt.Sprintf("decode error: %v", err)}, nil

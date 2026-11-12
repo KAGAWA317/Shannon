@@ -11,12 +11,12 @@ import (
 
 // StreamExecuteInput represents input for streaming execution
 type StreamExecuteInput struct {
-	Query     string                 `json:"query"`
-	Context   map[string]interface{} `json:"context"`
-	SessionID string                 `json:"session_id"`
-	UserID    string                 `json:"user_id"`
-	AgentID   string                 `json:"agent_id"`
-	Mode      string                 `json:"mode"`
+	Query     string         `json:"query"`
+	Context   map[string]any `json:"context"`
+	SessionID string         `json:"session_id"`
+	UserID    string         `json:"user_id"`
+	AgentID   string         `json:"agent_id"`
+	Mode      string         `json:"mode"`
 }
 
 // StreamProgress represents the progress of a streaming operation
@@ -185,7 +185,7 @@ func (s *StreamingActivities) BatchStreamExecute(
 		totalTokens += result.TokensUsed
 
 		// Record progress for the batch
-		activity.RecordHeartbeat(ctx, map[string]interface{}{
+		activity.RecordHeartbeat(ctx, map[string]any{
 			"completed": i + 1,
 			"total":     len(inputs),
 			"tokens":    totalTokens,
@@ -203,7 +203,7 @@ func (s *StreamingActivities) BatchStreamExecute(
 // simulateAgentResponse simulates an agent's response
 // In production, this would call the actual LLM service
 // 模拟 agent 的 response；生产环境应调用真实的 LLM service。
-func (s *StreamingActivities) simulateAgentResponse(query string, context map[string]interface{}) string {
+func (s *StreamingActivities) simulateAgentResponse(query string, context map[string]any) string {
 	// Generate a response based on the query
 	response := fmt.Sprintf("Based on your query '%s', here is my analysis: ", query)
 
@@ -233,10 +233,10 @@ type StreamingResult struct {
 
 // GetStreamingMetrics returns metrics for streaming operations
 // 返回 streaming 操作的指标。
-func (s *StreamingActivities) GetStreamingMetrics(ctx context.Context) (map[string]interface{}, error) {
+func (s *StreamingActivities) GetStreamingMetrics(ctx context.Context) (map[string]any, error) {
 	// In production, this would return actual metrics
 	// 生产环境应返回真实指标。
-	return map[string]interface{}{
+	return map[string]any{
 		"total_streams":         42,
 		"active_streams":        3,
 		"avg_tokens_per_stream": 150,

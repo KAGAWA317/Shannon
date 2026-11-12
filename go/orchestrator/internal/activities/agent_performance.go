@@ -76,7 +76,7 @@ func FetchAgentPerformances(ctx context.Context, in FetchAgentPerformancesInput)
 	// Build dynamic IN clause placeholders
 	// 动态拼接 IN 子句的占位符。
 	placeholders := make([]string, 0, len(in.AgentIDs))
-	args := make([]interface{}, 0, len(in.AgentIDs)+1)
+	args := make([]any, 0, len(in.AgentIDs)+1)
 	for i, id := range in.AgentIDs {
 		placeholders = append(placeholders, fmt.Sprintf("$%d", i+1))
 		args = append(args, id)

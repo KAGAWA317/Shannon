@@ -97,7 +97,7 @@ func (s *MemoryIntegrationSuite) TestChunkingPipelineIntegration() {
 		Query:     "Explain distributed systems in detail",
 		Answer:    longAnswer,
 		Model:     "gpt-4",
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"test_type": "chunking_integration",
 		},
 	}
@@ -576,7 +576,7 @@ func (s *MemoryIntegrationSuite) calculateSimilarity(text1, text2 string) float6
 	return float64(matches) / float64(maxLen)
 }
 
-func (s *MemoryIntegrationSuite) calculateDiversity(items []map[string]interface{}) float64 {
+func (s *MemoryIntegrationSuite) calculateDiversity(items []map[string]any) float64 {
 	if len(items) <= 1 {
 		return 0.0
 	}

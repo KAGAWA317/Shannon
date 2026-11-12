@@ -21,7 +21,7 @@ type IntermediateSynthesisInput struct {
 	AgentResults      []AgentExecutionResult   `json:"agent_results"`
 	PreviousSynthesis string                   `json:"previous_synthesis,omitempty"` // From prior iteration
 	CoverageGaps      []string                 `json:"coverage_gaps,omitempty"`       // Gaps identified so far
-	Context           map[string]interface{}   `json:"context,omitempty"`
+	Context           map[string]any   `json:"context,omitempty"`
 	ParentWorkflowID  string                   `json:"parent_workflow_id,omitempty"`
 }
 
@@ -59,14 +59,14 @@ func (a *Activities) IntermediateSynthesis(ctx context.Context, input Intermedia
 	llmServiceURL := getenvDefault("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"query":       userContent,
 		"max_tokens":  8192, // Extended for comprehensive intermediate synthesis
 		// 加大到 8192，以容纳完整的 intermediate synthesis。
 		"temperature": 0.3,
 		"agent_id":    "intermediate_synthesis",
 		"model_tier":  "small",
-		"context": map[string]interface{}{
+		"context": map[string]any{
 			"system_prompt":      systemPrompt,
 			"parent_workflow_id": input.ParentWorkflowID,
 		},

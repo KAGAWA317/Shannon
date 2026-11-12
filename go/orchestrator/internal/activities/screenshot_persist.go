@@ -115,17 +115,17 @@ func persistScreenshot(logger *zap.Logger, sessionID, workflowID string, index i
 // 扫描 agent response metadata 中的 tool_execution_records，收集 Python 侧
 // browser tool 落盘时写入的 screenshot_path。这条路径覆盖 agent loop 场景：
 // tool 在 Python 内执行，Go 侧只收到 metadata（而不是原始 ToolResults）。
-func extractScreenshotPathsFromMetadata(metadata map[string]interface{}) []string {
+func extractScreenshotPathsFromMetadata(metadata map[string]any) []string {
 	if metadata == nil {
 		return nil
 	}
-	records, ok := metadata["tool_execution_records"].([]interface{})
+	records, ok := metadata["tool_execution_records"].([]any)
 	if !ok {
 		return nil
 	}
 	var paths []string
 	for _, rec := range records {
-		m, ok := rec.(map[string]interface{})
+		m, ok := rec.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -133,7 +133,7 @@ func extractScreenshotPathsFromMetadata(metadata map[string]interface{}) []strin
 		if tool != "browser" {
 			continue
 		}
-		out, ok := m["output"].(map[string]interface{})
+		out, ok := m["output"].(map[string]any)
 		if !ok {
 			continue
 		}

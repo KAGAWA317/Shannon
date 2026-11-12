@@ -14,7 +14,7 @@ import (
 type StateChannel struct {
 	Name        string          `json:"name"`
 	Version     string          `json:"version"`
-	Data        interface{}     `json:"data"`
+	Data        any             `json:"data"`
 	Metadata    ChannelMetadata `json:"metadata"`
 	mu          sync.RWMutex
 	validators  []Validator
@@ -32,15 +32,15 @@ type ChannelMetadata struct {
 
 // Checkpoint represents a saved state snapshot
 type Checkpoint struct {
-	ID        string                 `json:"id"`
-	Timestamp time.Time              `json:"timestamp"`
-	State     json.RawMessage        `json:"state"`
-	Metadata  map[string]interface{} `json:"metadata"`
+	ID        string          `json:"id"`
+	Timestamp time.Time       `json:"timestamp"`
+	State     json.RawMessage `json:"state"`
+	Metadata  map[string]any  `json:"metadata"`
 }
 
 // Validator is a function that validates state
 // Validator 是校验状态的函数
-type Validator func(interface{}) error
+type Validator func(any) error
 
 // Validatable interface for types that can validate themselves
 // Validatable 接口供可自校验的类型实现
@@ -71,7 +71,7 @@ func (sc *StateChannel) AddValidator(v Validator) {
 }
 
 // Set updates the state with validation
-func (sc *StateChannel) Set(data interface{}) error {
+func (sc *StateChannel) Set(data any) error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
@@ -98,14 +98,14 @@ func (sc *StateChannel) Set(data interface{}) error {
 }
 
 // Get retrieves the current state
-func (sc *StateChannel) Get() interface{} {
+func (sc *StateChannel) Get() any {
 	sc.mu.RLock()
 	defer sc.mu.RUnlock()
 	return sc.Data
 }
 
 // Checkpoint saves the current state
-func (sc *StateChannel) Checkpoint(metadata map[string]interface{}) (string, error) {
+func (sc *StateChannel) Checkpoint(metadata map[string]any) (string, error) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
@@ -129,7 +129,7 @@ func (sc *StateChannel) Checkpoint(metadata map[string]interface{}) (string, err
 }
 
 // Restore restores state from a checkpoint
-func (sc *StateChannel) Restore(checkpointID string, target interface{}) error {
+func (sc *StateChannel) Restore(checkpointID string, target any) error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 

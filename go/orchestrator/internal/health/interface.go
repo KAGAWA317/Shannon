@@ -34,14 +34,14 @@ func (s CheckStatus) String() string {
 // CheckResult contains the result of a health check
 // CheckResult 包含健康检查的结果
 type CheckResult struct {
-	Status    CheckStatus            `json:"status"`
-	Message   string                 `json:"message,omitempty"`
-	Error     string                 `json:"error,omitempty"`
-	Details   map[string]interface{} `json:"details,omitempty"`
-	Duration  time.Duration          `json:"duration"`
-	Timestamp time.Time              `json:"timestamp"`
-	Component string                 `json:"component"`
-	Critical  bool                   `json:"critical"` // Whether failure affects service availability
+	Status    CheckStatus    `json:"status"`
+	Message   string         `json:"message,omitempty"`
+	Error     string         `json:"error,omitempty"`
+	Details   map[string]any `json:"details,omitempty"`
+	Duration  time.Duration  `json:"duration"`
+	Timestamp time.Time      `json:"timestamp"`
+	Component string         `json:"component"`
+	Critical  bool           `json:"critical"` // Whether failure affects service availability
 }
 
 // Checker defines the interface for health checks

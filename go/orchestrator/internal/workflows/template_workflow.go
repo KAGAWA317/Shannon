@@ -115,7 +115,7 @@ func TemplateWorkflow(ctx workflow.Context, input TemplateWorkflowInput) (TaskRe
 		taskInput.RequireApproval = *plan.Defaults.RequireApproval
 	}
 	if taskInput.Context == nil {
-		taskInput.Context = map[string]interface{}{}
+		taskInput.Context = map[string]any{}
 	}
 	taskInput.Context["template_resolved"] = entry.Key
 	taskInput.Context["template_content_hash"] = entry.ContentHash
@@ -197,7 +197,7 @@ func TemplateWorkflow(ctx workflow.Context, input TemplateWorkflowInput) (TaskRe
 			AgentID:    "final_output",
 			Message:    finalResult,
 			Timestamp:  workflow.Now(ctx),
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"tokens_used": runtime.TotalTokens,
 			},
 		}).Get(ctx, nil)
@@ -225,7 +225,7 @@ type TemplateNodeResult struct {
 	Result   string
 	Success  bool
 	Tokens   int
-	Metadata map[string]interface{}
+	Metadata map[string]any
 }
 
 type templateRuntime struct {
@@ -255,18 +255,18 @@ func (rt *templateRuntime) FinalResult() string {
 	return ""
 }
 
-func (rt *templateRuntime) summaryMetadata() map[string]interface{} {
-	nodeSummary := make(map[string]interface{}, len(rt.NodeResults))
+func (rt *templateRuntime) summaryMetadata() map[string]any {
+	nodeSummary := make(map[string]any, len(rt.NodeResults))
 	for id, res := range rt.NodeResults {
-		nodeSummary[id] = map[string]interface{}{
+		nodeSummary[id] = map[string]any{
 			"result":   res.Result,
 			"success":  res.Success,
 			"tokens":   res.Tokens,
 			"metadata": res.Metadata,
 		}
 	}
-	return map[string]interface{}{
-		"template": map[string]interface{}{
+	return map[string]any{
+		"template": map[string]any{
 			"name":     rt.Plan.TemplateName,
 			"version":  rt.Plan.TemplateVersion,
 			"checksum": rt.Plan.Checksum,
@@ -298,7 +298,7 @@ func executeTemplateNode(ctx workflow.Context, rt *templateRuntime, node templat
 	}
 }
 
-func executeSimpleTemplateNode(ctx workflow.Context, rt *templateRuntime, node templates.ExecutableNode, nodeContext map[string]interface{}, history []string, query string) (TemplateNodeResult, error) {
+func executeSimpleTemplateNode(ctx workflow.Context, rt *templateRuntime, node templates.ExecutableNode, nodeContext map[string]any, history []string, query string) (TemplateNodeResult, error) {
 	nodeContext["template_node_strategy"] = string(node.Strategy)
 	input := activities.ExecuteSimpleTaskInput{
 		Query:            query,
@@ -333,14 +333,14 @@ func executeSimpleTemplateNode(ctx workflow.Context, rt *templateRuntime, node t
 		Result:  result.Response,
 		Success: true,
 		Tokens:  result.TokensUsed,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"model_used": result.ModelUsed,
 			"type":       "simple",
 		},
 	}, nil
 }
 
-func executeCognitiveTemplateNode(ctx workflow.Context, rt *templateRuntime, node templates.ExecutableNode, nodeContext map[string]interface{}, history []string, query string) (TemplateNodeResult, error) {
+func executeCognitiveTemplateNode(ctx workflow.Context, rt *templateRuntime, node templates.ExecutableNode, nodeContext map[string]any, history []string, query string) (TemplateNodeResult, error) {
 	registry := patterns.GetRegistry()
 
 	originalStrategy := patterns.PatternType(node.Strategy)
@@ -369,7 +369,7 @@ func executeCognitiveTemplateNode(ctx workflow.Context, rt *templateRuntime, nod
 
 	modelTier := determineModelTierForTemplate(rt.Plan.Defaults.ModelTier, node.Metadata)
 
-	config := make(map[string]interface{}, len(node.Metadata)+2)
+	config := make(map[string]any, len(node.Metadata)+2)
 	for k, v := range node.Metadata {
 		config[k] = v
 	}
@@ -398,7 +398,7 @@ func executeCognitiveTemplateNode(ctx workflow.Context, rt *templateRuntime, nod
 		rt.AgentResults = append(rt.AgentResults, patternResult.AgentResults...)
 	}
 
-	metadata := map[string]interface{}{}
+	metadata := map[string]any{}
 	for k, v := range patternResult.Metadata {
 		metadata[k] = v
 	}
@@ -423,7 +423,7 @@ func executeCognitiveTemplateNode(ctx workflow.Context, rt *templateRuntime, nod
 // 按 parallel_by 从 context 数组展开 HybridTask：例如 parallel_by="tickers"、
 // context["tickers"]=["NVDA","AAPL"] 时，用 metadata 中的 prompt_template 为每个 ticker 生成一个 task；
 // 所有 context 字段都可用 {field_name} 语法替换。
-func expandParallelByTasks(nodeContext map[string]interface{}, metadata map[string]interface{}, parallelBy string) []execution.HybridTask {
+func expandParallelByTasks(nodeContext map[string]any, metadata map[string]any, parallelBy string) []execution.HybridTask {
 	if nodeContext == nil || parallelBy == "" {
 		return nil
 	}
@@ -438,7 +438,7 @@ func expandParallelByTasks(nodeContext map[string]interface{}, metadata map[stri
 	switch v := rawItems.(type) {
 	case []string:
 		items = v
-	case []interface{}:
+	case []any:
 		for _, item := range v {
 			if s, ok := item.(string); ok {
 				items = append(items, s)
@@ -493,7 +493,7 @@ func expandParallelByTasks(nodeContext map[string]interface{}, metadata map[stri
 	return tasks
 }
 
-func executeDAGTemplateNode(ctx workflow.Context, rt *templateRuntime, node templates.ExecutableNode, nodeContext map[string]interface{}, history []string, query string) (TemplateNodeResult, error) {
+func executeDAGTemplateNode(ctx workflow.Context, rt *templateRuntime, node templates.ExecutableNode, nodeContext map[string]any, history []string, query string) (TemplateNodeResult, error) {
 	nodeContext["template_node_mode"] = "dag"
 
 	tasks, err := parseHybridTasks(node.Metadata)
@@ -523,7 +523,7 @@ func executeDAGTemplateNode(ctx workflow.Context, rt *templateRuntime, node temp
 
 	if len(tasks) == 0 {
 		aggregated := aggregateDependencyOutputs(rt, node)
-		meta := map[string]interface{}{
+		meta := map[string]any{
 			"type": "dag",
 			"mode": "aggregate",
 		}
@@ -590,7 +590,7 @@ func executeDAGTemplateNode(ctx workflow.Context, rt *templateRuntime, node temp
 	}, nil
 }
 
-func executeSupervisorTemplateNode(ctx workflow.Context, rt *templateRuntime, node templates.ExecutableNode, nodeContext map[string]interface{}, _ []string, query string) (TemplateNodeResult, error) {
+func executeSupervisorTemplateNode(ctx workflow.Context, rt *templateRuntime, node templates.ExecutableNode, nodeContext map[string]any, _ []string, query string) (TemplateNodeResult, error) {
 	nodeContext["template_node_mode"] = "supervisor"
 
 	childInput := TaskInput{
@@ -636,7 +636,7 @@ func executeSupervisorTemplateNode(ctx workflow.Context, rt *templateRuntime, no
 		return TemplateNodeResult{}, fmt.Errorf("supervisor node %s failed: %s", node.ID, childResult.ErrorMessage)
 	}
 
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"type": "supervisor",
 	}
 	for k, v := range childResult.Metadata {
@@ -651,7 +651,7 @@ func executeSupervisorTemplateNode(ctx workflow.Context, rt *templateRuntime, no
 	}, nil
 }
 
-func determineModelTierForTemplate(defaultTier string, metadata map[string]interface{}) string {
+func determineModelTierForTemplate(defaultTier string, metadata map[string]any) string {
 	if metadata != nil {
 		if v, ok := metadata["model_tier"].(string); ok {
 			if trimmed := strings.TrimSpace(v); trimmed != "" {
@@ -666,7 +666,7 @@ func determineModelTierForTemplate(defaultTier string, metadata map[string]inter
 	return tier
 }
 
-func determineNodeQuery(defaultQuery string, metadata map[string]interface{}, nodeOutputs map[string]string, nodeContext map[string]interface{}) string {
+func determineNodeQuery(defaultQuery string, metadata map[string]any, nodeOutputs map[string]string, nodeContext map[string]any) string {
 	var query string
 
 	if metadata != nil {
@@ -716,8 +716,8 @@ func determineNodeQuery(defaultQuery string, metadata map[string]interface{}, no
 	return query
 }
 
-func mergeContext(base map[string]interface{}, overlay map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{}, len(base)+len(overlay))
+func mergeContext(base map[string]any, overlay map[string]any) map[string]any {
+	result := make(map[string]any, len(base)+len(overlay))
 	for k, v := range base {
 		result[k] = v
 	}
@@ -759,7 +759,7 @@ func truncateText(s string, maxChars int) string {
 	return s[:maxChars] + "\n...[TRUNCATED]"
 }
 
-func loadPatternThresholds(context map[string]interface{}) map[patterns.PatternType]int {
+func loadPatternThresholds(context map[string]any) map[patterns.PatternType]int {
 	thresholds := patterns.DegradationThresholds()
 	if context == nil {
 		return thresholds
@@ -770,7 +770,7 @@ func loadPatternThresholds(context map[string]interface{}) map[patterns.PatternT
 		return thresholds
 	}
 
-	data, ok := raw.(map[string]interface{})
+	data, ok := raw.(map[string]any)
 	if !ok {
 		return thresholds
 	}
@@ -790,7 +790,7 @@ func loadPatternThresholds(context map[string]interface{}) map[patterns.PatternT
 	return thresholds
 }
 
-func toInt(v interface{}) (int, bool) {
+func toInt(v any) (int, bool) {
 	switch val := v.(type) {
 	case int:
 		return val, true
@@ -809,7 +809,7 @@ func toInt(v interface{}) (int, bool) {
 	return 0, false
 }
 
-func parseHybridTasks(metadata map[string]interface{}) ([]execution.HybridTask, error) {
+func parseHybridTasks(metadata map[string]any) ([]execution.HybridTask, error) {
 	if metadata == nil {
 		return nil, nil
 	}
@@ -817,13 +817,13 @@ func parseHybridTasks(metadata map[string]interface{}) ([]execution.HybridTask, 
 	if !ok || raw == nil {
 		return nil, nil
 	}
-	list, ok := raw.([]interface{})
+	list, ok := raw.([]any)
 	if !ok {
 		return nil, fmt.Errorf("metadata.tasks must be an array")
 	}
 	tasks := make([]execution.HybridTask, 0, len(list))
 	for i, item := range list {
-		entry, ok := item.(map[string]interface{})
+		entry, ok := item.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("metadata.tasks[%d] must be an object", i)
 		}
@@ -845,7 +845,7 @@ func parseHybridTasks(metadata map[string]interface{}) ([]execution.HybridTask, 
 	return tasks, nil
 }
 
-func firstNonEmptyString(values ...interface{}) string {
+func firstNonEmptyString(values ...any) string {
 	for _, v := range values {
 		if s := stringValue(v); s != "" {
 			return s
@@ -854,7 +854,7 @@ func firstNonEmptyString(values ...interface{}) string {
 	return ""
 }
 
-func preferValue(primary, fallback interface{}) interface{} {
+func preferValue(primary, fallback any) any {
 	if primary != nil {
 		return primary
 	}
@@ -868,14 +868,14 @@ func sanitizeID(s string) string {
 	return idSanitizer.ReplaceAllString(strings.ToLower(s), "_")
 }
 
-func stringValue(v interface{}) string {
+func stringValue(v any) string {
 	if s, ok := v.(string); ok {
 		return strings.TrimSpace(s)
 	}
 	return ""
 }
 
-func contextKeys(ctx map[string]interface{}) []string {
+func contextKeys(ctx map[string]any) []string {
 	keys := make([]string, 0, len(ctx))
 	for k := range ctx {
 		keys = append(keys, k)
@@ -884,7 +884,7 @@ func contextKeys(ctx map[string]interface{}) []string {
 	return keys
 }
 
-func stringSlice(v interface{}) []string {
+func stringSlice(v any) []string {
 	if v == nil {
 		return nil
 	}
@@ -895,7 +895,7 @@ func stringSlice(v interface{}) []string {
 			out[i] = strings.TrimSpace(s)
 		}
 		return out
-	case []interface{}:
+	case []any:
 		out := make([]string, 0, len(raw))
 		for _, item := range raw {
 			if s := stringValue(item); s != "" {
@@ -911,12 +911,12 @@ func stringSlice(v interface{}) []string {
 	return nil
 }
 
-func mapStringInterface(v interface{}) map[string]interface{} {
+func mapStringInterface(v any) map[string]any {
 	if v == nil {
 		return nil
 	}
-	if m, ok := v.(map[string]interface{}); ok {
-		clone := make(map[string]interface{}, len(m))
+	if m, ok := v.(map[string]any); ok {
+		clone := make(map[string]any, len(m))
 		for k, val := range m {
 			clone[k] = val
 		}
@@ -925,14 +925,14 @@ func mapStringInterface(v interface{}) map[string]interface{} {
 	return nil
 }
 
-func boolValue(v interface{}) bool {
+func boolValue(v any) bool {
 	if b, ok := metadataBool(v); ok {
 		return b
 	}
 	return false
 }
 
-func metadataBool(v interface{}) (bool, bool) {
+func metadataBool(v any) (bool, bool) {
 	switch val := v.(type) {
 	case bool:
 		return val, true
@@ -973,9 +973,9 @@ func aggregateDependencyOutputs(rt *templateRuntime, node templates.ExecutableNo
 	return builder.String()
 }
 
-func summariseHybridResult(rt *templateRuntime, node templates.ExecutableNode, result *execution.HybridResult) (string, map[string]interface{}) {
+func summariseHybridResult(rt *templateRuntime, node templates.ExecutableNode, result *execution.HybridResult) (string, map[string]any) {
 	if result == nil {
-		return "", map[string]interface{}{"type": "dag", "mode": "hybrid"}
+		return "", map[string]any{"type": "dag", "mode": "hybrid"}
 	}
 	ids := make([]string, 0, len(result.Results))
 	for id := range result.Results {
@@ -994,7 +994,7 @@ func summariseHybridResult(rt *templateRuntime, node templates.ExecutableNode, r
 		builder.WriteString(r.Response)
 		rt.AgentResults = append(rt.AgentResults, r)
 	}
-	meta := make(map[string]interface{}, len(result.Metadata)+4)
+	meta := make(map[string]any, len(result.Metadata)+4)
 	for k, v := range result.Metadata {
 		meta[k] = v
 	}
@@ -1050,7 +1050,7 @@ func recordTemplateToVectorStore(ctx workflow.Context, task TaskInput, plan *tem
 		},
 	}
 	ctx = workflow.WithActivityOptions(ctx, activityOpts)
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"workflow":          "template_v1",
 		"template_name":     plan.TemplateName,
 		"template_version":  plan.TemplateVersion,

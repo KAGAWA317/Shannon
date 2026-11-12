@@ -38,9 +38,9 @@ type SimilarQuery struct {
 // ContextItem represents context retrieved for a session
 // ContextItem 表示为 session 检索到的 context
 type ContextItem struct {
-	SessionID string                 `json:"session_id"`
-	Payload   map[string]interface{} `json:"payload"`
-	Score     float64                `json:"score"`
+	SessionID string         `json:"session_id"`
+	Payload   map[string]any `json:"payload"`
+	Score     float64        `json:"score"`
 	// Optional candidate vector when fetched with vectors (for MMR)
 	// 随向量一起取回时的候选向量（用于 MMR）
 	Vector []float32 `json:"-"`
@@ -49,9 +49,9 @@ type ContextItem struct {
 // UpsertItem represents a single point to insert into Qdrant
 // UpsertItem 表示要写入 Qdrant 的单个 point
 type UpsertItem struct {
-	ID      interface{}            `json:"id,omitempty"`
-	Vector  []float32              `json:"vector"`
-	Payload map[string]interface{} `json:"payload"`
+	ID      any            `json:"id,omitempty"`
+	Vector  []float32      `json:"vector"`
+	Payload map[string]any `json:"payload"`
 }
 
 // UpsertResponse captures basic Qdrant upsert response

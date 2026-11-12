@@ -48,11 +48,11 @@ type CitationForAgent struct {
 
 // CitationAgentInput is the input for the Citation Agent activity
 type CitationAgentInput struct {
-	Report           string                 `json:"report"`
-	Citations        []CitationForAgent     `json:"citations"`
-	ParentWorkflowID string                 `json:"parent_workflow_id,omitempty"`
-	Context          map[string]interface{} `json:"context,omitempty"`
-	ModelTier        string                 `json:"model_tier,omitempty"` // "small", "medium", "large"; default "small"
+	Report           string             `json:"report"`
+	Citations        []CitationForAgent `json:"citations"`
+	ParentWorkflowID string             `json:"parent_workflow_id,omitempty"`
+	Context          map[string]any     `json:"context,omitempty"`
+	ModelTier        string             `json:"model_tier,omitempty"` // "small", "medium", "large"; default "small"
 }
 
 // CitationAgentResult is the result of the Citation Agent activity
@@ -243,13 +243,13 @@ func (a *Activities) addCitationsInline(ctx context.Context, input CitationAgent
 		"max_tokens", maxTokens,
 	)
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"query":       userContent,
 		"max_tokens":  maxTokens,
 		"temperature": 0.0,
 		"agent_id":    "citation_agent",
 		"model_tier":  modelTier,
-		"context": map[string]interface{}{
+		"context": map[string]any{
 			"system_prompt":      systemPrompt,
 			"parent_workflow_id": input.ParentWorkflowID,
 		},
@@ -1115,13 +1115,13 @@ func (a *Activities) addCitationsV2(ctx context.Context, input CitationAgentInpu
 		modelTier = "medium"
 	}
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"query":       userContent,
 		"max_tokens":  4096,
 		"temperature": 0.0,
 		"agent_id":    "citation_agent_v2",
 		"model_tier":  modelTier,
-		"context": map[string]interface{}{
+		"context": map[string]any{
 			"system_prompt":      systemPrompt,
 			"parent_workflow_id": input.ParentWorkflowID,
 		},
@@ -1628,7 +1628,7 @@ type CitationAgentInputV2 struct {
 	AllCitations     []CitationWithIDForAgent `json:"all_citations"`  // P1: All citations for Sources section output
 	ClaimMappings    []ClaimMappingInput      `json:"claim_mappings"` // From Verify batch endpoint
 	ParentWorkflowID string                   `json:"parent_workflow_id,omitempty"`
-	Context          map[string]interface{}   `json:"context,omitempty"`
+	Context          map[string]any           `json:"context,omitempty"`
 	ModelTier        string                   `json:"model_tier,omitempty"`
 }
 
@@ -1724,13 +1724,13 @@ func (a *Activities) AddCitationsWithVerify(ctx context.Context, input CitationA
 		"max_tokens", maxTokens,
 	)
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"query":       userContent,
 		"max_tokens":  maxTokens,
 		"temperature": 0.0,
 		"agent_id":    "citation_agent_v2_verify",
 		"model_tier":  modelTier,
-		"context": map[string]interface{}{
+		"context": map[string]any{
 			"system_prompt":      systemPrompt,
 			"parent_workflow_id": input.ParentWorkflowID,
 		},
@@ -2098,13 +2098,13 @@ func (a *Activities) addCitationsPlacement(ctx context.Context, input CitationAg
 		modelTier = "medium"
 	}
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"query":       userContent,
 		"max_tokens":  8192, // More tokens for supporting quotes
 		"temperature": 0.0,
 		"agent_id":    "citation_agent_placement",
 		"model_tier":  modelTier,
-		"context": map[string]interface{}{
+		"context": map[string]any{
 			"system_prompt":      systemPrompt,
 			"parent_workflow_id": input.ParentWorkflowID,
 		},

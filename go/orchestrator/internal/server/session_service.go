@@ -40,7 +40,7 @@ func (s *SessionServiceImpl) CreateSession(ctx context.Context, req *pb.CreateSe
 	)
 
 	// Convert protobuf struct to map
-	initialContext := make(map[string]interface{})
+	initialContext := make(map[string]any)
 	if req.InitialContext != nil {
 		initialContext = req.InitialContext.AsMap()
 	}
@@ -142,7 +142,7 @@ func (s *SessionServiceImpl) UpdateSession(ctx context.Context, req *pb.UpdateSe
 	if req.ContextUpdates != nil {
 		updates := req.ContextUpdates.AsMap()
 		if sess.Context == nil {
-			sess.Context = make(map[string]interface{})
+			sess.Context = make(map[string]any)
 		}
 		for k, v := range updates {
 			sess.Context[k] = v
@@ -310,7 +310,7 @@ func (s *SessionServiceImpl) ClearHistory(ctx context.Context, req *pb.ClearHist
 
 	// Clear context if requested
 	if !req.KeepContext {
-		sess.Context = make(map[string]interface{})
+		sess.Context = make(map[string]any)
 	}
 
 	// Update session

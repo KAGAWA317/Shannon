@@ -97,7 +97,7 @@ func (j *JWTManager) generateAccessToken(user *User) (string, error) {
 // ValidateAccessToken validates and parses a JWT access token
 // ValidateAccessToken 校验并解析 JWT access token
 func (j *JWTManager) ValidateAccessToken(tokenString string) (*UserContext, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (any, error) {
 		// Validate signing method
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])

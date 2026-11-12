@@ -25,12 +25,12 @@ func (h *IngestHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 type ingestEvent struct {
-	WorkflowID string                 `json:"workflow_id"`
-	Type       string                 `json:"type"`
-	AgentID    string                 `json:"agent_id,omitempty"`
-	Message    string                 `json:"message,omitempty"`
-	Payload    map[string]interface{} `json:"payload,omitempty"`
-	Timestamp  string                 `json:"timestamp,omitempty"`
+	WorkflowID string         `json:"workflow_id"`
+	Type       string         `json:"type"`
+	AgentID    string         `json:"agent_id,omitempty"`
+	Message    string         `json:"message,omitempty"`
+	Payload    map[string]any `json:"payload,omitempty"`
+	Timestamp  string         `json:"timestamp,omitempty"`
 }
 
 func (h *IngestHandler) handleIngest(w http.ResponseWriter, r *http.Request) {

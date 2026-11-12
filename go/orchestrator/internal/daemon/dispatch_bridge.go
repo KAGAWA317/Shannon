@@ -41,7 +41,7 @@ func (h *Hub) PublishDispatch(ctx context.Context, req DispatchRequest) error {
 		Stream: dispatchStreamKey,
 		MaxLen: dispatchMaxLen,
 		Approx: true,
-		Values: map[string]interface{}{"data": string(data)},
+		Values: map[string]any{"data": string(data)},
 	}).Result()
 	if err != nil {
 		return fmt.Errorf("redis xadd dispatch: %w", err)

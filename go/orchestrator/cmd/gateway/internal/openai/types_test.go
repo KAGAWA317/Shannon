@@ -110,7 +110,7 @@ func TestChatCompletionResponseJSON(t *testing.T) {
 	}
 
 	// Verify JSON structure
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
@@ -122,12 +122,12 @@ func TestChatCompletionResponseJSON(t *testing.T) {
 		t.Errorf("object = %v, want chat.completion", parsed["object"])
 	}
 
-	choices := parsed["choices"].([]interface{})
+	choices := parsed["choices"].([]any)
 	if len(choices) != 1 {
 		t.Errorf("len(choices) = %d, want 1", len(choices))
 	}
 
-	usage := parsed["usage"].(map[string]interface{})
+	usage := parsed["usage"].(map[string]any)
 	if usage["total_tokens"].(float64) != 15 {
 		t.Errorf("total_tokens = %v, want 15", usage["total_tokens"])
 	}
@@ -155,7 +155,7 @@ func TestChatCompletionChunkJSON(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
@@ -164,9 +164,9 @@ func TestChatCompletionChunkJSON(t *testing.T) {
 		t.Errorf("object = %v, want chat.completion.chunk", parsed["object"])
 	}
 
-	choices := parsed["choices"].([]interface{})
-	choice := choices[0].(map[string]interface{})
-	delta := choice["delta"].(map[string]interface{})
+	choices := parsed["choices"].([]any)
+	choice := choices[0].(map[string]any)
+	delta := choice["delta"].(map[string]any)
 	if delta["content"] != "Hello" {
 		t.Errorf("delta.content = %v, want Hello", delta["content"])
 	}
@@ -185,7 +185,7 @@ func TestModelObjectJSON(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}

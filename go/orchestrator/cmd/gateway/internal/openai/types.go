@@ -33,11 +33,11 @@ type ChatCompletionRequest struct {
 // ShannonOptions 包含 Shannon 专有的 request 选项，在 OpenAI API 之上扩展 Shannon 能力。
 type ShannonOptions struct {
 	// Context is passed directly to the Shannon orchestrator
-	Context map[string]interface{} `json:"context,omitempty"`
+	Context map[string]any `json:"context,omitempty"`
 	// Agent specifies a single-purpose agent to execute (e.g., "serp-ads", "competitor-discover")
 	Agent string `json:"agent,omitempty"`
 	// AgentInput provides parameters for the agent (alternative to context.agent_input)
-	AgentInput map[string]interface{} `json:"agent_input,omitempty"`
+	AgentInput map[string]any `json:"agent_input,omitempty"`
 	// Role specifies a workflow role (e.g., "browser_use")
 	Role string `json:"role,omitempty"`
 	// ResearchStrategy sets the research depth (quick, standard, deep, academic)
@@ -168,11 +168,11 @@ type ChatCompletionChunk struct {
 // These are Shannon-specific extensions to the OpenAI streaming format.
 // ShannonEvent 表示 agent 生命周期或进度 event，是对 OpenAI streaming 格式的 Shannon 扩展。
 type ShannonEvent struct {
-	Type      string                 `json:"type"`                // Event type (AGENT_STARTED, TOOL_INVOKED, etc.)
-	AgentID   string                 `json:"agent_id,omitempty"`  // Agent identifier (e.g., "Ryogoku", "synthesis")
-	Message   string                 `json:"message,omitempty"`   // Human-readable message
-	Timestamp int64                  `json:"timestamp,omitempty"` // Unix timestamp
-	Payload   map[string]interface{} `json:"payload,omitempty"`   // Additional event data
+	Type      string         `json:"type"`                // Event type (AGENT_STARTED, TOOL_INVOKED, etc.)
+	AgentID   string         `json:"agent_id,omitempty"`  // Agent identifier (e.g., "Ryogoku", "synthesis")
+	Message   string         `json:"message,omitempty"`   // Human-readable message
+	Timestamp int64          `json:"timestamp,omitempty"` // Unix timestamp
+	Payload   map[string]any `json:"payload,omitempty"`   // Additional event data
 }
 
 // ModelObject represents a model in the /v1/models response.

@@ -506,7 +506,7 @@ func normalizePrefetchRegion(raw string) string {
 	}
 }
 
-func prefetchRegionsFromContext(ctx map[string]interface{}) []string {
+func prefetchRegionsFromContext(ctx map[string]any) []string {
 	if ctx == nil {
 		return nil
 	}
@@ -533,7 +533,7 @@ func prefetchRegionsFromContext(ctx map[string]interface{}) []string {
 			for _, s := range v {
 				add(s)
 			}
-		case []interface{}:
+		case []any:
 			for _, item := range v {
 				if s, ok := item.(string); ok {
 					add(s)
@@ -1248,19 +1248,19 @@ func domainsFromWebSearchToolExecutionsAll(toolExecs []activities.ToolExecution)
 		}
 
 		switch v := te.Output.(type) {
-		case map[string]interface{}:
-			if rawResults, ok := v["results"].([]interface{}); ok {
+		case map[string]any:
+			if rawResults, ok := v["results"].([]any); ok {
 				for _, rr := range rawResults {
-					if m, ok2 := rr.(map[string]interface{}); ok2 {
+					if m, ok2 := rr.(map[string]any); ok2 {
 						if u, ok3 := m["url"].(string); ok3 {
 							addURL(u)
 						}
 					}
 				}
 			}
-		case []interface{}:
+		case []any:
 			for _, rr := range v {
-				if m, ok2 := rr.(map[string]interface{}); ok2 {
+				if m, ok2 := rr.(map[string]any); ok2 {
 					if u, ok3 := m["url"].(string); ok3 {
 						addURL(u)
 					}
@@ -1346,19 +1346,19 @@ func domainsFromWebSearchToolExecutionsAllV2(toolExecs []activities.ToolExecutio
 		}
 
 		switch v := te.Output.(type) {
-		case map[string]interface{}:
-			if rawResults, ok := v["results"].([]interface{}); ok {
+		case map[string]any:
+			if rawResults, ok := v["results"].([]any); ok {
 				for _, rr := range rawResults {
-					if m, ok2 := rr.(map[string]interface{}); ok2 {
+					if m, ok2 := rr.(map[string]any); ok2 {
 						if u, ok3 := m["url"].(string); ok3 {
 							addURL(u)
 						}
 					}
 				}
 			}
-		case []interface{}:
+		case []any:
 			for _, rr := range v {
-				if m, ok2 := rr.(map[string]interface{}); ok2 {
+				if m, ok2 := rr.(map[string]any); ok2 {
 					if u, ok3 := m["url"].(string); ok3 {
 						addURL(u)
 					}
@@ -2033,21 +2033,21 @@ func domainsFromWebSearchToolExecutions(toolExecs []activities.ToolExecution, ca
 		}
 
 		switch v := te.Output.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			// Common shape: {results:[{url:...}, ...]}
-			if rawResults, ok := v["results"].([]interface{}); ok {
+			if rawResults, ok := v["results"].([]any); ok {
 				for _, rr := range rawResults {
-					if m, ok2 := rr.(map[string]interface{}); ok2 {
+					if m, ok2 := rr.(map[string]any); ok2 {
 						if u, ok3 := m["url"].(string); ok3 {
 							addURL(u)
 						}
 					}
 				}
 			}
-		case []interface{}:
+		case []any:
 			// Alternate shape: [{url:...}, ...]
 			for _, rr := range v {
-				if m, ok2 := rr.(map[string]interface{}); ok2 {
+				if m, ok2 := rr.(map[string]any); ok2 {
 					if u, ok3 := m["url"].(string); ok3 {
 						addURL(u)
 					}
@@ -2360,7 +2360,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 	// Prepare base context: start from SessionCtx, then overlay request Context
 	// Per-request context must take precedence over persisted session defaults
-	baseContext := make(map[string]interface{})
+	baseContext := make(map[string]any)
 	for k, v := range input.SessionCtx {
 		baseContext[k] = v
 	}
@@ -2582,7 +2582,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 				Provider:     refineResult.Provider,
 				InputTokens:  inTok,
 				OutputTokens: outTok,
-				Metadata:     map[string]interface{}{"phase": "refine"},
+				Metadata:     map[string]any{"phase": "refine"},
 			}).Get(recCtx, nil)
 		}
 
@@ -2593,7 +2593,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 		}
 		emitTaskUpdatePayload(ctx, input, activities.StreamEventProgress, "research-refiner",
 			fmt.Sprintf("Expanded query into %d research dimensions", dimCount),
-			map[string]interface{}{
+			map[string]any{
 				"original_query":       input.Query,
 				"refined_query":        refineResult.RefinedQuery,
 				"research_areas":       refineResult.ResearchAreas,
@@ -2690,7 +2690,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 			OutputTokens:        outTok,
 			CacheReadTokens:     decomp.CacheReadTokens,
 			CacheCreationTokens: decomp.CacheCreationTokens,
-			Metadata:            map[string]interface{}{"phase": "decompose"},
+			Metadata:            map[string]any{"phase": "decompose"},
 		}).Get(recCtx, nil)
 	}
 
@@ -2955,12 +2955,12 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 							}
 						}
 
-						discoveryContext := map[string]interface{}{
+						discoveryContext := map[string]any{
 							"user_id":    input.UserID,
 							"session_id": input.SessionID,
 							"model_tier": "small",
 							"role":       "domain_discovery", // Use specialized preset
-							"response_format": map[string]interface{}{
+							"response_format": map[string]any{
 								"type": "json_object",
 							},
 						}
@@ -3028,7 +3028,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 								SuggestedTools: []string{
 									"web_search",
 								},
-								ToolParameters: map[string]interface{}{
+								ToolParameters: map[string]any{
 									"tool":        "web_search",
 									"query":       allQueries[0], // Primary query as hint
 									"max_results": 20,
@@ -3055,7 +3055,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 								"domain_discovery",
 								fmt.Sprintf("Domain discovery: %s (batch, %d queries)", refineResult.CanonicalName, len(allQueries)),
 								discoveryResult,
-								map[string]interface{}{
+								map[string]any{
 									"phase":             "domain_discovery",
 									"batch_mode":        true,
 									"query_count":       len(allQueries),
@@ -3134,7 +3134,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 									OutputTokens:        outTok,
 									CacheReadTokens:     discoveryResult.CacheReadTokens,
 									CacheCreationTokens: discoveryResult.CacheCreationTokens,
-									Metadata:            map[string]interface{}{"phase": "domain_discovery", "batch_mode": true, "query_count": len(allQueries)},
+									Metadata:            map[string]any{"phase": "domain_discovery", "batch_mode": true, "query_count": len(allQueries)},
 								}).Get(recCtx, nil)
 							}
 						}
@@ -3205,12 +3205,12 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 					if domainDiscoveryVersion >= 1 && strings.TrimSpace(refineResult.CanonicalName) != "" {
 						searchQuery := buildCompanyDomainDiscoverySearchQuery(refineResult.CanonicalName, refineResult.DisambiguationTerms, regionCode)
 						if searchQuery != "" {
-							discoveryContext := map[string]interface{}{
+							discoveryContext := map[string]any{
 								"user_id":    input.UserID,
 								"session_id": input.SessionID,
 								"model_tier": "small",
 								"role":       "domain_discovery", // Use specialized preset
-								"response_format": map[string]interface{}{
+								"response_format": map[string]any{
 									"type": "json_object",
 								},
 							}
@@ -3270,7 +3270,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 									SuggestedTools: []string{
 										"web_search",
 									},
-									ToolParameters: map[string]interface{}{
+									ToolParameters: map[string]any{
 										"tool":        "web_search",
 										"query":       searchQuery,
 										"max_results": 20,
@@ -3295,7 +3295,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 									"domain_discovery",
 									fmt.Sprintf("Domain discovery (global_fallback): %s", refineResult.CanonicalName),
 									discoveryResult,
-									map[string]interface{}{
+									map[string]any{
 										"phase":      "domain_discovery",
 										"search_key": "global_fallback",
 										"query":      searchQuery,
@@ -3399,7 +3399,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 										OutputTokens:        outTok,
 										CacheReadTokens:     discoveryResult.CacheReadTokens,
 										CacheCreationTokens: discoveryResult.CacheCreationTokens,
-										Metadata:            map[string]interface{}{"phase": "domain_discovery"},
+										Metadata:            map[string]any{"phase": "domain_discovery"},
 									}).Get(recCtx, nil)
 								}
 							}
@@ -3488,7 +3488,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 						}
 
 						workflow.Go(ctx, func(gctx workflow.Context) {
-							prefetchContext := make(map[string]interface{})
+							prefetchContext := make(map[string]any)
 							for k, v := range baseContext {
 								prefetchContext[k] = v
 							}
@@ -3518,7 +3518,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 									UserID:         input.UserID,
 									History:        convertHistoryForAgent(input.History),
 									SuggestedTools: []string{"web_subpage_fetch"},
-									ToolParameters: map[string]interface{}{
+									ToolParameters: map[string]any{
 										"tool":            "web_subpage_fetch",
 										"url":             url,
 										"limit":           domainLimit,
@@ -3570,7 +3570,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 							prefetchAgentName,
 							fmt.Sprintf("Domain prefetch: %s", payload.URL),
 							payload.Result,
-							map[string]interface{}{
+							map[string]any{
 								"phase":    "domain_prefetch",
 								"url":      payload.URL,
 								"url_role": prefetchURLRole,
@@ -3591,7 +3591,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 								Provider:     payload.Result.Provider,
 								InputTokens:  inTok,
 								OutputTokens: outTok,
-								Metadata:     map[string]interface{}{"phase": "domain_prefetch"},
+								Metadata:     map[string]any{"phase": "domain_prefetch"},
 							}).Get(recCtx, nil)
 						}
 					}
@@ -3681,7 +3681,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 					)
 					emitTaskUpdatePayload(ctx, input, activities.StreamEventProgress, "domain_analysis",
 						"Domain analysis started",
-						map[string]interface{}{
+						map[string]any{
 							"domain_analysis_workflow_id": domainAnalysisWorkflowID,
 						},
 					)
@@ -3830,7 +3830,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 					}
 
 					// Build context with dependency results
-					subtaskContext := make(map[string]interface{})
+					subtaskContext := make(map[string]any)
 					for k, v := range baseContext {
 						subtaskContext[k] = v
 					}
@@ -4123,7 +4123,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 						if err == nil && len(routeResult.Routes) > 0 {
 							if hybridTasks[i].ContextOverrides == nil {
-								hybridTasks[i].ContextOverrides = make(map[string]interface{})
+								hybridTasks[i].ContextOverrides = make(map[string]any)
 							}
 							hybridTasks[i].ContextOverrides["search_routes"] = routeResult.Routes
 							hybridTasks[i].ContextOverrides["search_strategy"] = routeResult.Strategy
@@ -4241,7 +4241,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 							domains := extractDomainsFromCoverage(childResult.OfficialDomainsSelected)
 							for i := range task1DependentTasks {
 								if task1DependentTasks[i].ContextOverrides == nil {
-									task1DependentTasks[i].ContextOverrides = make(map[string]interface{})
+									task1DependentTasks[i].ContextOverrides = make(map[string]any)
 								}
 								task1DependentTasks[i].ContextOverrides["official_domains"] = domains
 								task1DependentTasks[i].ContextOverrides["official_domains_source"] = "domain_analysis"
@@ -4408,7 +4408,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 						if err == nil && len(routeResult.Routes) > 0 {
 							if parallelTasks[i].ContextOverrides == nil {
-								parallelTasks[i].ContextOverrides = make(map[string]interface{})
+								parallelTasks[i].ContextOverrides = make(map[string]any)
 							}
 							parallelTasks[i].ContextOverrides["search_routes"] = routeResult.Routes
 							parallelTasks[i].ContextOverrides["search_strategy"] = routeResult.Strategy
@@ -4497,7 +4497,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 				)
 				emitTaskUpdatePayload(ctx, input, activities.StreamEventWarning, "domain_analysis",
 					fmt.Sprintf("Domain discovery failed: %s", childResult.Stats.DiscoveryError),
-					map[string]interface{}{
+					map[string]any{
 						"discovery_error": childResult.Stats.DiscoveryError,
 					},
 				)
@@ -4540,7 +4540,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 	if localizedSearchEnabled {
 		// Get target languages from context
 		var targetLanguages []string
-		if langs, ok := baseContext["target_languages"].([]interface{}); ok {
+		if langs, ok := baseContext["target_languages"].([]any); ok {
 			for _, l := range langs {
 				if ls, ok := l.(string); ok {
 					targetLanguages = append(targetLanguages, ls)
@@ -4598,7 +4598,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 							Provider:     locResult.Provider,
 							InputTokens:  inTok,
 							OutputTokens: outTok,
-							Metadata:     map[string]interface{}{"phase": "localization"},
+							Metadata:     map[string]any{"phase": "localization"},
 						}).Get(recCtx, nil)
 					}
 					logger.Info("Entity localization detected",
@@ -4634,7 +4634,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 					workflow.Go(ctx, func(gctx workflow.Context) {
 						// Build localized search context
-						localCtx := make(map[string]interface{})
+						localCtx := make(map[string]any)
 						for k, v := range baseContext {
 							localCtx[k] = v
 						}
@@ -4725,7 +4725,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 				for _, q := range t {
 					aliases = append(aliases, strings.Trim(q, "\""))
 				}
-			case []interface{}:
+			case []any:
 				for _, it := range t {
 					if s, ok := it.(string); ok {
 						aliases = append(aliases, strings.Trim(s, "\""))
@@ -4739,7 +4739,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 			switch t := dv.(type) {
 			case []string:
 				domains = append(domains, t...)
-			case []interface{}:
+			case []any:
 				for _, it := range t {
 					if s, ok := it.(string); ok {
 						domains = append(domains, s)
@@ -4813,7 +4813,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 	if !hasSuccessfulToolExecutions(agentResults) {
 		logger.Warn("No successful tool executions found in research phase; running fallback web search")
 
-		fallbackCtx := make(map[string]interface{})
+		fallbackCtx := make(map[string]any)
 		for k, v := range baseContext {
 			fallbackCtx[k] = v
 		}
@@ -4861,15 +4861,15 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 	var collectedCitations []metadata.Citation
 	// Build lightweight results array with tool_executions to feed metadata.CollectCitations
 	{
-		var resultsForCitations []interface{}
+		var resultsForCitations []any
 		// IMPORTANT: Use original (unfiltered) agent results to preserve all
 		// successful tool executions for citation extraction.
 		for _, ar := range originalAgentResults {
 			// Build tool_executions payload compatible with citations extractor
-			var toolExecs []interface{}
+			var toolExecs []any
 			if len(ar.ToolExecutions) > 0 {
 				for _, te := range ar.ToolExecutions {
-					toolExecs = append(toolExecs, map[string]interface{}{
+					toolExecs = append(toolExecs, map[string]any{
 						"tool":    te.Tool,
 						"success": te.Success,
 						"output":  te.Output,
@@ -4877,7 +4877,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 					})
 				}
 			}
-			resultsForCitations = append(resultsForCitations, map[string]interface{}{
+			resultsForCitations = append(resultsForCitations, map[string]any{
 				"agent_id":        ar.AgentID,
 				"tool_executions": toolExecs,
 				"response":        ar.Response,
@@ -4950,9 +4950,9 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 			baseContext["citation_count"] = len(collectedCitations)
 
 			// Also store structured citations for SSE emission
-			out := make([]map[string]interface{}, 0, len(collectedCitations))
+			out := make([]map[string]any, 0, len(collectedCitations))
 			for _, c := range collectedCitations {
-				out = append(out, map[string]interface{}{
+				out = append(out, map[string]any{
 					"url":               c.URL,
 					"title":             c.Title,
 					"source":            c.Source,
@@ -5000,9 +5000,9 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 			Query:        input.Query,
 			AgentResults: agentResults,
 			// Ensure comprehensive report style for research synthesis unless already specified
-			Context: func() map[string]interface{} {
+			Context: func() map[string]any {
 				if baseContext == nil {
-					baseContext = map[string]interface{}{}
+					baseContext = map[string]any{}
 				}
 				if _, ok := baseContext["synthesis_style"]; !ok {
 					baseContext["synthesis_style"] = "comprehensive"
@@ -5045,7 +5045,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 			Provider:     synthesis.Provider,
 			InputTokens:  inTok,
 			OutputTokens: outTok,
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"phase": "synthesis",
 			},
 		}).Get(recCtx, nil)
@@ -5107,10 +5107,10 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 		if dims, ok := baseContext["research_dimensions"]; ok {
 			if dimSlice, ok := dims.([]activities.ResearchDimension); ok {
 				researchDimensions = dimSlice
-			} else if dimSlice, ok := dims.([]interface{}); ok {
+			} else if dimSlice, ok := dims.([]any); ok {
 				// Convert from interface slice
 				for _, d := range dimSlice {
-					if dm, ok := d.(map[string]interface{}); ok {
+					if dm, ok := d.(map[string]any); ok {
 						dim := activities.ResearchDimension{}
 						if v, ok := dm["dimension"].(string); ok {
 							dim.Dimension = v
@@ -5118,14 +5118,14 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 						if v, ok := dm["priority"].(string); ok {
 							dim.Priority = v
 						}
-						if qs, ok := dm["questions"].([]interface{}); ok {
+						if qs, ok := dm["questions"].([]any); ok {
 							for _, q := range qs {
 								if s, ok := q.(string); ok {
 									dim.Questions = append(dim.Questions, s)
 								}
 							}
 						}
-						if sts, ok := dm["source_types"].([]interface{}); ok {
+						if sts, ok := dm["source_types"].([]any); ok {
 							for _, st := range sts {
 								if s, ok := st.(string); ok {
 									dim.SourceTypes = append(dim.SourceTypes, s)
@@ -5191,7 +5191,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 							Provider:     intermediateSynthResult.Provider,
 							InputTokens:  inTok,
 							OutputTokens: outTok,
-							Metadata:     map[string]interface{}{"phase": "intermediate_synthesis"},
+							Metadata:     map[string]any{"phase": "intermediate_synthesis"},
 						}).Get(recCtx, nil)
 					}
 
@@ -5258,7 +5258,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 					Provider:     coverageResult.Provider,
 					InputTokens:  inTok,
 					OutputTokens: outTok,
-					Metadata:     map[string]interface{}{"phase": "coverage_eval"},
+					Metadata:     map[string]any{"phase": "coverage_eval"},
 				}).Get(recCtx, nil)
 			}
 
@@ -5334,7 +5334,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 					Provider:     subqueryResult.Provider,
 					InputTokens:  inTok,
 					OutputTokens: outTok,
-					Metadata:     map[string]interface{}{"phase": "subquery_generation"},
+					Metadata:     map[string]any{"phase": "subquery_generation"},
 				}).Get(recCtx, nil)
 			}
 
@@ -5375,7 +5375,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 					defer sem.Release(1)
 
 					// Build context with task contract
-					gapContext := make(map[string]interface{})
+					gapContext := make(map[string]any)
 					for k, v := range baseContext {
 						gapContext[k] = v
 					}
@@ -5388,7 +5388,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 					// Apply task contract if present
 					if sq.SourceGuidance != nil {
-						gapContext["source_guidance"] = map[string]interface{}{
+						gapContext["source_guidance"] = map[string]any{
 							"required": sq.SourceGuidance.Required,
 							"optional": sq.SourceGuidance.Optional,
 							"avoid":    sq.SourceGuidance.Avoid,
@@ -5422,20 +5422,20 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 						}
 					}
 					if sq.OutputFormat != nil {
-						gapContext["output_format"] = map[string]interface{}{
+						gapContext["output_format"] = map[string]any{
 							"type":            sq.OutputFormat.Type,
 							"required_fields": sq.OutputFormat.RequiredFields,
 							"optional_fields": sq.OutputFormat.OptionalFields,
 						}
 					}
 					if sq.SearchBudget != nil {
-						gapContext["search_budget"] = map[string]interface{}{
+						gapContext["search_budget"] = map[string]any{
 							"max_queries": sq.SearchBudget.MaxQueries,
 							"max_fetches": sq.SearchBudget.MaxFetches,
 						}
 					}
 					if sq.Boundaries != nil {
-						gapContext["boundaries"] = map[string]interface{}{
+						gapContext["boundaries"] = map[string]any{
 							"in_scope":     sq.Boundaries.InScope,
 							"out_of_scope": sq.Boundaries.OutOfScope,
 						}
@@ -5542,18 +5542,18 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 		// After iterative loop, re-collect citations (always) and re-synthesize (only if gap-filling occurred)
 		if len(agentResults) > 0 {
-			var resultsForCitations []interface{}
+			var resultsForCitations []any
 			for _, ar := range originalAgentResults {
-				var toolExecs []interface{}
+				var toolExecs []any
 				for _, te := range ar.ToolExecutions {
-					toolExecs = append(toolExecs, map[string]interface{}{
+					toolExecs = append(toolExecs, map[string]any{
 						"tool":    te.Tool,
 						"success": te.Success,
 						"output":  te.Output,
 						"error":   te.Error,
 					})
 				}
-				resultsForCitations = append(resultsForCitations, map[string]interface{}{
+				resultsForCitations = append(resultsForCitations, map[string]any{
 					"agent_id":        ar.AgentID,
 					"tool_executions": toolExecs,
 					"response":        ar.Response,
@@ -5749,7 +5749,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 								}
 								defer sem.Release(1)
 
-								gapContext := make(map[string]interface{})
+								gapContext := make(map[string]any)
 								for k, v := range baseContext {
 									gapContext[k] = v
 								}
@@ -5838,12 +5838,12 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 							combinedAgentResults := append(allGapResults, agentResults...)
 							combinedForCitations := append(allGapResults, originalAgentResults...)
 
-							var resultsForCitations []interface{}
+							var resultsForCitations []any
 							for _, ar := range combinedForCitations {
-								var toolExecs []interface{}
+								var toolExecs []any
 								if len(ar.ToolExecutions) > 0 {
 									for _, te := range ar.ToolExecutions {
-										toolExecs = append(toolExecs, map[string]interface{}{
+										toolExecs = append(toolExecs, map[string]any{
 											"tool":    te.Tool,
 											"success": te.Success,
 											"output":  te.Output,
@@ -5851,7 +5851,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 										})
 									}
 								}
-								resultsForCitations = append(resultsForCitations, map[string]interface{}{
+								resultsForCitations = append(resultsForCitations, map[string]any{
 									"agent_id":        ar.AgentID,
 									"tool_executions": toolExecs,
 									"response":        ar.Response,
@@ -5895,7 +5895,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 								var enhancedSynthesis activities.SynthesisResult
 
 								// Build enhanced context with new citations
-								enhancedContext := make(map[string]interface{})
+								enhancedContext := make(map[string]any)
 								for k, v := range baseContext {
 									enhancedContext[k] = v
 								}
@@ -5925,9 +5925,9 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 									enhancedContext["citation_count"] = len(allCitations)
 
 									// Also store structured citations for SSE emission
-									out := make([]map[string]interface{}, 0, len(allCitations))
+									out := make([]map[string]any, 0, len(allCitations))
 									for _, c := range allCitations {
-										out = append(out, map[string]interface{}{
+										out = append(out, map[string]any{
 											"url":               c.URL,
 											"title":             c.Title,
 											"source":            c.Source,
@@ -6179,9 +6179,9 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 	}
 	if verifyEnabled && len(collectedCitations) > 0 {
 		// Convert citations to []interface{} of maps for VerifyClaimsActivity
-		var verCitations []interface{}
+		var verCitations []any
 		for _, c := range collectedCitations {
-			m := map[string]interface{}{
+			m := map[string]any{
 				"url":               c.URL,
 				"title":             c.Title,
 				"source":            c.Source,
@@ -6254,7 +6254,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 					Provider:     extractedFacts.Provider,
 					InputTokens:  inTok,
 					OutputTokens: outTok,
-					Metadata:     map[string]interface{}{"phase": "fact_extraction"},
+					Metadata:     map[string]any{"phase": "fact_extraction"},
 				}).Get(recCtx, nil)
 			}
 			logger.Info("Fact extraction complete",
@@ -6290,7 +6290,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 		}
 	}
 
-	meta := map[string]interface{}{
+	meta := map[string]any{
 		"version":       "v2",
 		"complexity":    decomp.ComplexityScore,
 		"quality_score": qualityScore,
@@ -6300,9 +6300,9 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 	logger.Info("Preparing metadata", "collected_citations_count", len(collectedCitations))
 	if len(collectedCitations) > 0 {
 		// Export a light citation struct to metadata
-		out := make([]map[string]interface{}, 0, len(collectedCitations))
+		out := make([]map[string]any, 0, len(collectedCitations))
 		for _, c := range collectedCitations {
-			out = append(out, map[string]interface{}{
+			out = append(out, map[string]any{
 				"url":               c.URL,
 				"title":             c.Title,
 				"source":            c.Source,
@@ -6326,9 +6326,9 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 	// Add extracted facts to metadata if available
 	if extractedFacts != nil && len(extractedFacts.Facts) > 0 {
 		// Convert facts to serializable format
-		factsOut := make([]map[string]interface{}, 0, len(extractedFacts.Facts))
+		factsOut := make([]map[string]any, 0, len(extractedFacts.Facts))
 		for _, f := range extractedFacts.Facts {
-			factsOut = append(factsOut, map[string]interface{}{
+			factsOut = append(factsOut, map[string]any{
 				"id":              f.ID,
 				"statement":       f.Statement,
 				"category":        f.Category,
@@ -6340,7 +6340,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 			})
 		}
 		meta["extracted_facts"] = factsOut
-		meta["fact_summary"] = map[string]interface{}{
+		meta["fact_summary"] = map[string]any{
 			"total_facts":         extractedFacts.FactCount,
 			"high_confidence":     extractedFacts.HighConfidenceFacts,
 			"categorized_facts":   extractedFacts.CategorizedFacts,
@@ -6453,7 +6453,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 				Query:     input.Query,
 				Answer:    finalResult,
 				Model:     modelTier,
-				Metadata: map[string]interface{}{
+				Metadata: map[string]any{
 					"workflow":      "research_flow_v2",
 					"complexity":    decomp.ComplexityScore,
 					"quality_score": qualityScore,
@@ -6497,7 +6497,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 			AgentID:    "final_output",
 			Message:    finalResult,
 			Timestamp:  workflow.Now(ctx),
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"tokens_used": totalTokens,
 			},
 		}).Get(ctx, nil)
@@ -6523,8 +6523,8 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 // buildResearchFailureMetadata creates metadata for failed research workflows so that
 // cost/progress visibility is preserved even when the task fails. Workflow-local only —
 // no DB reads. The service layer augments this with token_usage table data as it already does.
-func buildResearchFailureMetadata(phase string, totalTokens int, agentCount int, partialResult string) map[string]interface{} {
-	meta := map[string]interface{}{
+func buildResearchFailureMetadata(phase string, totalTokens int, agentCount int, partialResult string) map[string]any {
+	meta := map[string]any{
 		"status": "failed",
 		"phase":  phase,
 	}
@@ -6546,11 +6546,11 @@ func buildResearchFailureMetadata(phase string, totalTokens int, agentCount int,
 	return meta
 }
 
-func buildTaskContractContext(subtask activities.Subtask) map[string]interface{} {
-	contract := make(map[string]interface{})
+func buildTaskContractContext(subtask activities.Subtask) map[string]any {
+	contract := make(map[string]any)
 
 	if subtask.OutputFormat != nil {
-		contract["output_format"] = map[string]interface{}{
+		contract["output_format"] = map[string]any{
 			"type":            subtask.OutputFormat.Type,
 			"required_fields": subtask.OutputFormat.RequiredFields,
 			"optional_fields": subtask.OutputFormat.OptionalFields,
@@ -6558,7 +6558,7 @@ func buildTaskContractContext(subtask activities.Subtask) map[string]interface{}
 	}
 
 	if subtask.SourceGuidance != nil {
-		contract["source_guidance"] = map[string]interface{}{
+		contract["source_guidance"] = map[string]any{
 			"required": subtask.SourceGuidance.Required,
 			"optional": subtask.SourceGuidance.Optional,
 			"avoid":    subtask.SourceGuidance.Avoid,
@@ -6566,14 +6566,14 @@ func buildTaskContractContext(subtask activities.Subtask) map[string]interface{}
 	}
 
 	if subtask.SearchBudget != nil {
-		contract["search_budget"] = map[string]interface{}{
+		contract["search_budget"] = map[string]any{
 			"max_queries": subtask.SearchBudget.MaxQueries,
 			"max_fetches": subtask.SearchBudget.MaxFetches,
 		}
 	}
 
 	if subtask.Boundaries != nil {
-		contract["boundaries"] = map[string]interface{}{
+		contract["boundaries"] = map[string]any{
 			"in_scope":     subtask.Boundaries.InScope,
 			"out_of_scope": subtask.Boundaries.OutOfScope,
 		}
@@ -6598,7 +6598,7 @@ type GapQuery struct {
 
 // analyzeGaps detects which research areas are undercovered in the synthesis
 // Reads configuration from context with strategy-based fallbacks for backward compatibility
-func analyzeGaps(synthesisText string, researchAreas []string, context map[string]interface{}) GapAnalysis {
+func analyzeGaps(synthesisText string, researchAreas []string, context map[string]any) GapAnalysis {
 	gaps := GapAnalysis{
 		UndercoveredAreas: []string{},
 	}
@@ -6812,7 +6812,7 @@ func persistAgentExecutionLocal(ctx workflow.Context, workflowID, agentID, input
 
 	// Pre-generate agent execution ID using SideEffect for replay safety
 	var agentExecutionID string
-	workflow.SideEffect(ctx, func(ctx workflow.Context) interface{} {
+	workflow.SideEffect(ctx, func(ctx workflow.Context) any {
 		return uuid.New().String()
 	}).Get(&agentExecutionID)
 
@@ -6852,7 +6852,7 @@ func persistAgentExecutionLocal(ctx workflow.Context, workflowID, agentID, input
 			ModelUsed:  result.ModelUsed,
 			DurationMs: result.DurationMs,
 			Error:      result.Error,
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"workflow": "research",
 				"strategy": "react",
 			},
@@ -6878,7 +6878,7 @@ func persistAgentExecutionLocal(ctx workflow.Context, workflowID, agentID, input
 			}
 
 			// Extract input params from tool execution
-			inputParamsMap, _ := tool.InputParams.(map[string]interface{})
+			inputParamsMap, _ := tool.InputParams.(map[string]any)
 
 			workflow.ExecuteActivity(
 				detachedCtx,
@@ -6909,7 +6909,7 @@ func persistAgentExecutionLocal(ctx workflow.Context, workflowID, agentID, input
 // persistAgentExecutionLocalWithMeta persists agent execution results with extra metadata.
 // This extends persistAgentExecutionLocal to support phase/url/search_key tracking
 // for domain_discovery and domain_prefetch agents.
-func persistAgentExecutionLocalWithMeta(ctx workflow.Context, workflowID, agentID, input string, result activities.AgentExecutionResult, extraMeta map[string]interface{}) {
+func persistAgentExecutionLocalWithMeta(ctx workflow.Context, workflowID, agentID, input string, result activities.AgentExecutionResult, extraMeta map[string]any) {
 	logger := workflow.GetLogger(ctx)
 
 	// Use detached context for fire-and-forget persistence
@@ -6924,7 +6924,7 @@ func persistAgentExecutionLocalWithMeta(ctx workflow.Context, workflowID, agentI
 
 	// Pre-generate agent execution ID using SideEffect for replay safety
 	var agentExecutionID string
-	workflow.SideEffect(ctx, func(ctx workflow.Context) interface{} {
+	workflow.SideEffect(ctx, func(ctx workflow.Context) any {
 		return uuid.New().String()
 	}).Get(&agentExecutionID)
 
@@ -6935,7 +6935,7 @@ func persistAgentExecutionLocalWithMeta(ctx workflow.Context, workflowID, agentI
 	}
 
 	// Merge base metadata with extra metadata
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"workflow": "research",
 		"strategy": "react",
 	}
@@ -6995,7 +6995,7 @@ func persistAgentExecutionLocalWithMeta(ctx workflow.Context, workflowID, agentI
 			}
 
 			// Extract input params from tool execution
-			inputParamsMap, _ := tool.InputParams.(map[string]interface{})
+			inputParamsMap, _ := tool.InputParams.(map[string]any)
 
 			workflow.ExecuteActivity(
 				detachedCtx,
@@ -7026,8 +7026,8 @@ func persistAgentExecutionLocalWithMeta(ctx workflow.Context, workflowID, agentI
 
 // simpleLogger is a minimal logger interface for validateTaskContracts
 type simpleLogger interface {
-	Info(msg string, keyvals ...interface{})
-	Warn(msg string, keyvals ...interface{})
+	Info(msg string, keyvals ...any)
+	Warn(msg string, keyvals ...any)
 }
 
 // validateTaskContracts validates decomposed subtasks against their declared contracts
@@ -7120,7 +7120,7 @@ func extractURLsFromAgentResults(results []activities.AgentExecutionResult) []st
 		for _, te := range r.ToolExecutions {
 			// Extract URLs from web_fetch and web_search tool inputs
 			if te.Tool == "web_fetch" || te.Tool == "web_search" {
-				if params, ok := te.InputParams.(map[string]interface{}); ok {
+				if params, ok := te.InputParams.(map[string]any); ok {
 					if urlStr, ok := params["url"].(string); ok && urlStr != "" {
 						if !urlSet[urlStr] {
 							urlSet[urlStr] = true
@@ -7132,10 +7132,10 @@ func extractURLsFromAgentResults(results []activities.AgentExecutionResult) []st
 
 			// Also extract URLs from tool outputs (search results)
 			if te.Tool == "web_search" && te.Success {
-				if output, ok := te.Output.(map[string]interface{}); ok {
-					if results, ok := output["results"].([]interface{}); ok {
+				if output, ok := te.Output.(map[string]any); ok {
+					if results, ok := output["results"].([]any); ok {
 						for _, result := range results {
-							if resultMap, ok := result.(map[string]interface{}); ok {
+							if resultMap, ok := result.(map[string]any); ok {
 								if urlStr, ok := resultMap["url"].(string); ok && urlStr != "" {
 									if !urlSet[urlStr] {
 										urlSet[urlStr] = true

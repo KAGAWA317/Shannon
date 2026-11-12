@@ -99,7 +99,7 @@ func NewManagerWithConfig(redisAddr string, logger *zap.Logger, config *ManagerC
 }
 
 // CreateSession creates a new session
-func (m *Manager) CreateSession(ctx context.Context, userID string, tenantID string, metadata map[string]interface{}) (*Session, error) {
+func (m *Manager) CreateSession(ctx context.Context, userID string, tenantID string, metadata map[string]any) (*Session, error) {
 	sessionID := uuid.New().String()
 
 	session := &Session{
@@ -110,7 +110,7 @@ func (m *Manager) CreateSession(ctx context.Context, userID string, tenantID str
 		UpdatedAt: time.Now(),
 		ExpiresAt: time.Now().Add(m.ttl),
 		Metadata:  metadata,
-		Context:   make(map[string]interface{}),
+		Context:   make(map[string]any),
 		History:   make([]Message, 0),
 	}
 
@@ -137,7 +137,7 @@ func (m *Manager) CreateSession(ctx context.Context, userID string, tenantID str
 
 // CreateSessionWithID creates a new session with a specific ID
 // CreateSessionWithID 用指定 ID 创建新 session
-func (m *Manager) CreateSessionWithID(ctx context.Context, sessionID string, userID string, tenantID string, metadata map[string]interface{}) (*Session, error) {
+func (m *Manager) CreateSessionWithID(ctx context.Context, sessionID string, userID string, tenantID string, metadata map[string]any) (*Session, error) {
 	// IMPORTANT: Check if session already exists to prevent hijacking
 	// 重要：先检查 session 是否已存在，防止 session 劫持
 	existing, _ := m.GetSession(ctx, sessionID)
@@ -168,7 +168,7 @@ func (m *Manager) CreateSessionWithID(ctx context.Context, sessionID string, use
 		UpdatedAt: time.Now(),
 		ExpiresAt: time.Now().Add(m.ttl),
 		Metadata:  metadata,
-		Context:   make(map[string]interface{}),
+		Context:   make(map[string]any),
 		History:   make([]Message, 0),
 	}
 
@@ -325,14 +325,14 @@ func (m *Manager) AddMessage(ctx context.Context, sessionID string, msg Message)
 }
 
 // UpdateContext updates session context
-func (m *Manager) UpdateContext(ctx context.Context, sessionID string, key string, value interface{}) error {
+func (m *Manager) UpdateContext(ctx context.Context, sessionID string, key string, value any) error {
 	session, err := m.GetSession(ctx, sessionID)
 	if err != nil {
 		return err
 	}
 
 	if session.Context == nil {
-		session.Context = make(map[string]interface{})
+		session.Context = make(map[string]any)
 	}
 	session.Context[key] = value
 

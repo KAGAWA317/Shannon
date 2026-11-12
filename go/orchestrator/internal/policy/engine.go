@@ -37,9 +37,9 @@ type PolicyInput struct {
 	AgentID   string `json:"agent_id"`
 
 	// Request details
-	Query   string                 `json:"query"`
-	Mode    string                 `json:"mode"` // simple, standard, complex
-	Context map[string]interface{} `json:"context,omitempty"`
+	Query   string         `json:"query"`
+	Mode    string         `json:"mode"` // simple, standard, complex
+	Context map[string]any `json:"context,omitempty"`
 
 	// Security context
 	Environment string `json:"environment"` // dev, staging, prod
@@ -74,8 +74,8 @@ type Decision struct {
 	Reason string `json:"reason,omitempty"`
 
 	// Obligations (future phase)
-	RequireApproval bool                   `json:"require_approval,omitempty"`
-	Obligations     map[string]interface{} `json:"obligations,omitempty"`
+	RequireApproval bool           `json:"require_approval,omitempty"`
+	Obligations     map[string]any `json:"obligations,omitempty"`
 
 	// Audit
 	PolicyVersion string            `json:"policy_version,omitempty"`
@@ -293,13 +293,13 @@ func (e *OPAEngine) Environment() string { return e.config.Environment }
 func (e *OPAEngine) Mode() Mode { return e.config.Mode }
 
 // inputToMap converts PolicyInput to a map for OPA evaluation
-func (e *OPAEngine) inputToMap(input *PolicyInput) (map[string]interface{}, error) {
+func (e *OPAEngine) inputToMap(input *PolicyInput) (map[string]any, error) {
 	data, err := json.Marshal(input)
 	if err != nil {
 		return nil, err
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(data, &result); err != nil {
 		return nil, err
 	}
@@ -332,7 +332,7 @@ func (e *OPAEngine) parseResults(results rego.ResultSet, input *PolicyInput) *De
 
 	// Try to parse structured decision
 	value := result.Expressions[0].Value
-	if valueMap, ok := value.(map[string]interface{}); ok {
+	if valueMap, ok := value.(map[string]any); ok {
 		if allow, ok := valueMap["allow"].(bool); ok {
 			decision.Allow = allow
 		}
@@ -342,7 +342,7 @@ func (e *OPAEngine) parseResults(results rego.ResultSet, input *PolicyInput) *De
 		if requireApproval, ok := valueMap["require_approval"].(bool); ok {
 			decision.RequireApproval = requireApproval
 		}
-		if obligations, ok := valueMap["obligations"].(map[string]interface{}); ok {
+		if obligations, ok := valueMap["obligations"].(map[string]any); ok {
 			decision.Obligations = obligations
 		}
 	} else if allow, ok := value.(bool); ok {

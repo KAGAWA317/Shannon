@@ -63,7 +63,7 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	controlHandler.Setup(ctx)
 
 	// Prepare base context
-	baseContext := make(map[string]interface{})
+	baseContext := make(map[string]any)
 	for k, v := range input.Context {
 		baseContext[k] = v
 	}
@@ -177,7 +177,7 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 				Query:     input.Query,
 				Answer:    finalResult,
 				Model:     approxModel,
-				Metadata: map[string]interface{}{
+				Metadata: map[string]any{
 					"workflow":     "browser_use",
 					"iterations":   browserResult.Iterations,
 					"actions":      len(browserResult.Actions),
@@ -194,7 +194,7 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	)
 
 	// Build metadata
-	meta := map[string]interface{}{
+	meta := map[string]any{
 		"workflow":     "browser_use",
 		"iterations":   browserResult.Iterations,
 		"actions":      len(browserResult.Actions),
@@ -242,7 +242,7 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 			AgentID:    "final_output",
 			Message:    finalResult,
 			Timestamp:  workflow.Now(ctx),
-			Payload: map[string]interface{}{
+			Payload: map[string]any{
 				"tokens_used": totalTokens,
 				"model_used":  approxModel,
 			},

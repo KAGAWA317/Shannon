@@ -23,7 +23,7 @@ func ReflectOnResult(
 	query string,
 	initialResult string,
 	agentResults []activities.AgentExecutionResult, // For re-synthesis
-	baseContext map[string]interface{},
+	baseContext map[string]any,
 	config ReflectionConfig,
 	opts Options,
 ) (string, float64, int, error) {
@@ -83,7 +83,7 @@ func ReflectOnResult(
 			"retry", retryCount)
 
 		// Build reflection context with feedback
-		reflectionContext := make(map[string]interface{})
+		reflectionContext := make(map[string]any)
 		for k, v := range baseContext {
 			reflectionContext[k] = v
 		}
@@ -157,7 +157,7 @@ func ReflectOnResult(
                     Provider:     provider,
                     InputTokens:  inTok,
                     OutputTokens: outTok,
-                    Metadata:     map[string]interface{}{"phase": "reflection_synth"},
+                    Metadata:     map[string]any{"phase": "reflection_synth"},
                 }).Get(recCtx, nil)
         }
 

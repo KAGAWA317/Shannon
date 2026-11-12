@@ -65,7 +65,7 @@ type BudgetTokenUsage struct {
 	CostUSD             float64                `json:"cost_usd"`
 	CostOverride        float64                `json:"cost_override,omitempty"` // When > 0, use this instead of pricing calculation (e.g. Python-reported cost_usd)
 	Timestamp           time.Time              `json:"timestamp"`
-	Metadata            map[string]interface{} `json:"metadata"`
+	Metadata            map[string]any `json:"metadata"`
 	IdempotencyKey      string                 `json:"idempotency_key,omitempty"` // Optional key for retry safety
 }
 
@@ -287,7 +287,7 @@ func (bm *BudgetManager) CheckBudget(ctx context.Context, userID, sessionID, tas
 		result.Warnings = append(result.Warnings, warningMsg)
 
 		// Emit BUDGET_THRESHOLD event for streaming observability
-		bm.emitBudgetThresholdEvent(taskID, sessionID, warningMsg, map[string]interface{}{
+		bm.emitBudgetThresholdEvent(taskID, sessionID, warningMsg, map[string]any{
 			"usage_percent":     taskUsagePercent * 100,
 			"threshold_percent": warningThreshold * 100,
 			"tokens_used":       taskTokensUsed,
@@ -1105,7 +1105,7 @@ func NewEnhancedBudgetManager(db *sql.DB, logger *zap.Logger) *BudgetManager {
 }
 
 // emitBudgetThresholdEvent emits a streaming event when budget thresholds are crossed
-func (bm *BudgetManager) emitBudgetThresholdEvent(taskID, sessionID, message string, payload map[string]interface{}) {
+func (bm *BudgetManager) emitBudgetThresholdEvent(taskID, sessionID, message string, payload map[string]any) {
 	// This is best-effort, non-blocking - we don't want budget monitoring to fail the task
 	// 这是尽力而为、非阻塞的操作——budget 监控不应导致 task 失败
 	// The streaming manager will publish to Redis for SSE/WebSocket delivery

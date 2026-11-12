@@ -34,7 +34,7 @@ func (h *SkillHandler) ListSkills(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"skills":     skillList,
 		"count":      len(skillList),
 		"categories": h.registry.Categories(),
@@ -56,9 +56,9 @@ func (h *SkillHandler) GetSkill(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"skill": entry.Skill,
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"source_path":  entry.SourcePath,
 			"content_hash": entry.ContentHash,
 			"loaded_at":    entry.LoadedAt,
@@ -96,7 +96,7 @@ func (h *SkillHandler) GetSkillVersions(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"name":     name,
 		"versions": summaries,
 		"count":    len(summaries),

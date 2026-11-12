@@ -21,7 +21,7 @@ type LocalizedSearchInput struct {
 	LocalizedNames   map[string][]string    `json:"localized_names,omitempty"`   // Language -> names
 	SourceTypes      []string               `json:"source_types,omitempty"`      // Source types to search
 	MaxResultsPerLang int                   `json:"max_results_per_lang"`
-	Context          map[string]interface{} `json:"context,omitempty"`
+	Context          map[string]any `json:"context,omitempty"`
 	ParentWorkflowID string                 `json:"parent_workflow_id,omitempty"`
 }
 
@@ -54,8 +54,8 @@ type EntityLocalizationInput struct {
 	EntityName       string                 `json:"entity_name"`
 	TargetLanguages  []string               `json:"target_languages"` // e.g., ["zh", "ja", "ko"]
 	EntityType       string                 `json:"entity_type,omitempty"` // "company", "person", "product"
-	Context          map[string]interface{} `json:"context,omitempty"`
-	ParentWorkflowID string                 `json:"parent_workflow_id,omitempty"`
+	Context          map[string]any `json:"context,omitempty"`
+	ParentWorkflowID string         `json:"parent_workflow_id,omitempty"`
 }
 
 // EntityLocalizationResult contains detected name localizations
@@ -90,13 +90,13 @@ func (a *Activities) DetectEntityLocalization(ctx context.Context, input EntityL
 	llmServiceURL := getenvDefault("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"query":       userContent,
 		"max_tokens":  4096, // Extended for entity localization output
 		"temperature": 0.1,
 		"agent_id":    "entity_localization",
 		"model_tier":  "small",
-		"context": map[string]interface{}{
+		"context": map[string]any{
 			"system_prompt":      systemPrompt,
 			"parent_workflow_id": input.ParentWorkflowID,
 		},

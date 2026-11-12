@@ -24,7 +24,7 @@ func persistAgentExecution(ctx workflow.Context, workflowID string, agentID stri
 	// This allows correlating tool executions with their parent agent execution
 	// 用 SideEffect 预生成执行 ID，便于把 tool 执行关联到其所属的 agent 执行记录。
 	var agentExecutionID string
-	workflow.SideEffect(ctx, func(ctx workflow.Context) interface{} {
+	workflow.SideEffect(ctx, func(ctx workflow.Context) any {
 		return uuid.New().String()
 	}).Get(&agentExecutionID)
 
@@ -73,7 +73,7 @@ func persistAgentExecution(ctx workflow.Context, workflowID string, agentID stri
 			}
 
 			// Extract input params from tool execution (from HTTP path)
-			inputParamsMap, _ := tool.InputParams.(map[string]interface{})
+			inputParamsMap, _ := tool.InputParams.(map[string]any)
 
 			workflow.ExecuteActivity(
 				persistCtx,

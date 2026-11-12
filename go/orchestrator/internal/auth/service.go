@@ -33,7 +33,7 @@ type QuotaDefaults struct {
 // asyncUpdate represents a background update task
 type asyncUpdate struct {
 	query string
-	args  []interface{}
+	args  []any
 }
 
 // Service handles authentication operations
@@ -100,7 +100,7 @@ func (s *Service) Close() {
 
 // enqueueUpdate adds an update to the async queue (non-blocking, drops if full)
 // enqueueUpdate 把更新放入异步队列（非阻塞，队列满则丢弃）
-func (s *Service) enqueueUpdate(query string, args ...interface{}) {
+func (s *Service) enqueueUpdate(query string, args ...any) {
 	select {
 	case s.updateCh <- asyncUpdate{query: query, args: args}:
 		// Successfully queued
@@ -243,7 +243,7 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*TokenPair, err
 		if err == sql.ErrNoRows {
 			// Log failed attempt
 			s.logAuditEvent(ctx, AuditEventLoginFailed, uuid.Nil, uuid.Nil,
-				map[string]interface{}{"email": req.Email})
+				map[string]any{"email": req.Email})
 			return nil, fmt.Errorf("invalid email or password")
 		}
 		return nil, fmt.Errorf("failed to find user: %w", err)
@@ -460,7 +460,7 @@ func (s *Service) ValidateAPIKey(ctx context.Context, apiKey string) (*UserConte
 
 	// Log audit event
 	s.logAuditEvent(ctx, AuditEventAPIKeyUsed, user.ID, user.TenantID,
-		map[string]interface{}{"api_key_id": key.ID.String()})
+		map[string]any{"api_key_id": key.ID.String()})
 
 	return &UserContext{
 		UserID:     user.ID,
@@ -544,7 +544,7 @@ func (s *Service) CreateAPIKey(ctx context.Context, userID uuid.UUID, req *Creat
 
 	// Log audit event
 	s.logAuditEvent(ctx, AuditEventAPIKeyCreated, userID, user.TenantID,
-		map[string]interface{}{"api_key_id": key.ID.String(), "name": key.Name})
+		map[string]any{"api_key_id": key.ID.String(), "name": key.Name})
 
 	s.logger.Info("API key created successfully",
 		zap.String("key_id", key.ID.String()),
@@ -673,7 +673,7 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 	}
 
 	// Log audit event
-	s.logAuditEvent(ctx, AuditEventAccountCreated, newUser.ID, tenantID, map[string]interface{}{
+	s.logAuditEvent(ctx, AuditEventAccountCreated, newUser.ID, tenantID, map[string]any{
 		"oauth_provider": "google",
 		"email":          googleUser.Email,
 	})
@@ -764,7 +764,7 @@ func (s *Service) createTenant(ctx context.Context, username, product string) (u
 
 	// Store product and max_schedules in tenant metadata
 	// 在租户 metadata 中存储 product 与 max_schedules
-	metadata := map[string]interface{}{"product": product}
+	metadata := map[string]any{"product": product}
 	if quotas.MaxSchedules > 0 {
 		metadata["max_schedules"] = quotas.MaxSchedules
 	}
@@ -813,7 +813,7 @@ func (s *Service) storeRefreshTokenTx(ctx context.Context, tx *sqlx.Tx, user *Us
 	return err
 }
 
-func (s *Service) logAuditEvent(ctx context.Context, eventType string, userID, tenantID uuid.UUID, details map[string]interface{}) {
+func (s *Service) logAuditEvent(ctx context.Context, eventType string, userID, tenantID uuid.UUID, details map[string]any) {
 	query := `
 		INSERT INTO auth.audit_logs (event_type, user_id, tenant_id, details)
 		VALUES ($1, $2, $3, $4)
@@ -1046,7 +1046,7 @@ func (s *Service) ProvisionUser(ctx context.Context, tenantID uuid.UUID, usernam
 		return uuid.Nil, "", false, fmt.Errorf("failed to create API key: %w", err)
 	}
 
-	s.logAuditEvent(ctx, AuditEventAccountCreated, newUser.ID, tenantID, map[string]interface{}{
+	s.logAuditEvent(ctx, AuditEventAccountCreated, newUser.ID, tenantID, map[string]any{
 		"provisioned_by": "admin_api",
 		"username":       username,
 	})

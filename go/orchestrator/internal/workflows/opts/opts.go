@@ -41,14 +41,14 @@ func RecordToolCostEntries(
 	if !ok {
 		return
 	}
-	entries, ok := rawEntries.([]interface{})
+	entries, ok := rawEntries.([]any)
 	if !ok || len(entries) == 0 {
 		return
 	}
 
 	recCtx := WithTokenRecordOptions(ctx)
 	for i, raw := range entries {
-		em, ok := raw.(map[string]interface{})
+		em, ok := raw.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -89,7 +89,7 @@ func RecordToolCostEntries(
 			InputTokens:  0,
 			OutputTokens: syntheticTokens,
 			CostOverride: costOverride,
-			Metadata:     map[string]interface{}{"tool_cost_index": i},
+			Metadata:     map[string]any{"tool_cost_index": i},
 		}).Get(recCtx, nil)
 	}
 }

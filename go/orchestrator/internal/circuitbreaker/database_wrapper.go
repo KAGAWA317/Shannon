@@ -51,7 +51,7 @@ func (dw *DatabaseWrapper) PingContext(ctx context.Context) error {
 }
 
 // QueryContext wraps database query with circuit breaker
-func (dw *DatabaseWrapper) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+func (dw *DatabaseWrapper) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	var rows *sql.Rows
 	var err error
 
@@ -73,7 +73,7 @@ func (dw *DatabaseWrapper) QueryContext(ctx context.Context, query string, args 
 
 // QueryRowContext wraps database query row with circuit breaker
 // Returns (*sql.Row, error) to properly propagate circuit breaker errors
-func (dw *DatabaseWrapper) QueryRowContextCB(ctx context.Context, query string, args ...interface{}) (*sql.Row, error) {
+func (dw *DatabaseWrapper) QueryRowContextCB(ctx context.Context, query string, args ...any) (*sql.Row, error) {
 	var row *sql.Row
 
 	cbErr := dw.cb.Execute(ctx, func() error {
@@ -99,7 +99,7 @@ func (dw *DatabaseWrapper) QueryRowContextCB(ctx context.Context, query string, 
 
 // QueryRowContext wraps database query row with circuit breaker (legacy API)
 // Deprecated: Use QueryRowContextCB for proper error handling
-func (dw *DatabaseWrapper) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+func (dw *DatabaseWrapper) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	row, err := dw.QueryRowContextCB(ctx, query, args...)
 	if err != nil {
 		// Return a row that will error on Scan with circuit breaker error
@@ -111,7 +111,7 @@ func (dw *DatabaseWrapper) QueryRowContext(ctx context.Context, query string, ar
 }
 
 // ExecContext wraps database exec with circuit breaker
-func (dw *DatabaseWrapper) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+func (dw *DatabaseWrapper) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	var result sql.Result
 	var err error
 
@@ -168,7 +168,7 @@ func (dw *DatabaseWrapper) BeginTx(ctx context.Context, opts *sql.TxOptions) (*T
 }
 
 // Transaction wrapper methods
-func (tw *TxWrapper) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+func (tw *TxWrapper) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	var result sql.Result
 	var err error
 
@@ -188,7 +188,7 @@ func (tw *TxWrapper) ExecContext(ctx context.Context, query string, args ...inte
 	return result, err
 }
 
-func (tw *TxWrapper) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+func (tw *TxWrapper) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	var rows *sql.Rows
 	var err error
 
@@ -208,7 +208,7 @@ func (tw *TxWrapper) QueryContext(ctx context.Context, query string, args ...int
 	return rows, err
 }
 
-func (tw *TxWrapper) QueryRowContext(ctx context.Context, query string, args ...interface{}) (*sql.Row, error) {
+func (tw *TxWrapper) QueryRowContext(ctx context.Context, query string, args ...any) (*sql.Row, error) {
 	var row *sql.Row
 
 	cbErr := tw.cb.Execute(ctx, func() error {
@@ -317,7 +317,7 @@ func (dw *DatabaseWrapper) PrepareContext(ctx context.Context, query string) (*S
 }
 
 // Statement wrapper methods
-func (sw *StmtWrapper) ExecContext(ctx context.Context, args ...interface{}) (sql.Result, error) {
+func (sw *StmtWrapper) ExecContext(ctx context.Context, args ...any) (sql.Result, error) {
 	var result sql.Result
 	var err error
 
@@ -337,7 +337,7 @@ func (sw *StmtWrapper) ExecContext(ctx context.Context, args ...interface{}) (sq
 	return result, err
 }
 
-func (sw *StmtWrapper) QueryContext(ctx context.Context, args ...interface{}) (*sql.Rows, error) {
+func (sw *StmtWrapper) QueryContext(ctx context.Context, args ...any) (*sql.Rows, error) {
 	var rows *sql.Rows
 	var err error
 
@@ -357,7 +357,7 @@ func (sw *StmtWrapper) QueryContext(ctx context.Context, args ...interface{}) (*
 	return rows, err
 }
 
-func (sw *StmtWrapper) QueryRowContext(ctx context.Context, args ...interface{}) (*sql.Row, error) {
+func (sw *StmtWrapper) QueryRowContext(ctx context.Context, args ...any) (*sql.Row, error) {
 	var row *sql.Row
 
 	cbErr := sw.cb.Execute(ctx, func() error {

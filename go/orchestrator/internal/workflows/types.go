@@ -11,7 +11,7 @@ type TaskInput struct {
 	UserID    string
 	TenantID  string
 	SessionID string
-	Context   map[string]interface{}
+	Context   map[string]any
 	Mode      string
 
 	// Template routing hints (optional, user-specified)
@@ -21,8 +21,8 @@ type TaskInput struct {
 	// 打开后只走模板匹配，不再调用 LLM 做分解。
 
 	// Session context for multi-turn conversations
-	History    []Message              // Recent conversation history
-	SessionCtx map[string]interface{} // Persistent session context
+	History    []Message      // Recent conversation history
+	SessionCtx map[string]any // Persistent session context
 
 	// Human intervention settings
 	RequireApproval bool // Whether to require human approval for this task
@@ -36,8 +36,8 @@ type TaskInput struct {
 	ParentWorkflowID string // Parent workflow ID for unified event streaming
 
 	// Tool suggestions from decomposition (for simple tasks with tools)
-	SuggestedTools []string               // Tools suggested by decomposition
-	ToolParameters map[string]interface{} // Pre-structured parameters for tool execution
+	SuggestedTools []string       // Tools suggested by decomposition
+	ToolParameters map[string]any // Pre-structured parameters for tool execution
 
 	// Optional: preplanned decomposition from router to avoid re-decompose downstream
 	// router 已分解过就透传，下游不再重复调用 DecomposeTask。
@@ -57,5 +57,5 @@ type TaskResult struct {
 	Success      bool
 	TokensUsed   int
 	ErrorMessage string
-	Metadata     map[string]interface{}
+	Metadata     map[string]any
 }

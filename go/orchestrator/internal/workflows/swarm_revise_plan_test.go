@@ -7,10 +7,10 @@ import (
 )
 
 func TestRevisePlanDependsOnParsing(t *testing.T) {
-	newTask := map[string]interface{}{
+	newTask := map[string]any{
 		"id":          "T6",
 		"description": "Cross-analysis of all findings",
-		"depends_on":  []interface{}{"T1", "T2", "T3"},
+		"depends_on":  []any{"T1", "T2", "T3"},
 	}
 
 	task := activities.SwarmTask{
@@ -18,7 +18,7 @@ func TestRevisePlanDependsOnParsing(t *testing.T) {
 		Description: newTask["description"].(string),
 		CreatedBy:   "lead",
 	}
-	if deps, ok := newTask["depends_on"].([]interface{}); ok {
+	if deps, ok := newTask["depends_on"].([]any); ok {
 		for _, d := range deps {
 			task.DependsOn = append(task.DependsOn, d.(string))
 		}
@@ -36,7 +36,7 @@ func TestRevisePlanDependsOnParsing(t *testing.T) {
 }
 
 func TestRevisePlanNoDependsOn(t *testing.T) {
-	newTask := map[string]interface{}{
+	newTask := map[string]any{
 		"id":          "T7",
 		"description": "Simple standalone task",
 	}
@@ -46,7 +46,7 @@ func TestRevisePlanNoDependsOn(t *testing.T) {
 		Description: newTask["description"].(string),
 		CreatedBy:   "lead",
 	}
-	if deps, ok := newTask["depends_on"].([]interface{}); ok {
+	if deps, ok := newTask["depends_on"].([]any); ok {
 		for _, d := range deps {
 			task.DependsOn = append(task.DependsOn, d.(string))
 		}

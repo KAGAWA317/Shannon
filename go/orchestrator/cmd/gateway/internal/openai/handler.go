@@ -169,14 +169,14 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 	// 把附件引用写入 gRPC context，下游（orchestrator、LLM-service）可从 Redis 解析。
 	if len(attRefs) > 0 {
 		if translated.GRPCRequest.Context == nil {
-			ctxMap := map[string]interface{}{"attachments": attRefs}
+			ctxMap := map[string]any{"attachments": attRefs}
 			st, stErr := structpb.NewStruct(sanitizeForStructpb(ctxMap))
 			if stErr == nil {
 				translated.GRPCRequest.Context = st
 			}
 		} else {
 			sanitized := sanitizeValue(attRefs)
-			if list, ok := sanitized.([]interface{}); ok {
+			if list, ok := sanitized.([]any); ok {
 				translated.GRPCRequest.Context.Fields["attachments"] = structpb.NewListValue(
 					mustNewList(list),
 				)
@@ -573,7 +573,7 @@ func (h *Handler) sendError(w http.ResponseWriter, message, errType, code string
 // references. URL-based attachments are passed through as-is.
 // extractAndStoreAttachments 找到 req.Messages 中最后一条 user 消息，把其中的 base64 附件存入 Redis，
 // 并返回轻量引用；URL 附件原样透传。
-func (h *Handler) extractAndStoreAttachments(ctx context.Context, req *ChatCompletionRequest, session *SessionResult) ([]interface{}, error) {
+func (h *Handler) extractAndStoreAttachments(ctx context.Context, req *ChatCompletionRequest, session *SessionResult) ([]any, error) {
 	// Find the last user message (same scan order as extractQuery).
 	for i := len(req.Messages) - 1; i >= 0; i-- {
 		msg := &req.Messages[i]
@@ -586,7 +586,7 @@ func (h *Handler) extractAndStoreAttachments(ctx context.Context, req *ChatCompl
 			sessionID = session.ShannonSession
 		}
 
-		var refs []interface{}
+		var refs []any
 		for _, att := range msg.RawAttachments {
 			switch att.SourceType {
 			case "base64":
@@ -594,14 +594,14 @@ func (h *Handler) extractAndStoreAttachments(ctx context.Context, req *ChatCompl
 				if err != nil {
 					return nil, fmt.Errorf("store attachment: %w", err)
 				}
-				refs = append(refs, map[string]interface{}{
+				refs = append(refs, map[string]any{
 					"id":         id,
 					"media_type": att.MediaType,
 					"filename":   att.Filename,
 					"size_bytes": len(att.Data),
 				})
 			case "url":
-				refs = append(refs, map[string]interface{}{
+				refs = append(refs, map[string]any{
 					"url":        att.URL,
 					"media_type": att.MediaType,
 					"source":     "url",
@@ -617,7 +617,7 @@ func (h *Handler) extractAndStoreAttachments(ctx context.Context, req *ChatCompl
 // This is safe because all values have already been sanitized by sanitizeValue.
 // mustNewList 由 []interface{} 构造 structpb.ListValue，出错即 panic；
 // 这是安全的，因为所有值都已由 sanitizeValue 清洗过。
-func mustNewList(items []interface{}) *structpb.ListValue {
+func mustNewList(items []any) *structpb.ListValue {
 	list, err := structpb.NewList(items)
 	if err != nil {
 		// Should never happen after sanitization, but handle gracefully.

@@ -21,7 +21,7 @@ type CoverageEvaluationInput struct {
 	KeyFindings         []string               `json:"key_findings"`
 	Iteration           int                    `json:"iteration"`
 	MaxIterations       int                    `json:"max_iterations"`
-	Context             map[string]interface{} `json:"context,omitempty"`
+	Context             map[string]any `json:"context,omitempty"`
 	ParentWorkflowID    string                 `json:"parent_workflow_id,omitempty"`
 }
 
@@ -69,14 +69,14 @@ func (a *Activities) EvaluateCoverage(ctx context.Context, input CoverageEvaluat
 	llmServiceURL := getenvDefault("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"query":       userContent,
 		"max_tokens":  8192, // Extended for detailed coverage analysis JSON
 		// 加大到 8192，以容纳详细的 coverage 分析 JSON。
 		"temperature": 0.2,
 		"agent_id":    "coverage_evaluator",
 		"model_tier":  "small",
-		"context": map[string]interface{}{
+		"context": map[string]any{
 			"system_prompt":      systemPrompt,
 			"parent_workflow_id": input.ParentWorkflowID,
 		},

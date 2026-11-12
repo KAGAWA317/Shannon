@@ -132,7 +132,7 @@ func loadResearchStrategies() (*ResearchStrategiesConfig, error) {
 
 // applyStrategyPreset seeds ctxMap with preset defaults when absent
 // applyStrategyPreset 在 ctxMap 缺少对应键时，用 preset 的默认值填充。
-func applyStrategyPreset(ctxMap map[string]interface{}, strategy string) {
+func applyStrategyPreset(ctxMap map[string]any, strategy string) {
 	s := strings.ToLower(strings.TrimSpace(strategy))
 	if s == "" {
 		return
@@ -201,7 +201,7 @@ func applyStrategyPreset(ctxMap map[string]interface{}, strategy string) {
 // 若已向客户端返回校验错误则返回 false。
 func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchpb.SubmitTaskRequest, w http.ResponseWriter, r *http.Request) bool {
 	// Ensure context map exists so we can inject optional fields safely
-	ctxMap := map[string]interface{}{}
+	ctxMap := map[string]any{}
 	if len(req.Context) > 0 {
 		for k, v := range req.Context {
 			ctxMap[k] = v
@@ -458,9 +458,9 @@ func NewTaskHandler(
 
 // TaskRequest represents a task submission request
 type TaskRequest struct {
-	Query     string                 `json:"query"`
-	SessionID string                 `json:"session_id,omitempty"`
-	Context   map[string]interface{} `json:"context,omitempty"`
+	Query     string         `json:"query"`
+	SessionID string         `json:"session_id,omitempty"`
+	Context   map[string]any `json:"context,omitempty"`
 	// Optional execution mode hint (e.g., "supervisor").
 	// Routed via metadata labels to orchestrator.
 	// 可选的执行 mode 提示（如 supervisor），通过 metadata labels 交给 orchestrator 路由。
@@ -495,25 +495,25 @@ type TaskResponse struct {
 
 // TaskStatusResponse represents a task status response
 type TaskStatusResponse struct {
-	TaskID     string                 `json:"task_id"`
-	WorkflowID string                 `json:"workflow_id,omitempty"` // Same as task_id, for clarity
-	Status     string                 `json:"status"`
-	Result     string                 `json:"result,omitempty"`   // Raw result from LLM (plain text or JSON)
-	Response   map[string]interface{} `json:"response,omitempty"` // Parsed JSON (backward compatibility)
-	Error      string                 `json:"error,omitempty"`
-	CreatedAt  time.Time              `json:"created_at"`
-	UpdatedAt  time.Time              `json:"updated_at"`
+	TaskID     string         `json:"task_id"`
+	WorkflowID string         `json:"workflow_id,omitempty"` // Same as task_id, for clarity
+	Status     string         `json:"status"`
+	Result     string         `json:"result,omitempty"`   // Raw result from LLM (plain text or JSON)
+	Response   map[string]any `json:"response,omitempty"` // Parsed JSON (backward compatibility)
+	Error      string         `json:"error,omitempty"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
 	// Extra metadata to enable "reply" UX
-	Query     string                 `json:"query,omitempty"`
-	SessionID string                 `json:"session_id,omitempty"`
-	Mode      string                 `json:"mode,omitempty"`
-	Context   map[string]interface{} `json:"context,omitempty"` // Task context (force_research, research_strategy, etc.)
+	Query     string         `json:"query,omitempty"`
+	SessionID string         `json:"session_id,omitempty"`
+	Mode      string         `json:"mode,omitempty"`
+	Context   map[string]any `json:"context,omitempty"` // Task context (force_research, research_strategy, etc.)
 	// Usage metadata
-	ModelUsed string                 `json:"model_used,omitempty"`
-	Provider  string                 `json:"provider,omitempty"`
-	Usage     map[string]interface{} `json:"usage,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`         // Task metadata (citations, etc.)
-	Unified   map[string]interface{} `json:"unified_response,omitempty"` // Structured unified response
+	ModelUsed string         `json:"model_used,omitempty"`
+	Provider  string         `json:"provider,omitempty"`
+	Usage     map[string]any `json:"usage,omitempty"`
+	Metadata  map[string]any `json:"metadata,omitempty"`         // Task metadata (citations, etc.)
+	Unified   map[string]any `json:"unified_response,omitempty"` // Structured unified response
 }
 
 // ListTasksResponse represents the list tasks response
@@ -524,13 +524,13 @@ type ListTasksResponse struct {
 
 // TaskSummary represents a single task in listing
 type TaskSummary struct {
-	TaskID          string                 `json:"task_id"`
-	Query           string                 `json:"query,omitempty"`
-	Status          string                 `json:"status"`
-	Mode            string                 `json:"mode,omitempty"`
-	CreatedAt       *time.Time             `json:"created_at,omitempty"`
-	CompletedAt     *time.Time             `json:"completed_at,omitempty"`
-	TotalTokenUsage map[string]interface{} `json:"total_token_usage,omitempty"`
+	TaskID          string         `json:"task_id"`
+	Query           string         `json:"query,omitempty"`
+	Status          string         `json:"status"`
+	Mode            string         `json:"mode,omitempty"`
+	CreatedAt       *time.Time     `json:"created_at,omitempty"`
+	CompletedAt     *time.Time     `json:"completed_at,omitempty"`
+	TotalTokenUsage map[string]any `json:"total_token_usage,omitempty"`
 }
 
 
@@ -561,7 +561,7 @@ func (h *TaskHandler) SubmitTask(w http.ResponseWriter, r *http.Request) {
 	hasAttachments := false
 	if req.Context != nil {
 		if atts, ok := req.Context["attachments"]; ok {
-			if attList, ok := atts.([]interface{}); ok && len(attList) > 0 {
+			if attList, ok := atts.([]any); ok && len(attList) > 0 {
 				hasAttachments = true
 			}
 		}
@@ -680,7 +680,7 @@ func (h *TaskHandler) SubmitTaskAndGetStreamURL(w http.ResponseWriter, r *http.R
 	hasAtts := false
 	if req.Context != nil {
 		if atts, ok := req.Context["attachments"]; ok {
-			if attList, ok := atts.([]interface{}); ok && len(attList) > 0 {
+			if attList, ok := atts.([]any); ok && len(attList) > 0 {
 				hasAtts = true
 			}
 		}
@@ -822,7 +822,7 @@ func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 	// If result is valid JSON, populate response field; otherwise leave it nil
 	// 为向后兼容，尝试把 result 解析为 JSON：成功则填充 response 字段，否则保持 nil。
 	if resp.Result != "" {
-		var responseData map[string]interface{}
+		var responseData map[string]any
 		if err := json.Unmarshal([]byte(resp.Result), &responseData); err == nil {
 			statusResp.Response = responseData
 		}
@@ -878,7 +878,7 @@ func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Populate usage metadata if available
 	if totalTokens.Valid || totalCost.Valid {
-		statusResp.Usage = map[string]interface{}{}
+		statusResp.Usage = map[string]any{}
 		if totalTokens.Valid && totalTokens.Int32 > 0 {
 			statusResp.Usage["total_tokens"] = totalTokens.Int32
 		}
@@ -895,7 +895,7 @@ func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Parse and populate unified response if available
 	if len(responseJSON) > 0 {
-		var unified map[string]interface{}
+		var unified map[string]any
 		if err := json.Unmarshal(responseJSON, &unified); err == nil && len(unified) > 0 {
 			statusResp.Unified = unified
 		}
@@ -903,13 +903,13 @@ func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Parse and populate metadata (citations, etc.) if available
 	if len(metadataJSON) > 0 {
-		var metadata map[string]interface{}
+		var metadata map[string]any
 		if err := json.Unmarshal(metadataJSON, &metadata); err == nil {
 			statusResp.Metadata = metadata
 
 			// Extract context from metadata if available (stored as metadata.task_context)
 			// 若存在则从 metadata 中取出 context（存放在 metadata.task_context）。
-			if taskContext, ok := metadata["task_context"].(map[string]interface{}); ok {
+			if taskContext, ok := metadata["task_context"].(map[string]any); ok {
 				statusResp.Context = taskContext
 			}
 		}
@@ -917,7 +917,7 @@ func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Add model_breakdown from token_usage table for transparency
 	if statusResp.Metadata == nil {
-		statusResp.Metadata = make(map[string]interface{})
+		statusResp.Metadata = make(map[string]any)
 	}
 	if breakdown := h.buildModelBreakdown(ctx, taskID); breakdown != nil {
 		statusResp.Metadata["model_breakdown"] = breakdown
@@ -1015,9 +1015,9 @@ func (h *TaskHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
 			cp := t.CompletedAt.AsTime()
 			completedAt = &cp
 		}
-		var usage map[string]interface{}
+		var usage map[string]any
 		if t.TotalTokenUsage != nil {
-			usage = map[string]interface{}{
+			usage = map[string]any{
 				"total_tokens":      t.TotalTokenUsage.TotalTokens,
 				"cost_usd":          t.TotalTokenUsage.CostUsd,
 				"prompt_tokens":     t.TotalTokenUsage.PromptTokens,
@@ -1212,7 +1212,7 @@ func (h *TaskHandler) CancelTask(w http.ResponseWriter, r *http.Request) {
 	// Return 202 Accepted
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"success": cancelResp.Success,
 		"message": cancelResp.Message,
 	})
@@ -1280,7 +1280,7 @@ func (h *TaskHandler) PauseTask(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"success": pauseResp.Success,
 		"message": pauseResp.Message,
 		"task_id": taskID,
@@ -1349,7 +1349,7 @@ func (h *TaskHandler) ResumeTask(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"success": resumeResp.Success,
 		"message": resumeResp.Message,
 		"task_id": taskID,
@@ -1399,7 +1399,7 @@ func (h *TaskHandler) GetControlState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"is_paused":     stateResp.IsPaused,
 		"is_cancelled":  stateResp.IsCancelled,
 		"paused_at":     stateResp.PausedAt,
@@ -1412,7 +1412,7 @@ func (h *TaskHandler) GetControlState(w http.ResponseWriter, r *http.Request) {
 
 // buildModelBreakdown queries token_usage table to build detailed model breakdown
 // buildModelBreakdown 查询 token_usage 表，构建按 model 拆分的用量明细。
-func (h *TaskHandler) buildModelBreakdown(ctx context.Context, workflowID string) []map[string]interface{} {
+func (h *TaskHandler) buildModelBreakdown(ctx context.Context, workflowID string) []map[string]any {
 	// Query token_usage table grouped by model
 	query := `
 		SELECT
@@ -1438,7 +1438,7 @@ func (h *TaskHandler) buildModelBreakdown(ctx context.Context, workflowID string
 	}
 	defer rows.Close()
 
-	var breakdown []map[string]interface{}
+	var breakdown []map[string]any
 	var totalCost float64
 	var totalTokens int64
 
@@ -1473,7 +1473,7 @@ func (h *TaskHandler) buildModelBreakdown(ctx context.Context, workflowID string
 			percentage = int((m.Cost / totalCost) * 100)
 		}
 
-		entry := map[string]interface{}{
+		entry := map[string]any{
 			"model":      m.Model,
 			"provider":   m.Provider,
 			"executions": m.Executions,
@@ -1508,7 +1508,7 @@ func (h *TaskHandler) sendError(w http.ResponseWriter, message string, code int)
 // Attachments without "data" (already references or URL-based) are passed through.
 // extractAndStoreContextAttachments 检查 ctxMap["attachments"] 中的内联 base64 数据，把每个 blob 存入 Redis，
 // 并替换为轻量引用（id + media_type + filename + size_bytes）；没有 "data" 字段的条目（已是引用或 URL）原样透传。
-func (h *TaskHandler) extractAndStoreContextAttachments(ctx context.Context, sessionID string, ctxMap map[string]interface{}) error {
+func (h *TaskHandler) extractAndStoreContextAttachments(ctx context.Context, sessionID string, ctxMap map[string]any) error {
 	if ctxMap == nil {
 		return nil
 	}
@@ -1516,7 +1516,7 @@ func (h *TaskHandler) extractAndStoreContextAttachments(ctx context.Context, ses
 	if !ok {
 		return nil
 	}
-	attList, ok := raw.([]interface{})
+	attList, ok := raw.([]any)
 	if !ok {
 		return fmt.Errorf("context.attachments must be an array")
 	}
@@ -1526,11 +1526,11 @@ func (h *TaskHandler) extractAndStoreContextAttachments(ctx context.Context, ses
 
 
 	attStore := attachments.NewStore(h.redis, 30*time.Minute)
-	var refs []interface{}
+	var refs []any
 	var totalDecodedBytes int
 
 	for _, a := range attList {
-		am, ok := a.(map[string]interface{})
+		am, ok := a.(map[string]any)
 		if !ok {
 			return fmt.Errorf("each attachment must be an object")
 		}
@@ -1555,7 +1555,7 @@ func (h *TaskHandler) extractAndStoreContextAttachments(ctx context.Context, ses
 			if attachments.IsDangerous(mt) {
 				return fmt.Errorf("rejected attachment type: %s (executables / installers are not accepted)", mt)
 			}
-			ref := make(map[string]interface{}, len(am))
+			ref := make(map[string]any, len(am))
 			for k, v := range am {
 				ref[k] = v
 			}
@@ -1614,7 +1614,7 @@ func (h *TaskHandler) extractAndStoreContextAttachments(ctx context.Context, ses
 			return fmt.Errorf("failed to store attachment: %w", err)
 		}
 
-		ref := map[string]interface{}{
+		ref := map[string]any{
 			"id":         id,
 			"media_type": mediaType,
 			"filename":   filename,
@@ -1630,7 +1630,7 @@ func (h *TaskHandler) extractAndStoreContextAttachments(ctx context.Context, ses
 	return nil
 }
 
-func sanitizeAttachmentThumbnail(raw interface{}) (string, bool) {
+func sanitizeAttachmentThumbnail(raw any) (string, bool) {
 	thumb, ok := raw.(string)
 	if !ok {
 		return "", false
@@ -1796,7 +1796,7 @@ func (h *TaskHandler) SendSwarmMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"success": resp.Success,
 		"status":  resp.Status,
 	})

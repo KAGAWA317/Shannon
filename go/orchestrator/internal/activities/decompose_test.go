@@ -62,7 +62,7 @@ func TestDecomposeTask_Success(t *testing.T) {
 	// 直接测试 decomposition 逻辑，绕过 HTTP client interceptor 的问题
 	input := DecompositionInput{
 		Query:          "test query",
-		Context:        map[string]interface{}{"k": "v"},
+		Context:        map[string]any{"k": "v"},
 		AvailableTools: []string{"tool1"},
 	}
 

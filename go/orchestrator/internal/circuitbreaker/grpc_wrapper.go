@@ -71,7 +71,7 @@ func (gw *GRPCWrapper) Execute(ctx context.Context, fn func() error) error {
 
 // UnaryClientInterceptor returns a gRPC unary client interceptor with circuit breaker
 func (gw *GRPCWrapper) UnaryClientInterceptor() grpc.UnaryClientInterceptor {
-	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		return gw.Execute(ctx, func() error {
 			return invoker(ctx, method, req, reply, cc, opts...)
 		})

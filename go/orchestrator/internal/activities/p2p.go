@@ -28,12 +28,12 @@ const (
 )
 
 type SendAgentMessageInput struct {
-	WorkflowID string                 `json:"workflow_id"`
-	From       string                 `json:"from"`
-	To         string                 `json:"to"`
-	Type       MessageType            `json:"type"`
-	Payload    map[string]interface{} `json:"payload"`
-	Timestamp  time.Time              `json:"timestamp"` // Passed from workflow.Now()
+	WorkflowID string         `json:"workflow_id"`
+	From       string         `json:"from"`
+	To         string         `json:"to"`
+	Type       MessageType    `json:"type"`
+	Payload    map[string]any `json:"payload"`
+	Timestamp  time.Time      `json:"timestamp"` // Passed from workflow.Now()
 	// 由 workflow.Now() 传入。
 }
 
@@ -59,7 +59,7 @@ func (a *Activities) SendAgentMessage(ctx context.Context, in SendAgentMessageIn
 
 	// Policy gate via existing team action authorizer
 	// 复用既有的 team action authorizer 做 policy 校验。
-	_, _ = AuthorizeTeamAction(ctx, TeamActionInput{Action: "message_send", SessionID: "", UserID: "", AgentID: in.From, Role: "", Metadata: map[string]interface{}{
+	_, _ = AuthorizeTeamAction(ctx, TeamActionInput{Action: "message_send", SessionID: "", UserID: "", AgentID: in.From, Role: "", Metadata: map[string]any{
 		"to": in.To, "type": string(in.Type), "size": payloadSize,
 	}})
 
@@ -74,7 +74,7 @@ func (a *Activities) SendAgentMessage(ctx context.Context, in SendAgentMessageIn
 		ts = time.Now() // Fallback for backward compatibility
 		// 向后兼容的兜底。
 	}
-	msg := map[string]interface{}{
+	msg := map[string]any{
 		"seq":     seq,
 		"from":    in.From,
 		"to":      in.To,
@@ -111,12 +111,12 @@ type FetchAgentMessagesInput struct {
 }
 
 type AgentMessage struct {
-	Seq     uint64                 `json:"seq"`
-	From    string                 `json:"from"`
-	To      string                 `json:"to"`
-	Type    MessageType            `json:"type"`
-	Payload map[string]interface{} `json:"payload"`
-	Ts      int64                  `json:"ts"`
+	Seq     uint64         `json:"seq"`
+	From    string         `json:"from"`
+	To      string         `json:"to"`
+	Type    MessageType    `json:"type"`
+	Payload map[string]any `json:"payload"`
+	Ts      int64          `json:"ts"`
 }
 
 // FetchAgentMessages returns messages for an agent after SinceSeq (best-effort)
@@ -156,10 +156,10 @@ func (a *Activities) FetchAgentMessages(ctx context.Context, in FetchAgentMessag
 }
 
 type WorkspaceAppendInput struct {
-	WorkflowID string                 `json:"workflow_id"`
-	Topic      string                 `json:"topic"`
-	Entry      map[string]interface{} `json:"entry"`
-	Timestamp  time.Time              `json:"timestamp"` // Passed from workflow.Now()
+	WorkflowID string         `json:"workflow_id"`
+	Topic      string         `json:"topic"`
+	Entry      map[string]any `json:"entry"`
+	Timestamp  time.Time      `json:"timestamp"` // Passed from workflow.Now()
 	// 由 workflow.Now() 传入。
 }
 
@@ -185,7 +185,7 @@ func (a *Activities) WorkspaceAppend(ctx context.Context, in WorkspaceAppendInpu
 
 	// Policy gate
 	// Policy 校验。
-	_, _ = AuthorizeTeamAction(ctx, TeamActionInput{Action: "workspace_append", Metadata: map[string]interface{}{"topic": in.Topic, "size": entrySize}})
+	_, _ = AuthorizeTeamAction(ctx, TeamActionInput{Action: "workspace_append", Metadata: map[string]any{"topic": in.Topic, "size": entrySize}})
 	rc := a.sessionManager.RedisWrapper().GetClient()
 	seqKey := fmt.Sprintf("wf:%s:ws:seq", in.WorkflowID)
 	seq := rc.Incr(ctx, seqKey).Val()
@@ -197,7 +197,7 @@ func (a *Activities) WorkspaceAppend(ctx context.Context, in WorkspaceAppendInpu
 		ts = time.Now() // Fallback for backward compatibility
 		// 向后兼容的兜底。
 	}
-	entry := map[string]interface{}{"seq": seq, "topic": in.Topic, "entry": in.Entry, "ts": ts.UnixNano()}
+	entry := map[string]any{"seq": seq, "topic": in.Topic, "entry": in.Entry, "ts": ts.UnixNano()}
 	b, _ := json.Marshal(entry)
 	if err := rc.RPush(ctx, listKey, b).Err(); err != nil {
 		return WorkspaceAppendResult{}, err
@@ -220,10 +220,10 @@ type WorkspaceListInput struct {
 }
 
 type WorkspaceEntry struct {
-	Seq   uint64                 `json:"seq"`
-	Topic string                 `json:"topic"`
-	Entry map[string]interface{} `json:"entry"`
-	Ts    int64                  `json:"ts"`
+	Seq   uint64         `json:"seq"`
+	Topic string         `json:"topic"`
+	Entry map[string]any `json:"entry"`
+	Ts    int64          `json:"ts"`
 }
 
 // WorkspaceList returns entries for a topic after SinceSeq
@@ -418,7 +418,7 @@ func (a *Activities) GetFileRegistry(ctx context.Context, in GetFileRegistryInpu
 // Returns math.MaxInt on marshal failure so the size check never passes silently.
 // lenMust 返回 payload 的近似 JSON 大小。
 // 序列化失败时返回 math.MaxInt，确保大小校验不会静默通过。
-func lenMust(m map[string]interface{}) int {
+func lenMust(m map[string]any) int {
 	b, err := json.Marshal(m)
 	if err != nil {
 		return math.MaxInt
@@ -449,21 +449,21 @@ type TaskAccept struct {
 
 // Convenience wrappers
 func (a *Activities) SendTaskRequest(ctx context.Context, wf, from, to string, req TaskRequest, timestamp time.Time) (SendAgentMessageResult, error) {
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"task_id": req.TaskID, "description": req.Description, "required_by": req.RequiredBy, "skills": req.Skills, "topic": req.Topic,
 	}
 	return a.SendAgentMessage(ctx, SendAgentMessageInput{WorkflowID: wf, From: from, To: to, Type: MessageTypeRequest, Payload: payload, Timestamp: timestamp})
 }
 
 func (a *Activities) SendTaskOffer(ctx context.Context, wf, from, to string, off TaskOffer, timestamp time.Time) (SendAgentMessageResult, error) {
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"request_id": off.RequestID, "agent_id": off.AgentID, "confidence": off.Confidence, "estimate_hours": off.EstimateHours,
 	}
 	return a.SendAgentMessage(ctx, SendAgentMessageInput{WorkflowID: wf, From: from, To: to, Type: MessageTypeOffer, Payload: payload, Timestamp: timestamp})
 }
 
 func (a *Activities) SendTaskAccept(ctx context.Context, wf, from, to string, ac TaskAccept, timestamp time.Time) (SendAgentMessageResult, error) {
-	payload := map[string]interface{}{"request_id": ac.RequestID, "agent_id": ac.AgentID}
+	payload := map[string]any{"request_id": ac.RequestID, "agent_id": ac.AgentID}
 	return a.SendAgentMessage(ctx, SendAgentMessageInput{WorkflowID: wf, From: from, To: to, Type: MessageTypeAccept, Payload: payload, Timestamp: timestamp})
 }
 
@@ -547,7 +547,7 @@ func taskListKey(workflowID string) string {
 func publishTaskListUpdate(workflowID, agentID, message string, tasks []SwarmTask) {
 	// Convert to generic maps for JSON payload
 	// 转成通用 map，便于序列化成 JSON payload。
-	taskMaps := make([]interface{}, len(tasks))
+	taskMaps := make([]any, len(tasks))
 	for i, t := range tasks {
 		taskMaps[i] = t
 	}
@@ -556,7 +556,7 @@ func publishTaskListUpdate(workflowID, agentID, message string, tasks []SwarmTas
 		Type:       string(StreamEventTaskListUpdated),
 		AgentID:    agentID,
 		Message:    message,
-		Payload:    map[string]interface{}{"tasks": taskMaps},
+		Payload:    map[string]any{"tasks": taskMaps},
 		Timestamp:  time.Now(),
 	})
 }
@@ -625,7 +625,7 @@ func (a *Activities) InitTaskList(ctx context.Context, in InitTaskListInput) err
 	rc := a.sessionManager.RedisWrapper().GetClient()
 	key := taskListKey(in.WorkflowID)
 
-	fields := make(map[string]interface{}, len(in.Tasks))
+	fields := make(map[string]any, len(in.Tasks))
 	for i := range in.Tasks {
 		t := &in.Tasks[i]
 		if t.ID == "" {

@@ -52,7 +52,7 @@ type config struct {
 	} `yaml:"pricing"`
 	// ModelCatalog maps provider → model → metadata (used for zero-cost provider detection)
 	// ModelCatalog 映射 provider → model → metadata（用于零成本 provider 判定）
-	ModelCatalog map[string]map[string]interface{} `yaml:"model_catalog"`
+	ModelCatalog map[string]map[string]any `yaml:"model_catalog"`
 }
 
 var (
@@ -351,24 +351,24 @@ func CostForSplitWithCache(model string, inputTokens, outputTokens, cacheReadTok
 
 // ValidateMap validates the pricing section in a raw config map for the config manager.
 // ValidateMap 为配置管理器校验原始配置 map 中的 pricing 段。
-func ValidateMap(m map[string]interface{}) error {
-	p, ok := m["pricing"].(map[string]interface{})
+func ValidateMap(m map[string]any) error {
+	p, ok := m["pricing"].(map[string]any)
 	if !ok {
 		return nil
 	}
-	if d, ok := p["defaults"].(map[string]interface{}); ok {
+	if d, ok := p["defaults"].(map[string]any); ok {
 		if v, ok := d["combined_per_1k"].(float64); ok && v < 0 {
 			return errors.New("pricing.defaults.combined_per_1k must be >= 0")
 		}
 	}
-	if provs, ok := p["models"].(map[string]interface{}); ok {
+	if provs, ok := p["models"].(map[string]any); ok {
 		for provName, pm := range provs {
-			models, ok := pm.(map[string]interface{})
+			models, ok := pm.(map[string]any)
 			if !ok {
 				continue
 			}
 			for modelName, mv := range models {
-				entry, ok := mv.(map[string]interface{})
+				entry, ok := mv.(map[string]any)
 				if !ok {
 					continue
 				}

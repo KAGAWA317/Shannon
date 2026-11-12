@@ -99,7 +99,7 @@ func (m *Middleware) HTTPMiddleware(next http.Handler) http.Handler {
 
 // UnaryServerInterceptor provides gRPC authentication interceptor
 func (m *Middleware) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		// Skip auth for health check
 		if strings.HasSuffix(info.FullMethod, "/Health") {
 			return handler(ctx, req)

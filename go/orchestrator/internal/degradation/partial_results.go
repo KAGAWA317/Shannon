@@ -25,20 +25,20 @@ func NewPartialResultsManager(strategy DegradationStrategy, logger *zap.Logger) 
 
 // PartialResult represents a partial result from a failed operation
 type PartialResult struct {
-	Source     string                 `json:"source"`             // Component that generated result
-	Success    bool                   `json:"success"`            // Whether this component succeeded
-	Result     interface{}            `json:"result"`             // Actual result data
-	Error      string                 `json:"error,omitempty"`    // Error message if failed
-	Timestamp  time.Time              `json:"timestamp"`          // When result was generated
-	Metadata   map[string]interface{} `json:"metadata,omitempty"` // Additional context
-	Confidence float64                `json:"confidence"`         // Confidence score (0-1)
-	Degraded   bool                   `json:"degraded"`           // Whether this was a degraded result
+	Source     string         `json:"source"`             // Component that generated result
+	Success    bool           `json:"success"`            // Whether this component succeeded
+	Result     any            `json:"result"`             // Actual result data
+	Error      string         `json:"error,omitempty"`    // Error message if failed
+	Timestamp  time.Time      `json:"timestamp"`          // When result was generated
+	Metadata   map[string]any `json:"metadata,omitempty"` // Additional context
+	Confidence float64        `json:"confidence"`         // Confidence score (0-1)
+	Degraded   bool           `json:"degraded"`           // Whether this was a degraded result
 }
 
 // AggregatedResult combines multiple partial results into a coherent response
 type AggregatedResult struct {
 	Success         bool             `json:"success"`                    // Overall success status
-	Result          interface{}      `json:"result"`                     // Combined result
+	Result          any              `json:"result"`                     // Combined result
 	PartialResults  []PartialResult  `json:"partial_results"`            // Individual component results
 	TotalComponents int              `json:"total_components"`           // Total number of components attempted
 	SuccessCount    int              `json:"success_count"`              // Number of successful components
@@ -67,7 +67,7 @@ func (prm *PartialResultsManager) AggregateResults(
 	}
 
 	successCount := 0
-	var successfulResults []interface{}
+	var successfulResults []any
 	var errors []string
 	var warnings []string
 
@@ -182,7 +182,7 @@ func (prm *PartialResultsManager) shouldConsiderSuccessful(successCount, totalCo
 }
 
 // combineResults combines successful results into a single result
-func (prm *PartialResultsManager) combineResults(results []interface{}, workflowType string) interface{} {
+func (prm *PartialResultsManager) combineResults(results []any, workflowType string) any {
 	if len(results) == 0 {
 		return nil
 	}
@@ -195,7 +195,7 @@ func (prm *PartialResultsManager) combineResults(results []interface{}, workflow
 	switch workflowType {
 	case "agent_dag":
 		// For agent DAG, results are typically structured
-		return map[string]interface{}{
+		return map[string]any{
 			"type":         "combined_agent_results",
 			"results":      results,
 			"result_count": len(results),
@@ -203,7 +203,7 @@ func (prm *PartialResultsManager) combineResults(results []interface{}, workflow
 		}
 	default:
 		// For other workflows, concatenate string results or return structured data
-		return map[string]interface{}{
+		return map[string]any{
 			"type":         "combined_results",
 			"results":      results,
 			"result_count": len(results),
@@ -230,7 +230,7 @@ func (prm *PartialResultsManager) getRecommendedAction(level DegradationLevel) s
 func (prm *PartialResultsManager) CreatePartialResult(
 	source string,
 	success bool,
-	result interface{},
+	result any,
 	err error,
 	confidence float64,
 	degraded bool,
@@ -248,7 +248,7 @@ func (prm *PartialResultsManager) CreatePartialResult(
 		Timestamp:  time.Now(),
 		Confidence: confidence,
 		Degraded:   degraded,
-		Metadata:   make(map[string]interface{}),
+		Metadata:   make(map[string]any),
 	}
 }
 

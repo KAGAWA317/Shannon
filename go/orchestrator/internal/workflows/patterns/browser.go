@@ -50,7 +50,7 @@ type BrowserLoopResult struct {
 func BrowserLoop(
 	ctx workflow.Context,
 	query string,
-	baseContext map[string]interface{},
+	baseContext map[string]any,
 	sessionID string,
 	history []string,
 	config BrowserConfig,
@@ -141,7 +141,7 @@ func BrowserLoop(
 		})
 
 		// Build unified context for single agent call
-		agentContext := make(map[string]interface{})
+		agentContext := make(map[string]any)
 		for k, v := range baseContext {
 			agentContext[k] = v
 		}
@@ -396,7 +396,7 @@ func buildObservationFromTools(toolExecs []activities.ToolExecution) string {
 	var parts []string
 	for _, te := range toolExecs {
 		if te.Success {
-			output, _ := te.Output.(map[string]interface{})
+			output, _ := te.Output.(map[string]any)
 			action := ""
 			if output != nil {
 				if a, ok := output["action"].(string); ok {
@@ -563,7 +563,7 @@ func recordBrowserTokenUsage(ctx workflow.Context, wfID, sessionID string, opts 
 		Provider:     provider,
 		InputTokens:  inTok,
 		OutputTokens: outTok,
-		Metadata:     map[string]interface{}{"phase": "browser_action"},
+		Metadata:     map[string]any{"phase": "browser_action"},
 	}).Get(recCtx, nil)
 	wopts.RecordToolCostEntries(ctx, result, opts.UserID, sessionID, wfID)
 }

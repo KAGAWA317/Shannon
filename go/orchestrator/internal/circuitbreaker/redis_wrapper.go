@@ -81,7 +81,7 @@ func (rw *RedisWrapper) Get(ctx context.Context, key string) *redis.StringCmd {
 }
 
 // Set wraps Redis Set with circuit breaker
-func (rw *RedisWrapper) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd {
+func (rw *RedisWrapper) Set(ctx context.Context, key string, value any, expiration time.Duration) *redis.StatusCmd {
 	var result *redis.StatusCmd
 
 	err := rw.cb.Execute(ctx, func() error {
