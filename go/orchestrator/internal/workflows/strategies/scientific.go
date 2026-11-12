@@ -90,10 +90,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	)
 
 	// Ensure parent workflow ID is included in context for downstream activities
-	cotCtx := make(map[string]any)
-	for k, v := range input.Context {
-		cotCtx[k] = v
-	}
+	cotCtx := cloneContextMap(input.Context)
 	if input.ParentWorkflowID != "" {
 		cotCtx["parent_workflow_id"] = input.ParentWorkflowID
 	}
@@ -203,10 +200,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	}
 
 	// Prepare debate context with hypotheses
-	debateContext := make(map[string]any)
-	for k, v := range input.Context {
-		debateContext[k] = v
-	}
+	debateContext := cloneContextMap(input.Context)
 	if input.ParentWorkflowID != "" {
 		debateContext["parent_workflow_id"] = input.ParentWorkflowID
 	}
@@ -275,10 +269,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 		input.Query,
 	)
 
-	totContext := make(map[string]any)
-	for k, v := range input.Context {
-		totContext[k] = v
-	}
+	totContext := cloneContextMap(input.Context)
 	if input.ParentWorkflowID != "" {
 		totContext["parent_workflow_id"] = input.ParentWorkflowID
 	}

@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -1078,10 +1077,7 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		if sess.TokenBudget > 0 {
 			summary.TokenBudget = sess.TokenBudget
 			summary.BudgetUtilization = float64(sess.TokensUsed) / float64(sess.TokenBudget)
-			summary.BudgetRemaining = sess.TokenBudget - sess.TokensUsed
-			if summary.BudgetRemaining < 0 {
-				summary.BudgetRemaining = 0 // Prevent negative
-			}
+			summary.BudgetRemaining = max(0, sess.TokenBudget-sess.TokensUsed)
 			summary.IsNearBudgetLimit = summary.BudgetUtilization > 0.9
 		}
 
@@ -1229,11 +1225,7 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 // sendError sends an error response
 func (h *SessionHandler) sendError(w http.ResponseWriter, message string, code int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{
-		"error": message,
-	})
+	writeJSON(w, code, map[string]string{"error": message})
 }
 
 // UpdateSessionTitle handles PATCH /api/v1/sessions/{sessionId}
@@ -1497,7 +1489,7 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	// SECURITY: Validate workspaceKey and ensure path can't escape base dir
 	// (external_id isn't validated at DB write time - reuse workspace.go guardrails)
 	// 安全：校验 workspaceKey，确保路径无法逃出基目录（external_id 在写入 DB 时未做校验，因此复用 workspace.go 的防护）。
-	workspacePath, err := h.buildWorkspacePath(workspaceKey)
+	workspacePath, err := buildWorkspacePath(h.workspaceBaseDir, workspaceKey)
 	if err != nil {
 		h.logger.Warn("Invalid workspace key, skipping cleanup",
 			zap.Error(err),
@@ -1531,52 +1523,6 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 
 	// No content, idempotent
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// buildWorkspacePath validates the workspace key and builds a safe path.
-// Uses same guardrails as workspace.go to prevent path traversal.
-// buildWorkspacePath 校验 workspace key 并构造安全路径，沿用 workspace.go 的防护以避免路径穿越。
-func (h *SessionHandler) buildWorkspacePath(workspaceKey string) (string, error) {
-	if err := validateSessionWorkspaceID(workspaceKey); err != nil {
-		return "", err
-	}
-
-	base := filepath.Clean(h.workspaceBaseDir)
-	path := filepath.Join(base, workspaceKey)
-
-	rel, err := filepath.Rel(base, path)
-	if err != nil {
-		return "", fmt.Errorf("invalid workspace base directory")
-	}
-	if rel == "." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == ".." {
-		return "", fmt.Errorf("workspace path escapes base directory")
-	}
-
-	return path, nil
-}
-
-// validateSessionWorkspaceID validates that a session ID is safe for use in paths.
-// Replicates validation from workspace.go:validateWorkspaceSessionID.
-// validateSessionWorkspaceID 校验 session ID 可安全用于路径，规则与 workspace.go:validateWorkspaceSessionID 一致。
-func validateSessionWorkspaceID(sessionID string) error {
-	sessionID = strings.TrimSpace(sessionID)
-	if sessionID == "" {
-		return fmt.Errorf("invalid session_id")
-	}
-	if len(sessionID) > 128 {
-		return fmt.Errorf("invalid session_id")
-	}
-	// Reject path traversal attempts
-	if strings.Contains(sessionID, "..") || strings.HasPrefix(sessionID, ".") {
-		return fmt.Errorf("invalid session_id")
-	}
-	for _, c := range sessionID {
-		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' {
-			continue
-		}
-		return fmt.Errorf("invalid session_id")
-	}
-	return nil
 }
 
 // cleanupWorkspace calls the Firecracker executor to clean up workspace files.

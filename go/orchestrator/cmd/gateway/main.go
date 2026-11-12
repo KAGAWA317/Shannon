@@ -1027,22 +1027,17 @@ func corsMiddleware(next http.Handler) http.Handler {
 		// 允许的来源从环境变量读取（逗号分隔），默认通配。
 		allowedOrigins := getEnvOrDefault("CORS_ALLOWED_ORIGINS", "*")
 
-		if !isStreaming {
-			// Allow CORS - use specific origins in production, wildcard for dev
-			// 允许 CORS——生产环境使用具体来源，开发环境用通配。
-			w.Header().Set("Access-Control-Allow-Origin", allowedOrigins)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", allowedHeaders)
-			w.Header().Set("Access-Control-Expose-Headers", exposedHeaders)
-			w.Header().Set("Access-Control-Max-Age", "3600")
-		} else {
-			// Streaming endpoints also need CORS headers for GET requests
-			w.Header().Set("Access-Control-Allow-Origin", allowedOrigins)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", allowedHeaders)
-			w.Header().Set("Access-Control-Expose-Headers", exposedHeaders)
-			w.Header().Set("Access-Control-Max-Age", "3600")
+		allowMethods := "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+		if isStreaming {
+			// Streaming endpoints (SSE/WS) are GET-only.
+			// 流式端点（SSE/WS）只服务 GET。
+			allowMethods = "GET, OPTIONS"
 		}
+		w.Header().Set("Access-Control-Allow-Origin", allowedOrigins)
+		w.Header().Set("Access-Control-Allow-Methods", allowMethods)
+		w.Header().Set("Access-Control-Allow-Headers", allowedHeaders)
+		w.Header().Set("Access-Control-Expose-Headers", exposedHeaders)
+		w.Header().Set("Access-Control-Max-Age", "3600")
 
 		if r.Method == http.MethodOptions {
 			// Handle preflight - headers already set above

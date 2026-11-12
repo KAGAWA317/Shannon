@@ -468,22 +468,6 @@ func (h *Handler) getUsageFromDB(ctx context.Context, workflowID string) *Usage 
 	}
 }
 
-// extractToken extracts the auth token from the request.
-func (h *Handler) extractToken(r *http.Request) string {
-	// Try Authorization header first
-	auth := r.Header.Get("Authorization")
-	if strings.HasPrefix(auth, "Bearer ") {
-		return strings.TrimPrefix(auth, "Bearer ")
-	}
-
-	// Try API key
-	if apiKey := r.Header.Get("X-API-Key"); apiKey != "" {
-		return apiKey
-	}
-
-	return ""
-}
-
 // withGRPCMetadata adds authentication metadata to gRPC context.
 func (h *Handler) withGRPCMetadata(ctx context.Context, r *http.Request) context.Context {
 	md := metadata.New(nil)
@@ -904,12 +888,4 @@ func (h *Handler) recordCompletionUsage(
 			zap.Error(err))
 	}
 
-}
-
-// streamContent is a helper to write raw bytes for non-buffered streaming.
-func streamContent(w io.Writer, content string) {
-	if flusher, ok := w.(http.Flusher); ok {
-		w.Write([]byte(content))
-		flusher.Flush()
-	}
 }

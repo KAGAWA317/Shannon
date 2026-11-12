@@ -2,7 +2,9 @@ package workflows
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -692,11 +694,7 @@ func determineNodeQuery(defaultQuery string, metadata map[string]any, nodeOutput
 	// Substitute {node_results} placeholders with actual outputs
 	// e.g., {fetch_news_results} -> output from fetch_news node
 	// 把 {node_results} 占位符替换为实际输出，例如 {fetch_news_results} → fetch_news 节点的输出。
-	nodeIDs := make([]string, 0, len(nodeOutputs))
-	for nodeID := range nodeOutputs {
-		nodeIDs = append(nodeIDs, nodeID)
-	}
-	sort.Strings(nodeIDs)
+	nodeIDs := slices.Sorted(maps.Keys(nodeOutputs))
 	for _, nodeID := range nodeIDs {
 		output := nodeOutputs[nodeID]
 		placeholder := fmt.Sprintf("{%s_results}", nodeID)

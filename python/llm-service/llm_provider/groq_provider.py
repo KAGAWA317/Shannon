@@ -62,16 +62,6 @@ class GroqProvider(LLMProvider):
         """
         self._load_models_from_config()
 
-    def _resolve_alias(self, model_id: str) -> str:
-        """Return the configured alias for a given vendor model_id, if any.
-
-        返回给定厂商 model_id 对应的已配置别名（若有）。
-        """
-        for alias, cfg in self.models.items():
-            if cfg.model_id == model_id:
-                return alias
-        return model_id
-
     def count_tokens(self, messages: List[Dict[str, Any]], model: str) -> int:
         """Count tokens for messages using TokenCounter.
 
@@ -108,6 +98,51 @@ class GroqProvider(LLMProvider):
                 sanitized.append(msg)
         return sanitized
 
+    def _build_params(
+        self, request: CompletionRequest, model_config, *, stream: bool
+    ) -> Dict[str, Any]:
+        # Prepare OpenAI-compatible request
+        # 准备 OpenAI 兼容 request
+        params: Dict[str, Any] = {
+            "model": model_config.model_id,
+            "messages": self._sanitize_messages(request.messages),
+            "temperature": request.temperature,
+            "max_tokens": request.max_tokens or model_config.max_tokens,
+            "top_p": request.top_p,
+            "frequency_penalty": request.frequency_penalty,
+            "presence_penalty": request.presence_penalty,
+            "stream": stream,
+        }
+
+        if request.stop:
+            params["stop"] = request.stop
+
+        if request.seed is not None:
+            params["seed"] = request.seed
+
+        # Functions are supported by some models
+        # 部分 model 支持 functions
+        if request.functions and model_config.supports_functions:
+            from llm_provider.openai_provider import OpenAIProvider
+            if OpenAIProvider._has_tool_role_messages(params.get("messages", [])):
+                params["tools"] = OpenAIProvider._functions_to_tools_param(request.functions)
+            else:
+                params["functions"] = request.functions
+            if request.function_call:
+                if "tools" in params:
+                    if request.function_call == "any":
+                        params["tool_choice"] = "required"
+                    elif request.function_call == "auto":
+                        params["tool_choice"] = "auto"
+                    elif request.function_call == "none":
+                        params["tool_choice"] = "none"
+                    else:
+                        params["tool_choice"] = {"type": "function", "function": {"name": request.function_call}}
+                else:
+                    params["function_call"] = request.function_call
+
+        return params
+
     @retry(
         stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5, min=1, max=8)
     )
@@ -123,52 +158,12 @@ class GroqProvider(LLMProvider):
         model_id = model_config.model_id
         model_alias = self._resolve_alias(model_id)
 
-        # Sanitize messages (flatten list content, degrade attachments to text)
-        # 清理消息（压平列表内容，把附件降级为文本）
-        clean_messages = self._sanitize_messages(request.messages)
-
         # Prepare OpenAI-compatible request
         # 准备 OpenAI 兼容 request
-        completion_params = {
-            "model": model_id,
-            "messages": clean_messages,
-            "temperature": request.temperature,
-            "max_tokens": request.max_tokens or model_config.max_tokens,
-            "top_p": request.top_p,
-            "frequency_penalty": request.frequency_penalty,
-            "presence_penalty": request.presence_penalty,
-            "stream": False,
-        }
-
-        if request.stop:
-            completion_params["stop"] = request.stop
-
-        if request.seed is not None:
-            completion_params["seed"] = request.seed
+        completion_params = self._build_params(request, model_config, stream=False)
 
         if request.response_format:
             completion_params["response_format"] = request.response_format
-
-        # Functions are supported by some models
-        # 部分 model 支持 functions
-        if request.functions and model_config.supports_functions:
-            from llm_provider.openai_provider import OpenAIProvider
-            if OpenAIProvider._has_tool_role_messages(completion_params.get("messages", [])):
-                completion_params["tools"] = OpenAIProvider._functions_to_tools_param(request.functions)
-            else:
-                completion_params["functions"] = request.functions
-            if request.function_call:
-                if "tools" in completion_params:
-                    if request.function_call == "any":
-                        completion_params["tool_choice"] = "required"
-                    elif request.function_call == "auto":
-                        completion_params["tool_choice"] = "auto"
-                    elif request.function_call == "none":
-                        completion_params["tool_choice"] = "none"
-                    else:
-                        completion_params["tool_choice"] = {"type": "function", "function": {"name": request.function_call}}
-                else:
-                    completion_params["function_call"] = request.function_call
 
         start_time = time.time()
         try:
@@ -248,47 +243,9 @@ class GroqProvider(LLMProvider):
         model_id = model_config.model_id
         model_alias = self._resolve_alias(model_id)
 
-        # Sanitize messages (flatten list content, degrade attachments to text)
-        # 清理消息（压平列表内容，把附件降级为文本）
-        clean_messages = self._sanitize_messages(request.messages)
-
         # Prepare request
         # 准备 request
-        completion_params = {
-            "model": model_id,
-            "messages": clean_messages,
-            "temperature": request.temperature,
-            "max_tokens": request.max_tokens or model_config.max_tokens,
-            "top_p": request.top_p,
-            "frequency_penalty": request.frequency_penalty,
-            "presence_penalty": request.presence_penalty,
-            "stream": True,
-        }
-
-        if request.stop:
-            completion_params["stop"] = request.stop
-
-        if request.seed is not None:
-            completion_params["seed"] = request.seed
-
-        if request.functions and model_config.supports_functions:
-            from llm_provider.openai_provider import OpenAIProvider
-            if OpenAIProvider._has_tool_role_messages(completion_params.get("messages", [])):
-                completion_params["tools"] = OpenAIProvider._functions_to_tools_param(request.functions)
-            else:
-                completion_params["functions"] = request.functions
-            if request.function_call:
-                if "tools" in completion_params:
-                    if request.function_call == "any":
-                        completion_params["tool_choice"] = "required"
-                    elif request.function_call == "auto":
-                        completion_params["tool_choice"] = "auto"
-                    elif request.function_call == "none":
-                        completion_params["tool_choice"] = "none"
-                    else:
-                        completion_params["tool_choice"] = {"type": "function", "function": {"name": request.function_call}}
-                else:
-                    completion_params["function_call"] = request.function_call
+        completion_params = self._build_params(request, model_config, stream=True)
 
         try:
             # Stream response

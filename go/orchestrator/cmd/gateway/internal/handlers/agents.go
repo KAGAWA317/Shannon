@@ -262,11 +262,7 @@ func (h *AgentsHandler) ExecuteAgent(w http.ResponseWriter, r *http.Request) {
 
 // sendError sends an error response
 func (h *AgentsHandler) sendError(w http.ResponseWriter, message string, code int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{
-		"error": message,
-	})
+	writeJSON(w, code, map[string]string{"error": message})
 }
 
 // ValidateAgentInput validates input against the agent's InputSchema

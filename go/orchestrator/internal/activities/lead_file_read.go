@@ -68,10 +68,7 @@ func ReadWorkspaceFile(ctx context.Context, in ReadWorkspaceFileInput) (ReadWork
 		return ReadWorkspaceFileResult{Path: in.Path, Error: "invalid path"}, nil
 	}
 
-	baseDir := os.Getenv("SHANNON_SESSION_WORKSPACES_DIR")
-	if baseDir == "" {
-		baseDir = "/tmp/shannon-sessions"
-	}
+	baseDir := getenv("SHANNON_SESSION_WORKSPACES_DIR", "/tmp/shannon-sessions")
 	fullPath := filepath.Join(baseDir, in.SessionID, cleanPath)
 
 	// Resolve symlinks and verify the real path stays within the session workspace.

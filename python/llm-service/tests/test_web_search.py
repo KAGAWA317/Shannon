@@ -3,6 +3,8 @@ Tests for web_search tool - SerpAPI/SearchAPI.io multi-engine support and valida
 web_search tool 的测试 —— SerpAPI/SearchAPI.io 多引擎支持与参数校验。
 """
 
+from contextlib import contextmanager
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -16,6 +18,24 @@ from llm_service.tools.base import ToolResult
 # Valid API key format (at least 10 chars, not test values)
 # 合法的 API key 格式（至少 10 个字符，且不是测试占位值）
 VALID_TEST_API_KEY = "sk_test_valid_api_key_12345"
+
+
+@contextmanager
+def _mock_aiohttp_session(mock_response):
+    """Patch aiohttp.ClientSession and yield the session mock.
+    替换 aiohttp.ClientSession，并产出用于断言的 session mock。
+    """
+    with patch("aiohttp.ClientSession") as mock_client:
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(
+            return_value=AsyncMock(
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(),
+            )
+        )
+        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_client.return_value.__aexit__ = AsyncMock()
+        yield mock_session
 
 
 class TestSerpAPISearchProvider:
@@ -50,16 +70,7 @@ class TestSerpAPISearchProvider:
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"organic_results": []})
 
-        with patch("aiohttp.ClientSession") as mock_client:
-            mock_session = MagicMock()
-            mock_session.get = MagicMock(
-                return_value=AsyncMock(
-                    __aenter__=AsyncMock(return_value=mock_response),
-                    __aexit__=AsyncMock()
-                )
-            )
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_client.return_value.__aexit__ = AsyncMock()
+        with _mock_aiohttp_session(mock_response) as mock_session:
 
             # Call search with different engine than instance
             await provider.search("test query", max_results=5, engine="bing")
@@ -81,16 +92,7 @@ class TestSerpAPISearchProvider:
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"organic_results": []})
 
-        with patch("aiohttp.ClientSession") as mock_client:
-            mock_session = MagicMock()
-            mock_session.get = MagicMock(
-                return_value=AsyncMock(
-                    __aenter__=AsyncMock(return_value=mock_response),
-                    __aexit__=AsyncMock()
-                )
-            )
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_client.return_value.__aexit__ = AsyncMock()
+        with _mock_aiohttp_session(mock_response) as mock_session:
 
             # Call search without engine parameter
             await provider.search("test query", max_results=5)
@@ -122,16 +124,7 @@ class TestSerpAPISearchProvider:
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value=mock_finance_response)
 
-        with patch("aiohttp.ClientSession") as mock_client:
-            mock_session = MagicMock()
-            mock_session.get = MagicMock(
-                return_value=AsyncMock(
-                    __aenter__=AsyncMock(return_value=mock_response),
-                    __aexit__=AsyncMock()
-                )
-            )
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_client.return_value.__aexit__ = AsyncMock()
+        with _mock_aiohttp_session(mock_response) as mock_session:
 
             results = await provider.search("AAPL:NASDAQ", max_results=5, engine="google_finance")
 
@@ -168,16 +161,7 @@ class TestSerpAPISearchProvider:
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value=mock_markets_response)
 
-        with patch("aiohttp.ClientSession") as mock_client:
-            mock_session = MagicMock()
-            mock_session.get = MagicMock(
-                return_value=AsyncMock(
-                    __aenter__=AsyncMock(return_value=mock_response),
-                    __aexit__=AsyncMock()
-                )
-            )
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_client.return_value.__aexit__ = AsyncMock()
+        with _mock_aiohttp_session(mock_response) as mock_session:
 
             results = await provider.search("", max_results=10, engine="google_finance_markets", trend="gainers")
 
@@ -212,16 +196,7 @@ class TestSearchAPISearchProvider:
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"organic_results": []})
 
-        with patch("aiohttp.ClientSession") as mock_client:
-            mock_session = MagicMock()
-            mock_session.get = MagicMock(
-                return_value=AsyncMock(
-                    __aenter__=AsyncMock(return_value=mock_response),
-                    __aexit__=AsyncMock()
-                )
-            )
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_client.return_value.__aexit__ = AsyncMock()
+        with _mock_aiohttp_session(mock_response) as mock_session:
 
             await provider.search("test query", max_results=5, engine="google", gl="jp", hl="ja")
 
@@ -261,16 +236,7 @@ class TestSearchAPISearchProvider:
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value=mock_data)
 
-        with patch("aiohttp.ClientSession") as mock_client:
-            mock_session = MagicMock()
-            mock_session.get = MagicMock(
-                return_value=AsyncMock(
-                    __aenter__=AsyncMock(return_value=mock_response),
-                    __aexit__=AsyncMock()
-                )
-            )
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_client.return_value.__aexit__ = AsyncMock()
+        with _mock_aiohttp_session(mock_response) as mock_session:
 
             results = await provider.search("test", max_results=5)
 
@@ -304,16 +270,7 @@ class TestSearchAPISearchProvider:
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value=mock_data)
 
-        with patch("aiohttp.ClientSession") as mock_client:
-            mock_session = MagicMock()
-            mock_session.get = MagicMock(
-                return_value=AsyncMock(
-                    __aenter__=AsyncMock(return_value=mock_response),
-                    __aexit__=AsyncMock()
-                )
-            )
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_client.return_value.__aexit__ = AsyncMock()
+        with _mock_aiohttp_session(mock_response) as mock_session:
 
             results = await provider.search("Apple Inc", max_results=5)
 
@@ -346,16 +303,7 @@ class TestSearchAPISearchProvider:
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value=mock_data)
 
-        with patch("aiohttp.ClientSession") as mock_client:
-            mock_session = MagicMock()
-            mock_session.get = MagicMock(
-                return_value=AsyncMock(
-                    __aenter__=AsyncMock(return_value=mock_response),
-                    __aexit__=AsyncMock()
-                )
-            )
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_client.return_value.__aexit__ = AsyncMock()
+        with _mock_aiohttp_session(mock_response) as mock_session:
 
             results = await provider.search("news", max_results=5, engine="google_news")
 

@@ -129,10 +129,7 @@ func LeadDecision(ctx context.Context, in LeadDecisionInput) (LeadDecisionResult
 	logger := activity.GetLogger(ctx)
 	logger.Info("LeadDecision called", "workflow_id", in.WorkflowID, "event", in.Event.Type)
 
-	base := os.Getenv("LLM_SERVICE_URL")
-	if base == "" {
-		base = "http://llm-service:8000"
-	}
+	base := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/lead/decide", base)
 
 	body, err := json.Marshal(in)
@@ -207,10 +204,7 @@ func ListWorkspaceFiles(ctx context.Context, in ListWorkspaceFilesInput) (ListWo
 	if err := validateSessionID(in.SessionID); err != nil {
 		return ListWorkspaceFilesResult{}, fmt.Errorf("invalid session_id: %w", err)
 	}
-	baseDir := os.Getenv("SHANNON_SESSION_WORKSPACES_DIR")
-	if baseDir == "" {
-		baseDir = "/tmp/shannon-sessions"
-	}
+	baseDir := getenv("SHANNON_SESSION_WORKSPACES_DIR", "/tmp/shannon-sessions")
 	sessionDir := filepath.Join(baseDir, in.SessionID)
 	files := readWorkspaceFiles(sessionDir, 10000, 2000)
 	return ListWorkspaceFilesResult{Files: files}, nil
@@ -240,10 +234,7 @@ func LeadExecuteTool(ctx context.Context, in LeadToolInput) (LeadToolResult, err
 	logger := activity.GetLogger(ctx)
 	logger.Info("LeadExecuteTool called", "tool", in.Tool)
 
-	base := os.Getenv("LLM_SERVICE_URL")
-	if base == "" {
-		base = "http://llm-service:8000"
-	}
+	base := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/tools/execute", base)
 
 	// Build request body matching Python ToolExecuteRequest field names

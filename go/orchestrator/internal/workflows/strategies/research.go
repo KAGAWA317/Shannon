@@ -417,20 +417,6 @@ func hasSuccessfulToolExecutions(results []activities.AgentExecutionResult) bool
 	return false
 }
 
-// buildCompanyPrefetchURLs constructs a small set of candidate URLs for company research.
-// Priority:
-//  1. Use official_domains from refinement when available.
-//  2. Add config-based aggregator sources (Crunchbase, LinkedIn, etc.)
-//  3. Fallback to a simple canonical_name-based .com heuristic.
-//
-// All outputs are normalized to https://host form and deduplicated.
-// 为公司研究构造少量候选 URL，优先级：refinement 提供的 official_domains >
-// 配置化聚合站点（Crunchbase、LinkedIn 等）> 基于 canonical_name 的 .com 兜底猜测。
-// 输出统一规范为 https://host 形式并去重。
-func buildCompanyPrefetchURLs(canonicalName string, officialDomains []string) []string {
-	return buildCompanyPrefetchURLsWithLocale(canonicalName, officialDomains, "")
-}
-
 // languageToCode normalizes language strings to 2-letter codes.
 // Handles variants like zh-cn, zh-hans, japanese, etc.
 func languageToCode(lang string) string {
@@ -922,34 +908,6 @@ func (i *DomainAnalysisIntent) computeMultinational() bool {
 	return false
 }
 
-// ShouldIncludeRegion determines if a region should be included in discovery.
-// Used by buildDomainDiscoverySearches to filter regions.
-func (i *DomainAnalysisIntent) ShouldIncludeRegion(region string) bool {
-	// If explicit regions specified, only include those
-	if len(i.ExplicitRegions) > 0 {
-		for _, r := range i.ExplicitRegions {
-			if strings.EqualFold(r, region) {
-				return true
-			}
-		}
-		return false
-	}
-
-	// If multinational, include default set
-	if i.MultinationalDefault {
-		defaultRegions := []string{"global", "eu", "cn", "jp", "us"}
-		for _, r := range defaultRegions {
-			if strings.EqualFold(r, region) {
-				return true
-			}
-		}
-		return false
-	}
-
-	// Non-multinational: only global
-	return strings.EqualFold(region, "global")
-}
-
 // extractProductHints extracts product names from refiner domains for search hints.
 // Only returns domains that don't match the canonical company name.
 func extractProductHints(officialDomains []string, canonicalName string) []string {
@@ -1011,55 +969,6 @@ func originRegionToDiscoveryLanguageCode(originRegion string) string {
 	}
 }
 
-func shouldRunGlobalDomainDiscoveryFallback(discovered []string) bool {
-	if len(discovered) < 4 {
-		return true
-	}
-
-	registrables := make(map[string]bool)
-	hasSupport := false
-	for _, d := range discovered {
-		h := normalizeDomainCandidateHost(d)
-		if h == "" {
-			continue
-		}
-		if strings.HasPrefix(h, "help.") || strings.HasPrefix(h, "docs.") || strings.HasPrefix(h, "support.") {
-			hasSupport = true
-		}
-		reg := registrableDomain(h)
-		if reg != "" {
-			registrables[reg] = true
-		}
-	}
-
-	// If we only found one registrable domain, we're likely missing product/brand domains.
-	if len(registrables) < 2 {
-		return true
-	}
-
-	// Support/help sites are high-signal for company research; if missing and the set is small, try one more search.
-	if !hasSupport && len(discovered) < 6 {
-		return true
-	}
-
-	return false
-}
-
-// containsGenericTerm checks if a term contains any generic tech words that pollute search results.
-// This fixes the bug where multi-word terms like "analytics platform" were not filtered
-// because only exact matches were checked (e.g., "analytics platform" != "analytics").
-func containsGenericTerm(term string, genericTerms map[string]bool) bool {
-	termLower := strings.ToLower(term)
-	// Split into words and check each word
-	words := strings.Fields(termLower)
-	for _, word := range words {
-		if genericTerms[word] {
-			return true
-		}
-	}
-	return false
-}
-
 func buildCompanyDomainDiscoverySearchQuery(canonicalName string, disambiguationTerms []string, regionCode string) string {
 	name := strings.TrimSpace(canonicalName)
 	if name == "" {
@@ -1108,16 +1017,6 @@ func stripCodeFences(s string) string {
 		return strings.TrimSpace(t)
 	}
 	return t
-}
-
-// appendVerificationWarning appends a warning message to the report
-// Used by P0-B to add verification warnings when V2 fails without falling back to V1
-func appendVerificationWarning(report, warning string) string {
-	if report == "" {
-		return warning
-	}
-	// Append warning as a separate section at the end
-	return report + "\n\n---\n\n" + warning
 }
 
 func registrableDomain(host string) string {
@@ -2712,13 +2611,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 	delete(baseContext, "user_intent")
 
 	// Check for budget configuration
-	agentMaxTokens := 0
-	if v, ok := baseContext["budget_agent_max"].(int); ok {
-		agentMaxTokens = v
-	}
-	if v, ok := baseContext["budget_agent_max"].(float64); ok && v > 0 {
-		agentMaxTokens = int(v)
-	}
+	agentMaxTokens := getBudgetMax(baseContext)
 	// Apply minimum budget if configured
 	if minBudget, ok := baseContext["budget_agent_min"].(int); ok && minBudget > agentMaxTokens {
 		agentMaxTokens = minBudget

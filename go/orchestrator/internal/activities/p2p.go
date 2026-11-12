@@ -504,10 +504,7 @@ func (a *Activities) SetupWorkspaceDirs(ctx context.Context, in SetupWorkspaceDi
 	if err := validateSessionID(in.SessionID); err != nil {
 		return fmt.Errorf("invalid session_id: %w", err)
 	}
-	baseDir := os.Getenv("SHANNON_SESSION_WORKSPACES_DIR")
-	if baseDir == "" {
-		baseDir = "/tmp/shannon-sessions"
-	}
+	baseDir := getenv("SHANNON_SESSION_WORKSPACES_DIR", "/tmp/shannon-sessions")
 	sessionDir := filepath.Join(baseDir, in.SessionID)
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
 		return fmt.Errorf("failed to create workspace dir: %w", err)

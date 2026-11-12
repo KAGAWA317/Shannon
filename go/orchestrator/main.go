@@ -492,22 +492,7 @@ func main() {
 	if shannonCfgMgr != nil {
 		if shCfg := shannonCfgMgr.GetConfig(); shCfg != nil {
 			// Convert Shannon health config to health manager config
-			healthConfig = &health.HealthConfiguration{
-				Enabled:       shCfg.Health.Enabled,
-				CheckInterval: shCfg.Health.CheckInterval,
-				GlobalTimeout: shCfg.Health.Timeout,
-				Checks:        make(map[string]health.CheckConfig),
-			}
-
-			// Convert per-check configuration
-			for name, checkCfg := range shCfg.Health.Checks {
-				healthConfig.Checks[name] = health.CheckConfig{
-					Enabled:  checkCfg.Enabled,
-					Critical: checkCfg.Critical,
-					Timeout:  checkCfg.Timeout,
-					Interval: checkCfg.Interval,
-				}
-			}
+			healthConfig = buildHealthConfig(shCfg)
 
 			// Update endpoints and port from config (only if not already set via env var)
 			// 从配置更新端点和端口（仅在未通过环境变量设置时）。
@@ -534,22 +519,7 @@ func main() {
 	if shannonCfgMgr != nil {
 		shannonCfgMgr.RegisterCallback(func(oldConfig, newConfig *cfg.ShannonConfig) error {
 			// Update health configuration
-			newHealthConfig := &health.HealthConfiguration{
-				Enabled:       newConfig.Health.Enabled,
-				CheckInterval: newConfig.Health.CheckInterval,
-				GlobalTimeout: newConfig.Health.Timeout,
-				Checks:        make(map[string]health.CheckConfig),
-			}
-
-			// Convert per-check configuration
-			for name, checkCfg := range newConfig.Health.Checks {
-				newHealthConfig.Checks[name] = health.CheckConfig{
-					Enabled:  checkCfg.Enabled,
-					Critical: checkCfg.Critical,
-					Timeout:  checkCfg.Timeout,
-					Interval: checkCfg.Interval,
-				}
-			}
+			newHealthConfig := buildHealthConfig(newConfig)
 
 			// Update health manager configuration
 			if err := hm.UpdateConfiguration(newHealthConfig); err != nil {
@@ -898,4 +868,23 @@ func getEnvOrDefaultFloat(key string, defaultValue float64) float64 {
 		}
 	}
 	return defaultValue
+}
+
+func buildHealthConfig(shCfg *cfg.ShannonConfig) *health.HealthConfiguration {
+	hc := &health.HealthConfiguration{
+		Enabled:       shCfg.Health.Enabled,
+		CheckInterval: shCfg.Health.CheckInterval,
+		GlobalTimeout: shCfg.Health.Timeout,
+		Checks:        make(map[string]health.CheckConfig, len(shCfg.Health.Checks)),
+	}
+	// Convert per-check configuration
+	for name, checkCfg := range shCfg.Health.Checks {
+		hc.Checks[name] = health.CheckConfig{
+			Enabled:  checkCfg.Enabled,
+			Critical: checkCfg.Critical,
+			Timeout:  checkCfg.Timeout,
+			Interval: checkCfg.Interval,
+		}
+	}
+	return hc
 }

@@ -450,7 +450,5 @@ func (h *ToolsHandler) recordToolUsage(
 }
 
 func (h *ToolsHandler) sendError(w http.ResponseWriter, message string, code int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": message})
+	writeJSON(w, code, map[string]string{"error": message})
 }

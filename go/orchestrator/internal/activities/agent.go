@@ -699,6 +699,33 @@ func evaluateAgentPolicy(ctx context.Context, input AgentExecutionInput, logger 
 	return decision, nil
 }
 
+// isResearchContext reports whether context requests a research-style tool chain
+// (force_research / research_strategy / research_mode)
+// isResearchContext 判断 context 是否要求 research 风格的 tool 链（force_research / research_strategy / research_mode 任一为真）。
+func isResearchContext(ctx map[string]any) bool {
+	if ctx == nil {
+		return false
+	}
+	// Use util.GetContextBool to handle both bool and string "true" (proto map<string,string> converts to string)
+	if util.GetContextBool(ctx, "force_research") {
+		return true
+	}
+	if rs, ok := ctx["research_strategy"].(string); ok && strings.TrimSpace(rs) != "" {
+		return true
+	}
+	rm, ok := ctx["research_mode"].(string)
+	return ok && strings.TrimSpace(rm) != ""
+}
+
+// roleFromContext extracts the role from context, defaulting to generalist
+// roleFromContext 取出 context 中的 role，缺省为 generalist。
+func roleFromContext(ctx map[string]any) string {
+	if v, ok := ctx["role"].(string); ok && strings.TrimSpace(v) != "" {
+		return strings.TrimSpace(v)
+	}
+	return "generalist"
+}
+
 // executeAgentCore contains the shared logic for executing an agent via gRPC
 // This is used by both ExecuteAgent and ExecuteSimpleTask activities to avoid
 // activities calling other activities directly
@@ -710,15 +737,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	}
 
 	// Best-effort role extraction for observability
-	role := ""
-	if input.Context != nil {
-		if v, ok := input.Context["role"].(string); ok && strings.TrimSpace(v) != "" {
-			role = strings.TrimSpace(v)
-		}
-	}
-	if role == "" {
-		role = "generalist"
-	}
+	role := roleFromContext(input.Context)
 
 	// Apply persona settings if specified
 	if input.PersonaID != "" {
@@ -975,16 +994,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 
 	// Research mode guard: If web_search is suggested but no fetch tools, add web_fetch
 	// This ensures DR policy can execute search→fetch chain even if decomposition only suggested search
-	isResearchMode := false
-	if input.Context != nil {
-		if util.GetContextBool(input.Context, "force_research") {
-			isResearchMode = true
-		} else if rs, ok := input.Context["research_strategy"].(string); ok && strings.TrimSpace(rs) != "" {
-			isResearchMode = true
-		} else if rm, ok := input.Context["research_mode"].(string); ok && strings.TrimSpace(rm) != "" {
-			isResearchMode = true
-		}
-	}
+	isResearchMode := isResearchContext(input.Context)
 	if isResearchMode && hasWebSearch && !hasWebFetch {
 		allowedByRole = append(allowedByRole, "web_fetch", "web_subpage_fetch")
 		logger.Info("Research mode: Added web_fetch alongside web_search to enable search→fetch chain",
@@ -1081,17 +1091,8 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	var selectedToolCalls []map[string]any
 
 	// Detect research-style contexts where we prefer LLM-native tool selection
-	isResearch := false
-	if input.Context != nil {
-		// Use util.GetContextBool to handle both bool and string "true" (proto map<string,string> converts to string)
-		if util.GetContextBool(input.Context, "force_research") {
-			isResearch = true
-		} else if rs, ok := input.Context["research_strategy"].(string); ok && strings.TrimSpace(rs) != "" {
-			isResearch = true
-		} else if rm, ok := input.Context["research_mode"].(string); ok && strings.TrimSpace(rm) != "" {
-			isResearch = true
-		}
-	}
+	// 识别 research 风格 context：这类场景优先走 LLM 原生 tool 选择。
+	isResearch := isResearchContext(input.Context)
 
 	// If ANY role is specified, skip /tools/select and use LLM-native function calling.
 	// Roles are designed for specialized agents with domain-specific system prompts and tools.
@@ -1995,15 +1996,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 
 	// Determine which tool to execute (typically just one from decomposition)
 	// Best-effort role extraction for observability (mirrors executeAgentCore)
-	role := ""
-	if input.Context != nil {
-		if v, ok := input.Context["role"].(string); ok && strings.TrimSpace(v) != "" {
-			role = strings.TrimSpace(v)
-		}
-	}
-	if role == "" {
-		role = "generalist"
-	}
+	role := roleFromContext(input.Context)
 
 	toolName := ""
 	if len(input.SuggestedTools) > 0 {
@@ -2649,15 +2642,7 @@ func emitAgentThinkingEvent(ctx context.Context, input AgentExecutionInput) {
 		}
 
 		// Best-effort role extraction for observability
-		role := ""
-		if input.Context != nil {
-			if v, ok := input.Context["role"].(string); ok && strings.TrimSpace(v) != "" {
-				role = strings.TrimSpace(v)
-			}
-		}
-		if role == "" {
-			role = "generalist"
-		}
+		role := roleFromContext(input.Context)
 
 		message := fmt.Sprintf("Thinking: %s", truncateQuery(input.Query, MaxThinkingChars))
 		eventData := EmitTaskUpdateInput{
@@ -2699,15 +2684,7 @@ func emitToolSelectionEvent(ctx context.Context, input AgentExecutionInput, tool
 		}
 
 		// Best-effort role extraction for observability
-		role := ""
-		if input.Context != nil {
-			if v, ok := input.Context["role"].(string); ok && strings.TrimSpace(v) != "" {
-				role = strings.TrimSpace(v)
-			}
-		}
-		if role == "" {
-			role = "generalist"
-		}
+		role := roleFromContext(input.Context)
 
 		for _, call := range toolCalls {
 			toolName, _ := call["tool"].(string)

@@ -91,16 +91,6 @@ class GoogleProvider(LLMProvider):
                     f"Failed to initialize model {model_config.model_id}: {e}"
                 )
 
-    def _resolve_alias(self, model_id: str) -> str:
-        """Return the configured alias for a given vendor model_id, if any.
-
-        返回给定厂商 model_id 对应的已配置别名（若有）。
-        """
-        for alias, cfg in self.models.items():
-            if cfg.model_id == model_id:
-                return alias
-        return model_id
-
     @staticmethod
     def _content_to_gemini_parts(content) -> list:
         """Convert message content (str or list of blocks) to Gemini parts.

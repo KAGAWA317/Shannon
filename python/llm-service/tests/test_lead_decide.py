@@ -20,6 +20,21 @@ from llm_service.api.lead import (
 )
 
 
+# 模块级，四个 Test* 类共用
+@pytest.fixture
+def mock_providers():
+    providers = MagicMock()
+    providers.is_configured.return_value = True
+    return providers
+
+
+@pytest.fixture
+def mock_request(mock_providers):
+    request = MagicMock()
+    request.app.state.providers = mock_providers
+    return request
+
+
 class TestLeadModels:
     """Test Pydantic models for Lead endpoint."""
 
@@ -171,18 +186,6 @@ class TestLeadModels:
 
 class TestLeadEndpoint:
     """Test the /lead/decide endpoint with mocked LLM."""
-
-    @pytest.fixture
-    def mock_providers(self):
-        providers = MagicMock()
-        providers.is_configured.return_value = True
-        return providers
-
-    @pytest.fixture
-    def mock_request(self, mock_providers):
-        request = MagicMock()
-        request.app.state.providers = mock_providers
-        return request
 
     @pytest.mark.asyncio
     async def test_lead_decide_assign_task(self, mock_request, mock_providers):
@@ -389,18 +392,6 @@ class TestLeadEndpoint:
 class TestLeadClosingCheckpoint:
     """Test max_tokens adjustment for closing_checkpoint events."""
 
-    @pytest.fixture
-    def mock_providers(self):
-        providers = MagicMock()
-        providers.is_configured.return_value = True
-        return providers
-
-    @pytest.fixture
-    def mock_request(self, mock_providers):
-        request = MagicMock()
-        request.app.state.providers = mock_providers
-        return request
-
     def _make_llm_response(self):
         return {
             "output_text": '{"decision_summary": "ok", "actions": [{"type": "done"}]}',
@@ -452,18 +443,6 @@ class TestLeadClosingCheckpoint:
 
 class TestLeadStructuredOutput:
     """Test Lead endpoint uses structured output instead of prefill."""
-
-    @pytest.fixture
-    def mock_providers(self):
-        providers = MagicMock()
-        providers.is_configured.return_value = True
-        return providers
-
-    @pytest.fixture
-    def mock_request(self, mock_providers):
-        request = MagicMock()
-        request.app.state.providers = mock_providers
-        return request
 
     @pytest.mark.asyncio
     async def test_no_assistant_prefill_in_messages(self, mock_request, mock_providers):
@@ -601,18 +580,6 @@ class TestLeadStructuredOutput:
 
 class TestLeadOriginalQueryLanguage:
     """Test original_query language-matching directive injection."""
-
-    @pytest.fixture
-    def mock_providers(self):
-        providers = MagicMock()
-        providers.is_configured.return_value = True
-        return providers
-
-    @pytest.fixture
-    def mock_request(self, mock_providers):
-        request = MagicMock()
-        request.app.state.providers = mock_providers
-        return request
 
     def _make_llm_response(self):
         return {

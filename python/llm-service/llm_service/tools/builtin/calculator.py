@@ -176,17 +176,10 @@ class CalculatorTool(Tool):
         elif isinstance(node, ast.Name):
             # Allow only safe constants and functions
             # 仅允许安全的常量和函数
-            if node.id in SAFE_FUNCTIONS:
-                value = SAFE_FUNCTIONS[node.id]
-                # If it's a constant (like pi or e), return the value directly
-                # 若是常量（如 pi 或 e），直接返回其值
-                if not callable(value):
-                    return value
-                # If it's a function, return it for later calling
-                # 若是函数，则返回供后续调用
-                return value
-            else:
+            if node.id not in SAFE_FUNCTIONS:
                 raise ValueError(f"Unknown variable or function: {node.id}")
+            # 常量（如 pi、e）直接返回值，函数返回可调用对象供 ast.Call 使用
+            return SAFE_FUNCTIONS[node.id]
         elif isinstance(node, ast.BinOp):
             # Binary operations like +, -, *, /
             # 二元运算，如 +、-、*、/

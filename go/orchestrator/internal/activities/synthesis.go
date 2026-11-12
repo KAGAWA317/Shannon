@@ -1529,115 +1529,22 @@ Section requirements:
 		req.Header.Set("X-Parent-Workflow-ID", wfID)
 	}
 
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		logger.Warn("LLM synthesis: HTTP error, falling back", zap.Error(err))
-		// Emit fallback warning to SSE stream
-		if wfID != "" {
+	// fallback 统一回退：跑轻量 synthesis 并发出标准事件序列。
+	// recovery 为 true 时先发 ErrorRecovery；withCitations 为 true 时在 payload 里带上 citations。
+	fallback := func(recovery bool, summaryMsg string, withCitations bool) (SynthesisResult, error) {
+		if recovery && wfID != "" {
+			// Emit fallback warning to SSE stream
 			streaming.Get().Publish(wfID, streaming.Event{
 				WorkflowID: wfID,
 				Type:       string(StreamEventErrorRecovery),
 				AgentID:    "synthesis",
-				Message:    MsgSynthesisFallback("LLM service unavailable"),
+				Message:    MsgSynthesisFallback(""), // helper 忽略实参，固定 "Summarizing results"
 				Timestamp:  time.Now(),
 			})
 		}
-		res, serr := simpleSynthesisNoEvents(ctx, input)
-		if serr != nil {
-			return res, serr
-		}
-		// Append citations saved earlier (if any) to ensure Sources are preserved
-		if savedCitations != "" {
-			res.FinalResult = formatting.FormatReportWithCitations(res.FinalResult, savedCitations)
-		}
-		// Emit standard 3-event sequence (fallback path)
-		if wfID != "" {
-			streaming.Get().Publish(wfID, streaming.Event{
-				WorkflowID: wfID,
-				Type:       string(StreamEventLLMOutput),
-				AgentID:    "synthesis",
-				Message:    truncateQuery(res.FinalResult, MaxSynthesisOutputChars),
-				Payload: map[string]any{
-					"tokens_used": res.TokensUsed,
-				},
-				Timestamp: time.Now(),
-			})
-			streaming.Get().Publish(wfID, streaming.Event{
-				WorkflowID: wfID,
-				Type:       string(StreamEventDataProcessing),
-				AgentID:    "synthesis",
-				Message:    MsgTokensUsed(),
-				Timestamp:  time.Now(),
-			})
-			streaming.Get().Publish(wfID, streaming.Event{
-				WorkflowID: wfID,
-				Type:       string(StreamEventDataProcessing),
-				AgentID:    "synthesis",
-				Message:    MsgFinalAnswer(),
-				Timestamp:  time.Now(),
-			})
-		}
-		return res, nil
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		logger.Warn("LLM synthesis: non-2xx, falling back", zap.Int("status", resp.StatusCode))
-		// Emit fallback warning to SSE stream
-		if wfID != "" {
-			streaming.Get().Publish(wfID, streaming.Event{
-				WorkflowID: wfID,
-				Type:       string(StreamEventErrorRecovery),
-				AgentID:    "synthesis",
-				Message:    MsgSynthesisFallback("LLM returned error"),
-				Timestamp:  time.Now(),
-			})
-		}
-		res, serr := simpleSynthesisNoEvents(ctx, input)
-		if serr != nil {
-			return res, serr
-		}
-		// Append citations saved earlier (if any) to ensure Sources are preserved
-		if savedCitations != "" {
-			res.FinalResult = formatting.FormatReportWithCitations(res.FinalResult, savedCitations)
-		}
-		// Emit standard 3-event sequence (fallback path)
-		if wfID != "" {
-			streaming.Get().Publish(wfID, streaming.Event{
-				WorkflowID: wfID,
-				Type:       string(StreamEventLLMOutput),
-				AgentID:    "synthesis",
-				Message:    truncateQuery(res.FinalResult, MaxSynthesisOutputChars),
-				Payload: map[string]any{
-					"tokens_used": res.TokensUsed,
-				},
-				Timestamp: time.Now(),
-			})
-			streaming.Get().Publish(wfID, streaming.Event{
-				WorkflowID: wfID,
-				Type:       string(StreamEventDataProcessing),
-				AgentID:    "synthesis",
-				Message:    MsgTokensUsed(),
-				Timestamp:  time.Now(),
-			})
-			streaming.Get().Publish(wfID, streaming.Event{
-				WorkflowID: wfID,
-				Type:       string(StreamEventDataProcessing),
-				AgentID:    "synthesis",
-				Message:    MsgFinalAnswer(),
-				Timestamp:  time.Now(),
-			})
-		}
-		return res, nil
-	}
-
-	// Parse /agent/query response format (read body for diagnostics)
-	// 解析 /agent/query 的 response 格式；读原始 body 便于诊断。
-	rawBody, readErr := io.ReadAll(resp.Body)
-	if readErr != nil {
-		logger.Warn("LLM synthesis: read body failed, falling back", zap.Error(readErr))
-		res, serr := simpleSynthesisNoEvents(ctx, input)
-		if serr != nil {
-			return res, serr
+		res, err := simpleSynthesisNoEvents(ctx, input)
+		if err != nil {
+			return res, err
 		}
 		// Append citations saved earlier (if any) to ensure Sources are preserved
 		if savedCitations != "" {
@@ -1649,7 +1556,7 @@ Section requirements:
 				"tokens_used": res.TokensUsed,
 			}
 			// Include citations if available (already in correct format from workflow)
-			if input.CollectedCitations != nil {
+			if withCitations && input.CollectedCitations != nil {
 				payload["citations"] = input.CollectedCitations
 			}
 			streaming.Get().Publish(wfID, streaming.Event{
@@ -1664,7 +1571,7 @@ Section requirements:
 				WorkflowID: wfID,
 				Type:       string(StreamEventDataProcessing),
 				AgentID:    "synthesis",
-				Message:    MsgSynthesisSummary(),
+				Message:    summaryMsg,
 				Timestamp:  time.Now(),
 			})
 			streaming.Get().Publish(wfID, streaming.Event{
@@ -1676,6 +1583,25 @@ Section requirements:
 			})
 		}
 		return res, nil
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		logger.Warn("LLM synthesis: HTTP error, falling back", zap.Error(err))
+		return fallback(true, MsgTokensUsed(), false)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		logger.Warn("LLM synthesis: non-2xx, falling back", zap.Int("status", resp.StatusCode))
+		return fallback(true, MsgTokensUsed(), false)
+	}
+
+	// Parse /agent/query response format (read body for diagnostics)
+	// 解析 /agent/query 的 response 格式；读原始 body 便于诊断。
+	rawBody, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		logger.Warn("LLM synthesis: read body failed, falling back", zap.Error(readErr))
+		return fallback(false, MsgSynthesisSummary(), true)
 	}
 
 	var out struct {
@@ -1689,104 +1615,14 @@ Section requirements:
 			zap.Error(err),
 			zap.String("raw", truncateForLog(string(rawBody), 2000)),
 		)
-		// Emit fallback warning to SSE stream
-		if wfID != "" {
-			streaming.Get().Publish(wfID, streaming.Event{
-				WorkflowID: wfID,
-				Type:       string(StreamEventErrorRecovery),
-				AgentID:    "synthesis",
-				Message:    MsgSynthesisFallback("response decode failed"),
-				Timestamp:  time.Now(),
-			})
-		}
-		res, serr := simpleSynthesisNoEvents(ctx, input)
-		if serr != nil {
-			return res, serr
-		}
-		// Append citations saved earlier (if any) to ensure Sources are preserved
-		if savedCitations != "" {
-			res.FinalResult = formatting.FormatReportWithCitations(res.FinalResult, savedCitations)
-		}
-		// Emit standard 3-event sequence (fallback path)
-		if wfID != "" {
-			streaming.Get().Publish(wfID, streaming.Event{
-				WorkflowID: wfID,
-				Type:       string(StreamEventLLMOutput),
-				AgentID:    "synthesis",
-				Message:    truncateQuery(res.FinalResult, MaxSynthesisOutputChars),
-				Payload: map[string]any{
-					"tokens_used": res.TokensUsed,
-				},
-				Timestamp: time.Now(),
-			})
-			streaming.Get().Publish(wfID, streaming.Event{
-				WorkflowID: wfID,
-				Type:       string(StreamEventDataProcessing),
-				AgentID:    "synthesis",
-				Message:    MsgSynthesisSummary(),
-				Timestamp:  time.Now(),
-			})
-			streaming.Get().Publish(wfID, streaming.Event{
-				WorkflowID: wfID,
-				Type:       string(StreamEventDataProcessing),
-				AgentID:    "synthesis",
-				Message:    MsgFinalAnswer(),
-				Timestamp:  time.Now(),
-			})
-		}
-		return res, nil
+		return fallback(true, MsgSynthesisSummary(), false)
 	}
 
 	if out.Response == "" {
 		logger.Warn("LLM synthesis: empty response, falling back",
 			zap.String("raw", truncateForLog(string(rawBody), 2000)),
 		)
-		// Emit fallback warning to SSE stream
-		if wfID != "" {
-			streaming.Get().Publish(wfID, streaming.Event{
-				WorkflowID: wfID,
-				Type:       string(StreamEventErrorRecovery),
-				AgentID:    "synthesis",
-				Message:    MsgSynthesisFallback("LLM returned empty response"),
-				Timestamp:  time.Now(),
-			})
-		}
-		res, serr := simpleSynthesisNoEvents(ctx, input)
-		if serr != nil {
-			return res, serr
-		}
-		// Append citations saved earlier (if any) to ensure Sources are preserved
-		if savedCitations != "" {
-			res.FinalResult = formatting.FormatReportWithCitations(res.FinalResult, savedCitations)
-		}
-		// Emit standard 3-event sequence (fallback path)
-		if wfID != "" {
-			streaming.Get().Publish(wfID, streaming.Event{
-				WorkflowID: wfID,
-				Type:       string(StreamEventLLMOutput),
-				AgentID:    "synthesis",
-				Message:    truncateQuery(res.FinalResult, MaxSynthesisOutputChars),
-				Payload: map[string]any{
-					"tokens_used": res.TokensUsed,
-				},
-				Timestamp: time.Now(),
-			})
-			streaming.Get().Publish(wfID, streaming.Event{
-				WorkflowID: wfID,
-				Type:       string(StreamEventDataProcessing),
-				AgentID:    "synthesis",
-				Message:    MsgSynthesisSummary(),
-				Timestamp:  time.Now(),
-			})
-			streaming.Get().Publish(wfID, streaming.Event{
-				WorkflowID: wfID,
-				Type:       string(StreamEventDataProcessing),
-				AgentID:    "synthesis",
-				Message:    MsgFinalAnswer(),
-				Timestamp:  time.Now(),
-			})
-		}
-		return res, nil
+		return fallback(true, MsgSynthesisSummary(), false)
 	}
 
 	// Extract model info: prefer top-level model_used; fallback to metadata.model

@@ -191,13 +191,6 @@ func minPositive(a, b int) int {
 	}
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func Reload() {
 	mu.Lock()
 	defer mu.Unlock()

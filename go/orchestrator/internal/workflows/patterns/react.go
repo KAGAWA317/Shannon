@@ -18,11 +18,6 @@ import (
 	wopts "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/workflows/opts"
 )
 
-// getContextBool extracts a boolean from context, handling both bool and string "true"
-func getContextBool(ctx map[string]any, key string) bool {
-	return util.GetContextBool(ctx, key)
-}
-
 // ReactConfig controls the Reason-Act-Observe loop behavior
 type ReactConfig struct {
 	MaxIterations     int // Maximum number of ReAct loops
@@ -82,7 +77,7 @@ func ReactLoop(
 
 	isResearch := false
 	if baseContext != nil {
-		if getContextBool(baseContext, "force_research") {
+		if util.GetContextBool(baseContext, "force_research") {
 			isResearch = true
 		} else if rs, ok := baseContext["research_strategy"].(string); ok && strings.TrimSpace(rs) != "" {
 			isResearch = true
@@ -309,7 +304,7 @@ func ReactLoop(
 		// tool 由 LLM 自行选择，不做 pattern matching；研究 mode 下偏向 web_search + web_fetch 以保证引用，
 		// 非研究场景则启用 python_executor 以支持计算。
 		if baseContext != nil {
-			if getContextBool(baseContext, "force_research") {
+			if util.GetContextBool(baseContext, "force_research") {
 				suggestedTools = []string{"web_search", "web_fetch", "python_executor"}
 			} else if rs, ok := baseContext["research_strategy"].(string); ok && strings.TrimSpace(rs) != "" {
 				suggestedTools = []string{"web_search", "web_fetch", "python_executor"}

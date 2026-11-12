@@ -30,71 +30,54 @@ func NewDatabaseWrapper(db *sql.DB, logger *zap.Logger) *DatabaseWrapper {
 	}
 }
 
-// PingContext wraps database ping with circuit breaker
-func (dw *DatabaseWrapper) PingContext(ctx context.Context) error {
-	var err error
-
-	cbErr := dw.cb.Execute(ctx, func() error {
-		err = dw.db.PingContext(ctx)
+// run 在 breaker 保护下执行 fn，并记录一次 request 指标；breaker 拒绝时返回零值+cbErr。
+func run[T any](cb *CircuitBreaker, ctx context.Context, fn func() (T, error)) (T, error) {
+	var (
+		val T
+		err error
+	)
+	cbErr := cb.Execute(ctx, func() error {
+		val, err = fn()
 		return err
 	})
-
-	// Record metrics
-	state := dw.cb.State()
-	success := cbErr == nil && err == nil
-	GlobalMetricsCollector.RecordRequest("postgresql", "database-client", state, success)
-
+	GlobalMetricsCollector.RecordRequest("postgresql", "database-client", cb.State(), cbErr == nil && err == nil)
 	if cbErr != nil {
-		return cbErr
+		var zero T
+		return zero, cbErr
 	}
+	return val, err
+}
+
+func runErr(cb *CircuitBreaker, ctx context.Context, fn func() error) error {
+	_, err := run(cb, ctx, func() (struct{}, error) { return struct{}{}, fn() })
 	return err
+}
+
+// PingContext wraps database ping with circuit breaker
+func (dw *DatabaseWrapper) PingContext(ctx context.Context) error {
+	return runErr(dw.cb, ctx, func() error {
+		return dw.db.PingContext(ctx)
+	})
 }
 
 // QueryContext wraps database query with circuit breaker
 func (dw *DatabaseWrapper) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
-	var rows *sql.Rows
-	var err error
-
-	cbErr := dw.cb.Execute(ctx, func() error {
-		rows, err = dw.db.QueryContext(ctx, query, args...)
-		return err
+	return run(dw.cb, ctx, func() (*sql.Rows, error) {
+		return dw.db.QueryContext(ctx, query, args...)
 	})
-
-	// Record metrics
-	state := dw.cb.State()
-	success := cbErr == nil && err == nil
-	GlobalMetricsCollector.RecordRequest("postgresql", "database-client", state, success)
-
-	if cbErr != nil {
-		return nil, cbErr
-	}
-	return rows, err
 }
 
 // QueryRowContext wraps database query row with circuit breaker
 // Returns (*sql.Row, error) to properly propagate circuit breaker errors
 func (dw *DatabaseWrapper) QueryRowContextCB(ctx context.Context, query string, args ...any) (*sql.Row, error) {
-	var row *sql.Row
-
-	cbErr := dw.cb.Execute(ctx, func() error {
-		row = dw.db.QueryRowContext(ctx, query, args...)
+	// Record metrics - assume success for QueryRow since errors are deferred
+	// 记录指标：QueryRow 的错误被延后，此处按成功计
+	return run(dw.cb, ctx, func() (*sql.Row, error) {
 		// We can't easily check for query errors here since sql.Row doesn't expose them
 		// The error will be checked when Scan() is called
 		// sql.Row 不会立即暴露查询错误，需等到调用 Scan() 时才能发现。
-		return nil
+		return dw.db.QueryRowContext(ctx, query, args...), nil
 	})
-
-	// Record metrics - assume success for QueryRow since errors are deferred
-	// 记录指标：QueryRow 的错误被延后，此处按成功计
-	state := dw.cb.State()
-	success := cbErr == nil
-	GlobalMetricsCollector.RecordRequest("postgresql", "database-client", state, success)
-
-	if cbErr != nil {
-		return nil, cbErr
-	}
-
-	return row, nil
 }
 
 // QueryRowContext wraps database query row with circuit breaker (legacy API)
@@ -112,23 +95,9 @@ func (dw *DatabaseWrapper) QueryRowContext(ctx context.Context, query string, ar
 
 // ExecContext wraps database exec with circuit breaker
 func (dw *DatabaseWrapper) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	var result sql.Result
-	var err error
-
-	cbErr := dw.cb.Execute(ctx, func() error {
-		result, err = dw.db.ExecContext(ctx, query, args...)
-		return err
+	return run(dw.cb, ctx, func() (sql.Result, error) {
+		return dw.db.ExecContext(ctx, query, args...)
 	})
-
-	// Record metrics
-	state := dw.cb.State()
-	success := cbErr == nil && err == nil
-	GlobalMetricsCollector.RecordRequest("postgresql", "database-client", state, success)
-
-	if cbErr != nil {
-		return nil, cbErr
-	}
-	return result, err
 }
 
 // TxWrapper wraps sql.Tx with circuit breaker protection
@@ -140,22 +109,9 @@ type TxWrapper struct {
 
 // BeginTx wraps database transaction begin with circuit breaker
 func (dw *DatabaseWrapper) BeginTx(ctx context.Context, opts *sql.TxOptions) (*TxWrapper, error) {
-	var tx *sql.Tx
-	var err error
-
-	cbErr := dw.cb.Execute(ctx, func() error {
-		tx, err = dw.db.BeginTx(ctx, opts)
-		return err
+	tx, err := run(dw.cb, ctx, func() (*sql.Tx, error) {
+		return dw.db.BeginTx(ctx, opts)
 	})
-
-	// Record metrics
-	state := dw.cb.State()
-	success := cbErr == nil && err == nil
-	GlobalMetricsCollector.RecordRequest("postgresql", "database-client", state, success)
-
-	if cbErr != nil {
-		return nil, cbErr
-	}
 	if err != nil {
 		return nil, err
 	}
@@ -169,81 +125,27 @@ func (dw *DatabaseWrapper) BeginTx(ctx context.Context, opts *sql.TxOptions) (*T
 
 // Transaction wrapper methods
 func (tw *TxWrapper) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	var result sql.Result
-	var err error
-
-	cbErr := tw.cb.Execute(ctx, func() error {
-		result, err = tw.tx.ExecContext(ctx, query, args...)
-		return err
+	return run(tw.cb, ctx, func() (sql.Result, error) {
+		return tw.tx.ExecContext(ctx, query, args...)
 	})
-
-	// Record metrics
-	state := tw.cb.State()
-	success := cbErr == nil && err == nil
-	GlobalMetricsCollector.RecordRequest("postgresql", "database-client", state, success)
-
-	if cbErr != nil {
-		return nil, cbErr
-	}
-	return result, err
 }
 
 func (tw *TxWrapper) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
-	var rows *sql.Rows
-	var err error
-
-	cbErr := tw.cb.Execute(ctx, func() error {
-		rows, err = tw.tx.QueryContext(ctx, query, args...)
-		return err
+	return run(tw.cb, ctx, func() (*sql.Rows, error) {
+		return tw.tx.QueryContext(ctx, query, args...)
 	})
-
-	// Record metrics
-	state := tw.cb.State()
-	success := cbErr == nil && err == nil
-	GlobalMetricsCollector.RecordRequest("postgresql", "database-client", state, success)
-
-	if cbErr != nil {
-		return nil, cbErr
-	}
-	return rows, err
 }
 
 func (tw *TxWrapper) QueryRowContext(ctx context.Context, query string, args ...any) (*sql.Row, error) {
-	var row *sql.Row
-
-	cbErr := tw.cb.Execute(ctx, func() error {
-		row = tw.tx.QueryRowContext(ctx, query, args...)
-		return nil
+	return run(tw.cb, ctx, func() (*sql.Row, error) {
+		return tw.tx.QueryRowContext(ctx, query, args...), nil
 	})
-
-	// Record metrics
-	state := tw.cb.State()
-	success := cbErr == nil
-	GlobalMetricsCollector.RecordRequest("postgresql", "database-client", state, success)
-
-	if cbErr != nil {
-		return nil, cbErr
-	}
-	return row, nil
 }
 
 func (tw *TxWrapper) PrepareContext(ctx context.Context, query string) (*StmtWrapper, error) {
-	var stmt *sql.Stmt
-	var err error
-
-	cbErr := tw.cb.Execute(ctx, func() error {
-		stmt, err = tw.tx.PrepareContext(ctx, query)
-		return err
+	stmt, err := run(tw.cb, ctx, func() (*sql.Stmt, error) {
+		return tw.tx.PrepareContext(ctx, query)
 	})
-
-	// Record metrics
-	state := tw.cb.State()
-	success := cbErr == nil && err == nil
-	GlobalMetricsCollector.RecordRequest("postgresql", "database-client", state, success)
-
-	if cbErr != nil {
-		return nil, cbErr
-	}
 	if err != nil {
 		return nil, err
 	}
@@ -256,22 +158,9 @@ func (tw *TxWrapper) PrepareContext(ctx context.Context, query string) (*StmtWra
 }
 
 func (tw *TxWrapper) Commit() error {
-	var err error
-
-	cbErr := tw.cb.Execute(context.Background(), func() error {
-		err = tw.tx.Commit()
-		return err
+	return runErr(tw.cb, context.Background(), func() error {
+		return tw.tx.Commit()
 	})
-
-	// Record metrics
-	state := tw.cb.State()
-	success := cbErr == nil && err == nil
-	GlobalMetricsCollector.RecordRequest("postgresql", "database-client", state, success)
-
-	if cbErr != nil {
-		return cbErr
-	}
-	return err
 }
 
 func (tw *TxWrapper) Rollback() error {
@@ -289,22 +178,9 @@ type StmtWrapper struct {
 
 // PrepareContext wraps database prepare with circuit breaker
 func (dw *DatabaseWrapper) PrepareContext(ctx context.Context, query string) (*StmtWrapper, error) {
-	var stmt *sql.Stmt
-	var err error
-
-	cbErr := dw.cb.Execute(ctx, func() error {
-		stmt, err = dw.db.PrepareContext(ctx, query)
-		return err
+	stmt, err := run(dw.cb, ctx, func() (*sql.Stmt, error) {
+		return dw.db.PrepareContext(ctx, query)
 	})
-
-	// Record metrics
-	state := dw.cb.State()
-	success := cbErr == nil && err == nil
-	GlobalMetricsCollector.RecordRequest("postgresql", "database-client", state, success)
-
-	if cbErr != nil {
-		return nil, cbErr
-	}
 	if err != nil {
 		return nil, err
 	}
@@ -318,62 +194,21 @@ func (dw *DatabaseWrapper) PrepareContext(ctx context.Context, query string) (*S
 
 // Statement wrapper methods
 func (sw *StmtWrapper) ExecContext(ctx context.Context, args ...any) (sql.Result, error) {
-	var result sql.Result
-	var err error
-
-	cbErr := sw.cb.Execute(ctx, func() error {
-		result, err = sw.stmt.ExecContext(ctx, args...)
-		return err
+	return run(sw.cb, ctx, func() (sql.Result, error) {
+		return sw.stmt.ExecContext(ctx, args...)
 	})
-
-	// Record metrics
-	state := sw.cb.State()
-	success := cbErr == nil && err == nil
-	GlobalMetricsCollector.RecordRequest("postgresql", "database-client", state, success)
-
-	if cbErr != nil {
-		return nil, cbErr
-	}
-	return result, err
 }
 
 func (sw *StmtWrapper) QueryContext(ctx context.Context, args ...any) (*sql.Rows, error) {
-	var rows *sql.Rows
-	var err error
-
-	cbErr := sw.cb.Execute(ctx, func() error {
-		rows, err = sw.stmt.QueryContext(ctx, args...)
-		return err
+	return run(sw.cb, ctx, func() (*sql.Rows, error) {
+		return sw.stmt.QueryContext(ctx, args...)
 	})
-
-	// Record metrics
-	state := sw.cb.State()
-	success := cbErr == nil && err == nil
-	GlobalMetricsCollector.RecordRequest("postgresql", "database-client", state, success)
-
-	if cbErr != nil {
-		return nil, cbErr
-	}
-	return rows, err
 }
 
 func (sw *StmtWrapper) QueryRowContext(ctx context.Context, args ...any) (*sql.Row, error) {
-	var row *sql.Row
-
-	cbErr := sw.cb.Execute(ctx, func() error {
-		row = sw.stmt.QueryRowContext(ctx, args...)
-		return nil
+	return run(sw.cb, ctx, func() (*sql.Row, error) {
+		return sw.stmt.QueryRowContext(ctx, args...), nil
 	})
-
-	// Record metrics
-	state := sw.cb.State()
-	success := cbErr == nil
-	GlobalMetricsCollector.RecordRequest("postgresql", "database-client", state, success)
-
-	if cbErr != nil {
-		return nil, cbErr
-	}
-	return row, nil
 }
 
 func (sw *StmtWrapper) Close() error {

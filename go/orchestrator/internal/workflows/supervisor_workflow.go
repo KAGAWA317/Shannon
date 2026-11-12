@@ -391,10 +391,6 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	// Emit team status event after decomposition
 	if len(decomp.Subtasks) > 1 {
 		message := fmt.Sprintf("Coordinating %d agents to handle subtasks", len(decomp.Subtasks))
-		emitCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-			StartToCloseTimeout: 30 * time.Second,
-			RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
-		})
 		if err := workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: workflowID,
 			EventType:  activities.StreamEventTeamStatus,
@@ -443,10 +439,6 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 		}
 
 		// Ensure WORKFLOW_COMPLETED is emitted even on the simple path
-		emitCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-			StartToCloseTimeout: 30 * time.Second,
-			RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
-		})
 		_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: workflowID,
 			EventType:  activities.StreamEventWorkflowCompleted,
@@ -535,10 +527,6 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 
 		// Emit progress event for this subtask
 		progressMessage := fmt.Sprintf("Working on step %d of %d", i+1, len(decomp.Subtasks))
-		emitCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-			StartToCloseTimeout: 30 * time.Second,
-			RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
-		})
 		if err := workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: workflowID,
 			EventType:  activities.StreamEventProgress,
@@ -582,10 +570,6 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 				msgChan.Send(ctx, msg)
 			}
 			// Stream role assignment
-			emitCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-				StartToCloseTimeout: 30 * time.Second,
-				RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
-			})
 			if err := workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 				WorkflowID: workflowID,
 				EventType:  activities.StreamEventRoleAssigned,
@@ -691,10 +675,6 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 					// Emit waiting event on first attempt
 					if attempts == 0 {
 						waitMessage := "Waiting on a previous step"
-						emitCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-							StartToCloseTimeout: 30 * time.Second,
-							RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
-						})
 						if err := workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 							WorkflowID: workflowID,
 							EventType:  activities.StreamEventWaiting,
@@ -751,10 +731,6 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 					logger.Warn("Dependency wait timeout", "topic", topic, "wait_time", maxWaitTime, "attempts", attempts)
 				}
 				// Stream dependency satisfied
-				emitCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-					StartToCloseTimeout: 30 * time.Second,
-					RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
-				})
 				if err := workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 					WorkflowID: workflowID,
 					EventType:  activities.StreamEventDependencySatisfied,
@@ -1058,10 +1034,6 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	// Emit data processing event for synthesis
 	if len(childResults) > 1 {
 		synthMessage := "Combining results"
-		emitCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-			StartToCloseTimeout: 30 * time.Second,
-			RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
-		})
 		if err := workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: workflowID,
 			EventType:  activities.StreamEventDataProcessing,
@@ -1505,10 +1477,6 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	}
 
 	// Emit workflow completed event for dashboards
-	emitCtx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		StartToCloseTimeout: 30 * time.Second,
-		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
-	})
 	_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 		WorkflowID: workflowID,
 		EventType:  activities.StreamEventWorkflowCompleted,

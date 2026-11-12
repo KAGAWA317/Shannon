@@ -178,6 +178,18 @@ async def apply_extraction(
     return result
 
 
+def apply_research_truncation(result: ToolResult, max_length: int) -> ToolResult:
+    """Research mode: skip LLM extraction and hard-truncate to max_length.
+    research mode：跳过 LLM 提取，直接按 max_length 硬截断。"""
+    if result.success and result.output:
+        content = result.output.get("content", "")
+        if len(content) > max_length:
+            result.output["content"] = content[:max_length]
+            result.output["truncated"] = True
+            result.output["char_count"] = len(result.output["content"])
+    return result
+
+
 # --- Batch extraction (N pages → 1 LLM call) ---
 # --- 批量提取（N 个页面 → 1 次 LLM 调用）---
 
@@ -1769,13 +1781,7 @@ class WebFetchTool(Tool):
             """Research mode: hard-truncate. Otherwise: LLM extraction.
             research mode：硬截断。其他情况：LLM 提取。"""
             if _research_mode:
-                if result.success and result.output:
-                    content = result.output.get("content", "")
-                    if len(content) > max_length:
-                        result.output["content"] = content[:max_length]
-                        result.output["truncated"] = True
-                        result.output["char_count"] = len(result.output["content"])
-                return result
+                return apply_research_truncation(result, max_length)
             return await apply_extraction(result, extract_prompt, max_length)
 
         # DEPRECATED: These parameters are ignored in v3.0.0

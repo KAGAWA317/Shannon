@@ -1020,17 +1020,6 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	// NOTE: force_swarm is handled in early routing (before decomposition) to avoid
 	// redundant LLM calls. See "Early route: Force SwarmWorkflow" block above.
 
-	// Supervisor heuristic: very large plans, explicit dependencies, or forced P2P
-	hasDeps := forceP2P // Start with force flag
-	if !hasDeps {
-		for _, st := range decomp.Subtasks {
-			if len(st.Dependencies) > 0 || len(st.Consumes) > 0 {
-				hasDeps = true
-				break
-			}
-		}
-	}
-
 	switch {
 	case isSimple && !forceP2P:
 		// Check pause/cancel before starting child workflow
@@ -1059,46 +1048,6 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			ParentClosePolicy: enums.PARENT_CLOSE_POLICY_REQUEST_CANCEL,
 		})
 		childFuture := workflow.ExecuteChildWorkflow(childCtx, SimpleTaskWorkflow, input)
-		var childExec workflow.Execution
-		if err := childFuture.GetChildWorkflowExecution().Get(childCtx, &childExec); err != nil {
-			return TaskResult{Success: false, ErrorMessage: fmt.Sprintf("Failed to get child execution: %v", err)}, err
-		}
-		controlHandler.RegisterChildWorkflow(childExec.ID)
-		execErr := childFuture.Get(childCtx, &result)
-		controlHandler.UnregisterChildWorkflow(childExec.ID)
-
-		// Generate title regardless of success/failure (best-effort)
-		scheduleStreamEnd(ctx)
-
-		if execErr != nil {
-			// Emit workflow.cancelled if this was a cancellation (child skipped emission due to SkipSSEEmit)
-			controlHandler.EmitCancelledIfNeeded(ctx, execErr.Error())
-			result = AddTaskContextToMetadata(result, input.Context)
-			return result, execErr
-		}
-		// Add task context to metadata for API exposure
-		result = AddTaskContextToMetadata(result, input.Context)
-		return result, nil
-
-	case false: // Supervisor routing disabled — all multi-task flows use DAGWorkflow
-		// Check pause/cancel before starting child workflow
-		if err := controlHandler.CheckPausePoint(ctx, "pre_supervisor_workflow"); err != nil {
-			return TaskResult{Success: false, ErrorMessage: err.Error()}, err
-		}
-		var result TaskResult
-		ometrics.WorkflowsStarted.WithLabelValues("SupervisorWorkflow", "complex").Inc()
-		// Emit delegation event
-		_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
-			WorkflowID: parentWorkflowID,
-			EventType:  activities.StreamEventDelegation,
-			AgentID:    "orchestrator",
-			Message:    activities.MsgHandoffSupervisor(),
-			Timestamp:  workflow.Now(ctx),
-		}).Get(ctx, nil)
-		childCtx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
-			ParentClosePolicy: enums.PARENT_CLOSE_POLICY_REQUEST_CANCEL,
-		})
-		childFuture := workflow.ExecuteChildWorkflow(childCtx, SupervisorWorkflow, input)
 		var childExec workflow.Execution
 		if err := childFuture.GetChildWorkflowExecution().Get(childCtx, &childExec); err != nil {
 			return TaskResult{Success: false, ErrorMessage: fmt.Sprintf("Failed to get child execution: %v", err)}, err

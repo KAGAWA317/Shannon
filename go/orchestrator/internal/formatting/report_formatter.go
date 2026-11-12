@@ -3,6 +3,7 @@ package formatting
 import (
     "regexp"
     "sort"
+    "strconv"
     "strings"
 )
 
@@ -34,11 +35,7 @@ func FormatReportWithCitations(synthesis string, citationsList string) string {
     for _, m := range re.FindAllStringSubmatch(s, -1) {
         if len(m) == 2 {
             // parse int safely
-            var n int
-            for i := 0; i < len(m[1]); i++ {
-                n = n*10 + int(m[1][i]-'0')
-            }
-            if n > 0 {
+            if n, _ := strconv.Atoi(m[1]); n > 0 {
                 used[n] = true
             }
         }
@@ -71,9 +68,7 @@ func FormatReportWithCitations(synthesis string, citationsList string) string {
         // Determine index from leading [n]
         idx := 0
         if m := re.FindStringSubmatch(t); len(m) == 2 {
-            for i := 0; i < len(m[1]); i++ {
-                idx = idx*10 + int(m[1][i]-'0')
-            }
+            idx, _ = strconv.Atoi(m[1])
         }
         label := "Additional source"
         if used[idx] {
@@ -94,10 +89,7 @@ func FormatReportWithCitations(synthesis string, citationsList string) string {
         // Extract first number in each line
         first := func(s string) int {
             if m := re.FindStringSubmatch(s); len(m) == 2 {
-                n := 0
-                for i := 0; i < len(m[1]); i++ {
-                    n = n*10 + int(m[1][i]-'0')
-                }
+                n, _ := strconv.Atoi(m[1])
                 return n
             }
             return 0

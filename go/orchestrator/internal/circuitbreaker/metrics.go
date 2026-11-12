@@ -1,6 +1,7 @@
 package circuitbreaker
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -109,11 +110,10 @@ func (mc *MetricsCollector) UpdateMetrics() {
 	defer mc.mutex.RUnlock()
 
 	for key, cb := range mc.breakers {
-		parts := splitKey(key)
-		if len(parts) != 2 {
+		service, name, ok := strings.Cut(key, ":")
+		if !ok {
 			continue
 		}
-		service, name := parts[0], parts[1]
 
 		state := cb.State()
 		circuitBreakerState.WithLabelValues(name, service).Set(float64(state))
@@ -122,15 +122,6 @@ func (mc *MetricsCollector) UpdateMetrics() {
 		// No need to update them here as they are counters, not gauges
 		// 单次 request 计数已在 RecordRequest 中更新；这里是 counter 而非 gauge，无需重复设置。
 	}
-}
-
-func splitKey(key string) []string {
-	for i, r := range key {
-		if r == ':' {
-			return []string{key[:i], key[i+1:]}
-		}
-	}
-	return []string{key}
 }
 
 // Global metrics collector instance

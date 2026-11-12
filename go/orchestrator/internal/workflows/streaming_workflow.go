@@ -498,35 +498,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 				ctxMap["synthesis_style"] = "comprehensive"
 			}
 		}
-		if len(collectedCitations) > 0 {
-			var b strings.Builder
-			for i, c := range collectedCitations {
-				idx := i + 1
-				title := c.Title
-				if title == "" {
-					title = c.Source
-				}
-				if c.PublishedDate != nil {
-					fmt.Fprintf(&b, "[%d] %s (%s) - %s, %s\n", idx, title, c.URL, c.Source, c.PublishedDate.Format("2006-01-02"))
-				} else {
-					fmt.Fprintf(&b, "[%d] %s (%s) - %s\n", idx, title, c.URL, c.Source)
-				}
-			}
-			ctxMap["available_citations"] = strings.TrimRight(b.String(), "\n")
-			ctxMap["citation_count"] = len(collectedCitations)
-
-			out := make([]map[string]any, 0, len(collectedCitations))
-			for _, c := range collectedCitations {
-				out = append(out, map[string]any{
-					"url":               c.URL,
-					"title":             c.Title,
-					"source":            c.Source,
-					"credibility_score": c.CredibilityScore,
-					"quality_score":     c.QualityScore,
-				})
-			}
-			ctxMap["citations"] = out
-		}
+		addCitationsToContext(ctxMap, collectedCitations)
 		return ctxMap
 	}
 
@@ -538,52 +510,35 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	agentResults := make([]activities.AgentExecutionResult, len(results))
 	copy(agentResults, results)
 
-	if input.BypassSingleResult && len(agentResults) == 1 && agentResults[0].Success {
+	// 先把 bypass 条件算完（含 tools 与 JSON 两项否决），再只调用一次合成。
+	bypass := input.BypassSingleResult && len(agentResults) == 1 && agentResults[0].Success
+	if bypass {
 		// Avoid bypass if the single result looks like raw JSON or comes from web_search
 		// 若唯一结果是裸 JSON 或来自 web_search，则不要跳过合成。
-		shouldBypass := true
-		if len(agentResults[0].ToolsUsed) > 0 {
-			for _, t := range agentResults[0].ToolsUsed {
-				if strings.EqualFold(t, "web_search") {
-					shouldBypass = false
-					break
-				}
+		for _, t := range agentResults[0].ToolsUsed {
+			if strings.EqualFold(t, "web_search") {
+				bypass = false
+				break
 			}
 		}
-		if shouldBypass {
-			trimmed := strings.TrimSpace(agentResults[0].Response)
-			if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
-				shouldBypass = false
-			}
+	}
+	if bypass {
+		trimmed := strings.TrimSpace(agentResults[0].Response)
+		if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+			bypass = false
 		}
+	}
 
-		if shouldBypass {
-			synthesis = activities.SynthesisResult{FinalResult: agentResults[0].Response, TokensUsed: agentResults[0].TokensUsed}
-		} else {
-			var err error
-			err = workflow.ExecuteActivity(ctx, activities.SynthesizeResultsLLM, activities.SynthesisInput{
-				Query:              input.Query,
-				AgentResults:       agentResults,
-				Context:            buildContext(),
-				CollectedCitations: collectedCitations,
-				ParentWorkflowID:   workflowID,
-			}).Get(ctx, &synthesis)
-			if err != nil {
-				logger.Error("Result synthesis failed", "error", err)
-				return TaskResult{Success: false, ErrorMessage: err.Error()}, err
-			}
-			didSynthesisLLM = true
-		}
+	if bypass {
+		synthesis = activities.SynthesisResult{FinalResult: agentResults[0].Response, TokensUsed: agentResults[0].TokensUsed}
 	} else {
-		var err error
-		err = workflow.ExecuteActivity(ctx, activities.SynthesizeResultsLLM, activities.SynthesisInput{
+		if err := workflow.ExecuteActivity(ctx, activities.SynthesizeResultsLLM, activities.SynthesisInput{
 			Query:              input.Query,
 			AgentResults:       agentResults,
 			Context:            buildContext(),
 			CollectedCitations: collectedCitations,
 			ParentWorkflowID:   workflowID,
-		}).Get(ctx, &synthesis)
-		if err != nil {
+		}).Get(ctx, &synthesis); err != nil {
 			logger.Error("Result synthesis failed", "error", err)
 			return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 		}

@@ -86,7 +86,7 @@ func (a *Activities) GenerateSubqueries(ctx context.Context, input SubqueryGener
 
 	// Call LLM service
 	// 调用 LLM service。
-	llmServiceURL := getenvDefault("LLM_SERVICE_URL", "http://llm-service:8000")
+	llmServiceURL := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
 	reqBody := map[string]any{
@@ -578,13 +578,6 @@ func extractKeyTerms(text string) []string {
 		}
 	}
 	return found
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // detectGapInfoType maps gap area text to entity_gap_queries keys from config

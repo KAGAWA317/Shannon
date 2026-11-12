@@ -142,13 +142,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Check for budget configuration
-	agentMaxTokens := 0
-	if v, ok := baseContext["budget_agent_max"].(int); ok {
-		agentMaxTokens = v
-	}
-	if v, ok := baseContext["budget_agent_max"].(float64); ok && v > 0 {
-		agentMaxTokens = int(v)
-	}
+	agentMaxTokens := getBudgetMax(baseContext)
 
 	modelTier := determineModelTier(baseContext, "medium")
 	var totalTokens int
@@ -449,35 +443,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 				}, err
 			}
 			totalTokens += synthesis.TokensUsed
-			if synthesis.TokensUsed > 0 {
-				inTok := synthesis.InputTokens
-				outTok := synthesis.CompletionTokens
-				if inTok == 0 && outTok > 0 {
-					est := synthesis.TokensUsed - outTok
-					if est > 0 {
-						inTok = est
-					}
-				}
-				recCtx := opts.WithTokenRecordOptions(ctx)
-				wid := input.ParentWorkflowID
-				if wid == "" {
-					wid = workflow.GetInfo(ctx).WorkflowExecution.ID
-				}
-				_ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
-					UserID:       input.UserID,
-					SessionID:    input.SessionID,
-					TaskID:       wid,
-					AgentID:      "dag_synthesis",
-					Model:        synthesis.ModelUsed,
-					Provider:     synthesis.Provider,
-					InputTokens:  inTok,
-					OutputTokens: outTok,
-					Metadata: map[string]any{
-						"phase":    "synthesis",
-						"workflow": "dag",
-					},
-				}).Get(recCtx, nil)
-			}
+			recordSynthesisTokenUsage(ctx, input, synthesis)
 		}
 	} else if hasSynthesisSubtask && synthesisTaskIdx >= 0 && synthesisTaskIdx < len(agentResults) && agentResults[synthesisTaskIdx].Success {
 		// If citations exist, re-run synthesis to inject inline citation numbers.
@@ -533,35 +499,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 					}, err
 				}
 				totalTokens += synthesis.TokensUsed
-				if synthesis.TokensUsed > 0 {
-					inTok := synthesis.InputTokens
-					outTok := synthesis.CompletionTokens
-					if inTok == 0 && outTok > 0 {
-						est := synthesis.TokensUsed - outTok
-						if est > 0 {
-							inTok = est
-						}
-					}
-					recCtx := opts.WithTokenRecordOptions(ctx)
-					wid := input.ParentWorkflowID
-					if wid == "" {
-						wid = workflow.GetInfo(ctx).WorkflowExecution.ID
-					}
-					_ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
-						UserID:       input.UserID,
-						SessionID:    input.SessionID,
-						TaskID:       wid,
-						AgentID:      "dag_synthesis",
-						Model:        synthesis.ModelUsed,
-						Provider:     synthesis.Provider,
-						InputTokens:  inTok,
-						OutputTokens: outTok,
-						Metadata: map[string]any{
-							"phase":    "synthesis",
-							"workflow": "dag",
-						},
-					}).Get(recCtx, nil)
-				}
+				recordSynthesisTokenUsage(ctx, input, synthesis)
 			}
 		} else {
 			// Citations present: re-run synthesis to inject inline citations and sources
@@ -587,35 +525,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 				}, err
 			}
 			totalTokens += synthesis.TokensUsed
-			if synthesis.TokensUsed > 0 {
-				inTok := synthesis.InputTokens
-				outTok := synthesis.CompletionTokens
-				if inTok == 0 && outTok > 0 {
-					est := synthesis.TokensUsed - outTok
-					if est > 0 {
-						inTok = est
-					}
-				}
-				recCtx := opts.WithTokenRecordOptions(ctx)
-				wid := input.ParentWorkflowID
-				if wid == "" {
-					wid = workflow.GetInfo(ctx).WorkflowExecution.ID
-				}
-				_ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
-					UserID:       input.UserID,
-					SessionID:    input.SessionID,
-					TaskID:       wid,
-					AgentID:      "dag_synthesis",
-					Model:        synthesis.ModelUsed,
-					Provider:     synthesis.Provider,
-					InputTokens:  inTok,
-					OutputTokens: outTok,
-					Metadata: map[string]any{
-						"phase":    "synthesis",
-						"workflow": "dag",
-					},
-				}).Get(recCtx, nil)
-			}
+			recordSynthesisTokenUsage(ctx, input, synthesis)
 		}
 	} else {
 		// No bypass or synthesis subtask, perform standard synthesis
@@ -650,35 +560,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		}
 
 		totalTokens += synthesis.TokensUsed
-		if synthesis.TokensUsed > 0 {
-			inTok := synthesis.InputTokens
-			outTok := synthesis.CompletionTokens
-			if inTok == 0 && outTok > 0 {
-				est := synthesis.TokensUsed - outTok
-				if est > 0 {
-					inTok = est
-				}
-			}
-			recCtx := opts.WithTokenRecordOptions(ctx)
-			wid := input.ParentWorkflowID
-			if wid == "" {
-				wid = workflow.GetInfo(ctx).WorkflowExecution.ID
-			}
-			_ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
-				UserID:       input.UserID,
-				SessionID:    input.SessionID,
-				TaskID:       wid,
-				AgentID:      "dag_synthesis",
-				Model:        synthesis.ModelUsed,
-				Provider:     synthesis.Provider,
-				InputTokens:  inTok,
-				OutputTokens: outTok,
-				Metadata: map[string]any{
-					"phase":    "synthesis",
-					"workflow": "dag",
-				},
-			}).Get(recCtx, nil)
-		}
+		recordSynthesisTokenUsage(ctx, input, synthesis)
 	}
 
 	// Step 5: Citation Agent - add citations to synthesis result
@@ -917,17 +799,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		"had_reflection": shouldReflect(decomp.ComplexityScore, &config),
 	}
 	if len(collectedCitations) > 0 {
-		out := make([]map[string]any, 0, len(collectedCitations))
-		for _, c := range collectedCitations {
-			out = append(out, map[string]any{
-				"url":               c.URL,
-				"title":             c.Title,
-				"source":            c.Source,
-				"credibility_score": c.CredibilityScore,
-				"quality_score":     c.QualityScore,
-			})
-		}
-		meta["citations"] = out
+		meta["citations"] = citationsToStructuredMap(collectedCitations)
 	}
 	if len(toolErrors) > 0 {
 		meta["tool_errors"] = toolErrors
@@ -1075,6 +947,40 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		TokensUsed: totalTokens,
 		Metadata:   meta,
 	}, nil
+}
+
+// recordSynthesisTokenUsage records DAG synthesis token usage via RecordTokenUsageActivity.
+func recordSynthesisTokenUsage(ctx workflow.Context, input TaskInput, synthesis activities.SynthesisResult) {
+	if synthesis.TokensUsed <= 0 {
+		return
+	}
+	inTok := synthesis.InputTokens
+	outTok := synthesis.CompletionTokens
+	if inTok == 0 && outTok > 0 {
+		est := synthesis.TokensUsed - outTok
+		if est > 0 {
+			inTok = est
+		}
+	}
+	recCtx := opts.WithTokenRecordOptions(ctx)
+	wid := input.ParentWorkflowID
+	if wid == "" {
+		wid = workflow.GetInfo(ctx).WorkflowExecution.ID
+	}
+	_ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
+		UserID:       input.UserID,
+		SessionID:    input.SessionID,
+		TaskID:       wid,
+		AgentID:      "dag_synthesis",
+		Model:        synthesis.ModelUsed,
+		Provider:     synthesis.Provider,
+		InputTokens:  inTok,
+		OutputTokens: outTok,
+		Metadata: map[string]any{
+			"phase":    "synthesis",
+			"workflow": "dag",
+		},
+	}).Get(recCtx, nil)
 }
 
 // collectAndFormatCitations extracts citations from agentResults and returns the

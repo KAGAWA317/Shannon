@@ -439,28 +439,14 @@ def map_openapi_type_to_tool_type(
         Shannon ToolParameterType name
         Shannon ToolParameterType 名称
     """
-    type_map = {
+    return {
         "string": "string",
         "integer": "integer",
         "number": "float",
         "boolean": "boolean",
         "array": "array",
         "object": "object",
-    }
-
-    result = type_map.get(openapi_type, "string")
-
-    # Handle integer formats
-    # 处理 integer 格式
-    if openapi_type == "integer":
-        return "integer"
-
-    # Handle number formats
-    # 处理 number 格式
-    if openapi_type == "number":
-        return "float"
-
-    return result
+    }.get(openapi_type, "string")
 
 
 def extract_parameters(

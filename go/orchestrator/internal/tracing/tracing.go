@@ -41,9 +41,6 @@ func Initialize(cfg Config, logger *zap.Logger) error {
 	}
 
 	// Default values
-	if cfg.ServiceName == "" {
-		cfg.ServiceName = "shannon-orchestrator"
-	}
 	if cfg.OTLPEndpoint == "" {
 		cfg.OTLPEndpoint = "localhost:4317"
 	}

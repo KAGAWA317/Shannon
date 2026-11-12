@@ -748,6 +748,15 @@ func (scm *ShannonConfigManager) handleConfigChange(event ChangeEvent) error {
 	return scm.updateConfigFromMap(event.Config)
 }
 
+// setDuration 在 m[key] 为可解析字符串时写入 dst，否则保留 dst 原值。
+func setDuration(m map[string]any, key string, dst *time.Duration) {
+	if s, ok := m[key].(string); ok {
+		if d, err := time.ParseDuration(s); err == nil {
+			*dst = d
+		}
+	}
+}
+
 // updateConfigFromMap updates the current config from a map
 // updateConfigFromMap 从 map 更新当前配置
 func (scm *ShannonConfigManager) updateConfigFromMap(configMap map[string]any) error {
@@ -761,21 +770,9 @@ func (scm *ShannonConfigManager) updateConfigFromMap(configMap map[string]any) e
 		if healthPort, ok := service["health_port"].(float64); ok {
 			newConfig.Service.HealthPort = int(healthPort)
 		}
-		if timeout, ok := service["graceful_timeout"].(string); ok {
-			if d, err := time.ParseDuration(timeout); err == nil {
-				newConfig.Service.GracefulTimeout = d
-			}
-		}
-		if timeout, ok := service["read_timeout"].(string); ok {
-			if d, err := time.ParseDuration(timeout); err == nil {
-				newConfig.Service.ReadTimeout = d
-			}
-		}
-		if timeout, ok := service["write_timeout"].(string); ok {
-			if d, err := time.ParseDuration(timeout); err == nil {
-				newConfig.Service.WriteTimeout = d
-			}
-		}
+		setDuration(service, "graceful_timeout", &newConfig.Service.GracefulTimeout)
+		setDuration(service, "read_timeout", &newConfig.Service.ReadTimeout)
+		setDuration(service, "write_timeout", &newConfig.Service.WriteTimeout)
 	}
 
 	// Update circuit breaker configs
@@ -839,11 +836,7 @@ func (scm *ShannonConfigManager) updateConfigFromMap(configMap map[string]any) e
 		if v, ok := session["max_history"].(float64); ok {
 			newConfig.Session.MaxHistory = int(v)
 		}
-		if v, ok := session["ttl"].(string); ok {
-			if d, err := time.ParseDuration(v); err == nil {
-				newConfig.Session.TTL = d
-			}
-		}
+		setDuration(session, "ttl", &newConfig.Session.TTL)
 		if v, ok := session["cache_size"].(float64); ok {
 			newConfig.Session.CacheSize = int(v)
 		}
@@ -909,16 +902,8 @@ func (scm *ShannonConfigManager) updateSingleCircuitBreakerConfig(cbMap map[stri
 	if maxReq, ok := cbMap["max_requests"].(float64); ok {
 		config.MaxRequests = uint32(maxReq)
 	}
-	if interval, ok := cbMap["interval"].(string); ok {
-		if d, err := time.ParseDuration(interval); err == nil {
-			config.Interval = d
-		}
-	}
-	if timeout, ok := cbMap["timeout"].(string); ok {
-		if d, err := time.ParseDuration(timeout); err == nil {
-			config.Timeout = d
-		}
-	}
+	setDuration(cbMap, "interval", &config.Interval)
+	setDuration(cbMap, "timeout", &config.Timeout)
 	if maxFail, ok := cbMap["max_failures"].(float64); ok {
 		config.MaxFailures = uint32(maxFail)
 	}
@@ -932,11 +917,7 @@ func (scm *ShannonConfigManager) updateDegradationConfig(degMap map[string]any, 
 	if enabled, ok := degMap["enabled"].(bool); ok {
 		config.Enabled = enabled
 	}
-	if interval, ok := degMap["check_interval"].(string); ok {
-		if d, err := time.ParseDuration(interval); err == nil {
-			config.CheckInterval = d
-		}
-	}
+	setDuration(degMap, "check_interval", &config.CheckInterval)
 
 	// Update thresholds
 	if thresholds, ok := degMap["thresholds"].(map[string]any); ok {
@@ -1011,16 +992,8 @@ func (scm *ShannonConfigManager) updateHealthConfig(healthMap map[string]any, co
 	if enabled, ok := healthMap["enabled"].(bool); ok {
 		config.Enabled = enabled
 	}
-	if interval, ok := healthMap["check_interval"].(string); ok {
-		if d, err := time.ParseDuration(interval); err == nil {
-			config.CheckInterval = d
-		}
-	}
-	if timeout, ok := healthMap["timeout"].(string); ok {
-		if d, err := time.ParseDuration(timeout); err == nil {
-			config.Timeout = d
-		}
-	}
+	setDuration(healthMap, "check_interval", &config.CheckInterval)
+	setDuration(healthMap, "timeout", &config.Timeout)
 	if port, ok := healthMap["port"].(float64); ok {
 		config.Port = int(port)
 	}
@@ -1037,16 +1010,8 @@ func (scm *ShannonConfigManager) updateHealthConfig(healthMap map[string]any, co
 				if critical, ok := checkMap["critical"].(bool); ok {
 					checkConfig.Critical = critical
 				}
-				if timeout, ok := checkMap["timeout"].(string); ok {
-					if d, err := time.ParseDuration(timeout); err == nil {
-						checkConfig.Timeout = d
-					}
-				}
-				if interval, ok := checkMap["interval"].(string); ok {
-					if d, err := time.ParseDuration(interval); err == nil {
-						checkConfig.Interval = d
-					}
-				}
+				setDuration(checkMap, "timeout", &checkConfig.Timeout)
+				setDuration(checkMap, "interval", &checkConfig.Interval)
 				config.Checks[checkName] = checkConfig
 			}
 		}
@@ -1058,22 +1023,14 @@ func (scm *ShannonConfigManager) updateAgentsConfig(agentsMap map[string]any, co
 	if maxConcurrent, ok := agentsMap["max_concurrent"].(float64); ok {
 		config.MaxConcurrent = int(maxConcurrent)
 	}
-	if timeout, ok := agentsMap["default_timeout"].(string); ok {
-		if d, err := time.ParseDuration(timeout); err == nil {
-			config.DefaultTimeout = d
-		}
-	}
+	setDuration(agentsMap, "default_timeout", &config.DefaultTimeout)
 	if port, ok := agentsMap["health_check_port"].(float64); ok {
 		config.HealthCheckPort = int(port)
 	}
 	if retryCount, ok := agentsMap["retry_count"].(float64); ok {
 		config.RetryCount = int(retryCount)
 	}
-	if backoff, ok := agentsMap["retry_backoff"].(string); ok {
-		if d, err := time.ParseDuration(backoff); err == nil {
-			config.RetryBackoff = d
-		}
-	}
+	setDuration(agentsMap, "retry_backoff", &config.RetryBackoff)
 	if endpoint, ok := agentsMap["agent_core_endpoint"].(string); ok {
 		config.AgentCoreEndpoint = endpoint
 	}
@@ -1093,11 +1050,7 @@ func (scm *ShannonConfigManager) updateTemporalConfig(temporalMap map[string]any
 	if taskQueue, ok := temporalMap["task_queue"].(string); ok {
 		config.TaskQueue = taskQueue
 	}
-	if timeout, ok := temporalMap["timeout"].(string); ok {
-		if d, err := time.ParseDuration(timeout); err == nil {
-			config.Timeout = d
-		}
-	}
+	setDuration(temporalMap, "timeout", &config.Timeout)
 }
 
 // updateLoggingConfig updates logging configuration
@@ -1282,19 +1235,11 @@ func (scm *ShannonConfigManager) updateVectorConfig(vectorMap map[string]any, co
 	if threshold, ok := vectorMap["threshold"].(float64); ok {
 		config.Threshold = threshold
 	}
-	if timeout, ok := vectorMap["timeout"].(string); ok {
-		if d, err := time.ParseDuration(timeout); err == nil {
-			config.Timeout = d
-		}
-	}
+	setDuration(vectorMap, "timeout", &config.Timeout)
 	if defaultModel, ok := vectorMap["default_model"].(string); ok {
 		config.DefaultModel = defaultModel
 	}
-	if cacheTTL, ok := vectorMap["cache_ttl"].(string); ok {
-		if d, err := time.ParseDuration(cacheTTL); err == nil {
-			config.CacheTTL = d
-		}
-	}
+	setDuration(vectorMap, "cache_ttl", &config.CacheTTL)
 	if expectedEmbeddingDim, ok := vectorMap["expected_embedding_dim"].(float64); ok {
 		config.ExpectedEmbeddingDim = int(expectedEmbeddingDim)
 	}
@@ -1314,16 +1259,8 @@ func (scm *ShannonConfigManager) updateEmbeddingsConfig(embeddingsMap map[string
 	if defaultModel, ok := embeddingsMap["default_model"].(string); ok {
 		config.DefaultModel = defaultModel
 	}
-	if timeout, ok := embeddingsMap["timeout"].(string); ok {
-		if d, err := time.ParseDuration(timeout); err == nil {
-			config.Timeout = d
-		}
-	}
-	if cacheTTL, ok := embeddingsMap["cache_ttl"].(string); ok {
-		if d, err := time.ParseDuration(cacheTTL); err == nil {
-			config.CacheTTL = d
-		}
-	}
+	setDuration(embeddingsMap, "timeout", &config.Timeout)
+	setDuration(embeddingsMap, "cache_ttl", &config.CacheTTL)
 	if maxLRU, ok := embeddingsMap["max_lru"].(float64); ok {
 		config.MaxLRU = int(maxLRU)
 	}

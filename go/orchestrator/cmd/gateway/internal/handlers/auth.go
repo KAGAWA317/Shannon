@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -659,13 +660,9 @@ func (h *AuthHandler) checkRateLimit(ip string, maxRequests int) bool {
 	}
 
 	// Remove requests outside the window
-	validRequests := make([]time.Time, 0, len(entry.requests))
-	for _, t := range entry.requests {
-		if t.After(windowStart) {
-			validRequests = append(validRequests, t)
-		}
-	}
-	entry.requests = validRequests
+	entry.requests = slices.DeleteFunc(entry.requests, func(t time.Time) bool {
+		return !t.After(windowStart)
+	})
 
 	// Check if limit exceeded
 	if len(entry.requests) >= maxRequests {

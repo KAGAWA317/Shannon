@@ -75,13 +75,7 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	}
 
 	// Check for budget configuration
-	agentMaxTokens := 0
-	if v, ok := baseContext["budget_agent_max"].(int); ok {
-		agentMaxTokens = v
-	}
-	if v, ok := baseContext["budget_agent_max"].(float64); ok && v > 0 {
-		agentMaxTokens = int(v)
-	}
+	agentMaxTokens := getBudgetMax(baseContext)
 
 	// Use medium tier for browser tasks (needs good reasoning + tool use)
 	modelTier := "medium"

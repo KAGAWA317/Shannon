@@ -191,38 +191,7 @@ func FetchSemanticMemoryChunked(ctx context.Context, in FetchSemanticMemoryInput
 		// Sort chunks by chunk_index with defensive type checking
 		// 按 chunk_index 排序，并对类型做防御性判断。
 		sort.Slice(group.Chunks, func(i, j int) bool {
-			idxI := 0
-			idxJ := 0
-
-			// Safely extract chunk_index from payload with multiple type checks
-			// 从 payload 中安全取出 chunk_index，兼容多种数值类型。
-			if group.Chunks[i].Payload != nil {
-				if val, ok := group.Chunks[i].Payload["chunk_index"]; ok && val != nil {
-					switch v := val.(type) {
-					case float64:
-						idxI = int(v)
-					case int:
-						idxI = v
-					case int64:
-						idxI = int(v)
-					}
-				}
-			}
-
-			if group.Chunks[j].Payload != nil {
-				if val, ok := group.Chunks[j].Payload["chunk_index"]; ok && val != nil {
-					switch v := val.(type) {
-					case float64:
-						idxJ = int(v)
-					case int:
-						idxJ = v
-					case int64:
-						idxJ = int(v)
-					}
-				}
-			}
-
-			return idxI < idxJ
+			return chunkIndex(group.Chunks[i].Payload) < chunkIndex(group.Chunks[j].Payload)
 		})
 
 		// Create aggregated item
@@ -314,6 +283,24 @@ func FetchSemanticMemoryChunked(ctx context.Context, in FetchSemanticMemoryInput
 	metrics.MemoryItemsRetrieved.WithLabelValues("semantic", "qdrant").Observe(float64(len(singleItems)))
 
 	return FetchSemanticMemoryResult{Items: singleItems}, nil
+}
+
+// chunkIndex extracts chunk_index from a payload, tolerating the numeric types
+// seen across JSON round-trips; missing or unknown values yield 0.
+// chunkIndex 从 payload 中取出 chunk_index，兼容多种数值类型；缺失或未知类型按 0 处理。
+func chunkIndex(p map[string]any) int {
+	if p == nil {
+		return 0
+	}
+	switch v := p["chunk_index"].(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	case int64:
+		return int(v)
+	}
+	return 0
 }
 
 // cosineSim computes cosine similarity between two float32 vectors

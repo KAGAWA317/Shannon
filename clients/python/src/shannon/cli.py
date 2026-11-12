@@ -668,10 +668,6 @@ def main():
                     status = "enabled" if v.enabled else "disabled"
                     print(f"  {v.version}\t{v.category}\t{status}\t{v.description}")
 
-        elif args.command == "session-create":
-            print("This command is no longer supported in HTTP SDK.")
-            sys.exit(1)
-
         elif args.command == "session-get":
             sess = client.get_session(args.session_id)
             print(f"Session {sess.session_id} (user={sess.user_id})")

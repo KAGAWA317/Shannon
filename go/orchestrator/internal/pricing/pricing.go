@@ -14,30 +14,25 @@ import (
 	pmetrics "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/metrics"
 )
 
+// providerRef 对应 models.yaml model_tiers 下的一条 provider 记录。
+type providerRef struct {
+	Provider string `yaml:"provider"`
+	Model    string `yaml:"model"`
+	Priority int    `yaml:"priority"`
+}
+
 // Config structure for pricing section in config/models.yaml
 // config/models.yaml 中 pricing 段的配置结构
 type config struct {
 	ModelTiers struct {
 		Small struct {
-			Providers []struct {
-				Provider string `yaml:"provider"`
-				Model    string `yaml:"model"`
-				Priority int    `yaml:"priority"`
-			} `yaml:"providers"`
+			Providers []providerRef `yaml:"providers"`
 		} `yaml:"small"`
 		Medium struct {
-			Providers []struct {
-				Provider string `yaml:"provider"`
-				Model    string `yaml:"model"`
-				Priority int    `yaml:"priority"`
-			} `yaml:"providers"`
+			Providers []providerRef `yaml:"providers"`
 		} `yaml:"medium"`
 		Large struct {
-			Providers []struct {
-				Provider string `yaml:"provider"`
-				Model    string `yaml:"model"`
-				Priority int    `yaml:"priority"`
-			} `yaml:"providers"`
+			Providers []providerRef `yaml:"providers"`
 		} `yaml:"large"`
 	} `yaml:"model_tiers"`
 	Pricing struct {
@@ -387,6 +382,20 @@ func ValidateMap(m map[string]any) error {
 	return nil
 }
 
+// tierProviders 返回 tier 对应的 provider 列表；tier 未知时 ok=false。
+func tierProviders(cfg *config, tier string) ([]providerRef, bool) {
+	switch strings.ToLower(tier) {
+	case "small":
+		return cfg.ModelTiers.Small.Providers, true
+	case "medium":
+		return cfg.ModelTiers.Medium.Providers, true
+	case "large":
+		return cfg.ModelTiers.Large.Providers, true
+	default:
+		return nil, false
+	}
+}
+
 // GetPriorityOneProvider returns the priority-1 provider for a given tier from config.
 // Returns empty string if not found in config (caller should use fallback).
 // GetPriorityOneProvider 从配置返回某 tier 的优先级 1 provider。
@@ -397,20 +406,8 @@ func GetPriorityOneProvider(tier string) string {
 		return ""
 	}
 
-	var providers []struct {
-		Provider string `yaml:"provider"`
-		Model    string `yaml:"model"`
-		Priority int    `yaml:"priority"`
-	}
-
-	switch strings.ToLower(tier) {
-	case "small":
-		providers = cfg.ModelTiers.Small.Providers
-	case "medium":
-		providers = cfg.ModelTiers.Medium.Providers
-	case "large":
-		providers = cfg.ModelTiers.Large.Providers
-	default:
+	providers, ok := tierProviders(cfg, tier)
+	if !ok {
 		return ""
 	}
 
@@ -434,20 +431,8 @@ func GetPriorityOneModel(tier string) string {
 		return ""
 	}
 
-	var providers []struct {
-		Provider string `yaml:"provider"`
-		Model    string `yaml:"model"`
-		Priority int    `yaml:"priority"`
-	}
-
-	switch strings.ToLower(tier) {
-	case "small":
-		providers = cfg.ModelTiers.Small.Providers
-	case "medium":
-		providers = cfg.ModelTiers.Medium.Providers
-	case "large":
-		providers = cfg.ModelTiers.Large.Providers
-	default:
+	providers, ok := tierProviders(cfg, tier)
+	if !ok {
 		return ""
 	}
 
@@ -472,19 +457,8 @@ func GetPriorityModelForProvider(tier, provider string) string {
 	}
 
 	provider = strings.ToLower(provider)
-	var providers []struct {
-		Provider string `yaml:"provider"`
-		Model    string `yaml:"model"`
-		Priority int    `yaml:"priority"`
-	}
-	switch strings.ToLower(tier) {
-	case "small":
-		providers = cfg.ModelTiers.Small.Providers
-	case "medium":
-		providers = cfg.ModelTiers.Medium.Providers
-	case "large":
-		providers = cfg.ModelTiers.Large.Providers
-	default:
+	providers, ok := tierProviders(cfg, tier)
+	if !ok {
 		return ""
 	}
 
@@ -513,19 +487,8 @@ func GetProviderForModel(tier, model string) string {
 		return ""
 	}
 
-	var providers []struct {
-		Provider string `yaml:"provider"`
-		Model    string `yaml:"model"`
-		Priority int    `yaml:"priority"`
-	}
-	switch strings.ToLower(tier) {
-	case "small":
-		providers = cfg.ModelTiers.Small.Providers
-	case "medium":
-		providers = cfg.ModelTiers.Medium.Providers
-	case "large":
-		providers = cfg.ModelTiers.Large.Providers
-	default:
+	providers, ok := tierProviders(cfg, tier)
+	if !ok {
 		return ""
 	}
 

@@ -87,7 +87,7 @@ func (a *Activities) DetectEntityLocalization(ctx context.Context, input EntityL
 	userContent := buildEntityLocalizationContent(input)
 
 	// Call LLM service
-	llmServiceURL := getenvDefault("LLM_SERVICE_URL", "http://llm-service:8000")
+	llmServiceURL := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
 	reqBody := map[string]any{

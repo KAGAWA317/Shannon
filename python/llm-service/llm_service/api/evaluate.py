@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
-import json
-import re
+
+from ._json import extract_json_block as _extract_json_block
 
 router = APIRouter()
 
@@ -65,26 +65,6 @@ def _heuristic_evaluate(body: EvaluationRequest) -> EvaluationResponse:
     # Default: no replanning needed
     # 默认：无需重新规划
     return EvaluationResponse(should_replan=False, reason="Sufficient quality detected")
-
-
-def _extract_json_block(text: str) -> Optional[Dict[str, Any]]:
-    try:
-        return json.loads(text)
-    except Exception:
-        pass
-    m = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", text, re.IGNORECASE)
-    if m:
-        try:
-            return json.loads(m.group(1))
-        except Exception:
-            return None
-    m = re.search(r"\{[\s\S]*\}", text)
-    if m:
-        try:
-            return json.loads(m.group(0))
-        except Exception:
-            return None
-    return None
 
 
 @router.post("/agent/evaluate", response_model=EvaluationResponse)

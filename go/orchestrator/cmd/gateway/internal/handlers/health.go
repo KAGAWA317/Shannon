@@ -72,23 +72,10 @@ func (h *HealthHandler) Readiness(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		// Check if it's a "not found" or "unauthenticated" error (both indicate the server responded)
-		if st, ok := status.FromError(err); ok {
-			if st.Code() == codes.NotFound || st.Code() == codes.Unauthenticated {
-				response.Checks["orchestrator"] = "ok"
-			} else {
-				// Real error - orchestrator is not reachable or failing
-				response.Status = "not ready"
-				response.Checks["orchestrator"] = "failed"
-				h.logger.Warn("Orchestrator health check failed", zap.Error(err))
-
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusServiceUnavailable)
-				json.NewEncoder(w).Encode(response)
-				return
-			}
-		} else {
-			// Real error - orchestrator is not reachable
+		// NotFound / Unauthenticated both mean the orchestrator responded; anything else is a real failure.
+		// NotFound 与 Unauthenticated 都说明 orchestrator 已响应；其余错误一律视为不可用。
+		st, ok := status.FromError(err)
+		if !ok || (st.Code() != codes.NotFound && st.Code() != codes.Unauthenticated) {
 			response.Status = "not ready"
 			response.Checks["orchestrator"] = "failed"
 			h.logger.Warn("Orchestrator health check failed", zap.Error(err))
@@ -98,9 +85,9 @@ func (h *HealthHandler) Readiness(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(response)
 			return
 		}
-	} else {
-		response.Checks["orchestrator"] = "ok"
 	}
+
+	response.Checks["orchestrator"] = "ok"
 
 	// All checks passed
 	w.Header().Set("Content-Type", "application/json")

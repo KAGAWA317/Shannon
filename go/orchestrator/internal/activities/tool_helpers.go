@@ -17,8 +17,9 @@ import (
 // ToolExecuteRequest is the request format for /tools/execute
 // ToolExecuteRequest 是 /tools/execute 的 request 格式。
 type ToolExecuteRequest struct {
-	ToolName   string         `json:"tool_name"`
-	Parameters map[string]any `json:"parameters"`
+	ToolName       string         `json:"tool_name"`
+	Parameters     map[string]any `json:"parameters"`
+	SessionContext map[string]any `json:"session_context,omitempty"`
 }
 
 // ToolExecuteResponse is the response from /tools/execute
@@ -204,13 +205,17 @@ Rules:
 // callToolWithTimeout makes a request to the LLM service /tools/execute endpoint with custom timeout
 // callToolWithTimeout 以自定义 timeout 调用 LLM service 的 /tools/execute。
 func callToolWithTimeout(ctx context.Context, toolName string, params map[string]any, timeout time.Duration) (*ToolExecuteResponse, error) {
-	llmServiceURL := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
-	url := fmt.Sprintf("%s/tools/execute", llmServiceURL)
-
-	reqBody := ToolExecuteRequest{
+	return callToolExecute(ctx, ToolExecuteRequest{
 		ToolName:   toolName,
 		Parameters: params,
-	}
+	}, timeout)
+}
+
+// callToolExecute is the single /tools/execute client
+// callToolExecute 是唯一的 /tools/execute 调用实现。
+func callToolExecute(ctx context.Context, reqBody ToolExecuteRequest, timeout time.Duration) (*ToolExecuteResponse, error) {
+	llmServiceURL := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
+	url := fmt.Sprintf("%s/tools/execute", llmServiceURL)
 
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {

@@ -2,7 +2,6 @@ package health
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -190,9 +189,9 @@ func (h *HTTPHandler) handleDetailedHealth(w http.ResponseWriter, r *http.Reques
 			}
 		}
 
-		// Use manager's calculateOverallStatus method (need to make it accessible)
-		// 使用 manager 的 calculateOverallStatus 方法（需要将其导出）
-		overall := h.calculateOverallStatusForHTTP(components, summary)
+		// Use manager's calculateOverallStatus (same package, no export needed)
+		// 使用 manager 的 calculateOverallStatus（同包，无需导出）
+		overall := h.manager.calculateOverallStatus(components, summary)
 
 		detailed = DetailedHealth{
 			Overall:    overall,
@@ -223,71 +222,6 @@ func (h *HTTPHandler) handleDetailedHealth(w http.ResponseWriter, r *http.Reques
 
 	if err := json.NewEncoder(w).Encode(detailed); err != nil {
 		h.logger.Error("Failed to encode detailed health response", zap.Error(err))
-	}
-}
-
-// calculateOverallStatusForHTTP duplicates the manager's logic for HTTP responses
-// calculateOverallStatusForHTTP 为 HTTP response 复制 manager 的判断逻辑
-func (h *HTTPHandler) calculateOverallStatusForHTTP(components map[string]CheckResult, summary HealthSummary) OverallHealth {
-	if summary.Total == 0 {
-		return OverallHealth{
-			Status:  StatusUnknown,
-			Message: "No health checks registered",
-			Ready:   false,
-			Live:    false,
-		}
-	}
-
-	criticalFailures := 0
-	nonCriticalFailures := 0
-	degradedComponents := 0
-
-	for _, result := range components {
-		if result.Status == StatusDegraded {
-			degradedComponents++
-		}
-
-		if result.Status == StatusUnhealthy {
-			if result.Critical {
-				criticalFailures++
-			} else {
-				nonCriticalFailures++
-			}
-		}
-	}
-
-	var status CheckStatus
-	var message string
-	var ready, live bool
-
-	if criticalFailures > 0 {
-		status = StatusUnhealthy
-		message = fmt.Sprintf("%d critical component(s) failing", criticalFailures)
-		ready = false
-		live = true
-	} else if degradedComponents > 0 {
-		status = StatusDegraded
-		message = fmt.Sprintf("%d component(s) degraded", degradedComponents)
-		ready = true
-		live = true
-	} else if nonCriticalFailures > 0 {
-		status = StatusDegraded
-		message = fmt.Sprintf("%d non-critical component(s) failing", nonCriticalFailures)
-		ready = true
-		live = true
-	} else {
-		status = StatusHealthy
-		message = fmt.Sprintf("All %d components healthy", summary.Total)
-		ready = true
-		live = true
-	}
-
-	return OverallHealth{
-		Status:   status,
-		Message:  message,
-		Degraded: status == StatusDegraded || degradedComponents > 0,
-		Ready:    ready,
-		Live:     live,
 	}
 }
 

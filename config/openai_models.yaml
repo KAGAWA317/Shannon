@@ -20,9 +20,6 @@ models:
       iterative_max_iterations: 3
     description: "Deep research with iterative refinement and source verification"
     max_tokens_default: 8192
-    rate_limit:
-      requests_per_minute: 10
-      tokens_per_minute: 100000
 
   # Quick Research - Fast research for simple queries
   # Quick Research - 面向简单查询的快速研究
@@ -33,9 +30,6 @@ models:
       research_strategy: quick
     description: "Fast research for simple queries"
     max_tokens_default: 4096
-    rate_limit:
-      requests_per_minute: 30
-      tokens_per_minute: 150000
 
   # Standard Research - Balanced depth and speed
   # Standard Research - 深度与速度均衡
@@ -46,9 +40,6 @@ models:
       research_strategy: standard
     description: "Balanced research with moderate depth"
     max_tokens_default: 4096
-    rate_limit:
-      requests_per_minute: 20
-      tokens_per_minute: 120000
 
   # Academic Research - Citation-heavy scholarly research
   # Academic Research - 引用密集的学术研究
@@ -60,9 +51,6 @@ models:
       enable_verification: true
     description: "Academic-style research with citation verification"
     max_tokens_default: 8192
-    rate_limit:
-      requests_per_minute: 10
-      tokens_per_minute: 100000
 
   # Chat - General purpose chat completion
   # Chat - 通用对话补全
@@ -71,9 +59,6 @@ models:
     context: {}
     description: "General chat completion"
     max_tokens_default: 4096
-    rate_limit:
-      requests_per_minute: 60
-      tokens_per_minute: 200000
 
   # Complex - Multi-agent supervisor workflow
   # Complex - 多 Agent supervisor workflow
@@ -82,9 +67,6 @@ models:
     context: {}
     description: "Multi-agent orchestration for complex tasks"
     max_tokens_default: 8192
-    rate_limit:
-      requests_per_minute: 15
-      tokens_per_minute: 100000
 
 # Default model when none specified
 default_model: shannon-chat
@@ -101,9 +83,3 @@ settings:
   # Session TTL for multi-turn conversations (seconds)
   # 多轮对话的 session TTL（秒）
   session_ttl: 86400  # 24 hours
-
-  # Default rate limits (used if model doesn't specify)
-  # 默认 rate limit（在模型未单独指定时使用）
-  default_rate_limit:
-    requests_per_minute: 60
-    tokens_per_minute: 200000

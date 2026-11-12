@@ -50,21 +50,13 @@ func (gw *GRPCWrapper) Execute(ctx context.Context, fn func() error) error {
 
 	// Record metrics based on actual error, not circuit breaker decision
 	// 指标按真实错误记录，而不是按 circuit breaker 的放行/拒绝结果记录
-	state := gw.cb.State()
-	var success bool
-	var err error
-
+	// 只有熔断拒绝会替换调用结果，其余情况原样返回调用错误。
+	err := originalErr
 	if cbErr == ErrCircuitBreakerOpen || cbErr == ErrTooManyRequests {
-		// Circuit breaker is open/throttling
-		success = false
 		err = cbErr
-	} else {
-		// Return original error (could be client error that doesn't trip breaker)
-		success = originalErr == nil
-		err = originalErr
 	}
 
-	GlobalMetricsCollector.RecordRequest(gw.name, gw.service, state, success)
+	GlobalMetricsCollector.RecordRequest(gw.name, gw.service, gw.cb.State(), err == nil)
 
 	return err
 }

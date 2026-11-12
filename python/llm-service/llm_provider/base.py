@@ -480,6 +480,16 @@ class LLMProvider(ABC):
 
         return self.select_model_for_tier(request.model_tier, request.max_tokens)
 
+    def _resolve_alias(self, model_id: str) -> str:
+        """Return the configured alias for a given vendor model_id, if any.
+
+        返回给定厂商 model_id 对应的已配置别名（若有）。
+        """
+        for alias, cfg in self.models.items():
+            if cfg.model_id == model_id:
+                return alias
+        return model_id
+
 
 class LLMProviderRegistry:
     """Registry for managing multiple LLM providers

@@ -50,9 +50,16 @@ func (c *Client) FindSimilarQueries(ctx context.Context, embedding []float32, li
 	return out, nil
 }
 
-// GetSessionContext searches for recent points with the same session_id
-// GetSessionContext 查找同一 session_id 的近期 point
-func (c *Client) GetSessionContext(ctx context.Context, sessionID string, tenantID string, topK int) ([]ContextItem, error) {
+// scrollPoint is the Qdrant scroll point shape decoded by scrollRecent
+// scrollPoint 是 scrollRecent 解码的 Qdrant scroll point 结构
+type scrollPoint struct {
+	Payload map[string]any `json:"payload"`
+	Score   float64        `json:"score,omitempty"`
+}
+
+// scrollRecent fetches the points matching must, sorts them by payload timestamp descending and truncates to topK
+// scrollRecent 拉取 must 命中的 point，按 payload.timestamp 降序排序并截断到 topK
+func (c *Client) scrollRecent(ctx context.Context, sessionID string, must []map[string]any, topK int) ([]ContextItem, error) {
 	if topK <= 0 {
 		topK = c.cfg.TopK
 	}
@@ -60,16 +67,11 @@ func (c *Client) GetSessionContext(ctx context.Context, sessionID string, tenant
 	// 使用 Qdrant Scroll API 做纯过滤读取
 	url := fmt.Sprintf("%s/collections/%s/points/scroll", c.base, c.cfg.TaskEmbeddings)
 
-	// Start tracing span for session context retrieval
-	// 为 session context 检索启动 tracing span
+	// Start tracing span for context retrieval
+	// 为 context 检索启动 tracing span
 	ctx, span := tracing.StartHTTPSpan(ctx, "POST", url)
 	defer span.End()
-	must := []map[string]any{
-		{"key": "session_id", "match": map[string]any{"value": sessionID}},
-	}
-	if tenantID != "" {
-		must = append(must, map[string]any{"key": "tenant_id", "match": map[string]any{"value": tenantID}})
-	}
+
 	// Fetch more than topK to allow for sorting/MMR reranking
 	// 多取一些以留出排序/MMR 重排的余地
 	poolMultiplier := c.cfg.MMRPoolMultiplier
@@ -102,10 +104,7 @@ func (c *Client) GetSessionContext(ctx context.Context, sessionID string, tenant
 	}
 	var r struct {
 		Result struct {
-			Points []struct {
-				Payload map[string]any `json:"payload"`
-				Score   float64        `json:"score,omitempty"`
-			} `json:"points"`
+			Points []scrollPoint `json:"points"`
 		} `json:"result"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
@@ -147,22 +146,21 @@ func (c *Client) GetSessionContext(ctx context.Context, sessionID string, tenant
 	return out, nil
 }
 
+// GetSessionContext searches for recent points with the same session_id
+// GetSessionContext 查找同一 session_id 的近期 point
+func (c *Client) GetSessionContext(ctx context.Context, sessionID string, tenantID string, topK int) ([]ContextItem, error) {
+	must := []map[string]any{
+		{"key": "session_id", "match": map[string]any{"value": sessionID}},
+	}
+	if tenantID != "" {
+		must = append(must, map[string]any{"key": "tenant_id", "match": map[string]any{"value": tenantID}})
+	}
+	return c.scrollRecent(ctx, sessionID, must, topK)
+}
+
 // GetAgentContext searches for recent points with the same session_id and agent_id
 // GetAgentContext 查找同一 session_id 与 agent_id 的近期 point
 func (c *Client) GetAgentContext(ctx context.Context, sessionID string, agentID string, tenantID string, topK int) ([]ContextItem, error) {
-	if topK <= 0 {
-		topK = c.cfg.TopK
-	}
-	// Use Qdrant Scroll API for filter-only retrieval
-	// 使用 Qdrant Scroll API 做纯过滤读取
-	url := fmt.Sprintf("%s/collections/%s/points/scroll", c.base, c.cfg.TaskEmbeddings)
-
-	// Start tracing span for agent context retrieval
-	// 为 agent context 检索启动 tracing span
-	ctx, span := tracing.StartHTTPSpan(ctx, "POST", url)
-	defer span.End()
-
-	// Build filters for session_id AND agent_id
 	must := []map[string]any{
 		{"key": "session_id", "match": map[string]any{"value": sessionID}},
 		{"key": "agent_id", "match": map[string]any{"value": agentID}},
@@ -170,83 +168,5 @@ func (c *Client) GetAgentContext(ctx context.Context, sessionID string, agentID 
 	if tenantID != "" {
 		must = append(must, map[string]any{"key": "tenant_id", "match": map[string]any{"value": tenantID}})
 	}
-
-	// Sort by timestamp descending to get most recent first
-	// Fetch more than topK to allow for sorting/MMR reranking
-	// 按时间戳降序排序以取最新的在前
-	// 多取一些以留出排序/MMR 重排的余地
-	poolMultiplier := c.cfg.MMRPoolMultiplier
-	if poolMultiplier <= 0 {
-		poolMultiplier = 3 // Default multiplier
-	}
-	limit := topK * poolMultiplier
-	if limit > 100 {
-		limit = 100 // Cap to prevent excessive data transfer
-	}
-	body := map[string]any{
-		"limit":        limit,
-		"with_payload": true,
-		"filter":       map[string]any{"must": must},
-	}
-
-	buf, _ := json.Marshal(body)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(buf))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	tracing.InjectTraceparent(ctx, req)
-	resp, err := c.httpw.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("qdrant scroll status %d", resp.StatusCode)
-	}
-	var r struct {
-		Result struct {
-			Points []struct {
-				Payload map[string]any `json:"payload"`
-				Score   float64        `json:"score,omitempty"`
-			} `json:"points"`
-		} `json:"result"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
-		return nil, err
-	}
-	out := make([]ContextItem, 0, len(r.Result.Points))
-	for _, p := range r.Result.Points {
-		out = append(out, ContextItem{SessionID: sessionID, Payload: p.Payload, Score: p.Score})
-	}
-
-	// Sort by timestamp descending (most recent first)
-	// This is done client-side as Qdrant Scroll doesn't support ordering
-	// 按时间戳降序排序（最新的在前）
-	// 这在客户端完成，因为 Qdrant Scroll 不支持排序
-	sort.Slice(out, func(i, j int) bool {
-		tsI, okI := out[i].Payload["timestamp"].(float64)
-		tsJ, okJ := out[j].Payload["timestamp"].(float64)
-		// If both have timestamps, sort descending
-		if okI && okJ {
-			return tsI > tsJ
-		}
-		// Items with timestamps come before items without
-		// 有时间戳的条目排在没有时间戳的之前
-		if okI && !okJ {
-			return true
-		}
-		if !okI && okJ {
-			return false
-		}
-		// Neither has timestamp, maintain original order
-		return false
-	})
-
-	// Limit to topK after sorting
-	if len(out) > topK {
-		out = out[:topK]
-	}
-
-	return out, nil
+	return c.scrollRecent(ctx, sessionID, must, topK)
 }

@@ -2,8 +2,10 @@ package workflows
 
 import (
 	"fmt"
+	"maps"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -1870,6 +1872,78 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 	var elapsed int // declared here so it can be updated per-iteration and in file_read inner loop
 
+	leadBudget := func(elapsed int) activities.LeadBudget {
+		return activities.LeadBudget{
+			TotalLLMCalls:       budgetTotalLLMCalls,
+			RemainingLLMCalls:   maxLLMCalls - budgetTotalLLMCalls,
+			TotalTokens:         budgetTotalTokens,
+			RemainingTokens:     maxTokens - budgetTotalTokens,
+			ElapsedSeconds:      elapsed,
+			MaxWallClockSeconds: maxWallClockSeconds,
+		}
+	}
+
+	recordLeadTokens := func(phase string, d activities.LeadDecisionResult) {
+		recCtx := opts.WithTokenRecordOptions(ctx)
+		provider := d.Provider
+		if provider == "" {
+			provider = detectProviderFromModel(d.ModelUsed)
+		}
+		_ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
+			UserID:                input.UserID,
+			SessionID:             input.SessionID,
+			TaskID:                workflowID,
+			AgentID:               "swarm-lead",
+			Model:                 d.ModelUsed,
+			Provider:              provider,
+			InputTokens:           d.InputTokens,
+			OutputTokens:          d.OutputTokens,
+			CacheReadTokens:       d.CacheReadTokens,
+			CacheCreationTokens:   d.CacheCreationTokens,
+			CacheCreation1hTokens: 0, // LeadDecisionResult doesn't carry per-TTL breakdown
+			CallSequence:          d.CallSequence,
+			Metadata:              map[string]any{"workflow": "swarm", "phase": phase},
+		}).Get(ctx, nil)
+	}
+
+	runLeadFileIO := func(ctx, fileReadCtx workflow.Context, actions []activities.LeadAction, readCharLimit int) []activities.FileReadResult {
+		var out []activities.FileReadResult
+		for _, fr := range actions {
+			if fr.Type == "file_list" {
+				var listResult activities.ListWorkspaceFilesResult
+				listErr := workflow.ExecuteActivity(fileReadCtx, constants.ListWorkspaceFilesActivity,
+					activities.ListWorkspaceFilesInput{SessionID: input.SessionID}).Get(ctx, &listResult)
+				if listErr != nil {
+					out = append(out, activities.FileReadResult{Path: ".", Error: listErr.Error()})
+				} else {
+					var listing string
+					for _, f := range listResult.Files {
+						listing += f.Path + "\n"
+					}
+					if listing == "" {
+						listing = "(empty workspace)"
+					}
+					out = append(out, activities.FileReadResult{Path: ".", Content: listing})
+				}
+			} else if fr.Path != "" {
+				var readResult activities.ReadWorkspaceFileResult
+				readErr := workflow.ExecuteActivity(fileReadCtx, constants.ReadWorkspaceFileActivity,
+					activities.ReadWorkspaceFileInput{
+						SessionID: input.SessionID, Path: fr.Path, MaxChars: readCharLimit,
+					}).Get(ctx, &readResult)
+				if readErr != nil {
+					out = append(out, activities.FileReadResult{Path: fr.Path, Error: readErr.Error()})
+				} else {
+					out = append(out, activities.FileReadResult{
+						Path: readResult.Path, Content: readResult.Content,
+						Truncated: readResult.Truncated, Error: readResult.Error,
+					})
+				}
+			}
+		}
+		return out
+	}
+
 	type agentFuture struct {
 		ID         string
 		Future     workflow.ChildWorkflowFuture
@@ -1940,14 +2014,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			Event:      planEvent,
 			TaskList:   make([]activities.SwarmTask, 0),
 			AgentStates: make([]activities.LeadAgentState, 0),
-			Budget: activities.LeadBudget{
-				TotalLLMCalls:       budgetTotalLLMCalls,
-				RemainingLLMCalls:   maxLLMCalls - budgetTotalLLMCalls,
-				TotalTokens:         budgetTotalTokens,
-				RemainingTokens:     maxTokens - budgetTotalTokens,
-				ElapsedSeconds:      elapsed,
-				MaxWallClockSeconds: maxWallClockSeconds,
-			},
+			Budget:               leadBudget(elapsed),
 			History:              leadHistory,
 			OriginalQuery:        input.Query,
 			ConversationHistory:  conversationHistory,
@@ -1964,28 +2031,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		budgetTotalTokens += cacheAwareBudget(planDecision.TokensUsed, planDecision.CacheReadTokens, planDecision.CacheCreationTokens)
 
 		// Record Lead token usage
-		{
-			recCtx := opts.WithTokenRecordOptions(ctx)
-			provider := planDecision.Provider
-			if provider == "" {
-				provider = detectProviderFromModel(planDecision.ModelUsed)
-			}
-			_ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
-				UserID:              input.UserID,
-				SessionID:           input.SessionID,
-				TaskID:              workflowID,
-				AgentID:             "swarm-lead",
-				Model:               planDecision.ModelUsed,
-				Provider:            provider,
-				InputTokens:         planDecision.InputTokens,
-				OutputTokens:        planDecision.OutputTokens,
-				CacheReadTokens:     planDecision.CacheReadTokens,
-				CacheCreationTokens:   planDecision.CacheCreationTokens,
-				CacheCreation1hTokens: 0, // LeadDecisionResult doesn't carry per-TTL breakdown
-				CallSequence:        planDecision.CallSequence,
-				Metadata:            map[string]any{"workflow": "swarm", "phase": "initial_plan"},
-			}).Get(ctx, nil)
-		}
+		recordLeadTokens("initial_plan", planDecision)
 
 		leadHistory = append(leadHistory, map[string]any{
 			"decision_summary": planDecision.DecisionSummary,
@@ -2033,41 +2079,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		// File I/O: file_read + file_list (zero LLM cost)
 		if len(fileIOActions) > 0 && phase1ToolRound < maxToolCallRounds {
 			ranFileIO = true
-			var fileContents []activities.FileReadResult
-			for _, fr := range fileIOActions {
-				if fr.Type == "file_list" {
-					var listResult activities.ListWorkspaceFilesResult
-					listErr := workflow.ExecuteActivity(fileReadCtx, constants.ListWorkspaceFilesActivity,
-						activities.ListWorkspaceFilesInput{SessionID: input.SessionID}).Get(ctx, &listResult)
-					if listErr != nil {
-						fileContents = append(fileContents, activities.FileReadResult{Path: ".", Error: listErr.Error()})
-					} else {
-						var listing string
-						for _, f := range listResult.Files {
-							listing += f.Path + "\n"
-						}
-						if listing == "" {
-							listing = "(empty workspace)"
-						}
-						fileContents = append(fileContents, activities.FileReadResult{Path: ".", Content: listing})
-					}
-				} else if fr.Path != "" {
-					var readResult activities.ReadWorkspaceFileResult
-					readErr := workflow.ExecuteActivity(fileReadCtx, constants.ReadWorkspaceFileActivity,
-						activities.ReadWorkspaceFileInput{
-							SessionID: input.SessionID, Path: fr.Path, MaxChars: 4000,
-						}).Get(ctx, &readResult)
-					if readErr != nil {
-						fileContents = append(fileContents, activities.FileReadResult{Path: fr.Path, Error: readErr.Error()})
-					} else {
-						fileContents = append(fileContents, activities.FileReadResult{
-							Path: readResult.Path, Content: readResult.Content,
-							Truncated: readResult.Truncated, Error: readResult.Error,
-						})
-					}
-				}
-			}
-			planEvent.FileContents = fileContents
+			planEvent.FileContents = runLeadFileIO(ctx, fileReadCtx, fileIOActions, 4000)
 		}
 
 		// Tool calls
@@ -3007,14 +3019,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 				Event:       event,
 				TaskList:    currentTaskList,
 				AgentStates: statesList,
-				Budget: activities.LeadBudget{
-					TotalLLMCalls:       budgetTotalLLMCalls,
-					RemainingLLMCalls:   maxLLMCalls - budgetTotalLLMCalls,
-					TotalTokens:         budgetTotalTokens,
-					RemainingTokens:     maxTokens - budgetTotalTokens,
-					ElapsedSeconds:      elapsed,
-					MaxWallClockSeconds: maxWallClockSeconds,
-				},
+				Budget:               leadBudget(elapsed),
 				History:              leadHistory,
 				Messages:             leadMsgMaps,
 				OriginalQuery:        input.Query,
@@ -3035,28 +3040,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			budgetTotalTokens += cacheAwareBudget(decision.TokensUsed, decision.CacheReadTokens, decision.CacheCreationTokens)
 
 			// Record Lead decision token usage
-			{
-				recCtx := opts.WithTokenRecordOptions(ctx)
-				provider := decision.Provider
-				if provider == "" {
-					provider = detectProviderFromModel(decision.ModelUsed)
-				}
-				_ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
-					UserID:              input.UserID,
-					SessionID:           input.SessionID,
-					TaskID:              workflowID,
-					AgentID:             "swarm-lead",
-					Model:               decision.ModelUsed,
-					Provider:            provider,
-					InputTokens:         decision.InputTokens,
-					OutputTokens:        decision.OutputTokens,
-					CacheReadTokens:     decision.CacheReadTokens,
-					CacheCreationTokens:   decision.CacheCreationTokens,
-					CacheCreation1hTokens: 0, // LeadDecisionResult doesn't carry per-TTL breakdown
-					CallSequence:        decision.CallSequence,
-					Metadata:            map[string]any{"workflow": "swarm", "phase": "lead_decision"},
-				}).Get(ctx, nil)
-			}
+			recordLeadTokens("lead_decision", decision)
 
 			leadHistory = append(leadHistory, map[string]any{
 				"decision_summary": decision.DecisionSummary,
@@ -3093,41 +3077,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			if len(fileIOActions) > 0 && fileReadRound < maxFileReadRounds {
 				fileReadRound++
 				ranFileIO = true
-				var fileContents []activities.FileReadResult
-				for _, fr := range fileIOActions {
-					if fr.Type == "file_list" {
-						var listResult activities.ListWorkspaceFilesResult
-						listErr := workflow.ExecuteActivity(fileReadCtx, constants.ListWorkspaceFilesActivity,
-							activities.ListWorkspaceFilesInput{SessionID: input.SessionID}).Get(ctx, &listResult)
-						if listErr != nil {
-							fileContents = append(fileContents, activities.FileReadResult{Path: ".", Error: listErr.Error()})
-						} else {
-							var listing string
-							for _, f := range listResult.Files {
-								listing += f.Path + "\n"
-							}
-							if listing == "" {
-								listing = "(empty workspace)"
-							}
-							fileContents = append(fileContents, activities.FileReadResult{Path: ".", Content: listing})
-						}
-					} else if fr.Path != "" {
-						var readResult activities.ReadWorkspaceFileResult
-						readErr := workflow.ExecuteActivity(fileReadCtx, constants.ReadWorkspaceFileActivity,
-							activities.ReadWorkspaceFileInput{
-								SessionID: input.SessionID, Path: fr.Path, MaxChars: 4000,
-							}).Get(ctx, &readResult)
-						if readErr != nil {
-							fileContents = append(fileContents, activities.FileReadResult{Path: fr.Path, Error: readErr.Error()})
-						} else {
-							fileContents = append(fileContents, activities.FileReadResult{
-								Path: readResult.Path, Content: readResult.Content,
-								Truncated: readResult.Truncated, Error: readResult.Error,
-							})
-						}
-					}
-				}
-				event.FileContents = fileContents
+				event.FileContents = runLeadFileIO(ctx, fileReadCtx, fileIOActions, 4000)
 			}
 
 			// Tool calls (zero LLM cost — direct tool invocation)
@@ -3418,11 +3368,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 				}
 
 			case "broadcast":
-				broadcastIDs := make([]string, 0, len(agentStates))
-				for id := range agentStates {
-					broadcastIDs = append(broadcastIDs, id)
-				}
-				sort.Strings(broadcastIDs)
+				broadcastIDs := slices.Sorted(maps.Keys(agentStates))
 				for _, id := range broadcastIDs {
 					s := agentStates[id]
 					if s.Status == "running" || s.Status == "idle" {
@@ -3721,11 +3667,7 @@ synthesis:
 	// Convert AgentLoopResults to AgentExecutionResults for synthesis
 	var agentResults []activities.AgentExecutionResult
 	var totalTokensUsed int
-	synthIDs := make([]string, 0, len(results))
-	for id := range results {
-		synthIDs = append(synthIDs, id)
-	}
-	sort.Strings(synthIDs)
+	synthIDs := slices.Sorted(maps.Keys(results))
 	for _, id := range synthIDs {
 		r := results[id]
 		agentResults = append(agentResults, activities.AgentExecutionResult{
@@ -3814,14 +3756,7 @@ synthesis:
 			Event:      closingEvent,
 			TaskList:   make([]activities.SwarmTask, 0),
 			AgentStates: make([]activities.LeadAgentState, 0),
-			Budget: activities.LeadBudget{
-				TotalLLMCalls:       budgetTotalLLMCalls,
-				RemainingLLMCalls:   maxLLMCalls - budgetTotalLLMCalls,
-				TotalTokens:         budgetTotalTokens,
-				RemainingTokens:     maxTokens - budgetTotalTokens,
-				ElapsedSeconds:      closingElapsed,
-				MaxWallClockSeconds: maxWallClockSeconds,
-			},
+			Budget:               leadBudget(closingElapsed),
 			History:             leadHistory,
 			OriginalQuery:       input.Query,
 			ConversationHistory:  conversationHistory,
@@ -3839,28 +3774,7 @@ synthesis:
 		budgetTotalTokens += cacheAwareBudget(closingDecision.TokensUsed, closingDecision.CacheReadTokens, closingDecision.CacheCreationTokens)
 
 		// Record Lead closing decision token usage
-		{
-			recCtx := opts.WithTokenRecordOptions(ctx)
-			provider := closingDecision.Provider
-			if provider == "" {
-				provider = detectProviderFromModel(closingDecision.ModelUsed)
-			}
-			_ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
-				UserID:              input.UserID,
-				SessionID:           input.SessionID,
-				TaskID:              workflowID,
-				AgentID:             "swarm-lead",
-				Model:               closingDecision.ModelUsed,
-				Provider:            provider,
-				InputTokens:         closingDecision.InputTokens,
-				OutputTokens:        closingDecision.OutputTokens,
-				CacheReadTokens:     closingDecision.CacheReadTokens,
-				CacheCreationTokens:   closingDecision.CacheCreationTokens,
-				CacheCreation1hTokens: 0, // LeadDecisionResult doesn't carry per-TTL breakdown
-				CallSequence:        closingDecision.CallSequence,
-				Metadata:            map[string]any{"workflow": "swarm", "phase": "closing_decision"},
-			}).Get(ctx, nil)
-		}
+		recordLeadTokens("closing_decision", closingDecision)
 
 		leadHistory = append(leadHistory, map[string]any{
 			"decision_summary": closingDecision.DecisionSummary,
@@ -3887,44 +3801,10 @@ synthesis:
 
 		// Execute file I/O actions — zero LLM cost
 		if len(fileIOActions) > 0 && closingRound < maxClosingRounds {
-			var fileContents []activities.FileReadResult
-			for _, fr := range fileIOActions {
-				if fr.Type == "file_list" {
-					var listResult activities.ListWorkspaceFilesResult
-					listErr := workflow.ExecuteActivity(fileReadCtx, constants.ListWorkspaceFilesActivity,
-						activities.ListWorkspaceFilesInput{SessionID: input.SessionID}).Get(ctx, &listResult)
-					if listErr != nil {
-						fileContents = append(fileContents, activities.FileReadResult{Path: ".", Error: listErr.Error()})
-					} else {
-						var listing string
-						for _, f := range listResult.Files {
-							listing += f.Path + "\n"
-						}
-						if listing == "" {
-							listing = "(empty workspace)"
-						}
-						fileContents = append(fileContents, activities.FileReadResult{Path: ".", Content: listing})
-					}
-				} else if fr.Path != "" {
-					var readResult activities.ReadWorkspaceFileResult
-					readErr := workflow.ExecuteActivity(fileReadCtx, constants.ReadWorkspaceFileActivity,
-						activities.ReadWorkspaceFileInput{
-							SessionID: input.SessionID, Path: fr.Path, MaxChars: 8000,
-						}).Get(ctx, &readResult)
-					if readErr != nil {
-						fileContents = append(fileContents, activities.FileReadResult{Path: fr.Path, Error: readErr.Error()})
-					} else {
-						fileContents = append(fileContents, activities.FileReadResult{
-							Path: readResult.Path, Content: readResult.Content,
-							Truncated: readResult.Truncated, Error: readResult.Error,
-						})
-					}
-				}
-			}
-			closingEvent.FileContents = fileContents
+			closingEvent.FileContents = runLeadFileIO(ctx, fileReadCtx, fileIOActions, 8000)
 			closingEvent.ToolResults = nil
 			logger.Info("Lead closing file I/O complete, calling LeadDecision again",
-				"round", closingRound, "files", len(fileContents))
+				"round", closingRound, "files", len(closingEvent.FileContents))
 			continue
 		}
 
@@ -4171,11 +4051,7 @@ synthesis:
 // buildSwarmMetadata builds metadata from swarm agent results.
 func buildSwarmMetadata(results map[string]AgentLoopResult) map[string]any {
 	agentSummaries := make([]map[string]any, 0, len(results))
-	metaIDs := make([]string, 0, len(results))
-	for id := range results {
-		metaIDs = append(metaIDs, id)
-	}
-	sort.Strings(metaIDs)
+	metaIDs := slices.Sorted(maps.Keys(results))
 	var totalInput, totalOutput, totalCacheRead, totalCacheCreation int
 	var totalCost float64
 	for _, id := range metaIDs {

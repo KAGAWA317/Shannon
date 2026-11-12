@@ -34,7 +34,7 @@ from urllib.parse import urlparse
 
 from ..base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolResult
 from ..openapi_parser import _is_private_ip
-from .web_fetch import detect_blocked_reason, clean_markdown_noise, apply_extraction, EXTRACTION_INTERNAL_MAX  # P0-A: Reuse blocked detection and noise cleaning logic
+from .web_fetch import detect_blocked_reason, clean_markdown_noise, apply_extraction, apply_research_truncation, EXTRACTION_INTERNAL_MAX  # P0-A: Reuse blocked detection and noise cleaning logic
 # P0-A：复用拦截检测与噪声清理逻辑
 
 logger = logging.getLogger(__name__)
@@ -326,13 +326,7 @@ class WebSubpageFetchTool(Tool):
                     }
                 )
                 if _research_mode:
-                    if tool_result.output:
-                        content = tool_result.output.get("content", "")
-                        if len(content) > max_length:
-                            tool_result.output["content"] = content[:max_length]
-                            tool_result.output["truncated"] = True
-                            tool_result.output["char_count"] = len(tool_result.output["content"])
-                    return tool_result
+                    return apply_research_truncation(tool_result, max_length)
                 return await apply_extraction(tool_result, extract_prompt, max_length)
             except Exception as e:
                 last_error = f"Firecrawl map+scrape failed: {e}"
@@ -362,13 +356,7 @@ class WebSubpageFetchTool(Tool):
                     }
                 )
                 if _research_mode:
-                    if tool_result.output:
-                        content = tool_result.output.get("content", "")
-                        if len(content) > max_length:
-                            tool_result.output["content"] = content[:max_length]
-                            tool_result.output["truncated"] = True
-                            tool_result.output["char_count"] = len(tool_result.output["content"])
-                    return tool_result
+                    return apply_research_truncation(tool_result, max_length)
                 return await apply_extraction(tool_result, extract_prompt, max_length)
             except Exception as e:
                 error_msg = f"Exa fallback failed: {e}"
@@ -396,17 +384,6 @@ class WebSubpageFetchTool(Tool):
                 "failure_summary": {"failed_count": 0, "total_count": 0},
             },
         )
-
-    def _infer_paths_from_keywords(self, keywords: str) -> List[str]:
-        """Infer URL paths from keyword string.
-        从关键词字符串推断 URL 路径。"""
-        paths = []
-        keywords_lower = keywords.lower()
-        for keyword, keyword_paths in KEYWORD_PATH_MAP.items():
-            if keyword in keywords_lower:
-                paths.extend(keyword_paths)
-        return list(dict.fromkeys(paths))  # Deduplicate while preserving order
-        # 去重并保持顺序
 
     def _expand_keywords(self, target_keywords: str) -> set:
         """Expand target keywords using synonym mappings.

@@ -178,6 +178,16 @@ func (a *Activities) AddCitations(ctx context.Context, input CitationAgentInput)
 	return result, nil
 }
 
+// failedCitationResult 返回未改动的原始 report，并标记校验失败。
+func failedCitationResult(role, report, validationErr string) *CitationAgentResult {
+	return &CitationAgentResult{
+		Role:             role,
+		CitedReport:      report,
+		ValidationPassed: false,
+		ValidationError:  validationErr,
+	}
+}
+
 // addCitationsInline adds citations using direct LLM output approach
 // 回退路径：让 LLM 直接输出带 citation 标记的全文。
 func (a *Activities) addCitationsInline(ctx context.Context, input CitationAgentInput, role string) (*CitationAgentResult, error) {
@@ -285,23 +295,13 @@ func (a *Activities) addCitationsInline(ctx context.Context, input CitationAgent
 	resp, err := client.Do(req)
 	if err != nil {
 		logger.Warn("CitationAgent: LLM call failed, returning original report", "error", err)
-		return &CitationAgentResult{
-			Role:             role,
-			CitedReport:      input.Report,
-			ValidationPassed: false,
-			ValidationError:  err.Error(),
-		}, nil
+		return failedCitationResult(role, input.Report, err.Error()), nil
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		logger.Warn("CitationAgent: HTTP error, returning original report", "status", resp.StatusCode)
-		return &CitationAgentResult{
-			Role:             role,
-			CitedReport:      input.Report,
-			ValidationPassed: false,
-			ValidationError:  fmt.Sprintf("HTTP %d", resp.StatusCode),
-		}, nil
+		return failedCitationResult(role, input.Report, fmt.Sprintf("HTTP %d", resp.StatusCode)), nil
 	}
 
 	// Parse response
@@ -320,12 +320,7 @@ func (a *Activities) addCitationsInline(ctx context.Context, input CitationAgent
 
 	if err := json.NewDecoder(resp.Body).Decode(&llmResp); err != nil {
 		logger.Warn("CitationAgent: failed to parse response, returning original", "error", err)
-		return &CitationAgentResult{
-			Role:             role,
-			CitedReport:      input.Report,
-			ValidationPassed: false,
-			ValidationError:  err.Error(),
-		}, nil
+		return failedCitationResult(role, input.Report, err.Error()), nil
 	}
 
 	// Extract cited report from tags
@@ -1765,23 +1760,13 @@ func (a *Activities) AddCitationsWithVerify(ctx context.Context, input CitationA
 	resp, err := client.Do(req)
 	if err != nil {
 		logger.Warn("CitationAgent V2: LLM call failed, returning original report", "error", err)
-		return &CitationAgentResult{
-			Role:             role,
-			CitedReport:      input.Report,
-			ValidationPassed: false,
-			ValidationError:  err.Error(),
-		}, nil
+		return failedCitationResult(role, input.Report, err.Error()), nil
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		logger.Warn("CitationAgent V2: HTTP error, returning original report", "status", resp.StatusCode)
-		return &CitationAgentResult{
-			Role:             role,
-			CitedReport:      input.Report,
-			ValidationPassed: false,
-			ValidationError:  fmt.Sprintf("HTTP %d", resp.StatusCode),
-		}, nil
+		return failedCitationResult(role, input.Report, fmt.Sprintf("HTTP %d", resp.StatusCode)), nil
 	}
 
 	// Parse response
@@ -1800,12 +1785,7 @@ func (a *Activities) AddCitationsWithVerify(ctx context.Context, input CitationA
 
 	if err := json.NewDecoder(resp.Body).Decode(&llmResp); err != nil {
 		logger.Warn("CitationAgent V2: failed to parse response, returning original", "error", err)
-		return &CitationAgentResult{
-			Role:             role,
-			CitedReport:      input.Report,
-			ValidationPassed: false,
-			ValidationError:  err.Error(),
-		}, nil
+		return failedCitationResult(role, input.Report, err.Error()), nil
 	}
 
 	// Extract cited report from tags

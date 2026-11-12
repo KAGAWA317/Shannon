@@ -113,16 +113,9 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		// Get user context from auth middleware
 		userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 		if !ok {
-			// If no user context, reject if require_tenant_id is enabled
-			// 没有用户 context 时，若开启了 require_tenant_id 就直接拒绝。
-			if true { // Require authenticated user context for rate limiting
-				rl.logger.Warn("Rate limit check: missing user context",
-					zap.String("path", r.URL.Path))
-				rl.sendUnauthorizedError(w, "Authentication required")
-				return
-			}
-			// Otherwise skip rate limiting (auth middleware will handle it)
-			next.ServeHTTP(w, r)
+			rl.logger.Warn("Rate limit check: missing user context",
+				zap.String("path", r.URL.Path))
+			rl.sendUnauthorizedError(w, "Authentication required")
 			return
 		}
 
@@ -173,10 +166,7 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 				zap.String("path", r.URL.Path),
 			)
 
-			retryAfter := int64(info.ResetAt.Sub(time.Now()).Seconds())
-			if retryAfter < 1 {
-				retryAfter = 1
-			}
+			retryAfter := max(int64(info.ResetAt.Sub(time.Now()).Seconds()), int64(1))
 			w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
 			rl.sendRateLimitError(w, info.Window)
 			return
@@ -234,20 +224,10 @@ func (rl *RateLimiter) checkAllWindows(ctx context.Context, baseKey string, limi
 				zap.String("window", window.name),
 				zap.Error(err))
 
-			// Fail open if configured
-			if true { // Fail open on Redis errors
-				continue
-			}
-			// Fail closed: reject the request
-			info.Window = window.name
-			info.ResetAt = windowStart.Add(window.duration)
-			return false, info
+			continue // Fail open on Redis errors
 		}
 
-		remaining := window.limit - int(count)
-		if remaining < 0 {
-			remaining = 0
-		}
+		remaining := max(window.limit-int(count), 0)
 
 		// Update info based on window
 		switch window.name {

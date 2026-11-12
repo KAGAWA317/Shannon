@@ -110,7 +110,7 @@ func ExtractMemoryActivity(ctx context.Context, input MemoryExtractInput) (*Memo
 	}
 
 	// Call LLM service /memory/extract
-	llmServiceURL := getenvDefault("LLM_SERVICE_URL", "http://llm-service:8000")
+	llmServiceURL := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	extractURL := fmt.Sprintf("%s/memory/extract", llmServiceURL)
 
 	// Truncate to control cost
@@ -190,7 +190,7 @@ func ExtractMemoryActivity(ctx context.Context, input MemoryExtractInput) (*Memo
 	}
 
 	// Resolve base memory directory
-	memDir := getenvDefault("SHANNON_USER_MEMORY_DIR", "/tmp/shannon-users")
+	memDir := getenv("SHANNON_USER_MEMORY_DIR", "/tmp/shannon-users")
 	userMemDir := filepath.Join(memDir, input.UserID, "memory")
 
 	// Write the extracted content file

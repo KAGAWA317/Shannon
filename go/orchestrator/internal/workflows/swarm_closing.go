@@ -2,7 +2,8 @@ package workflows
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/activities"
@@ -18,11 +19,7 @@ func buildClosingSummary(results map[string]AgentLoopResult, files []activities.
 	var parts []string
 
 	// Agent summary
-	ids := make([]string, 0, len(results))
-	for id := range results {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
+	ids := slices.Sorted(maps.Keys(results))
 
 	parts = append(parts, fmt.Sprintf("%d agents completed.", len(results)))
 	for _, id := range ids {

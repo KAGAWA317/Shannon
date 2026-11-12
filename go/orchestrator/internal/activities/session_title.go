@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -231,7 +230,7 @@ Rules:
 
 Query: %s`, query)
 
-	llmServiceURL := getEnvOrDefaultTitle("LLM_SERVICE_URL", "http://llm-service:8000")
+	llmServiceURL := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
 	reqBody := map[string]any{
@@ -316,15 +315,6 @@ Query: %s`, query)
 	}
 
 	return title, nil
-}
-
-// getEnvOrDefaultTitle is a helper to get environment variables
-// getEnvOrDefaultTitle 是读取环境变量的辅助函数。
-func getEnvOrDefaultTitle(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
 }
 
 // generateFallbackTitle creates a simple title from the query by truncating

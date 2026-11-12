@@ -138,7 +138,7 @@ func (h *WorkspaceHandler) DownloadFile(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
-	workspacePath, err := h.buildWorkspacePath(workspaceKey)
+	workspacePath, err := buildWorkspacePath(h.workspaceBaseDir, workspaceKey)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
@@ -234,7 +234,7 @@ func (h *WorkspaceHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
-	workspacePath, err := h.buildWorkspacePath(workspaceKey)
+	workspacePath, err := buildWorkspacePath(h.workspaceBaseDir, workspaceKey)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
@@ -530,12 +530,14 @@ func (h *WorkspaceHandler) resolveWorkspaceKey(
 	return strings.TrimSpace(meta.ID), nil
 }
 
-func (h *WorkspaceHandler) buildWorkspacePath(workspaceKey string) (string, error) {
+// buildWorkspacePath validates the workspace key and builds a safe path; shared by the workspace and session handlers.
+// buildWorkspacePath 校验 workspace key 并构造安全路径，workspace 与 session 两个 handler 共用。
+func buildWorkspacePath(baseDir, workspaceKey string) (string, error) {
 	if err := validateWorkspaceSessionID(workspaceKey); err != nil {
 		return "", err
 	}
 
-	base := filepath.Clean(h.workspaceBaseDir)
+	base := filepath.Clean(baseDir)
 	path := filepath.Join(base, workspaceKey)
 
 	rel, err := filepath.Rel(base, path)

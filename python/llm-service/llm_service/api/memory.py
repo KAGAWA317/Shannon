@@ -1,12 +1,11 @@
-import json
 import logging
-import re
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
 from ..providers.base import ModelTier
+from ._json import extract_json_block as _extract_json_block
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -25,28 +24,6 @@ class MemoryExtractResponse(BaseModel):
     suggested_path: str = Field(default="")
     tags: List[str] = Field(default_factory=list)
     triples: List[Dict[str, str]] = Field(default_factory=list)
-
-
-def _extract_json_block(text: str) -> Optional[dict]:
-    """Extract JSON from model response, handling fenced blocks.
-
-    从模型 response 中提取 JSON，兼容围栏代码块。
-    """
-    try:
-        return json.loads(text)
-    except Exception:
-        pass
-    fence = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", text, re.IGNORECASE)
-    blob = fence.group(1) if fence else None
-    if not blob:
-        brace = re.search(r"\{[\s\S]*\}", text)
-        blob = brace.group(0) if brace else None
-    if not blob:
-        return None
-    try:
-        return json.loads(blob)
-    except Exception:
-        return None
 
 
 _SYSTEM_PROMPT = """You are a memory extraction specialist. Given a user query and its result, decide whether the result contains knowledge worth persisting to the user's long-term memory.

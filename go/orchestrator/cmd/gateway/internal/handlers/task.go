@@ -1495,11 +1495,7 @@ func (h *TaskHandler) buildModelBreakdown(ctx context.Context, workflowID string
 
 // sendError sends an error response
 func (h *TaskHandler) sendError(w http.ResponseWriter, message string, code int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{
-		"error": message,
-	})
+	writeJSON(w, code, map[string]string{"error": message})
 }
 
 // extractAndStoreContextAttachments inspects ctxMap["attachments"] for inline

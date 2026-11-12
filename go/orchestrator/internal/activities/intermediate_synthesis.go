@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -56,7 +55,7 @@ func (a *Activities) IntermediateSynthesis(ctx context.Context, input Intermedia
 	userContent := buildAgentResultsContent(input)
 
 	// Call LLM service
-	llmServiceURL := getenvDefault("LLM_SERVICE_URL", "http://llm-service:8000")
+	llmServiceURL := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
 	reqBody := map[string]any{
@@ -266,12 +265,4 @@ func truncateStr(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen]
-}
-
-// getenvDefault gets an environment variable with a default value
-func getenvDefault(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
 }

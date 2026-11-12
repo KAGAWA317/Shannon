@@ -1036,28 +1036,6 @@ Output JSON only.
         )
 
 
-def _detect_conflicts_v2(
-    verifications: List[ClaimVerificationV2],
-    citations: List[Citation]
-) -> List[ConflictReport]:
-    """Detect conflicting information across sources for V2 verifications."""
-    conflicts = []
-    for v in verifications:
-        if v.supporting_citations and v.conflicting_citations:
-            src1 = v.supporting_citations[0]
-            src2 = v.conflicting_citations[0]
-
-            if 0 < src1 <= len(citations) and 0 < src2 <= len(citations):
-                conflicts.append(ConflictReport(
-                    claim=v.claim,
-                    source1=src1,
-                    source1_text=citations[src1-1].title,
-                    source2=src2,
-                    source2_text=citations[src2-1].title
-                ))
-    return conflicts
-
-
 async def verify_claims_v2(
     answer: str,
     citations: List[Dict[str, Any]],
@@ -1153,7 +1131,7 @@ async def verify_claims_v2(
         overall_conf = 1.0
 
     # Detect conflicts
-    conflicts = _detect_conflicts_v2(verifications, citation_objs)
+    conflicts = _detect_conflicts(verifications, citation_objs)
 
     logger.info(f"[verification_v2] Results: supported={supported}, unsupported={unsupported}, "
                 f"insufficient={insufficient}, overall_conf={overall_conf:.2f}, "
@@ -1365,25 +1343,11 @@ def _batch_bm25_scores(
         return {}
 
     # Build corpus stats from citations
-    total_docs = len(citations)
-    doc_freq: Dict[str, int] = {}
-    total_tokens = 0
-
-    # Tokenize all citations and compute doc frequencies
-    citation_tokens_map: Dict[int, List[str]] = {}
-    for c in citations:
-        text = f"{c.title or ''} {c.content or c.snippet or ''}"
-        tokens = tokenize(text)
-        citation_tokens_map[c.id] = tokens
-        total_tokens += len(tokens)
-
-        # Document frequency
-        for term in set(tokens):
-            doc_freq[term] = doc_freq.get(term, 0) + 1
-
-    avg_doc_len = total_tokens / total_docs if total_docs > 0 else 200.0
-    if avg_doc_len <= 0:
-        avg_doc_len = 200.0
+    stats = CorpusStats.from_citations(citations)
+    citation_tokens_map: Dict[int, List[str]] = {
+        c.id: tokenize(f"{c.title or ''} {c.content or c.snippet or ''}")
+        for c in citations
+    }
 
     # Score each (claim, citation) pair
     result: Dict[str, List[Tuple[int, float]]] = {}
@@ -1401,32 +1365,15 @@ def _batch_bm25_scores(
                 continue
 
             # BM25 with IDF
-            doc_freq_counter = Counter(doc_tokens)
-            doc_len = len(doc_tokens)
-            k1, b = 1.5, 0.75
-
-            bm25_score = 0.0
-            for term in set(claim_tokens):
-                tf = doc_freq_counter.get(term, 0)
-                if tf > 0:
-                    # TF component
-                    tf_component = (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * doc_len / avg_doc_len))
-                    # IDF component
-                    n = doc_freq.get(term, 0)
-                    idf = math.log((total_docs - n + 0.5) / (n + 0.5) + 1) if total_docs > 0 else 1.0
-                    bm25_score += idf * tf_component
+            relevance = bm25_score(claim_tokens, doc_tokens, corpus_stats=stats)
 
             # P0-C: Enhanced ranking formula
             # score = 0.5 * relevance(BM25) + 0.3 * quality + 0.2 * credibility
             # Normalize BM25 to 0-1 range (assume max ~10)
-            normalized_bm25 = min(1.0, bm25_score / 10.0)
-            quality = c.quality_score * c.credibility_score  # Combined quality signal
-            credibility = c.credibility_score
-
             final_score = (
-                0.5 * normalized_bm25 +
-                0.3 * quality +
-                0.2 * credibility
+                0.5 * min(1.0, relevance / 10.0) +
+                0.3 * (c.quality_score * c.credibility_score) +
+                0.2 * c.credibility_score
             )
 
             if final_score > 0:

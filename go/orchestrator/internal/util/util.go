@@ -71,18 +71,6 @@ func TruncateString(s string, maxLen int, preserveWords bool) string {
 	return string(runes[:cut]) + "..."
 }
 
-func lastSpaceBefore(s string, pos int) int {
-	if pos > len(s) {
-		pos = len(s)
-	}
-	for i := pos - 1; i >= 0; i-- {
-		if s[i] == ' ' || s[i] == '\t' || s[i] == '\n' {
-			return i
-		}
-	}
-	return -1
-}
-
 // lastSpaceBeforeRune finds the last space before pos (in rune count, UTF-8 safe)
 // lastSpaceBeforeRune 查找 pos 之前的最后一个空格（按 rune 计数，UTF-8 安全）
 func lastSpaceBeforeRune(s string, pos int) int {

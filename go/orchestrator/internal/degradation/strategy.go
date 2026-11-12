@@ -136,22 +136,8 @@ func (ds *DefaultStrategy) ShouldDegrade(ctx context.Context) (bool, Degradation
 		failedCount++
 	}
 
-	var level DegradationLevel
-	shouldDegrade := false
-
-	switch failedCount {
-	case 0:
-		level = LevelNone
-	case 1:
-		level = LevelMinor
-		shouldDegrade = true
-	case 2:
-		level = LevelModerate
-		shouldDegrade = true
-	default:
-		level = LevelSevere
-		shouldDegrade = true
-	}
+	level := health.Overall
+	shouldDegrade := level != LevelNone
 
 	if shouldDegrade {
 		ds.logger.Warn("System degradation triggered",
@@ -173,47 +159,30 @@ func (ds *DefaultStrategy) GetFallbackBehavior(operation string) FallbackBehavio
 	health := ds.checkSystemHealth()
 
 	switch operation {
-	case "session_update":
-		if !health.Redis.IsHealthy {
-			return BehaviorProceed // Continue without session updates
-		}
-		return BehaviorProceed
-
-	case "task_persistence":
-		if !health.Database.IsHealthy {
-			return BehaviorProceed // Continue but log warnings
-		}
-		return BehaviorProceed
-
 	case "agent_execution":
 		if !health.AgentCore.IsHealthy {
 			return BehaviorDegrade // Downgrade to simpler mode
 		}
-		return BehaviorProceed
 
 	case "llm_call":
 		if !health.LLMService.IsHealthy {
 			return BehaviorCache // Use cached responses if available
 		}
-		return BehaviorProceed
 
 	case "complex_workflow":
 		if health.Overall >= LevelModerate {
 			return BehaviorDegrade // Downgrade to standard/simple mode
 		}
-		return BehaviorProceed
 
 	case "non_essential_logging":
 		if health.Overall >= LevelSevere {
 			return BehaviorSkip // Skip non-essential operations
 		}
-		return BehaviorProceed
-
-	default:
-		// Conservative default - proceed with warnings
-		// 保守的默认行为：继续执行并附带警告
-		return BehaviorProceed
 	}
+
+	// Conservative default - proceed with warnings
+	// 保守的默认行为：继续执行并附带警告
+	return BehaviorProceed
 }
 
 // RecordDegradation records degradation events for monitoring

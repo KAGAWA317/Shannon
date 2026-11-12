@@ -213,6 +213,16 @@ func WorkspaceDefaults() WorkspaceConfig {
 	}
 }
 
+func envInt(key string, dst *int) {
+	if v := os.Getenv(key); v != "" {
+		var x int
+		_, _ = fmt.Sscanf(v, "%d", &x)
+		if x > 0 {
+			*dst = x
+		}
+	}
+}
+
 // BudgetFromEnvOrDefaults returns merged budget config using env overrides first, then config file, with sensible defaults.
 // BudgetFromEnvOrDefaults 合并 budget 配置：优先环境变量，其次配置文件，最后使用合理默认值。
 func BudgetFromEnvOrDefaults(f *Features) BudgetConfig {
@@ -258,48 +268,12 @@ func BudgetFromEnvOrDefaults(f *Features) BudgetConfig {
 			bc.Backpressure.Threshold = x
 		}
 	}
-	if v := os.Getenv("MAX_BACKPRESSURE_DELAY_MS"); v != "" {
-		var x int
-		_, _ = fmt.Sscanf(v, "%d", &x)
-		if x > 0 {
-			bc.Backpressure.MaxDelayMs = x
-		}
-	}
-	if v := os.Getenv("CIRCUIT_FAILURE_THRESHOLD"); v != "" {
-		var x int
-		_, _ = fmt.Sscanf(v, "%d", &x)
-		if x > 0 {
-			bc.CircuitBreaker.FailureThreshold = x
-		}
-	}
-	if v := os.Getenv("CIRCUIT_RESET_TIMEOUT_MS"); v != "" {
-		var x int
-		_, _ = fmt.Sscanf(v, "%d", &x)
-		if x > 0 {
-			bc.CircuitBreaker.ResetTimeoutMs = x
-		}
-	}
-	if v := os.Getenv("CIRCUIT_HALF_OPEN_REQUESTS"); v != "" {
-		var x int
-		_, _ = fmt.Sscanf(v, "%d", &x)
-		if x > 0 {
-			bc.CircuitBreaker.HalfOpenRequests = x
-		}
-	}
-	if v := os.Getenv("RATE_LIMIT_REQUESTS"); v != "" {
-		var x int
-		_, _ = fmt.Sscanf(v, "%d", &x)
-		if x > 0 {
-			bc.RateLimit.Requests = x
-		}
-	}
-	if v := os.Getenv("RATE_LIMIT_INTERVAL_MS"); v != "" {
-		var x int
-		_, _ = fmt.Sscanf(v, "%d", &x)
-		if x > 0 {
-			bc.RateLimit.IntervalMs = x
-		}
-	}
+	envInt("MAX_BACKPRESSURE_DELAY_MS", &bc.Backpressure.MaxDelayMs)
+	envInt("CIRCUIT_FAILURE_THRESHOLD", &bc.CircuitBreaker.FailureThreshold)
+	envInt("CIRCUIT_RESET_TIMEOUT_MS", &bc.CircuitBreaker.ResetTimeoutMs)
+	envInt("CIRCUIT_HALF_OPEN_REQUESTS", &bc.CircuitBreaker.HalfOpenRequests)
+	envInt("RATE_LIMIT_REQUESTS", &bc.RateLimit.Requests)
+	envInt("RATE_LIMIT_INTERVAL_MS", &bc.RateLimit.IntervalMs)
 
 	return bc
 }

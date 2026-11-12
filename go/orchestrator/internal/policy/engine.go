@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -728,25 +730,9 @@ func (e *OPAEngine) calculatePolicyVersion(policies map[string]string) string {
 	h := md5.New()
 
 	// Sort policy names for deterministic ordering
-	policyNames := make([]string, 0, len(policies))
-	for name := range policies {
-		policyNames = append(policyNames, name)
-	}
-
-	// Sort to ensure consistent hash regardless of map iteration order
-	for i := 0; i < len(policyNames); i++ {
-		for j := i + 1; j < len(policyNames); j++ {
-			if policyNames[i] > policyNames[j] {
-				policyNames[i], policyNames[j] = policyNames[j], policyNames[i]
-			}
-		}
-	}
-
-	// Hash each policy in sorted order
-	for _, name := range policyNames {
-		content := policies[name]
+	for _, name := range slices.Sorted(maps.Keys(policies)) {
 		h.Write([]byte(name))
-		h.Write([]byte(content))
+		h.Write([]byte(policies[name]))
 	}
 
 	// Return first 8 hex chars for reasonable uniqueness

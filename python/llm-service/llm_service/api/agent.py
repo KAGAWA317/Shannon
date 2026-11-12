@@ -84,14 +84,14 @@ async def _resolve_attachments(context: Optional[Dict], redis_client, session_id
 
     Skips resolution when the agent has dependency_results — these downstream
     agents already have upstream conclusions in their LLM context (rendered by
-    _format_dependency_results). Re-sending binary attachments wastes tokens.
+    _format_keyed_results). Re-sending binary attachments wastes tokens.
 
     从 Redis 解析附件引用.
 
     由 /agent/query 与 /agent/loop 两个 handler 共用的辅助函数.
 
     当 agent 带有 dependency_results 时跳过解析 —— 这些下游 agent 的 LLM context
-    中已包含上游结论 (由 _format_dependency_results 渲染). 重复发送二进制附件
+    中已包含上游结论 (由 _format_keyed_results 渲染). 重复发送二进制附件
     只会浪费 token.
     """
     if not context or not isinstance(context, dict):
@@ -1483,45 +1483,30 @@ async def agent_query(request: Request, query: AgentQuery):
                         return text
                     return text[:max_chars] + "\n...[TRUNCATED — this is the available data, do NOT re-search for more]"
 
-                def _format_template_results(value: Any) -> str:
+                def _format_keyed_results(
+                    value: Any, per_item_max_chars: int, noun: str
+                ) -> str:
                     if not isinstance(value, dict):
                         return _truncate_text(str(value), 20000)
-                    node_ids = sorted([str(k) for k in value.keys()])
-                    max_nodes = 20
-                    per_node_max_chars = 12000
+                    ids = sorted(str(k) for k in value.keys())
+                    max_items = 20
                     parts: List[str] = []
-                    for idx, node_id in enumerate(node_ids):
-                        if idx >= max_nodes:
-                            parts.append(f"... ({len(node_ids) - max_nodes} more nodes omitted)")
+                    for idx, item_id in enumerate(ids):
+                        if idx >= max_items:
+                            parts.append(f"... ({len(ids) - max_items} more {noun} omitted)")
                             break
-                        node_output = value.get(node_id)
-                        node_text = (
-                            node_output if isinstance(node_output, str) else str(node_output)
+                        item = value.get(item_id)
+                        item_text = item if isinstance(item, str) else str(item)
+                        parts.append(
+                            f"[{item_id}]\n{_truncate_text(item_text, per_item_max_chars)}"
                         )
-                        parts.append(f"[{node_id}]\n{_truncate_text(node_text, per_node_max_chars)}")
-                    return "\n" + "\n\n".join(parts) if parts else ""
-
-                def _format_dependency_results(value: Any) -> str:
-                    if not isinstance(value, dict):
-                        return _truncate_text(str(value), 20000)
-                    dep_ids = sorted([str(k) for k in value.keys()])
-                    max_deps = 20
-                    per_dep_max_chars = 8000
-                    parts: List[str] = []
-                    for idx, dep_id in enumerate(dep_ids):
-                        if idx >= max_deps:
-                            parts.append(f"... ({len(dep_ids) - max_deps} more deps omitted)")
-                            break
-                        dep_val = value.get(dep_id)
-                        dep_text = dep_val if isinstance(dep_val, str) else str(dep_val)
-                        parts.append(f"[{dep_id}]\n{_truncate_text(dep_text, per_dep_max_chars)}")
                     return "\n" + "\n\n".join(parts) if parts else ""
 
                 def _format_context_value(key: str, value: Any) -> str:
                     if key == "template_results":
-                        return _format_template_results(value)
+                        return _format_keyed_results(value, 12000, "nodes")
                     if key == "dependency_results":
-                        return _format_dependency_results(value)
+                        return _format_keyed_results(value, 8000, "deps")
                     return _truncate_text(str(value), 20000)
 
                 session_allowed = {
@@ -5618,34 +5603,19 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
                 # Keep tool_params as-is without template resolution
 
                 # Deep Research 2.0: Parse task contract fields
-                output_format = None
-                source_guidance = None
-                search_budget = None
-                boundaries = None
-
-                if st.get("output_format") and isinstance(st.get("output_format"), dict):
-                    try:
-                        output_format = OutputFormatSpec(**st["output_format"])
-                    except Exception as e:
-                        logger.warning(f"Failed to parse output_format: {e}")
-
-                if st.get("source_guidance") and isinstance(st.get("source_guidance"), dict):
-                    try:
-                        source_guidance = SourceGuidanceSpec(**st["source_guidance"])
-                    except Exception as e:
-                        logger.warning(f"Failed to parse source_guidance: {e}")
-
-                if st.get("search_budget") and isinstance(st.get("search_budget"), dict):
-                    try:
-                        search_budget = SearchBudgetSpec(**st["search_budget"])
-                    except Exception as e:
-                        logger.warning(f"Failed to parse search_budget: {e}")
-
-                if st.get("boundaries") and isinstance(st.get("boundaries"), dict):
-                    try:
-                        boundaries = BoundariesSpec(**st["boundaries"])
-                    except Exception as e:
-                        logger.warning(f"Failed to parse boundaries: {e}")
+                parsed: Dict[str, Any] = {}
+                for field, spec in (
+                    ("output_format", OutputFormatSpec),
+                    ("source_guidance", SourceGuidanceSpec),
+                    ("search_budget", SearchBudgetSpec),
+                    ("boundaries", BoundariesSpec),
+                ):
+                    raw_field = st.get(field)
+                    if raw_field and isinstance(raw_field, dict):
+                        try:
+                            parsed[field] = spec(**raw_field)
+                        except Exception as e:
+                            logger.warning(f"Failed to parse {field}: {e}")
 
                 subtask = Subtask(
                     id=st.get("id", f"task-{len(subtasks) + 1}"),
@@ -5656,10 +5626,10 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
                     parent_area=str(st.get("parent_area", "")) if st.get("parent_area") is not None else "",
                     suggested_tools=suggested_tools,
                     tool_parameters=tool_params,
-                    output_format=output_format,
-                    source_guidance=source_guidance,
-                    search_budget=search_budget,
-                    boundaries=boundaries,
+                    output_format=parsed.get("output_format"),
+                    source_guidance=parsed.get("source_guidance"),
+                    search_budget=parsed.get("search_budget"),
+                    boundaries=parsed.get("boundaries"),
                     produces=st.get("produces", []),
                     consumes=st.get("consumes", []),
                 )
@@ -5667,11 +5637,13 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
                 total_tokens += subtask.estimated_tokens
 
                 # Log task contract fields for debugging
-                if any([output_format, source_guidance, search_budget, boundaries]):
+                if any(parsed.values()):
                     logger.info(
                         f"Deep Research 2.0 task contract for {subtask.id}: "
-                        f"output_format={output_format}, source_guidance={source_guidance}, "
-                        f"search_budget={search_budget}, boundaries={boundaries}"
+                        f"output_format={parsed.get('output_format')}, "
+                        f"source_guidance={parsed.get('source_guidance')}, "
+                        f"search_budget={parsed.get('search_budget')}, "
+                        f"boundaries={parsed.get('boundaries')}"
                     )
 
 

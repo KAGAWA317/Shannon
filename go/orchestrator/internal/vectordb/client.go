@@ -237,6 +237,38 @@ func (c *Client) UpsertSummaryEmbedding(ctx context.Context, vec []float32, payl
 	return c.Upsert(ctx, collection, []UpsertItem{p})
 }
 
+// Convert to ContextItem format
+func contextItems(points []qdrantPoint) []ContextItem {
+	items := make([]ContextItem, 0, len(points))
+	for _, point := range points {
+		// Add point ID to payload for deduplication
+		// 把 point ID 加入 payload 以便去重
+		payload := point.Payload
+		if payload == nil {
+			payload = make(map[string]any)
+		}
+		// Include Qdrant point ID for strong deduplication
+		// 带上 Qdrant point ID 以实现强去重
+		if point.ID != nil {
+			payload["_point_id"] = fmt.Sprintf("%v", point.ID)
+		}
+
+		item := ContextItem{
+			Score:   point.Score,
+			Payload: payload,
+		}
+		if len(point.Vector) > 0 {
+			v := make([]float32, len(point.Vector))
+			for i, f := range point.Vector {
+				v[i] = float32(f)
+			}
+			item.Vector = v
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
 // GetSessionContextSemanticByEmbedding performs semantic search filtered by session ID
 // This method accepts a pre-computed embedding to keep the vectordb layer independent of embeddings service
 // GetSessionContextSemanticByEmbedding 按 session ID 过滤做语义检索
@@ -286,36 +318,7 @@ func (c *Client) GetSessionContextSemanticByEmbedding(ctx context.Context, embed
 		return nil, err
 	}
 
-	// Convert to ContextItem format
-	items := make([]ContextItem, 0, len(points))
-	for _, point := range points {
-		// Add point ID to payload for deduplication
-		// 把 point ID 加入 payload 以便去重
-		payload := point.Payload
-		if payload == nil {
-			payload = make(map[string]any)
-		}
-		// Include Qdrant point ID for strong deduplication
-		// 带上 Qdrant point ID 以实现强去重
-		if point.ID != nil {
-			payload["_point_id"] = fmt.Sprintf("%v", point.ID)
-		}
-
-		item := ContextItem{
-			Score:   point.Score,
-			Payload: payload,
-		}
-		if len(point.Vector) > 0 {
-			v := make([]float32, len(point.Vector))
-			for i, f := range point.Vector {
-				v[i] = float32(f)
-			}
-			item.Vector = v
-		}
-		items = append(items, item)
-	}
-
-	return items, nil
+	return contextItems(points), nil
 }
 
 // SearchSummaries performs semantic search in the summaries collection
@@ -364,36 +367,7 @@ func (c *Client) SearchSummaries(ctx context.Context, embedding []float32, sessi
 		return nil, err
 	}
 
-	// Convert to ContextItem format
-	items := make([]ContextItem, 0, len(points))
-	for _, point := range points {
-		// Add point ID to payload for deduplication
-		// 把 point ID 加入 payload 以便去重
-		payload := point.Payload
-		if payload == nil {
-			payload = make(map[string]any)
-		}
-		// Include Qdrant point ID for strong deduplication
-		// 带上 Qdrant point ID 以实现强去重
-		if point.ID != nil {
-			payload["_point_id"] = fmt.Sprintf("%v", point.ID)
-		}
-
-		item := ContextItem{
-			Score:   point.Score,
-			Payload: payload,
-		}
-		if len(point.Vector) > 0 {
-			v := make([]float32, len(point.Vector))
-			for i, f := range point.Vector {
-				v[i] = float32(f)
-			}
-			item.Vector = v
-		}
-		items = append(items, item)
-	}
-
-	return items, nil
+	return contextItems(points), nil
 }
 
 // SearchDecompositionPatterns performs semantic search in the decomposition_patterns collection filtered by session
@@ -438,24 +412,5 @@ func (c *Client) SearchDecompositionPatterns(ctx context.Context, embedding []fl
 		return nil, err
 	}
 
-	items := make([]ContextItem, 0, len(points))
-	for _, point := range points {
-		payload := point.Payload
-		if payload == nil {
-			payload = make(map[string]any)
-		}
-		if point.ID != nil {
-			payload["_point_id"] = fmt.Sprintf("%v", point.ID)
-		}
-		item := ContextItem{Score: point.Score, Payload: payload}
-		if len(point.Vector) > 0 {
-			v := make([]float32, len(point.Vector))
-			for i, f := range point.Vector {
-				v[i] = float32(f)
-			}
-			item.Vector = v
-		}
-		items = append(items, item)
-	}
-	return items, nil
+	return contextItems(points), nil
 }

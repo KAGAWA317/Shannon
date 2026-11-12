@@ -51,10 +51,7 @@ type DecompositionResult struct {
 // DecomposeTask calls the LLM service to decompose a task into subtasks
 // DecomposeTask 调用 LLM service 把 task 分解为 subtasks。
 func (a *Activities) DecomposeTask(ctx context.Context, in DecompositionInput) (DecompositionResult, error) {
-	base := os.Getenv("LLM_SERVICE_URL")
-	if base == "" {
-		base = "http://llm-service:8000"
-	}
+	base := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/agent/decompose", base)
 
 	body, _ := json.Marshal(map[string]any{

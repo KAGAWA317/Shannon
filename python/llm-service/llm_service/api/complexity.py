@@ -5,6 +5,7 @@ import json
 import re
 
 from ..providers.base import ModelTier
+from ._json import extract_json_block as _extract_json_block
 
 router = APIRouter()
 
@@ -113,25 +114,6 @@ def _heuristic_analysis(body: ComplexityRequest) -> ComplexityResponse:
         reasoning=reasoning,
         source="heuristic",
     )
-
-
-def _extract_json_block(text: str) -> Optional[Dict[str, Any]]:
-    try:
-        return json.loads(text)
-    except Exception:
-        pass
-    # Try fenced JSON or first {...} block
-    fence = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", text, re.IGNORECASE)
-    blob = fence.group(1) if fence else None
-    if not blob:
-        brace = re.search(r"\{[\s\S]*\}", text)
-        blob = brace.group(0) if brace else None
-    if not blob:
-        return None
-    try:
-        return json.loads(blob)
-    except Exception:
-        return None
 
 
 @router.post("/analyze", response_model=ComplexityResponse)

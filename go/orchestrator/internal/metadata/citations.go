@@ -853,41 +853,22 @@ func extractCitationsFromPlainTextResponse(response string, agentID string, now 
 	// Strip common closing-tag suffix artifacts so citations remain valid URLs.
 	// 部分模型会用 <url>...</url> 之类标签包裹 URL，或给出编码变体。
 	// 去掉常见的闭合标签后缀残留，使引用仍是合法 URL。
-	trimSuffixFold := func(s, suffixLower string) (string, bool) {
-		if strings.HasSuffix(strings.ToLower(s), suffixLower) {
-			return s[:len(s)-len(suffixLower)], true
-		}
-		return s, false
+	urlTagSuffixes := []string{
+		"</url>", "</url", "%3c/url%3e", "%3c/url",
+		"&lt;/url&gt;", "&lt;/url&gt", "&lt;/url",
 	}
 	stripURLTagSuffix := func(s string) string {
 		for {
 			before := s
-			if v, ok := trimSuffixFold(s, "</url>"); ok {
-				s = v
-			}
-			if v, ok := trimSuffixFold(s, "</url"); ok {
-				s = v
-			}
-			if v, ok := trimSuffixFold(s, "%3c/url%3e"); ok {
-				s = v
-			}
-			if v, ok := trimSuffixFold(s, "%3c/url"); ok {
-				s = v
-			}
-			if v, ok := trimSuffixFold(s, "&lt;/url&gt;"); ok {
-				s = v
-			}
-			if v, ok := trimSuffixFold(s, "&lt;/url&gt"); ok {
-				s = v
-			}
-			if v, ok := trimSuffixFold(s, "&lt;/url"); ok {
-				s = v
+			for _, suffix := range urlTagSuffixes {
+				if strings.HasSuffix(strings.ToLower(s), suffix) {
+					s = s[:len(s)-len(suffix)]
+				}
 			}
 			if s == before {
-				break
+				return s
 			}
 		}
-		return s
 	}
 
 	// trimNonASCIISuffix truncates the URL at the first non-ASCII character
@@ -1029,126 +1010,71 @@ func extractCitationsFromToolOutput(toolName string, output any, agentID string,
 		log.Printf("[citations] tool=%s output_type=%T", toolName, output)
 	}
 
-	switch toolName {
-	case "web_search":
-		// Case 1: Direct array (proto sometimes returns []interface{} directly)
-		// 情况 1：直接是数组（proto 有时直接返回 []interface{}）
-		if arr, ok := output.([]any); ok {
-			for _, item := range arr {
-				if resultMap, ok := item.(map[string]any); ok {
-					if citation, err := extractCitationFromSearchResult(resultMap, agentID, now); err == nil {
-						citations = append(citations, *citation)
-					}
-				}
+	// 字符串载荷先统一解码，后续各工具只处理结构化形态
+	if s, ok := output.(string); ok && s != "" {
+		var decoded any
+		if err := json.Unmarshal([]byte(s), &decoded); err == nil {
+			if decoded == nil {
+				// JSON null：保持原 web_fetch / multi-page 以 nil map 调用的行为
+				decoded = map[string]any(nil)
 			}
-			// Case 2: Wrapped in map {"results": [...]}
-		} else if outputMap, ok := output.(map[string]any); ok {
-			if results, ok := outputMap["results"].([]any); ok {
-				for _, resultInterface := range results {
-					if resultMap, ok := resultInterface.(map[string]any); ok {
-						if citation, err := extractCitationFromSearchResult(resultMap, agentID, now); err == nil {
-							citations = append(citations, *citation)
-						}
-					}
-				}
-			}
-			// Case 3: JSON string
-		} else if s, ok := output.(string); ok && s != "" {
-			// Fallback: output encoded as JSON string
-			var decoded any
-			if err := json.Unmarshal([]byte(s), &decoded); err == nil {
-				if arr, ok := decoded.([]any); ok {
-					for _, item := range arr {
-						if resultMap, ok := item.(map[string]any); ok {
-							if citation, err := extractCitationFromSearchResult(resultMap, agentID, now); err == nil {
-								citations = append(citations, *citation)
-							}
-						}
-					}
-				} else if m, ok := decoded.(map[string]any); ok {
-					if results, ok := m["results"].([]any); ok {
-						for _, item := range results {
-							if resultMap, ok := item.(map[string]any); ok {
-								if citation, err := extractCitationFromSearchResult(resultMap, agentID, now); err == nil {
-									citations = append(citations, *citation)
-								}
-							}
-						}
-					}
+			output = decoded
+		}
+	}
+
+	appendResults := func(items any) {
+		arr, _ := items.([]any)
+		for _, item := range arr {
+			if resultMap, ok := item.(map[string]any); ok {
+				if citation, err := extractCitationFromSearchResult(resultMap, agentID, now); err == nil {
+					citations = append(citations, *citation)
 				}
 			}
 		}
+	}
+	appendPage := func(pageMap map[string]any) {
+		if citation, err := extractCitationFromFetchResult(pageMap, agentID, now); err == nil {
+			citations = append(citations, *citation)
+		}
+	}
+
+	switch toolName {
+	case "web_search":
+		if m, ok := output.(map[string]any); ok {
+			output = m["results"]
+		}
+		appendResults(output)
 
 	case "web_fetch":
 		// Handle both single page and batch fetch formats
 		// 同时处理单页与批量抓取两种格式
-		if outputMap, ok := output.(map[string]any); ok {
+		if m, ok := output.(map[string]any); ok {
 			// Check for batch format: {pages: [...], succeeded: N, failed: M}
 			// 检查批量格式：{pages: [...], succeeded: N, failed: M}
-			if pages, ok := outputMap["pages"].([]any); ok {
+			if pages, ok := m["pages"].([]any); ok {
 				for _, page := range pages {
 					if pageMap, ok := page.(map[string]any); ok {
 						// Only extract from successful pages
 						if success, _ := pageMap["success"].(bool); success {
-							if citation, err := extractCitationFromFetchResult(pageMap, agentID, now); err == nil {
-								citations = append(citations, *citation)
-							}
+							appendPage(pageMap)
 						}
 					}
 				}
 			} else {
 				// Single page format (backward compatible)
-				if citation, err := extractCitationFromFetchResult(outputMap, agentID, now); err == nil {
-					citations = append(citations, *citation)
-				}
-			}
-		} else if s, ok := output.(string); ok && s != "" {
-			var m map[string]any
-			if err := json.Unmarshal([]byte(s), &m); err == nil {
-				// Check for batch format in JSON string
-				// 检查 JSON 字符串中的批量格式
-				if pages, ok := m["pages"].([]any); ok {
-					for _, page := range pages {
-						if pageMap, ok := page.(map[string]any); ok {
-							if success, _ := pageMap["success"].(bool); success {
-								if citation, err := extractCitationFromFetchResult(pageMap, agentID, now); err == nil {
-									citations = append(citations, *citation)
-								}
-							}
-						}
-					}
-				} else {
-					if citation, err := extractCitationFromFetchResult(m, agentID, now); err == nil {
-						citations = append(citations, *citation)
-					}
-				}
+				appendPage(m)
 			}
 		}
 
 	case "web_subpage_fetch", "web_crawl":
 		// Multi-page tools: try to extract citations from metadata.urls
 		// 多页 tool：尝试从 metadata.urls 中提取引用
-		if outputMap, ok := output.(map[string]any); ok {
-			multiCitations := extractCitationsFromMultiPageResult(outputMap, agentID, now)
-			if len(multiCitations) > 0 {
-				citations = append(citations, multiCitations...)
+		if m, ok := output.(map[string]any); ok {
+			if multi := extractCitationsFromMultiPageResult(m, agentID, now); len(multi) > 0 {
+				citations = append(citations, multi...)
 			} else {
 				// Fallback: treat as single page fetch
-				if citation, err := extractCitationFromFetchResult(outputMap, agentID, now); err == nil {
-					citations = append(citations, *citation)
-				}
-			}
-		} else if s, ok := output.(string); ok && s != "" {
-			var m map[string]any
-			if err := json.Unmarshal([]byte(s), &m); err == nil {
-				multiCitations := extractCitationsFromMultiPageResult(m, agentID, now)
-				if len(multiCitations) > 0 {
-					citations = append(citations, multiCitations...)
-				} else {
-					if citation, err := extractCitationFromFetchResult(m, agentID, now); err == nil {
-						citations = append(citations, *citation)
-					}
-				}
+				appendPage(m)
 			}
 		}
 	}
@@ -1974,6 +1900,19 @@ type CitationWithID struct {
 	Citation Citation `json:"citation"` // Original citation data
 }
 
+// assignSequentialIDs wraps citations with 1-indexed sequential IDs, preserving order.
+// assignSequentialIDs 按顺序为引用分配从 1 开始的 ID
+func assignSequentialIDs(citations []Citation) []CitationWithID {
+	result := make([]CitationWithID, len(citations))
+	for i, c := range citations {
+		result[i] = CitationWithID{
+			ID:       i + 1, // 1-indexed
+			Citation: c,
+		}
+	}
+	return result
+}
+
 // FilterFetchOnlyAndAssignIDs filters citations to fetch-only sources and assigns sequential IDs.
 // This is used by Deep Research workflow to:
 // 1. Only use citations from actual page content (web_fetch/web_subpage_fetch/web_crawl)
@@ -1998,20 +1937,10 @@ func FilterFetchOnlyAndAssignIDs(citations []Citation) []CitationWithID {
 
 	// Sort by combined score (quality * credibility) descending
 	// 按综合分（quality * credibility）降序排序
-	sort.Slice(fetchCitations, func(i, j int) bool {
-		scoreI := fetchCitations[i].QualityScore * fetchCitations[i].CredibilityScore
-		scoreJ := fetchCitations[j].QualityScore * fetchCitations[j].CredibilityScore
-		return scoreI > scoreJ
-	})
+	sortByScore(fetchCitations)
 
 	// Assign sequential IDs (1-indexed)
-	result := make([]CitationWithID, len(fetchCitations))
-	for i, c := range fetchCitations {
-		result[i] = CitationWithID{
-			ID:       i + 1, // 1-indexed
-			Citation: c,
-		}
-	}
+	result := assignSequentialIDs(fetchCitations)
 
 	if isCitationsDebugEnabled() {
 		log.Printf("[citations] FilterFetchOnlyAndAssignIDs: input=%d fetch_only=%d", len(citations), len(result))
@@ -2038,20 +1967,10 @@ func AssignIDsToAllCitations(citations []Citation) []CitationWithID {
 
 	// Sort by combined score (quality * credibility) descending
 	// 按综合分（quality * credibility）降序排序
-	sort.Slice(sortedCitations, func(i, j int) bool {
-		scoreI := sortedCitations[i].QualityScore * sortedCitations[i].CredibilityScore
-		scoreJ := sortedCitations[j].QualityScore * sortedCitations[j].CredibilityScore
-		return scoreI > scoreJ
-	})
+	sortByScore(sortedCitations)
 
 	// Assign sequential IDs (1-indexed)
-	result := make([]CitationWithID, len(sortedCitations))
-	for i, c := range sortedCitations {
-		result[i] = CitationWithID{
-			ID:       i + 1, // 1-indexed
-			Citation: c,
-		}
-	}
+	result := assignSequentialIDs(sortedCitations)
 
 	if isCitationsDebugEnabled() {
 		log.Printf("[citations] AssignIDsToAllCitations: input=%d output=%d", len(citations), len(result))

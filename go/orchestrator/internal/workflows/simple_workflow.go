@@ -502,35 +502,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 				ctxForSynth[k] = v
 			}
 		}
-		if len(collectedCitations) > 0 {
-			var b strings.Builder
-			for i, c := range collectedCitations {
-				idx := i + 1
-				title := c.Title
-				if title == "" {
-					title = c.Source
-				}
-				if c.PublishedDate != nil {
-					fmt.Fprintf(&b, "[%d] %s (%s) - %s, %s\n", idx, title, c.URL, c.Source, c.PublishedDate.Format("2006-01-02"))
-				} else {
-					fmt.Fprintf(&b, "[%d] %s (%s) - %s\n", idx, title, c.URL, c.Source)
-				}
-			}
-			ctxForSynth["available_citations"] = strings.TrimRight(b.String(), "\n")
-			ctxForSynth["citation_count"] = len(collectedCitations)
-
-			out := make([]map[string]any, 0, len(collectedCitations))
-			for _, c := range collectedCitations {
-				out = append(out, map[string]any{
-					"url":               c.URL,
-					"title":             c.Title,
-					"source":            c.Source,
-					"credibility_score": c.CredibilityScore,
-					"quality_score":     c.QualityScore,
-				})
-			}
-			ctxForSynth["citations"] = out
-		}
+		addCitationsToContext(ctxForSynth, collectedCitations)
 
 		// Convert to agent results format for synthesis
 		agentResults := []activities.AgentExecutionResult{
@@ -746,4 +718,38 @@ func modelTierFromBudget(budget int) string {
 	default:
 		return "xlarge" // 200k+ window models
 	}
+}
+
+// addCitationsToContext 把引用格式化为可注入 prompt 的文本，并附带结构化引用列表。
+func addCitationsToContext(ctxMap map[string]any, citations []metadata.Citation) {
+	if len(citations) == 0 {
+		return
+	}
+	var b strings.Builder
+	for i, c := range citations {
+		idx := i + 1
+		title := c.Title
+		if title == "" {
+			title = c.Source
+		}
+		if c.PublishedDate != nil {
+			fmt.Fprintf(&b, "[%d] %s (%s) - %s, %s\n", idx, title, c.URL, c.Source, c.PublishedDate.Format("2006-01-02"))
+		} else {
+			fmt.Fprintf(&b, "[%d] %s (%s) - %s\n", idx, title, c.URL, c.Source)
+		}
+	}
+	ctxMap["available_citations"] = strings.TrimRight(b.String(), "\n")
+	ctxMap["citation_count"] = len(citations)
+
+	out := make([]map[string]any, 0, len(citations))
+	for _, c := range citations {
+		out = append(out, map[string]any{
+			"url":               c.URL,
+			"title":             c.Title,
+			"source":            c.Source,
+			"credibility_score": c.CredibilityScore,
+			"quality_score":     c.QualityScore,
+		})
+	}
+	ctxMap["citations"] = out
 }

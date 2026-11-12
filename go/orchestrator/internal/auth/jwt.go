@@ -212,10 +212,11 @@ func compareTokenHash(hash1, hash2 string) bool {
 // ExtractBearerToken 从 Authorization 头中提取 token
 func ExtractBearerToken(authHeader string) (string, error) {
 	authHeader = strings.TrimSpace(authHeader)
-	if len(authHeader) < 7 || !strings.EqualFold(authHeader[:6], "Bearer") || authHeader[6] != ' ' {
+	scheme, token, ok := strings.Cut(authHeader, " ")
+	if !ok || !strings.EqualFold(scheme, "Bearer") {
 		return "", fmt.Errorf("invalid authorization header format")
 	}
-	token := strings.TrimSpace(authHeader[7:])
+	token = strings.TrimSpace(token)
 	if token == "" {
 		return "", fmt.Errorf("invalid authorization header format")
 	}

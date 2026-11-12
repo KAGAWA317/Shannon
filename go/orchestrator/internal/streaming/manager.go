@@ -289,38 +289,7 @@ func (m *Manager) streamReaderFrom(ctx context.Context, workflowID string, ch ch
 		for _, stream := range result {
 			for _, message := range stream.Messages {
 				lastID = message.ID
-
-				// Parse event from Redis stream
-				event := Event{
-					WorkflowID: workflowID,
-					StreamID:   message.ID,
-				}
-
-				if v, ok := message.Values["type"].(string); ok {
-					event.Type = v
-				}
-				if v, ok := message.Values["agent_id"].(string); ok {
-					event.AgentID = v
-				}
-				if v, ok := message.Values["message"].(string); ok {
-					event.Message = v
-				}
-				if v, ok := message.Values["seq"].(string); ok {
-					if seq, err := strconv.ParseUint(v, 10, 64); err == nil {
-						event.Seq = seq
-					}
-				}
-				if v, ok := message.Values["ts_nano"].(string); ok {
-					if nano, err := strconv.ParseInt(v, 10, 64); err == nil {
-						event.Timestamp = time.Unix(0, nano)
-					}
-				}
-				if v, ok := message.Values["payload"].(string); ok && v != "" {
-					var p map[string]any
-					if err := json.Unmarshal([]byte(v), &p); err == nil {
-						event.Payload = p
-					}
-				}
+				event := eventFromMessage(workflowID, message)
 
 				// Best-effort DB persistence for events from external publishers (e.g., gateway).
 				// Events published via Publish() are already enqueued; the DB dedup index prevents duplicates.
@@ -370,13 +339,44 @@ func (m *Manager) streamReaderFrom(ctx context.Context, workflowID string, ch ch
 	}
 }
 
-// min returns the minimum of two durations
-// min 返回两个时长中的较小者
-func min(a, b time.Duration) time.Duration {
-	if a < b {
-		return a
+// streamSeq 解析 seq 字段；ok=false 表示字段缺失或非字符串/不可解析
+func streamSeq(msg redis.XMessage) (uint64, bool) {
+	v, ok := msg.Values["seq"].(string)
+	if !ok {
+		return 0, false
 	}
-	return b
+	seq, err := strconv.ParseUint(v, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return seq, true
+}
+
+// eventFromMessage 把 Redis stream 消息还原成 Event（字段集与 gateway review.go 的 XAdd 一致）
+func eventFromMessage(workflowID string, msg redis.XMessage) Event {
+	event := Event{WorkflowID: workflowID, StreamID: msg.ID}
+	if v, ok := msg.Values["type"].(string); ok {
+		event.Type = v
+	}
+	if v, ok := msg.Values["agent_id"].(string); ok {
+		event.AgentID = v
+	}
+	if v, ok := msg.Values["message"].(string); ok {
+		event.Message = v
+	}
+	event.Seq, _ = streamSeq(msg)
+	if v, ok := msg.Values["ts_nano"].(string); ok {
+		if nano, err := strconv.ParseInt(v, 10, 64); err == nil {
+			event.Timestamp = time.Unix(0, nano)
+		}
+	}
+	if v, ok := msg.Values["payload"].(string); ok && v != "" {
+		var p map[string]any
+		if err := json.Unmarshal([]byte(v), &p); err == nil {
+			event.Payload = p
+		}
+	}
+	return event
 }
 
 // isCriticalEvent determines if an event type is critical and should not be dropped silently
@@ -872,45 +872,12 @@ func (m *Manager) ReplaySince(workflowID string, since uint64) []Event {
 
 	var events []Event
 	for _, msg := range messages {
-		event := Event{
-			WorkflowID: workflowID,
-			StreamID:   msg.ID,
+		// Skip if not after 'since'
+		if seq, ok := streamSeq(msg); ok && seq <= since {
+			continue
 		}
 
-		// Parse sequence
-		if v, ok := msg.Values["seq"].(string); ok {
-			if seq, err := strconv.ParseUint(v, 10, 64); err == nil {
-				event.Seq = seq
-				// Skip if not after 'since'
-				if seq <= since {
-					continue
-				}
-			}
-		}
-
-		// Parse other fields
-		if v, ok := msg.Values["type"].(string); ok {
-			event.Type = v
-		}
-		if v, ok := msg.Values["agent_id"].(string); ok {
-			event.AgentID = v
-		}
-		if v, ok := msg.Values["message"].(string); ok {
-			event.Message = v
-		}
-		if v, ok := msg.Values["ts_nano"].(string); ok {
-			if nano, err := strconv.ParseInt(v, 10, 64); err == nil {
-				event.Timestamp = time.Unix(0, nano)
-			}
-		}
-		if v, ok := msg.Values["payload"].(string); ok && v != "" {
-			var p map[string]any
-			if err := json.Unmarshal([]byte(v), &p); err == nil {
-				event.Payload = p
-			}
-		}
-
-		events = append(events, event)
+		events = append(events, eventFromMessage(workflowID, msg))
 	}
 
 	return events
@@ -939,39 +906,7 @@ func (m *Manager) ReplayFromStreamID(workflowID string, streamID string) []Event
 
 	var events []Event
 	for _, msg := range messages {
-		event := Event{
-			WorkflowID: workflowID,
-			StreamID:   msg.ID,
-		}
-
-		// Parse fields
-		if v, ok := msg.Values["seq"].(string); ok {
-			if seq, err := strconv.ParseUint(v, 10, 64); err == nil {
-				event.Seq = seq
-			}
-		}
-		if v, ok := msg.Values["type"].(string); ok {
-			event.Type = v
-		}
-		if v, ok := msg.Values["agent_id"].(string); ok {
-			event.AgentID = v
-		}
-		if v, ok := msg.Values["message"].(string); ok {
-			event.Message = v
-		}
-		if v, ok := msg.Values["ts_nano"].(string); ok {
-			if nano, err := strconv.ParseInt(v, 10, 64); err == nil {
-				event.Timestamp = time.Unix(0, nano)
-			}
-		}
-		if v, ok := msg.Values["payload"].(string); ok && v != "" {
-			var p map[string]any
-			if err := json.Unmarshal([]byte(v), &p); err == nil {
-				event.Payload = p
-			}
-		}
-
-		events = append(events, event)
+		events = append(events, eventFromMessage(workflowID, msg))
 	}
 
 	return events

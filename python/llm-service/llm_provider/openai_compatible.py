@@ -201,16 +201,6 @@ class OpenAICompatibleProvider(LLMProvider):
             output_price_per_1k=0.0,
         )
 
-    def _resolve_alias(self, model_id: str) -> str:
-        """Return the configured alias for a given vendor model_id, if any.
-
-        返回给定厂商 model_id 对应的已配置别名（若有）。
-        """
-        for alias, cfg in self.models.items():
-            if cfg.model_id == model_id:
-                return alias
-        return model_id
-
     def count_tokens(self, messages: List[Dict[str, Any]], model: str) -> int:
         """
         Count tokens for the model.

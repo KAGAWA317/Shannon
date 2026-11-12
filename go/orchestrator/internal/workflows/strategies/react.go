@@ -177,13 +177,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Check for budget configuration
-	agentMaxTokens := 0
-	if v, ok := baseContext["budget_agent_max"].(int); ok {
-		agentMaxTokens = v
-	}
-	if v, ok := baseContext["budget_agent_max"].(float64); ok && v > 0 {
-		agentMaxTokens = int(v)
-	}
+	agentMaxTokens := getBudgetMax(baseContext)
 
 	// Determine model tier based on query complexity
 	modelTier := "medium" // Default for React tasks

@@ -142,10 +142,7 @@ func AgentLoopStep(ctx context.Context, in AgentLoopStepInput) (AgentLoopStepRes
 	logger := activity.GetLogger(ctx)
 	logger.Info("AgentLoopStep called", "agent_id", in.AgentID, "iteration", in.Iteration, "task_len", len(in.Task))
 
-	base := os.Getenv("LLM_SERVICE_URL")
-	if base == "" {
-		base = "http://llm-service:8000"
-	}
+	base := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/agent/loop", base)
 
 	body, err := json.Marshal(in)

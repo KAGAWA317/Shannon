@@ -101,12 +101,6 @@ class XAIProvider(LLMProvider):
     def count_tokens(self, messages: List[Dict[str, Any]], model: str) -> int:
         return TokenCounter.count_messages_tokens(messages, model)
 
-    def _resolve_alias(self, model_id: str) -> str:
-        for alias, cfg in self.models.items():
-            if cfg.model_id == model_id:
-                return alias
-        return model_id
-
     def _supports_reasoning(self, model_alias: str) -> bool:
         config = self.models.get(model_alias)
         if not config:

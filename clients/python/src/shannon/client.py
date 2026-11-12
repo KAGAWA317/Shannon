@@ -928,6 +928,31 @@ class AsyncShannonClient:
 
     # ===== HITL Review Operations =====
 
+    def _parse_review_state(self, data: Dict[str, Any]) -> ReviewState:
+        """把 /review 响应体解析成 ReviewState（get/submit-feedback 共用）。"""
+        rounds = []
+        for r in data.get("rounds", []):
+            ts = None
+            if r.get("timestamp"):
+                try:
+                    ts = _parse_timestamp(r["timestamp"])
+                except (ValueError, TypeError):
+                    pass
+            rounds.append(ReviewRound(
+                role=r.get("role", ""),
+                message=r.get("message", ""),
+                timestamp=ts,
+            ))
+
+        return ReviewState(
+            status=data.get("status", ""),
+            round=data.get("round", 0),
+            version=data.get("version", 0),
+            current_plan=data.get("current_plan"),
+            rounds=rounds,
+            query=data.get("query"),
+        )
+
     async def get_review_state(
         self, workflow_id: str, *, timeout: Optional[float] = None
     ) -> ReviewState:
@@ -966,28 +991,7 @@ class AsyncShannonClient:
 
             data = response.json()
 
-            rounds = []
-            for r in data.get("rounds", []):
-                ts = None
-                if r.get("timestamp"):
-                    try:
-                        ts = _parse_timestamp(r["timestamp"])
-                    except (ValueError, TypeError):
-                        pass
-                rounds.append(ReviewRound(
-                    role=r.get("role", ""),
-                    message=r.get("message", ""),
-                    timestamp=ts,
-                ))
-
-            return ReviewState(
-                status=data.get("status", ""),
-                round=data.get("round", 0),
-                version=data.get("version", 0),
-                current_plan=data.get("current_plan"),
-                rounds=rounds,
-                query=data.get("query"),
-            )
+            return self._parse_review_state(data)
 
         except httpx.HTTPError as e:
             raise errors.ConnectionError(
@@ -1048,28 +1052,7 @@ class AsyncShannonClient:
 
             data = response.json()
 
-            rounds = []
-            for r in data.get("rounds", []):
-                ts = None
-                if r.get("timestamp"):
-                    try:
-                        ts = _parse_timestamp(r["timestamp"])
-                    except (ValueError, TypeError):
-                        pass
-                rounds.append(ReviewRound(
-                    role=r.get("role", ""),
-                    message=r.get("message", ""),
-                    timestamp=ts,
-                ))
-
-            return ReviewState(
-                status=data.get("status", ""),
-                round=data.get("round", 0),
-                version=data.get("version", 0),
-                current_plan=data.get("current_plan"),
-                rounds=rounds,
-                query=data.get("query"),
-            )
+            return self._parse_review_state(data)
 
         except httpx.HTTPError as e:
             raise errors.ConnectionError(

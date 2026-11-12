@@ -567,11 +567,3 @@ func recordBrowserTokenUsage(ctx workflow.Context, wfID, sessionID string, opts 
 	}).Get(recCtx, nil)
 	wopts.RecordToolCostEntries(ctx, result, opts.UserID, sessionID, wfID)
 }
-
-// max returns the larger of two ints
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}

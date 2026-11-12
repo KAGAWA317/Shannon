@@ -3,6 +3,7 @@ package skills
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"crypto/sha256"
 	"fmt"
 	"io"
@@ -154,23 +155,11 @@ func CompareVersions(a, b string) int {
 	aMaj, aMin, aPat := ParseVersion(a)
 	bMaj, bMin, bPat := ParseVersion(b)
 
-	if aMaj != bMaj {
-		if aMaj < bMaj {
-			return -1
-		}
-		return 1
+	if c := cmp.Compare(aMaj, bMaj); c != 0 {
+		return c
 	}
-	if aMin != bMin {
-		if aMin < bMin {
-			return -1
-		}
-		return 1
+	if c := cmp.Compare(aMin, bMin); c != 0 {
+		return c
 	}
-	if aPat != bPat {
-		if aPat < bPat {
-			return -1
-		}
-		return 1
-	}
-	return 0
+	return cmp.Compare(aPat, bPat)
 }

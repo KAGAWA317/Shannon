@@ -1,12 +1,9 @@
 package activities
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -442,12 +439,6 @@ func executeKeywordExtractAgent(ctx context.Context, input ExecuteAgentInput, ag
 	}, nil
 }
 
-type toolExecuteRequestWithSessionContext struct {
-	ToolName       string         `json:"tool_name"`
-	Parameters     map[string]any `json:"parameters"`
-	SessionContext map[string]any `json:"session_context,omitempty"`
-}
-
 func executeBrowserScreenshotAgent(ctx context.Context, input ExecuteAgentInput, agentDef *AgentDefinition, startTime time.Time, timeout time.Duration) (*ExecuteAgentOutput, error) {
 	params := input.Input
 	if params == nil {
@@ -540,61 +531,16 @@ func executeBrowserScreenshotAgent(ctx context.Context, input ExecuteAgentInput,
 }
 
 // callToolForAgentExec is a helper that calls the LLM service tool endpoint.
-// When sessionContext is provided, it is forwarded as request.session_context.
+// It only adds session_context; everything else goes through callToolExecute.
 func callToolForAgentExec(ctx context.Context, toolName string, params map[string]any, sessionContext map[string]any, timeout time.Duration) (*ToolExecuteResponse, error) {
 	if params == nil {
 		params = map[string]any{}
 	}
-	if sessionContext == nil {
-		return callToolWithTimeout(ctx, toolName, params, timeout)
-	}
-
-	llmServiceURL := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
-	url := fmt.Sprintf("%s/tools/execute", llmServiceURL)
-
-	reqBody := toolExecuteRequestWithSessionContext{
+	return callToolExecute(ctx, ToolExecuteRequest{
 		ToolName:       toolName,
 		Parameters:     params,
 		SessionContext: sessionContext,
-	}
-
-	bodyBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: timeout}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("tool execution failed with status %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	var result ToolExecuteResponse
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	if !result.Success {
-		return nil, fmt.Errorf("tool error: %s", result.Error)
-	}
-
-	return &result, nil
+	}, timeout)
 }
 
 // validateBrowserURL checks that a URL is safe for browser navigation.
@@ -755,7 +701,13 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 		results []platformResult
 	)
 
-	collect := func(name string, output any, err error, cost float64) {
+	collect := func(name string, result *ToolExecuteResponse, err error) {
+		var output any
+		var cost float64
+		if err == nil && result != nil {
+			output = result.Output
+			cost = extractCostFromResult(result)
+		}
 		mu.Lock()
 		results = append(results, platformResult{name: name, output: output, err: err, cost: cost})
 		mu.Unlock()
@@ -790,13 +742,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 				googleParams["end_date"] = v
 			}
 			result, err := callToolWithTimeout(ctx, "ads_transparency_search", googleParams, 30*time.Second)
-			var cost float64
-			var output any
-			if err == nil && result != nil {
-				output = result.Output
-				cost = extractCostFromResult(result)
-			}
-			collect("google", output, err, cost)
+			collect("google", result, err)
 		}()
 	}
 
@@ -811,7 +757,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 				keyword = advertiserID
 			}
 			if keyword == "" {
-				collect("yahoo_jp", nil, fmt.Errorf("no domain or advertiser_id for Yahoo search"), 0)
+				collect("yahoo_jp", nil, fmt.Errorf("no domain or advertiser_id for Yahoo search"))
 				return
 			}
 			yahooParams := map[string]any{
@@ -820,13 +766,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 				"resolve_urls": false,
 			}
 			result, err := callToolWithTimeout(ctx, "yahoo_jp_ads_discover", yahooParams, 120*time.Second)
-			var cost float64
-			var output any
-			if err == nil && result != nil {
-				output = result.Output
-				cost = extractCostFromResult(result)
-			}
-			collect("yahoo_jp", output, err, cost)
+			collect("yahoo_jp", result, err)
 		}()
 	}
 
@@ -841,7 +781,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 				query = advertiserID
 			}
 			if query == "" {
-				collect("meta", nil, fmt.Errorf("no domain or advertiser_id for Meta search"), 0)
+				collect("meta", nil, fmt.Errorf("no domain or advertiser_id for Meta search"))
 				return
 			}
 			metaParams := map[string]any{
@@ -856,13 +796,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 				metaParams["platform"] = mp
 			}
 			result, err := callToolWithTimeout(ctx, "meta_ad_library_search", metaParams, 30*time.Second)
-			var cost float64
-			var output any
-			if err == nil && result != nil {
-				output = result.Output
-				cost = extractCostFromResult(result)
-			}
-			collect("meta", output, err, cost)
+			collect("meta", result, err)
 		}()
 	}
 

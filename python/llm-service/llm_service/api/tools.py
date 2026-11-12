@@ -291,13 +291,7 @@ def _load_mcp_tools_from_config():
                     env_var = value[2:-1]
                     headers[key] = os.getenv(env_var, "")
 
-            # Convert parameters to expected format
-            # 将 parameters 转成预期格式
             params = tool_config.get("parameters", [])
-            if params and isinstance(params, list):
-                # Already in list format from YAML
-                # YAML 中已是 list 格式
-                pass
 
             tool_class = create_mcp_tool_class(
                 name=tool_name,
@@ -1072,26 +1066,11 @@ async def select_tools(req: Request, body: ToolSelectRequest) -> ToolSelectRespo
         except Exception as e:
             logger.warning(f"Tool selection LLM fallback due to error: {e}")
 
-    # Heuristic fallback: very small, safe defaults
-    # 启发式 fallback：非常小且安全的默认值
-    selected: List[str] = []
-    calls: List[ToolCall] = []
-
-    def add(name: str, params: Dict[str, Any]):
-        nonlocal selected, calls
-        if (
-            name in filtered_tools
-            and name not in selected
-            and len(selected) < body.max_tools
-        ):
-            selected.append(name)
-            calls.append(ToolCall(tool_name=name, parameters=params))
-
     # No fallback pattern matching - trust the LLM's decision
     # If LLM providers aren't configured or fail, return empty selection
     # 不做 fallback 模式匹配 —— 信任 LLM 的决定
     # 若 LLM providers 未配置或失败，则返回空选择
 
-    resp = ToolSelectResponse(selected_tools=selected, calls=calls, provider_used=None)
+    resp = ToolSelectResponse(selected_tools=[], calls=[], provider_used=None)
     _SELECT_CACHE[cache_key] = {"ts": now, "data": resp.dict()}
     return resp

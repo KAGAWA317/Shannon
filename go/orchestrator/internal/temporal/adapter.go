@@ -84,12 +84,3 @@ func safeZapField(key string, val any) (field zap.Field) {
 func (z *ZapAdapter) With(keyvals ...any) log.Logger {
 	return &ZapAdapter{logger: z.logger.With(z.fieldsFromKeyvals(keyvals)...)}
 }
-
-// safeString converts value to string safely for logging
-// safeString 安全地把值转为字符串以便日志记录
-func safeString(val any) string {
-	defer func() {
-		recover() // Ignore any panic during string conversion
-	}()
-	return fmt.Sprintf("%v", val)
-}

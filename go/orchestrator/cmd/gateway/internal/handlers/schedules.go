@@ -552,9 +552,7 @@ func (h *ScheduleHandler) GetScheduleRuns(w http.ResponseWriter, r *http.Request
 }
 
 func (h *ScheduleHandler) sendError(w http.ResponseWriter, msg string, code int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+	writeJSON(w, code, map[string]string{"error": msg})
 }
 
 // jsonEncodedPrefix marks values that were JSON-encoded during transport.

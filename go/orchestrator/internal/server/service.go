@@ -1014,75 +1014,42 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 
 	// Route based on explicit workflow override; otherwise use AgentDAGWorkflow
 	// 按显式 workflow 覆盖路由；否则使用 AgentDAGWorkflow
+	setMode := func(m string) {
+		input.Mode = m
+		modeStr = m
+		memo["mode"] = m
+	}
+
+	wfFn := workflows.OrchestratorWorkflow
 	switch workflowOverride {
 	case "supervisor":
-		input.Mode = "supervisor"
-		modeStr = "supervisor"
-		memo["mode"] = "supervisor"
+		setMode("supervisor")
 		workflowType = "SupervisorWorkflow"
+		wfFn = workflows.SupervisorWorkflow
 		s.logger.Info("Starting SupervisorWorkflow", zap.String("workflow_id", workflowID))
-		workflowExecution, err = s.temporalClient.ExecuteWorkflow(
-			ctx,
-			workflowOptions,
-			workflows.SupervisorWorkflow,
-			input,
-		)
 	case "simple":
-		input.Mode = "simple"
-		modeStr = "simple"
-		memo["mode"] = "simple"
+		setMode("simple")
 		workflowType = "SimpleTaskWorkflow"
+		wfFn = workflows.SimpleTaskWorkflow
 		s.logger.Info("Starting SimpleTaskWorkflow", zap.String("workflow_id", workflowID))
-		workflowExecution, err = s.temporalClient.ExecuteWorkflow(
-			ctx,
-			workflowOptions,
-			workflows.SimpleTaskWorkflow,
-			input,
-		)
 	case "", "dag":
 		// Default: route through OrchestratorWorkflow
-		if forcedModeLabel == "complex" {
-			input.Mode = "complex"
-			modeStr = "complex"
-			memo["mode"] = "complex"
-		} else if forcedModeLabel == "standard" {
-			input.Mode = "standard"
-			modeStr = "standard"
-			memo["mode"] = "standard"
+		if forcedModeLabel == "complex" || (forcedModeLabel == "" && mode == common.ExecutionMode_EXECUTION_MODE_COMPLEX) {
+			setMode("complex")
 		} else {
-			if mode == common.ExecutionMode_EXECUTION_MODE_COMPLEX {
-				input.Mode = "complex"
-				modeStr = "complex"
-				memo["mode"] = "complex"
-			} else {
-				input.Mode = "standard"
-				modeStr = "standard"
-				memo["mode"] = "standard"
-			}
+			setMode("standard")
 		}
 		s.logger.Info("Starting OrchestratorWorkflow (router)",
 			zap.String("workflow_id", workflowID),
 			zap.String("initial_mode", modeStr))
-		workflowExecution, err = s.temporalClient.ExecuteWorkflow(
-			ctx,
-			workflowOptions,
-			workflows.OrchestratorWorkflow,
-			input,
-		)
 	default:
 		// Unknown override: fall back to DAG
 		s.logger.Warn("Unknown workflow override; falling back to router", zap.String("override", workflowOverride))
-		input.Mode = "standard"
-		modeStr = "standard"
-		memo["mode"] = "standard"
+		setMode("standard")
 		workflowType = "OrchestratorWorkflow"
-		workflowExecution, err = s.temporalClient.ExecuteWorkflow(
-			ctx,
-			workflowOptions,
-			workflows.OrchestratorWorkflow,
-			input,
-		)
 	}
+
+	workflowExecution, err = s.temporalClient.ExecuteWorkflow(ctx, workflowOptions, wfFn, input)
 
 	if err != nil {
 		s.logger.Error("Failed to start workflow", zap.Error(err))
@@ -2099,6 +2066,36 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 	return response, nil
 }
 
+// authorizeTaskAccess resolves the caller and verifies workflow-memo ownership.
+func (s *OrchestratorService) authorizeTaskAccess(ctx context.Context, taskID, runID string) (*auth.UserContext, *workflowservice.DescribeWorkflowExecutionResponse, error) {
+	uc, err := auth.GetUserContext(ctx)
+	if err != nil || uc == nil {
+		return nil, nil, status.Error(codes.Unauthenticated, "authentication required")
+	}
+	desc, dErr := s.temporalClient.DescribeWorkflowExecution(ctx, taskID, runID)
+	if dErr != nil || desc == nil || desc.WorkflowExecutionInfo == nil {
+		return nil, nil, status.Error(codes.NotFound, "task not found")
+	}
+	if memo := desc.WorkflowExecutionInfo.Memo; memo != nil {
+		dc := converter.GetDefaultDataConverter()
+		if f := memo.Fields["tenant_id"]; f != nil {
+			var memoTenant string
+			_ = dc.FromPayload(f, &memoTenant)
+			if memoTenant != "" && uc.TenantID.String() != memoTenant {
+				return nil, nil, status.Error(codes.NotFound, "task not found")
+			}
+		}
+		if f := memo.Fields["user_id"]; f != nil {
+			var memoUser string
+			_ = dc.FromPayload(f, &memoUser)
+			if memoUser != "" && uc.UserID.String() != memoUser {
+				return nil, nil, status.Error(codes.NotFound, "task not found")
+			}
+		}
+	}
+	return uc, desc, nil
+}
+
 // CancelTask cancels a running task
 func (s *OrchestratorService) CancelTask(ctx context.Context, req *pb.CancelTaskRequest) (*pb.CancelTaskResponse, error) {
 	s.logger.Info("Received CancelTask request",
@@ -2106,37 +2103,9 @@ func (s *OrchestratorService) CancelTask(ctx context.Context, req *pb.CancelTask
 		zap.String("reason", req.Reason),
 	)
 
-	// Enforce authentication
-	uc, err := auth.GetUserContext(ctx)
-	if err != nil || uc == nil {
-		return nil, status.Error(codes.Unauthenticated, "authentication required")
-	}
-
-	// Verify ownership/tenancy via workflow memo (atomic with cancel on server side)
-	// 通过 workflow memo 校验归属/租户（在服务端与取消操作原子执行）
-	desc, dErr := s.temporalClient.DescribeWorkflowExecution(ctx, req.TaskId, "")
-	if dErr != nil || desc == nil || desc.WorkflowExecutionInfo == nil {
-		return nil, status.Error(codes.NotFound, "task not found")
-	}
-	if desc.WorkflowExecutionInfo.Memo != nil {
-		dc := converter.GetDefaultDataConverter()
-		// Check tenant first (primary isolation key)
-		if f, ok := desc.WorkflowExecutionInfo.Memo.Fields["tenant_id"]; ok && f != nil {
-			var memoTenant string
-			_ = dc.FromPayload(f, &memoTenant)
-			if memoTenant != "" && uc.TenantID.String() != memoTenant {
-				// Do not leak existence
-				return nil, status.Error(codes.NotFound, "task not found")
-			}
-		}
-		// Optional: check user ownership when available
-		if f, ok := desc.WorkflowExecutionInfo.Memo.Fields["user_id"]; ok && f != nil {
-			var memoUser string
-			_ = dc.FromPayload(f, &memoUser)
-			if memoUser != "" && uc.UserID.String() != memoUser {
-				return nil, status.Error(codes.NotFound, "task not found")
-			}
-		}
+	uc, _, err := s.authorizeTaskAccess(ctx, req.TaskId, "")
+	if err != nil {
+		return nil, err
 	}
 
 	// Send graceful cancel signal first (allows checkpoint cleanup and SSE emission)
@@ -2179,36 +2148,9 @@ func (s *OrchestratorService) PauseTask(ctx context.Context, req *pb.PauseTaskRe
 		zap.String("reason", req.Reason),
 	)
 
-	// Enforce authentication
-	uc, err := auth.GetUserContext(ctx)
-	if err != nil || uc == nil {
-		return nil, status.Error(codes.Unauthenticated, "authentication required")
-	}
-
-	// Verify ownership/tenancy via workflow memo (existing pattern from CancelTask)
-	// 通过 workflow memo 校验归属/租户（沿用 CancelTask 的模式）
-	desc, dErr := s.temporalClient.DescribeWorkflowExecution(ctx, req.TaskId, "")
-	if dErr != nil || desc == nil || desc.WorkflowExecutionInfo == nil {
-		return nil, status.Error(codes.NotFound, "task not found")
-	}
-	if desc.WorkflowExecutionInfo.Memo != nil {
-		dc := converter.GetDefaultDataConverter()
-		// Check tenant first (primary isolation key)
-		if f, ok := desc.WorkflowExecutionInfo.Memo.Fields["tenant_id"]; ok && f != nil {
-			var memoTenant string
-			_ = dc.FromPayload(f, &memoTenant)
-			if memoTenant != "" && uc.TenantID.String() != memoTenant {
-				return nil, status.Error(codes.NotFound, "task not found")
-			}
-		}
-		// Check user ownership
-		if f, ok := desc.WorkflowExecutionInfo.Memo.Fields["user_id"]; ok && f != nil {
-			var memoUser string
-			_ = dc.FromPayload(f, &memoUser)
-			if memoUser != "" && uc.UserID.String() != memoUser {
-				return nil, status.Error(codes.NotFound, "task not found")
-			}
-		}
+	uc, desc, err := s.authorizeTaskAccess(ctx, req.TaskId, "")
+	if err != nil {
+		return nil, err
 	}
 
 	// Validate workflow state - cannot pause completed/failed/cancelled workflows
@@ -2266,32 +2208,9 @@ func (s *OrchestratorService) ResumeTask(ctx context.Context, req *pb.ResumeTask
 		zap.String("reason", req.Reason),
 	)
 
-	uc, err := auth.GetUserContext(ctx)
-	if err != nil || uc == nil {
-		return nil, status.Error(codes.Unauthenticated, "authentication required")
-	}
-
-	// Verify ownership/tenancy via workflow memo
-	desc, dErr := s.temporalClient.DescribeWorkflowExecution(ctx, req.TaskId, "")
-	if dErr != nil || desc == nil || desc.WorkflowExecutionInfo == nil {
-		return nil, status.Error(codes.NotFound, "task not found")
-	}
-	if desc.WorkflowExecutionInfo.Memo != nil {
-		dc := converter.GetDefaultDataConverter()
-		if f, ok := desc.WorkflowExecutionInfo.Memo.Fields["tenant_id"]; ok && f != nil {
-			var memoTenant string
-			_ = dc.FromPayload(f, &memoTenant)
-			if memoTenant != "" && uc.TenantID.String() != memoTenant {
-				return nil, status.Error(codes.NotFound, "task not found")
-			}
-		}
-		if f, ok := desc.WorkflowExecutionInfo.Memo.Fields["user_id"]; ok && f != nil {
-			var memoUser string
-			_ = dc.FromPayload(f, &memoUser)
-			if memoUser != "" && uc.UserID.String() != memoUser {
-				return nil, status.Error(codes.NotFound, "task not found")
-			}
-		}
+	uc, desc, err := s.authorizeTaskAccess(ctx, req.TaskId, "")
+	if err != nil {
+		return nil, err
 	}
 
 	// Validate workflow state - cannot resume completed/failed/cancelled workflows
@@ -2347,32 +2266,9 @@ func (s *OrchestratorService) ResumeTask(ctx context.Context, req *pb.ResumeTask
 // GetControlState queries workflow control state (with ownership check)
 // GetControlState 查询 workflow 控制状态（含归属校验）
 func (s *OrchestratorService) GetControlState(ctx context.Context, req *pb.GetControlStateRequest) (*pb.GetControlStateResponse, error) {
-	uc, err := auth.GetUserContext(ctx)
-	if err != nil || uc == nil {
-		return nil, status.Error(codes.Unauthenticated, "authentication required")
-	}
-
-	// Verify ownership/tenancy via workflow memo
-	desc, dErr := s.temporalClient.DescribeWorkflowExecution(ctx, req.TaskId, "")
-	if dErr != nil || desc == nil || desc.WorkflowExecutionInfo == nil {
-		return nil, status.Error(codes.NotFound, "task not found")
-	}
-	if desc.WorkflowExecutionInfo.Memo != nil {
-		dc := converter.GetDefaultDataConverter()
-		if f, ok := desc.WorkflowExecutionInfo.Memo.Fields["tenant_id"]; ok && f != nil {
-			var memoTenant string
-			_ = dc.FromPayload(f, &memoTenant)
-			if memoTenant != "" && uc.TenantID.String() != memoTenant {
-				return nil, status.Error(codes.NotFound, "task not found")
-			}
-		}
-		if f, ok := desc.WorkflowExecutionInfo.Memo.Fields["user_id"]; ok && f != nil {
-			var memoUser string
-			_ = dc.FromPayload(f, &memoUser)
-			if memoUser != "" && uc.UserID.String() != memoUser {
-				return nil, status.Error(codes.NotFound, "task not found")
-			}
-		}
+	_, _, err := s.authorizeTaskAccess(ctx, req.TaskId, "")
+	if err != nil {
+		return nil, err
 	}
 
 	// Query Temporal workflow for control state
@@ -2497,45 +2393,9 @@ func (s *OrchestratorService) ListTasks(ctx context.Context, req *pb.ListTasksRe
 
 	summaries := make([]*pb.TaskSummary, 0, limit)
 	for rows.Next() {
-		var (
-			workflowID string
-			queryText  sql.NullString
-			statusStr  sql.NullString
-			modeStr    sql.NullString
-			started    sql.NullTime
-			completed  sql.NullTime
-			created    sql.NullTime
-			tokens     sql.NullInt64
-			costUSD    sql.NullFloat64
-		)
-
-		if err := rows.Scan(&workflowID, &queryText, &statusStr, &modeStr, &started, &completed, &created, &tokens, &costUSD); err != nil {
+		summary, err := scanTaskSummary(rows)
+		if err != nil {
 			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to scan row: %v", err))
-		}
-
-		summary := &pb.TaskSummary{
-			TaskId: workflowID,
-			Query:  queryText.String,
-			Status: mapDBStatusToProto(statusStr.String),
-			Mode:   mapDBModeToProto(modeStr.String),
-		}
-		if started.Valid {
-			summary.CreatedAt = timestamppb.New(started.Time)
-		} else if created.Valid {
-			summary.CreatedAt = timestamppb.New(created.Time)
-		}
-		if completed.Valid {
-			summary.CompletedAt = timestamppb.New(completed.Time)
-		}
-		if tokens.Valid || costUSD.Valid {
-			tokenUsage := &common.TokenUsage{}
-			if tokens.Valid {
-				tokenUsage.TotalTokens = int32(tokens.Int64)
-			}
-			if costUSD.Valid {
-				tokenUsage.CostUsd = costUSD.Float64
-			}
-			summary.TotalTokenUsage = tokenUsage
 		}
 		summaries = append(summaries, summary)
 	}
@@ -2670,60 +2530,10 @@ func (s *OrchestratorService) loadRecentSessionTasks(ctx context.Context, sessio
 	summaries := make([]*pb.TaskSummary, 0, limit)
 
 	for rows.Next() {
-		var (
-			workflowID string
-			queryText  sql.NullString
-			statusStr  sql.NullString
-			modeStr    sql.NullString
-			started    sql.NullTime
-			completed  sql.NullTime
-			created    sql.NullTime
-			tokens     sql.NullInt64
-			costUSD    sql.NullFloat64
-		)
-
-		if err := rows.Scan(
-			&workflowID,
-			&queryText,
-			&statusStr,
-			&modeStr,
-			&started,
-			&completed,
-			&created,
-			&tokens,
-			&costUSD,
-		); err != nil {
+		summary, err := scanTaskSummary(rows)
+		if err != nil {
 			return nil, err
 		}
-
-		summary := &pb.TaskSummary{
-			TaskId: workflowID,
-			Query:  queryText.String,
-			Status: mapDBStatusToProto(statusStr.String),
-			Mode:   mapDBModeToProto(modeStr.String),
-		}
-
-		if started.Valid {
-			summary.CreatedAt = timestamppb.New(started.Time)
-		} else if created.Valid {
-			summary.CreatedAt = timestamppb.New(created.Time)
-		}
-
-		if completed.Valid {
-			summary.CompletedAt = timestamppb.New(completed.Time)
-		}
-
-		if tokens.Valid || costUSD.Valid {
-			tokenUsage := &common.TokenUsage{}
-			if tokens.Valid {
-				tokenUsage.TotalTokens = int32(tokens.Int64)
-			}
-			if costUSD.Valid {
-				tokenUsage.CostUsd = costUSD.Float64
-			}
-			summary.TotalTokenUsage = tokenUsage
-		}
-
 		summaries = append(summaries, summary)
 	}
 
@@ -2782,60 +2592,10 @@ func (s *OrchestratorService) loadRecentSessionTasksByIDs(ctx context.Context, s
 	summaries := make([]*pb.TaskSummary, 0, limit)
 
 	for rows.Next() {
-		var (
-			workflowID string
-			queryText  sql.NullString
-			statusStr  sql.NullString
-			modeStr    sql.NullString
-			started    sql.NullTime
-			completed  sql.NullTime
-			created    sql.NullTime
-			tokens     sql.NullInt64
-			costUSD    sql.NullFloat64
-		)
-
-		if err := rows.Scan(
-			&workflowID,
-			&queryText,
-			&statusStr,
-			&modeStr,
-			&started,
-			&completed,
-			&created,
-			&tokens,
-			&costUSD,
-		); err != nil {
+		summary, err := scanTaskSummary(rows)
+		if err != nil {
 			return nil, err
 		}
-
-		summary := &pb.TaskSummary{
-			TaskId: workflowID,
-			Query:  queryText.String,
-			Status: mapDBStatusToProto(statusStr.String),
-			Mode:   mapDBModeToProto(modeStr.String),
-		}
-
-		if started.Valid {
-			summary.CreatedAt = timestamppb.New(started.Time)
-		} else if created.Valid {
-			summary.CreatedAt = timestamppb.New(created.Time)
-		}
-
-		if completed.Valid {
-			summary.CompletedAt = timestamppb.New(completed.Time)
-		}
-
-		if tokens.Valid || costUSD.Valid {
-			tokenUsage := &common.TokenUsage{}
-			if tokens.Valid {
-				tokenUsage.TotalTokens = int32(tokens.Int64)
-			}
-			if costUSD.Valid {
-				tokenUsage.CostUsd = costUSD.Float64
-			}
-			summary.TotalTokenUsage = tokenUsage
-		}
-
 		summaries = append(summaries, summary)
 	}
 	if err := rows.Err(); err != nil {
@@ -2843,6 +2603,46 @@ func (s *OrchestratorService) loadRecentSessionTasksByIDs(ctx context.Context, s
 	}
 
 	return summaries, nil
+}
+
+// scanTaskSummary scans one task_executions summary row and maps it to proto.
+func scanTaskSummary(rows *sql.Rows) (*pb.TaskSummary, error) {
+	var (
+		workflowID                    string
+		queryText, statusStr, modeStr sql.NullString
+		started, completed, created   sql.NullTime
+		tokens                        sql.NullInt64
+		costUSD                       sql.NullFloat64
+	)
+	if err := rows.Scan(&workflowID, &queryText, &statusStr, &modeStr, &started, &completed, &created, &tokens, &costUSD); err != nil {
+		return nil, err
+	}
+
+	summary := &pb.TaskSummary{
+		TaskId: workflowID,
+		Query:  queryText.String,
+		Status: mapDBStatusToProto(statusStr.String),
+		Mode:   mapDBModeToProto(modeStr.String),
+	}
+	if started.Valid {
+		summary.CreatedAt = timestamppb.New(started.Time)
+	} else if created.Valid {
+		summary.CreatedAt = timestamppb.New(created.Time)
+	}
+	if completed.Valid {
+		summary.CompletedAt = timestamppb.New(completed.Time)
+	}
+	if tokens.Valid || costUSD.Valid {
+		tokenUsage := &common.TokenUsage{}
+		if tokens.Valid {
+			tokenUsage.TotalTokens = int32(tokens.Int64)
+		}
+		if costUSD.Valid {
+			tokenUsage.CostUsd = costUSD.Float64
+		}
+		summary.TotalTokenUsage = tokenUsage
+	}
+	return summary, nil
 }
 
 func mapDBStatusToProto(status string) pb.TaskStatus {
@@ -3595,6 +3395,25 @@ func (s *OrchestratorService) CreateSchedule(ctx context.Context, req *pb.Create
 	}, nil
 }
 
+// ownedSchedule parses the id, loads the schedule, and enforces ownership.
+func (s *OrchestratorService) ownedSchedule(ctx context.Context, uc *auth.UserContext, scheduleIDStr string) (uuid.UUID, *schedules.Schedule, error) {
+	if s.scheduleManager == nil {
+		return uuid.UUID{}, nil, status.Error(codes.Unavailable, "scheduling feature not enabled")
+	}
+	scheduleID, err := uuid.Parse(scheduleIDStr)
+	if err != nil {
+		return uuid.UUID{}, nil, status.Error(codes.InvalidArgument, "invalid schedule ID")
+	}
+	schedule, err := s.scheduleManager.GetSchedule(ctx, scheduleID)
+	if err != nil {
+		return uuid.UUID{}, nil, status.Error(codes.NotFound, "schedule not found")
+	}
+	if schedule.UserID != uc.UserID || schedule.TenantID != uc.TenantID {
+		return uuid.UUID{}, nil, status.Error(codes.NotFound, "schedule not found")
+	}
+	return scheduleID, schedule, nil
+}
+
 // GetSchedule retrieves a schedule (with ownership check)
 // GetSchedule 获取定时任务（含归属校验）
 func (s *OrchestratorService) GetSchedule(ctx context.Context, req *pb.GetScheduleRequest) (*pb.GetScheduleResponse, error) {
@@ -3603,23 +3422,9 @@ func (s *OrchestratorService) GetSchedule(ctx context.Context, req *pb.GetSchedu
 		return nil, status.Error(codes.Unauthenticated, "authentication required")
 	}
 
-	if s.scheduleManager == nil {
-		return nil, status.Error(codes.Unavailable, "scheduling feature not enabled")
-	}
-
-	scheduleID, err := uuid.Parse(req.ScheduleId)
+	_, schedule, err := s.ownedSchedule(ctx, uc, req.ScheduleId)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid schedule ID")
-	}
-
-	schedule, err := s.scheduleManager.GetSchedule(ctx, scheduleID)
-	if err != nil {
-		return nil, status.Error(codes.NotFound, "schedule not found")
-	}
-
-	// Ownership check
-	if schedule.UserID != uc.UserID || schedule.TenantID != uc.TenantID {
-		return nil, status.Error(codes.NotFound, "schedule not found")
+		return nil, err
 	}
 
 	return &pb.GetScheduleResponse{
@@ -3679,22 +3484,9 @@ func (s *OrchestratorService) UpdateSchedule(ctx context.Context, req *pb.Update
 		return nil, status.Error(codes.Unauthenticated, "authentication required")
 	}
 
-	if s.scheduleManager == nil {
-		return nil, status.Error(codes.Unavailable, "scheduling feature not enabled")
-	}
-
-	scheduleID, err := uuid.Parse(req.ScheduleId)
+	scheduleID, _, err := s.ownedSchedule(ctx, uc, req.ScheduleId)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid schedule ID")
-	}
-
-	// Ownership check
-	schedule, err := s.scheduleManager.GetSchedule(ctx, scheduleID)
-	if err != nil {
-		return nil, status.Error(codes.NotFound, "schedule not found")
-	}
-	if schedule.UserID != uc.UserID || schedule.TenantID != uc.TenantID {
-		return nil, status.Error(codes.NotFound, "schedule not found")
+		return nil, err
 	}
 
 	// Build update input
@@ -3782,22 +3574,9 @@ func (s *OrchestratorService) DeleteSchedule(ctx context.Context, req *pb.Delete
 		return nil, status.Error(codes.Unauthenticated, "authentication required")
 	}
 
-	if s.scheduleManager == nil {
-		return nil, status.Error(codes.Unavailable, "scheduling feature not enabled")
-	}
-
-	scheduleID, err := uuid.Parse(req.ScheduleId)
+	scheduleID, _, err := s.ownedSchedule(ctx, uc, req.ScheduleId)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid schedule ID")
-	}
-
-	// Ownership check
-	schedule, err := s.scheduleManager.GetSchedule(ctx, scheduleID)
-	if err != nil {
-		return nil, status.Error(codes.NotFound, "schedule not found")
-	}
-	if schedule.UserID != uc.UserID || schedule.TenantID != uc.TenantID {
-		return nil, status.Error(codes.NotFound, "schedule not found")
+		return nil, err
 	}
 
 	if err := s.scheduleManager.DeleteSchedule(ctx, scheduleID); err != nil {
@@ -3818,22 +3597,9 @@ func (s *OrchestratorService) PauseSchedule(ctx context.Context, req *pb.PauseSc
 		return nil, status.Error(codes.Unauthenticated, "authentication required")
 	}
 
-	if s.scheduleManager == nil {
-		return nil, status.Error(codes.Unavailable, "scheduling feature not enabled")
-	}
-
-	scheduleID, err := uuid.Parse(req.ScheduleId)
+	scheduleID, _, err := s.ownedSchedule(ctx, uc, req.ScheduleId)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid schedule ID")
-	}
-
-	// Ownership check
-	schedule, err := s.scheduleManager.GetSchedule(ctx, scheduleID)
-	if err != nil {
-		return nil, status.Error(codes.NotFound, "schedule not found")
-	}
-	if schedule.UserID != uc.UserID || schedule.TenantID != uc.TenantID {
-		return nil, status.Error(codes.NotFound, "schedule not found")
+		return nil, err
 	}
 
 	if err := s.scheduleManager.PauseSchedule(ctx, scheduleID, req.Reason); err != nil {
@@ -3853,22 +3619,9 @@ func (s *OrchestratorService) ResumeSchedule(ctx context.Context, req *pb.Resume
 		return nil, status.Error(codes.Unauthenticated, "authentication required")
 	}
 
-	if s.scheduleManager == nil {
-		return nil, status.Error(codes.Unavailable, "scheduling feature not enabled")
-	}
-
-	scheduleID, err := uuid.Parse(req.ScheduleId)
+	scheduleID, _, err := s.ownedSchedule(ctx, uc, req.ScheduleId)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid schedule ID")
-	}
-
-	// Ownership check
-	schedule, err := s.scheduleManager.GetSchedule(ctx, scheduleID)
-	if err != nil {
-		return nil, status.Error(codes.NotFound, "schedule not found")
-	}
-	if schedule.UserID != uc.UserID || schedule.TenantID != uc.TenantID {
-		return nil, status.Error(codes.NotFound, "schedule not found")
+		return nil, err
 	}
 
 	nextRun, err := s.scheduleManager.ResumeSchedule(ctx, scheduleID, req.Reason)

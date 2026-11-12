@@ -175,23 +175,8 @@ func (c *Chunker) simpleTokenize(text string) []string {
 	return tokens
 }
 
-// EstimateTokensForModel estimates tokens based on the model
-// This can be expanded to handle model-specific tokenization
-// EstimateTokensForModel 按模型估算 token 数
-// 可扩展以支持特定模型的分词
+// EstimateTokensForModel estimates tokens from word count; all models share the same rate today.
+// EstimateTokensForModel 按词数估算 token 数；当前所有模型使用同一比例。
 func EstimateTokensForModel(text string, model string) int {
-	// Model-specific adjustments
-	switch {
-	case strings.Contains(model, "gpt-"):
-		// GPT models (gpt-5, gpt-4, etc.) tend to have similar tokenization
-		// GPT 系列模型（gpt-5、gpt-4 等）的分词方式相近
-		return len(strings.Fields(text)) * 13 / 10 // 1.3 tokens per word
-	case strings.Contains(model, "embedding"):
-		// Embedding models often have similar tokenization to GPT-3
-		// embedding 模型的分词方式通常与 GPT-3 相近
-		return len(strings.Fields(text)) * 13 / 10
-	default:
-		// Default estimation
-		return len(strings.Fields(text)) * 13 / 10
-	}
+	return len(strings.Fields(text)) * 13 / 10 // 1.3 tokens per word
 }

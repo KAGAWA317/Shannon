@@ -106,29 +106,7 @@ func FetchHierarchicalMemory(ctx context.Context, in FetchHierarchicalMemoryInpu
 			TopK:      in.SemanticTopK,
 		})
 		for _, item := range result.Items {
-			key := ""
-			// Prefer point ID for deduplication
-			// 去重优先使用 point ID
-			if pid, ok := item["_point_id"].(string); ok && pid != "" {
-				key = pid
-			} else if id, ok := item["id"].(string); ok && id != "" {
-				key = id
-			} else {
-				// Fallback to composite key (query + first 100 chars of answer)
-				// 退化为 composite key（query + answer 的前 100 个字符）
-				if q, ok := item["query"].(string); ok {
-					key = q
-				}
-				if a, ok := item["answer"].(string); ok {
-					runes := []rune(a)
-					if len(runes) > 100 {
-						key += "_" + string(runes[:100])
-					} else {
-						key += "_" + a
-					}
-				}
-			}
-			if key != "" {
+			if key := memoryDedupKey(item); key != "" {
 				seen[key] = true
 			}
 		}
@@ -136,25 +114,8 @@ func FetchHierarchicalMemory(ctx context.Context, in FetchHierarchicalMemoryInpu
 		// Add non-duplicate semantic items
 		for _, item := range semanticResult.Items {
 			if item != nil {
-				key := ""
 				// Build dedup key using same logic
-				if pid, ok := item["_point_id"].(string); ok && pid != "" {
-					key = pid
-				} else if id, ok := item["id"].(string); ok && id != "" {
-					key = id
-				} else {
-					if q, ok := item["query"].(string); ok {
-						key = q
-					}
-					if a, ok := item["answer"].(string); ok {
-						runes := []rune(a)
-						if len(runes) > 100 {
-							key += "_" + string(runes[:100])
-						} else {
-							key += "_" + a
-						}
-					}
-				}
+				key := memoryDedupKey(item)
 
 				isDuplicate := false
 				if key != "" && seen[key] {
@@ -235,4 +196,24 @@ func FetchHierarchicalMemory(ctx context.Context, in FetchHierarchicalMemoryInpu
 	}
 
 	return result, nil
+}
+
+// memoryDedupKey builds a dedup key for a memory item
+// Priority: point ID, then id, then composite key (query + first 100 chars of answer)
+// memoryDedupKey 为 memory 条目构建去重 key：优先 point ID，其次 id，最后退化为 query 加 answer 前 100 个字符。
+func memoryDedupKey(item map[string]any) string {
+	if pid, ok := item["_point_id"].(string); ok && pid != "" {
+		return pid
+	}
+	if id, ok := item["id"].(string); ok && id != "" {
+		return id
+	}
+	key, _ := item["query"].(string)
+	if a, ok := item["answer"].(string); ok {
+		if runes := []rune(a); len(runes) > 100 {
+			a = string(runes[:100])
+		}
+		key += "_" + a
+	}
+	return key
 }

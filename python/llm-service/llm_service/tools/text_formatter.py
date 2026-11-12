@@ -108,6 +108,17 @@ def _format_generic(output: Any, metadata: Optional[Dict[str, Any]]) -> Optional
     return str(output)
 
 
+def _format_items(items: List[Any], empty: str) -> str:
+    """Format a list of items as numbered lines (max 20 items).
+    把条目列表格式化为带序号的文本（最多 20 条）。"""
+    if not items:
+        return empty
+    return "\n".join(
+        f"{i}. {_format_dict_compact(item) if isinstance(item, dict) else item}"
+        for i, item in enumerate(items[:20], 1)
+    )
+
+
 def _format_dict_smart(d: Dict[str, Any]) -> str:
     """Intelligently format a dict based on its shape.
     根据字典结构智能格式化。"""
@@ -130,30 +141,12 @@ def _format_dict_smart(d: Dict[str, Any]) -> str:
     # If it has a 'data' key with a list, format as entries
     # 若含列表类型的 'data' 键，按条目格式化
     if "data" in d and isinstance(d["data"], list):
-        items = d["data"]
-        if not items:
-            return "No data."
-        parts = []
-        for i, item in enumerate(items[:20], 1):
-            if isinstance(item, dict):
-                parts.append(f"{i}. {_format_dict_compact(item)}")
-            else:
-                parts.append(f"{i}. {item}")
-        return "\n".join(parts)
+        return _format_items(d["data"], "No data.")
 
     # If it has a 'results' key with a list, format as entries
     # 若含列表类型的 'results' 键，按条目格式化
     if "results" in d and isinstance(d["results"], list):
-        items = d["results"]
-        if not items:
-            return "No results."
-        parts = []
-        for i, item in enumerate(items[:20], 1):
-            if isinstance(item, dict):
-                parts.append(f"{i}. {_format_dict_compact(item)}")
-            else:
-                parts.append(f"{i}. {item}")
-        return "\n".join(parts)
+        return _format_items(d["results"], "No results.")
 
     # Default: strip metadata keys and compact-print remaining
     # 默认：剥离 metadata 键后紧凑打印剩余内容

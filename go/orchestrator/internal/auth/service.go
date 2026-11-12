@@ -264,7 +264,7 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*TokenPair, err
 	}
 
 	// Store refresh token
-	err = s.storeRefreshToken(ctx, &user, refreshTokenHash)
+	err = s.storeRefreshToken(ctx, s.db, &user, refreshTokenHash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store refresh token: %w", err)
 	}
@@ -332,7 +332,7 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*TokenPair,
 	defer tx.Rollback()
 
 	// Store new refresh token first
-	if err := s.storeRefreshTokenTx(ctx, tx, &user, newHash); err != nil {
+	if err := s.storeRefreshToken(ctx, tx, &user, newHash); err != nil {
 		return nil, fmt.Errorf("failed to store new refresh token: %w", err)
 	}
 
@@ -586,7 +586,7 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 
 		// Store refresh token (fail if unable - consistent with Login())
 		// 存储 refresh token（失败即返回，与 Login() 行为一致）
-		if err := s.storeRefreshToken(ctx, &existingUser, refreshTokenHash); err != nil {
+		if err := s.storeRefreshToken(ctx, s.db, &existingUser, refreshTokenHash); err != nil {
 			return nil, fmt.Errorf("failed to store refresh token: %w", err)
 		}
 
@@ -701,7 +701,7 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 
 	// Store refresh token (fail if unable - consistent with Login())
 	// 存储 refresh token（失败即返回，与 Login() 行为一致）
-	if err := s.storeRefreshToken(ctx, newUser, refreshTokenHash); err != nil {
+	if err := s.storeRefreshToken(ctx, s.db, newUser, refreshTokenHash); err != nil {
 		return nil, fmt.Errorf("failed to store refresh token: %w", err)
 	}
 
@@ -789,27 +789,14 @@ func (s *Service) createTenant(ctx context.Context, username, product string) (u
 	return tenant.ID, nil
 }
 
-func (s *Service) storeRefreshToken(ctx context.Context, user *User, tokenHash string) error {
+func (s *Service) storeRefreshToken(ctx context.Context, ex sqlx.ExtContext, user *User, tokenHash string) error {
 	query := `
 		INSERT INTO auth.refresh_tokens (user_id, tenant_id, token_hash, expires_at)
 		VALUES ($1, $2, $3, $4)
 	`
 
 	expiresAt := time.Now().Add(s.jwtManager.refreshTokenExpiry)
-	_, err := s.db.ExecContext(ctx, query, user.ID, user.TenantID, tokenHash, expiresAt)
-	return err
-}
-
-// storeRefreshTokenTx stores a refresh token within a transaction
-// storeRefreshTokenTx 在事务内存储 refresh token
-func (s *Service) storeRefreshTokenTx(ctx context.Context, tx *sqlx.Tx, user *User, tokenHash string) error {
-	query := `
-		INSERT INTO auth.refresh_tokens (user_id, tenant_id, token_hash, expires_at)
-		VALUES ($1, $2, $3, $4)
-	`
-
-	expiresAt := time.Now().Add(s.jwtManager.refreshTokenExpiry)
-	_, err := tx.ExecContext(ctx, query, user.ID, user.TenantID, tokenHash, expiresAt)
+	_, err := ex.ExecContext(ctx, query, user.ID, user.TenantID, tokenHash, expiresAt)
 	return err
 }
 
