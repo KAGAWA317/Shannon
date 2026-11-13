@@ -2,6 +2,7 @@ package execution
 
 import (
 	"fmt"
+	"maps"
 	"time"
 
 	"go.temporal.io/sdk/workflow"
@@ -98,7 +99,7 @@ func ExecuteHybrid(
 	// Merge prefilled results from external sources (child workflows, previous execution phases)
 	// This enables cross-phase dependency resolution
 	// 合并外部预填结果（子 workflow、前一阶段），从而支持跨阶段依赖解析。
-	if config.PrefilledResults != nil && len(config.PrefilledResults) > 0 {
+	if len(config.PrefilledResults) > 0 {
 		for id, result := range config.PrefilledResults {
 			taskResults[id] = result
 			completedTasks[id] = true
@@ -142,7 +143,7 @@ func ExecuteHybrid(
 	successCount := 0
 	errorCount := 0
 
-	for i := 0; i < len(tasks); i++ {
+	for range tasks {
 		var result taskExecutionResult
 		resultsChan.Receive(ctx, &result)
 
@@ -237,13 +238,9 @@ func executeHybridTask(
 
 	// Prepare task context
 	taskContext := make(map[string]any)
-	for k, v := range config.Context {
-		taskContext[k] = v
-	}
+	maps.Copy(taskContext, config.Context)
 	if task.ContextOverrides != nil {
-		for k, v := range task.ContextOverrides {
-			taskContext[k] = v
-		}
+		maps.Copy(taskContext, task.ContextOverrides)
 	}
 	taskContext["role"] = task.Role
 	taskContext["task_id"] = task.ID
@@ -311,8 +308,8 @@ func executeHybridTask(
 	parallelConfig := ParallelConfig{
 		MaxConcurrency:   1, // Single task execution
 		Context:          taskContext,
-		EmitEvents:       false,            // Already handled
-		AgentIndexOffset: originalIndex,    // Align inner agent name with hybrid's naming
+		EmitEvents:       false,         // Already handled
+		AgentIndexOffset: originalIndex, // Align inner agent name with hybrid's naming
 	}
 
 	result, err := ExecuteParallel(

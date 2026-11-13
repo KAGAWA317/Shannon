@@ -3,6 +3,7 @@ package activities
 import (
 	"context"
 	policy "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/policy"
+	"maps"
 	"time"
 )
 
@@ -46,9 +47,7 @@ func AuthorizeTeamAction(ctx context.Context, in TeamActionInput) (TeamActionDec
 // policyInputForTeam 把 team action 适配成既有的 PolicyInput。
 func policyInputForTeam(in TeamActionInput) *policy.PolicyInput {
 	ctx := map[string]any{}
-	for k, v := range in.Metadata {
-		ctx[k] = v
-	}
+	maps.Copy(ctx, in.Metadata)
 	ctx["action"] = in.Action
 	if in.Role != "" {
 		ctx["role"] = in.Role

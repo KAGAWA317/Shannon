@@ -34,7 +34,7 @@ type CancelRequest struct {
 type WorkflowControlState struct {
 	IsPaused     bool      `json:"is_paused"`
 	IsCancelled  bool      `json:"is_cancelled"`
-	PausedAt     time.Time `json:"paused_at,omitempty"`
+	PausedAt     time.Time `json:"paused_at"`
 	PauseReason  string    `json:"pause_reason,omitempty"`
 	PausedBy     string    `json:"paused_by,omitempty"`
 	CancelReason string    `json:"cancel_reason,omitempty"`

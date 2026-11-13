@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -192,13 +193,7 @@ func RequireScopes(ctx context.Context, requiredScopes ...string) error {
 	// Check if user has all required scopes
 	// 检查用户是否具备全部所需 scope
 	for _, required := range requiredScopes {
-		found := false
-		for _, scope := range userCtx.Scopes {
-			if scope == required {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(userCtx.Scopes, required)
 		if !found {
 			return status.Errorf(codes.PermissionDenied, "missing required scope: %s", required)
 		}

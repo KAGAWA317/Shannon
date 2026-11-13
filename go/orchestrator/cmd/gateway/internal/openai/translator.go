@@ -4,7 +4,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"reflect"
+	"slices"
 	"strings"
 
 	commonpb "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/pb/common"
@@ -127,15 +129,15 @@ func (t *Translator) TranslateWithSession(req *ChatCompletionRequest, userID, te
 // 文本内容和附件都算有效输入（只有附件也可以）。
 func (t *Translator) extractQuery(messages []ChatMessage) string {
 	// Find the last user message
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" {
-			if strings.TrimSpace(messages[i].Content) != "" {
-				return messages[i].Content
+	for _, message := range slices.Backward(messages) {
+		if message.Role == "user" {
+			if strings.TrimSpace(message.Content) != "" {
+				return message.Content
 			}
 			// Attachment-only message: use attachment summary as query
-			if len(messages[i].RawAttachments) > 0 {
-				if messages[i].ContentWithAttachmentSummary != "" {
-					return messages[i].ContentWithAttachmentSummary
+			if len(message.RawAttachments) > 0 {
+				if message.ContentWithAttachmentSummary != "" {
+					return message.ContentWithAttachmentSummary
 				}
 				return "[User sent file attachments]"
 			}
@@ -209,17 +211,13 @@ func (t *Translator) buildContext(req *ChatCompletionRequest, modelConfig *Model
 	ctx := make(map[string]any)
 
 	// Copy model config context
-	for k, v := range modelConfig.Context {
-		ctx[k] = v
-	}
+	maps.Copy(ctx, modelConfig.Context)
 
 	// Apply shannon_options if present (these take precedence)
 	// 先应用 shannon_options（其优先级更高）。
 	if req.ShannonOptions != nil {
 		// Copy context from shannon_options
-		for k, v := range req.ShannonOptions.Context {
-			ctx[k] = v
-		}
+		maps.Copy(ctx, req.ShannonOptions.Context)
 
 		// Agent routing (single-purpose deterministic agents)
 		if req.ShannonOptions.Agent != "" {
@@ -352,8 +350,8 @@ func (t *Translator) buildConversationHistory(messages []ChatMessage) []map[stri
 	// Skip system messages and the last user message (which is the query)
 	// 跳过 system 消息和最后一条 user 消息（它就是 query）。
 	lastUserIdx := -1
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" {
+	for i, message := range slices.Backward(messages) {
+		if message.Role == "user" {
 			lastUserIdx = i
 			break
 		}
@@ -380,14 +378,6 @@ func (t *Translator) buildConversationHistory(messages []ChatMessage) []map[stri
 	}
 
 	return history
-}
-
-// min returns the minimum of two integers.
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // sanitizeForStructpb converts values to types compatible with structpb.NewStruct.
@@ -446,7 +436,7 @@ func sanitizeValue(v any) any {
 func sanitizeSliceValue(rv reflect.Value) []any {
 	length := rv.Len()
 	result := make([]any, length)
-	for i := 0; i < length; i++ {
+	for i := range length {
 		result[i] = sanitizeValue(rv.Index(i).Interface())
 	}
 	return result

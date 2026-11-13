@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -323,10 +324,7 @@ func NewOrchestratorService(temporalClient client.Client, dbClient *db.Client, l
 			break
 		}
 		// Exponential-ish backoff capped at 5s
-		delay := time.Duration(attempt)
-		if delay > 5 {
-			delay = 5
-		}
+		delay := min(time.Duration(attempt), 5)
 		logger.Warn("Redis not ready for session manager, retrying",
 			zap.Int("attempt", attempt),
 			zap.String("redis_addr", redisAddr),
@@ -427,7 +425,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 	}
 
 	sessionID := req.Metadata.GetSessionId()
-	dbSessionID := sessionID      // Use the requested ID for DB persistence/metrics
+	dbSessionID := sessionID // Use the requested ID for DB persistence/metrics
 	// 使用 request 中的 ID 做 DB 持久化/指标
 	runtimeSessionID := sessionID // Session ID used for Redis/session manager/history
 	// 用于 Redis/session 管理器/历史的 session ID
@@ -1095,9 +1093,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 		// 提前持久化提交 context，使运行中的 GET status 也能返回它
 		if len(ctxMap) > 0 {
 			taskCtx := make(map[string]any, len(ctxMap))
-			for k, v := range ctxMap {
-				taskCtx[k] = v
-			}
+			maps.Copy(taskCtx, ctxMap)
 			initial.Metadata = db.JSONB{
 				"task_context": taskCtx,
 			}
@@ -1239,7 +1235,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 				defer cancel()
 
 			retryLoop:
-				for attempt := 0; attempt < 3; attempt++ {
+				for attempt := range 3 {
 					if attempt > 0 {
 						delay := time.Duration(attempt) * 50 * time.Millisecond
 						timer := time.NewTimer(delay)
@@ -1412,15 +1408,15 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 		}
 
 		taskExecution := &db.TaskExecution{
-			WorkflowID:   workflowID,
-			UserID:       userID,
-			SessionID:    sessionID,
-			TenantID:     tenantUUID,
-			Query:        query,
-			Mode:         mode,
-			Status:       statusStr,
-			StartedAt:    workflowStartTime.AsTime(),
-			TotalTokens:  result.TokensUsed, // Will be overridden by metadata if available
+			WorkflowID:  workflowID,
+			UserID:      userID,
+			SessionID:   sessionID,
+			TenantID:    tenantUUID,
+			Query:       query,
+			Mode:        mode,
+			Status:      statusStr,
+			StartedAt:   workflowStartTime.AsTime(),
+			TotalTokens: result.TokensUsed, // Will be overridden by metadata if available
 			// 若 metadata 可用则会被其覆盖
 			Result:       &result.Result,
 			ErrorMessage: &result.ErrorMessage,
@@ -2361,10 +2357,7 @@ func (s *OrchestratorService) ListTasks(ctx context.Context, req *pb.ListTasksRe
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	offset := int(req.Offset)
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(int(req.Offset), 0)
 
 	// Total count query
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM task_executions WHERE %s", strings.Join(where, " AND "))
@@ -2836,7 +2829,7 @@ func (s *OrchestratorService) watchAndPersist(workflowID, runID string) {
 		// Best-effort polling to tolerate visibility lag
 		// 尽力轮询以容忍可见性延迟
 		const maxAttempts = 6
-		for attempt := 0; attempt < maxAttempts; attempt++ {
+		for range maxAttempts {
 			var tokens sql.NullInt64
 			var res sql.NullString
 			row := s.dbClient.Wrapper().QueryRowContext(persistCtx,
@@ -3696,9 +3689,9 @@ func decodeTaskContext(ctx map[string]string) map[string]any {
 	}
 	result := make(map[string]any, len(ctx))
 	for k, v := range ctx {
-		if strings.HasPrefix(v, jsonEncodedPrefix) {
+		if after, ok := strings.CutPrefix(v, jsonEncodedPrefix); ok {
 			// JSON-encoded value: decode it
-			jsonStr := strings.TrimPrefix(v, jsonEncodedPrefix)
+			jsonStr := after
 			var decoded any
 			if err := json.Unmarshal([]byte(jsonStr), &decoded); err == nil {
 				result[k] = decoded

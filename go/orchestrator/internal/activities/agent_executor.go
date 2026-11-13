@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -53,13 +54,7 @@ func storeOversizedBase64Fields(ctx context.Context, workflowID string, output a
 			}
 
 			// Check if this is a known base64 field
-			isBase64Field := false
-			for _, fieldName := range base64FieldsToStore {
-				if key == fieldName {
-					isBase64Field = true
-					break
-				}
-			}
+			isBase64Field := slices.Contains(base64FieldsToStore, key)
 
 			if isBase64Field {
 				if strVal, ok := val.(string); ok && len(strVal) > maxBase64FieldSize {

@@ -342,7 +342,7 @@ func (m *Manager) UpdateContext(ctx context.Context, sessionID string, key strin
 // GetUserSessions gets all sessions for a user
 // GetUserSessions 获取用户的全部 session
 func (m *Manager) GetUserSessions(ctx context.Context, userID string) ([]*Session, error) {
-	pattern := fmt.Sprintf("session:*")
+	pattern := "session:*"
 	keys, err := m.client.Keys(ctx, pattern).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list sessions: %w", err)
@@ -377,7 +377,7 @@ func (m *Manager) GetUserSessions(ctx context.Context, userID string) ([]*Sessio
 
 // CleanupExpired removes expired sessions
 func (m *Manager) CleanupExpired(ctx context.Context) (int, error) {
-	pattern := fmt.Sprintf("session:*")
+	pattern := "session:*"
 	keys, err := m.client.Keys(ctx, pattern).Result()
 	if err != nil {
 		return 0, fmt.Errorf("failed to list sessions: %w", err)

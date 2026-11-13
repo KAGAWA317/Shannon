@@ -1,5 +1,7 @@
 package patterns
 
+import "maps"
+
 // Budget thresholds (in tokens) for triggering degradation.
 // Updated for modern LLMs with 128K+ context windows (2025).
 // Previous thresholds were designed for GPT-3.5 era (4K-8K context).
@@ -23,9 +25,7 @@ var degradeChain = map[PatternType]PatternType{
 // DegradationThresholds returns a copy of the default thresholds map.
 func DegradationThresholds() map[PatternType]int {
 	out := make(map[PatternType]int, len(defaultDegradeThresholds))
-	for k, v := range defaultDegradeThresholds {
-		out[k] = v
-	}
+	maps.Copy(out, defaultDegradeThresholds)
 	return out
 }
 

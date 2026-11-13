@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"maps"
 	"time"
 
 	"go.uber.org/zap"
@@ -144,9 +145,7 @@ func (s *SessionServiceImpl) UpdateSession(ctx context.Context, req *pb.UpdateSe
 		if sess.Context == nil {
 			sess.Context = make(map[string]any)
 		}
-		for k, v := range updates {
-			sess.Context[k] = v
-		}
+		maps.Copy(sess.Context, updates)
 	}
 
 	// Extend TTL if requested

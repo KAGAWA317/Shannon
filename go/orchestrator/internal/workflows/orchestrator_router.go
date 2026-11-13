@@ -2,6 +2,7 @@ package workflows
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -567,9 +568,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	// Add history to context for decomposition to be context-aware
 	decompContext := make(map[string]any)
 	if input.Context != nil {
-		for k, v := range input.Context {
-			decompContext[k] = v
-		}
+		maps.Copy(decompContext, input.Context)
 	}
 	// Inject current date for time awareness (use workflow.Now for Temporal determinism)
 	// Only inject if not already provided (allow user override)
@@ -888,7 +887,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			needsTools = true
 			break
 		}
-		if st.ToolParameters != nil && len(st.ToolParameters) > 0 {
+		if len(st.ToolParameters) > 0 {
 			needsTools = true
 			break
 		}

@@ -107,7 +107,7 @@ func (r *RedisCache) Get(ctx context.Context, key string) ([]float32, bool) {
 		return nil, false
 	}
 	out := make([]float32, len(b)/4)
-	for i := 0; i < len(out); i++ {
+	for i := range out {
 		u := binary.LittleEndian.Uint32(b[i*4:])
 		out[i] = math.Float32frombits(u)
 	}

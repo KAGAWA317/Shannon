@@ -307,11 +307,8 @@ func chunkIndex(p map[string]any) int {
 // cosineSim 计算两个 float32 向量间的 cosine 相似度。
 func cosineSim(a, b []float32) float64 {
 	var dot, na, nb float64
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
-	for i := 0; i < n; i++ {
+	n := min(len(b), len(a))
+	for i := range n {
 		da := float64(a[i])
 		db := float64(b[i])
 		dot += da * db
@@ -338,18 +335,18 @@ func mmrReorder(query []float32, items []vectordb.ContextItem, lambda float64) [
 		return items
 	}
 	qd := make([]float64, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		qd[i] = cosineSim(query, items[i].Vector)
 	}
 	selected := make([]int, 0, n)
 	remaining := make([]bool, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		remaining[i] = true
 	}
 	for len(selected) < n {
 		bestIdx := -1
 		bestScore := -1e9
-		for i := 0; i < n; i++ {
+		for i := range n {
 			if !remaining[i] {
 				continue
 			}

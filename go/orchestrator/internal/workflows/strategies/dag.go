@@ -3,6 +3,7 @@ package strategies
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -83,12 +84,8 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 
 	// Prepare base context
 	baseContext := make(map[string]any)
-	for k, v := range input.Context {
-		baseContext[k] = v
-	}
-	for k, v := range input.SessionCtx {
-		baseContext[k] = v
-	}
+	maps.Copy(baseContext, input.Context)
+	maps.Copy(baseContext, input.SessionCtx)
 	// Propagate parent workflow ID to downstream activities (pattern helpers)
 	if input.ParentWorkflowID != "" {
 		baseContext["parent_workflow_id"] = input.ParentWorkflowID
@@ -161,7 +158,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			needsTools = true
 			break
 		}
-		if subtask.ToolParameters != nil && len(subtask.ToolParameters) > 0 {
+		if len(subtask.ToolParameters) > 0 {
 			needsTools = true
 			break
 		}
@@ -237,9 +234,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			},
 		}
 		agMeta := metadata.AggregateAgentMetadata(ar, 0)
-		for k, v := range agMeta {
-			meta[k] = v
-		}
+		maps.Copy(meta, agMeta)
 
 		// Compute cost with centralized pricing when tokens are available
 		if totalTokens > 0 {
@@ -810,9 +805,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 
 	// Aggregate agent metadata (model, provider, tokens, cost)
 	agentMeta := metadata.AggregateAgentMetadata(agentResults, reflectionTokens+synthesis.TokensUsed)
-	for k, v := range agentMeta {
-		meta[k] = v
-	}
+	maps.Copy(meta, agentMeta)
 
 	// Ensure total_tokens present in metadata (fallback to workflow total if missing/zero)
 	if tv, ok := meta["total_tokens"]; !ok || (ok && ((func() int {

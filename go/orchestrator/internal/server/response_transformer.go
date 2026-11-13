@@ -19,7 +19,7 @@ type UnifiedResponse struct {
 	Result      string              `json:"result"`
 	Metadata    ResponseMetadata    `json:"metadata"`
 	Usage       ResponseUsage       `json:"usage"`
-	Performance ResponsePerformance `json:"performance,omitempty"`
+	Performance ResponsePerformance `json:"performance"`
 	StopReason  string              `json:"stop_reason"`
 	Error       *string             `json:"error"`
 	Timestamp   string              `json:"timestamp"`

@@ -369,7 +369,7 @@ func (c *Client) QueueWriteWithRetry(writeType WriteType, data any, callback fun
 	const maxRetries = 3
 	const retryDelay = 10 * time.Millisecond
 
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for attempt := range maxRetries {
 		select {
 		case c.writeQueue <- WriteRequest{
 			Type:     writeType,

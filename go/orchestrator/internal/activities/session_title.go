@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"strings"
 	"time"
@@ -169,9 +170,7 @@ func (a *Activities) GenerateSessionTitle(ctx context.Context, input GenerateSes
 		// Then overlay Redis context (to get latest updates)
 		// 再用 Redis 的 context 覆盖（取最新数据）。
 		if sess.Context != nil {
-			for k, v := range sess.Context {
-				contextData[k] = v
-			}
+			maps.Copy(contextData, sess.Context)
 		}
 
 		// Finally add the title
@@ -234,12 +233,12 @@ Query: %s`, query)
 	url := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
 	reqBody := map[string]any{
-		"query":       prompt,
-		"max_tokens":  9126, // Increased for long input queries + output
+		"query":      prompt,
+		"max_tokens": 9126, // Increased for long input queries + output
 		// 为长 query 输入加输出留出余量。
-		"temperature": 0.3,  // Low temperature for consistency
+		"temperature": 0.3, // Low temperature for consistency
 		// 低 temperature，保证输出稳定。
-		"agent_id":    "title_generator",
+		"agent_id": "title_generator",
 		"context": map[string]any{
 			"system_prompt": "You are a multilingual title generator. Generate concise, descriptive titles for chat sessions in the SAME LANGUAGE as the user's input. For CJK languages (Chinese, Japanese, Korean), use 5-15 characters. For English and other Western languages, use 3-5 words in Title Case. No quotes, no trailing punctuation, no emojis. Output ONLY the title.",
 		},

@@ -102,7 +102,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 	// Optional: type filter (comma-separated)
 	typeFilter := map[string]struct{}{}
 	if s := r.URL.Query().Get("types"); s != "" {
-		for _, t := range strings.Split(s, ",") {
+		for t := range strings.SplitSeq(s, ",") {
 			t = strings.TrimSpace(t)
 			if t != "" {
 				typeFilter[t] = struct{}{}

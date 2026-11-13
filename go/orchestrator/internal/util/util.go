@@ -1,18 +1,14 @@
 package util
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 )
 
 // ContainsString reports whether slice contains item.
 func ContainsString(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(slice, item)
 }
 
 // ParseNumericValue attempts to extract a numeric value from a free‑form string.
@@ -26,7 +22,7 @@ func ParseNumericValue(response string) (float64, bool) {
 	}
 	fields := strings.Fields(response)
 	var numbers []float64
-	for i := 0; i < len(fields); i++ {
+	for i := range fields {
 		token := strings.Trim(fields[i], ".,!?:;")
 		if v, err := strconv.ParseFloat(token, 64); err == nil {
 			numbers = append(numbers, v)

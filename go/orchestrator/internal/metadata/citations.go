@@ -254,9 +254,7 @@ func NormalizeURL(rawURL string) (string, error) {
 	parsed.Host = strings.ToLower(parsed.Host)
 
 	// Remove www. prefix for consistency
-	if strings.HasPrefix(parsed.Host, "www.") {
-		parsed.Host = parsed.Host[4:]
-	}
+	parsed.Host = strings.TrimPrefix(parsed.Host, "www.")
 
 	// Remove fragment
 	parsed.Fragment = ""
@@ -277,9 +275,7 @@ func NormalizeURL(rawURL string) (string, error) {
 
 	// Remove trailing slash from path (including root path "/" -> "")
 	// 去掉路径末尾的斜杠（含根路径 "/" -> ""）
-	if strings.HasSuffix(parsed.Path, "/") {
-		parsed.Path = strings.TrimSuffix(parsed.Path, "/")
-	}
+	parsed.Path = strings.TrimSuffix(parsed.Path, "/")
 
 	return parsed.String(), nil
 }
@@ -304,9 +300,7 @@ func ExtractDomain(rawURL string) (string, error) {
 	}
 
 	// Remove www. prefix
-	if strings.HasPrefix(host, "www.") {
-		host = host[4:]
-	}
+	host = strings.TrimPrefix(host, "www.")
 
 	return host, nil
 }
@@ -1198,17 +1192,17 @@ func CollectCitations(results []any, now time.Time, maxCitations int) ([]Citatio
 			stats.QualityBuckets["low"], stats.QualityBuckets["medium"], stats.QualityBuckets["high"])
 
 		if len(stats.TopDomains) > 0 {
-			var topDomainsStr string
+			var topDomainsStr strings.Builder
 			for i, d := range stats.TopDomains {
 				if i > 0 {
-					topDomainsStr += ", "
+					topDomainsStr.WriteString(", ")
 				}
-				topDomainsStr += fmt.Sprintf("%s(%d)", d.Domain, d.Count)
+				topDomainsStr.WriteString(fmt.Sprintf("%s(%d)", d.Domain, d.Count))
 				if i >= 4 { // Show top 5 in log
 					break
 				}
 			}
-			log.Printf("[citations] top_domains: %s", topDomainsStr)
+			log.Printf("[citations] top_domains: %s", topDomainsStr.String())
 		}
 
 		if len(stats.PerAgentCount) > 0 {
@@ -1313,6 +1307,7 @@ func sanitizeTitle(title, rawURL, source string) string {
 // Examples: https://arxiv.org/abs/2408.13687 -> 2408.13687
 //
 //	https://arxiv.org/pdf/2408.13687.pdf -> 2408.13687
+//
 // extractArxivID 从常见的 arxiv.org URL 中返回 arXiv 标识
 // 例如：https://arxiv.org/abs/2408.13687 -> 2408.13687
 // https://arxiv.org/pdf/2408.13687.pdf -> 2408.13687
@@ -1331,9 +1326,7 @@ func extractArxivID(rawURL string) string {
 	}
 	last := parts[len(parts)-1]
 	// Strip .pdf if present
-	if strings.HasSuffix(last, ".pdf") {
-		last = strings.TrimSuffix(last, ".pdf")
-	}
+	last = strings.TrimSuffix(last, ".pdf")
 	// abs/<id> or pdf/<id>
 	if len(parts) >= 2 {
 		return last
@@ -1666,6 +1659,7 @@ func extractCitationsFromMultiPageResult(output map[string]any, agentID string, 
 // Format patterns:
 //   - web_subpage_fetch: "# Main Page: {url}" and "## Subpage N: {url}"
 //   - web_crawl:         "# Main Page: {url}" and "## Page N: {url}"
+//
 // parseMultiPageContent 解析合并后的 markdown 内容，提取每页的标题与 snippet
 // 格式模式：
 // - web_subpage_fetch："# Main Page: {url}" 与 "## Subpage N: {url}"
@@ -1725,8 +1719,8 @@ func parseMultiPageContent(content string) map[string]pageInfo {
 // extractTitleFromPageContent 从页面内容中提取标题
 // 查找标题行之后首个非空行中的 **title** 模式
 func extractTitleFromPageContent(content string) string {
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(content, "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

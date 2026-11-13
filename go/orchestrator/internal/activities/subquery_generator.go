@@ -25,21 +25,21 @@ type SubqueryGeneratorInput struct {
 	ParentWorkflowID string         `json:"parent_workflow_id,omitempty"`
 	// Deep Research 2.0: Source-type aware search
 	// Deep Research 2.0：检索时感知 source type。
-	EntityName       string   `json:"entity_name,omitempty"`        // Primary entity being researched
-	QueryType        string   `json:"query_type,omitempty"`         // company, industry, scientific, etc.
-	TargetLanguages  []string `json:"target_languages,omitempty"`   // Languages for regional searches
+	EntityName      string   `json:"entity_name,omitempty"`      // Primary entity being researched
+	QueryType       string   `json:"query_type,omitempty"`       // company, industry, scientific, etc.
+	TargetLanguages []string `json:"target_languages,omitempty"` // Languages for regional searches
 }
 
 // GeneratedSubquery represents a generated subquery for gap-filling
 // GeneratedSubquery 表示一条用于填补覆盖缺口的 subquery。
 type GeneratedSubquery struct {
-	ID             string                 `json:"id"`
-	Query          string                 `json:"query"`
-	TargetGap      string                 `json:"target_gap"`       // Which gap this addresses
-	Priority       string                 `json:"priority"`         // "high", "medium", "low"
-	SuggestedTools []string               `json:"suggested_tools"`  // Tools to use
-	SourceTypes    []string               `json:"source_types"`     // Source types to target
-	ToolParameters map[string]any `json:"tool_parameters"`  // Pre-structured tool params
+	ID             string         `json:"id"`
+	Query          string         `json:"query"`
+	TargetGap      string         `json:"target_gap"`      // Which gap this addresses
+	Priority       string         `json:"priority"`        // "high", "medium", "low"
+	SuggestedTools []string       `json:"suggested_tools"` // Tools to use
+	SourceTypes    []string       `json:"source_types"`    // Source types to target
+	ToolParameters map[string]any `json:"tool_parameters"` // Pre-structured tool params
 	// Task contract fields
 	// Task contract 字段。
 	OutputFormat   *OutputFormatSpec   `json:"output_format,omitempty"`
@@ -51,14 +51,14 @@ type GeneratedSubquery struct {
 // SubqueryGeneratorResult is the result of subquery generation
 // SubqueryGeneratorResult 是 subquery 生成的结果。
 type SubqueryGeneratorResult struct {
-	Subqueries    []GeneratedSubquery `json:"subqueries"`
-	TotalGenerated int                `json:"total_generated"`
-	Reasoning      string             `json:"reasoning"`
-	TokensUsed     int                `json:"tokens_used"`
-	ModelUsed      string             `json:"model_used"`
-	Provider       string             `json:"provider"`
-	InputTokens    int                `json:"input_tokens"`
-	OutputTokens   int                `json:"output_tokens"`
+	Subqueries     []GeneratedSubquery `json:"subqueries"`
+	TotalGenerated int                 `json:"total_generated"`
+	Reasoning      string              `json:"reasoning"`
+	TokensUsed     int                 `json:"tokens_used"`
+	ModelUsed      string              `json:"model_used"`
+	Provider       string              `json:"provider"`
+	InputTokens    int                 `json:"input_tokens"`
+	OutputTokens   int                 `json:"output_tokens"`
 }
 
 // GenerateSubqueries generates new subqueries to fill coverage gaps
@@ -540,7 +540,7 @@ func generateSourceTypeQuery(stConfig *config.SourceTypesConfig, entityName, bas
 	// 取前 2-3 个优先站点。
 	maxSites := min(3, len(sites))
 	siteParts := make([]string, maxSites)
-	for i := 0; i < maxSites; i++ {
+	for i := range maxSites {
 		siteParts[i] = fmt.Sprintf("site:%s", sites[i])
 	}
 
@@ -701,7 +701,7 @@ func generateEntityGapQueries(stConfig *config.SourceTypesConfig, entityName, in
 	// Use up to 2 queries per info type to avoid query explosion
 	// 每个信息类型最多用 2 条 query，避免 query 数量爆炸。
 	maxQueries := min(2, len(queries))
-	for i := 0; i < maxQueries; i++ {
+	for i := range maxQueries {
 		// Replace {entity} placeholder with actual entity name
 		// 把 {entity} 占位符替换成真实实体名。
 		query := strings.ReplaceAll(queries[i], "{entity}", entityName)

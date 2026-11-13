@@ -43,30 +43,30 @@ type TokenBudget struct {
 // BudgetTokenUsage tracks token consumption for budget management (renamed to avoid conflict with models.TokenUsage)
 // BudgetTokenUsage 记录 budget 管理所需的 token 消耗（重命名以避免与 models.TokenUsage 冲突）
 type BudgetTokenUsage struct {
-	ID                  string                 `json:"id"`
-	UserID              string                 `json:"user_id"`
-	SessionID           string                 `json:"session_id"`
-	TaskID              string                 `json:"task_id"`
-	AgentID             string                 `json:"agent_id"`
-	Model               string                 `json:"model"`
-	Provider            string                 `json:"provider"`
-	InputTokens         int                    `json:"input_tokens"`
-	OutputTokens        int                    `json:"output_tokens"`
-	TotalTokens         int                    `json:"total_tokens"`
-	CacheReadTokens     int                    `json:"cache_read_tokens,omitempty"`
-	CacheCreationTokens   int                    `json:"cache_creation_tokens,omitempty"`
-	CacheCreation1hTokens int                    `json:"cache_creation_1h_tokens,omitempty"`
+	ID                    string `json:"id"`
+	UserID                string `json:"user_id"`
+	SessionID             string `json:"session_id"`
+	TaskID                string `json:"task_id"`
+	AgentID               string `json:"agent_id"`
+	Model                 string `json:"model"`
+	Provider              string `json:"provider"`
+	InputTokens           int    `json:"input_tokens"`
+	OutputTokens          int    `json:"output_tokens"`
+	TotalTokens           int    `json:"total_tokens"`
+	CacheReadTokens       int    `json:"cache_read_tokens,omitempty"`
+	CacheCreationTokens   int    `json:"cache_creation_tokens,omitempty"`
+	CacheCreation1hTokens int    `json:"cache_creation_1h_tokens,omitempty"`
 	// CacheAwareTotalTokens = InputTokens + OutputTokens + CacheReadTokens + CacheCreationTokens.
 	// Parallel to TotalTokens (= input + output), used for quota accounting that
 	// must include prompt-cache cost while keeping TotalTokens OpenAI-compatible.
 	// CacheAwareTotalTokens = InputTokens + OutputTokens + CacheReadTokens + CacheCreationTokens，与 TotalTokens（= input + output）并列，用于配额核算，须包含 prompt-cache 成本，同时保持 TotalTokens 与 OpenAI 兼容。
-	CacheAwareTotalTokens int                    `json:"cache_aware_total_tokens,omitempty"`
-	CallSequence        int                    `json:"call_sequence,omitempty"`
-	CostUSD             float64                `json:"cost_usd"`
-	CostOverride        float64                `json:"cost_override,omitempty"` // When > 0, use this instead of pricing calculation (e.g. Python-reported cost_usd)
-	Timestamp           time.Time              `json:"timestamp"`
-	Metadata            map[string]any `json:"metadata"`
-	IdempotencyKey      string                 `json:"idempotency_key,omitempty"` // Optional key for retry safety
+	CacheAwareTotalTokens int            `json:"cache_aware_total_tokens,omitempty"`
+	CallSequence          int            `json:"call_sequence,omitempty"`
+	CostUSD               float64        `json:"cost_usd"`
+	CostOverride          float64        `json:"cost_override,omitempty"` // When > 0, use this instead of pricing calculation (e.g. Python-reported cost_usd)
+	Timestamp             time.Time      `json:"timestamp"`
+	Metadata              map[string]any `json:"metadata"`
+	IdempotencyKey        string         `json:"idempotency_key,omitempty"` // Optional key for retry safety
 }
 
 // BudgetManager manages token budgets and usage tracking
@@ -711,12 +711,12 @@ type UsageDetail struct {
 }
 
 type ModelUsage struct {
-	Tokens                int     `json:"tokens"`
-	CacheAwareTokens      int     `json:"cache_aware_tokens,omitempty"`
-	Cost                  float64 `json:"cost"`
-	Requests              int     `json:"requests"`
-	CacheReadTokens       int     `json:"cache_read_tokens,omitempty"`
-	CacheCreationTokens   int     `json:"cache_creation_tokens,omitempty"`
+	Tokens              int     `json:"tokens"`
+	CacheAwareTokens    int     `json:"cache_aware_tokens,omitempty"`
+	Cost                float64 `json:"cost"`
+	Requests            int     `json:"requests"`
+	CacheReadTokens     int     `json:"cache_read_tokens,omitempty"`
+	CacheCreationTokens int     `json:"cache_creation_tokens,omitempty"`
 }
 
 // Enhanced Budget Manager Features - Backpressure and Circuit Breaker
@@ -1148,10 +1148,9 @@ func (bm *BudgetManager) startIdempotencyCleanup() {
 // 清理间隔设为 TTL 的一半，以便及时移除
 func (bm *BudgetManager) idempotencyCleanupLoop() {
 	// Run cleanup at half the TTL interval for timely expiration
-	cleanupInterval := bm.idempotencyTTL / 2
-	if cleanupInterval < time.Minute {
-		cleanupInterval = time.Minute // Minimum 1 minute interval
-	}
+	cleanupInterval := max(bm.idempotencyTTL/2,
+		// Minimum 1 minute interval
+		time.Minute)
 
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()

@@ -32,18 +32,18 @@ func stripMarkdownJSONWrapper(s string) string {
 	}
 
 	// Find end of first line (```json or ```)
-	idx := strings.Index(trimmed, "\n")
-	if idx == -1 {
+	before, after, ok := strings.Cut(trimmed, "\n")
+	if !ok {
 		return s
 	}
 
-	fence := strings.TrimSpace(trimmed[:idx])
+	fence := strings.TrimSpace(before)
 	lang := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(fence, "```")))
 	if lang != "" && lang != "json" {
 		return s
 	}
 
-	body := strings.TrimSpace(trimmed[idx+1:])
+	body := strings.TrimSpace(after)
 	if !strings.HasSuffix(body, "```") {
 		return s
 	}
@@ -165,9 +165,7 @@ func TemplateWorkflow(ctx workflow.Context, input TemplateWorkflowInput) (TaskRe
 	// Aggregate agent metadata (model, provider, tokens, cost) from template node executions
 	if len(runtime.AgentResults) > 0 {
 		agentMeta := metadata.AggregateAgentMetadata(runtime.AgentResults, 0)
-		for k, v := range agentMeta {
-			resultMetadata[k] = v
-		}
+		maps.Copy(resultMetadata, agentMeta)
 
 		// Compute cost estimate if tokens available
 		if runtime.TotalTokens > 0 {
@@ -372,9 +370,7 @@ func executeCognitiveTemplateNode(ctx workflow.Context, rt *templateRuntime, nod
 	modelTier := determineModelTierForTemplate(rt.Plan.Defaults.ModelTier, node.Metadata)
 
 	config := make(map[string]any, len(node.Metadata)+2)
-	for k, v := range node.Metadata {
-		config[k] = v
-	}
+	maps.Copy(config, node.Metadata)
 	if appliedStrategy != originalStrategy {
 		config["degraded_from"] = string(originalStrategy)
 		config["degraded_to"] = string(appliedStrategy)
@@ -401,9 +397,7 @@ func executeCognitiveTemplateNode(ctx workflow.Context, rt *templateRuntime, nod
 	}
 
 	metadata := map[string]any{}
-	for k, v := range patternResult.Metadata {
-		metadata[k] = v
-	}
+	maps.Copy(metadata, patternResult.Metadata)
 	metadata["type"] = "cognitive"
 	metadata["strategy"] = string(appliedStrategy)
 	if appliedStrategy != originalStrategy {
@@ -641,9 +635,7 @@ func executeSupervisorTemplateNode(ctx workflow.Context, rt *templateRuntime, no
 	metadata := map[string]any{
 		"type": "supervisor",
 	}
-	for k, v := range childResult.Metadata {
-		metadata[k] = v
-	}
+	maps.Copy(metadata, childResult.Metadata)
 
 	return TemplateNodeResult{
 		Result:   childResult.Result,
@@ -716,12 +708,8 @@ func determineNodeQuery(defaultQuery string, metadata map[string]any, nodeOutput
 
 func mergeContext(base map[string]any, overlay map[string]any) map[string]any {
 	result := make(map[string]any, len(base)+len(overlay))
-	for k, v := range base {
-		result[k] = v
-	}
-	for k, v := range overlay {
-		result[k] = v
-	}
+	maps.Copy(result, base)
+	maps.Copy(result, overlay)
 	return result
 }
 
@@ -730,9 +718,7 @@ func cloneStringMap(in map[string]string) map[string]string {
 		return map[string]string{}
 	}
 	out := make(map[string]string, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
+	maps.Copy(out, in)
 	return out
 }
 
@@ -915,9 +901,7 @@ func mapStringInterface(v any) map[string]any {
 	}
 	if m, ok := v.(map[string]any); ok {
 		clone := make(map[string]any, len(m))
-		for k, val := range m {
-			clone[k] = val
-		}
+		maps.Copy(clone, m)
 		return clone
 	}
 	return nil
@@ -993,9 +977,7 @@ func summariseHybridResult(rt *templateRuntime, node templates.ExecutableNode, r
 		rt.AgentResults = append(rt.AgentResults, r)
 	}
 	meta := make(map[string]any, len(result.Metadata)+4)
-	for k, v := range result.Metadata {
-		meta[k] = v
-	}
+	maps.Copy(meta, result.Metadata)
 	meta["type"] = "dag"
 	meta["mode"] = "hybrid"
 	meta["tasks"] = ids

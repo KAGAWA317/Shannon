@@ -272,10 +272,7 @@ func (a *Activities) addCitationsInline(ctx context.Context, input CitationAgent
 
 	// Dynamic timeout based on report length: base 120s + 30s per 1000 chars, max 300s
 	// 依据 report 长度动态设置 timeout：基础 120s，每 1000 字符加 30s，上限 300s。
-	timeoutSec := 120 + (reportLen/1000)*30
-	if timeoutSec > 300 {
-		timeoutSec = 300
-	}
+	timeoutSec := min(120+(reportLen/1000)*30, 300)
 
 	client := &http.Client{
 		Timeout:   time.Duration(timeoutSec) * time.Second,
@@ -635,10 +632,7 @@ func validateContentImmutability(original, cited string) (bool, error) {
 	} else {
 		// Use full Levenshtein for shorter texts
 		editDist := levenshteinDistance(origRunes, strippedRunes)
-		maxLen := len(origRunes)
-		if len(strippedRunes) > maxLen {
-			maxLen = len(strippedRunes)
-		}
+		maxLen := max(len(strippedRunes), len(origRunes))
 		// Guard against division by zero when both strings are empty
 		if maxLen == 0 {
 			diffRatio = 0.0
@@ -658,14 +652,8 @@ func validateContentImmutability(original, cited string) (bool, error) {
 	diffPos := findFirstDifference(origRunes, strippedRunes)
 
 	// Extract context around first difference
-	start := diffPos - 20
-	if start < 0 {
-		start = 0
-	}
-	end := diffPos + 20
-	if end > len(origRunes) {
-		end = len(origRunes)
-	}
+	start := max(diffPos-20, 0)
+	end := min(diffPos+20, len(origRunes))
 	context := ""
 	if end > start {
 		context = string(origRunes[start:end])
@@ -741,7 +729,7 @@ func sampledEditDistanceRatio(s1, s2 []rune) float64 {
 
 	// Sample from beginning, middle, and end
 	// 在文本的开头、中段与结尾均匀取样。
-	for i := 0; i < numSamples; i++ {
+	for i := range numSamples {
 		// Calculate sample position (spread across the text)
 		pos1 := (len1 - chunkSize) * i / (numSamples - 1)
 		pos2 := (len2 - chunkSize) * i / (numSamples - 1)
@@ -767,10 +755,7 @@ func sampledEditDistanceRatio(s1, s2 []rune) float64 {
 
 		if len(chunk1) > 0 && len(chunk2) > 0 {
 			editDist := levenshteinDistance(chunk1, chunk2)
-			maxChunkLen := len(chunk1)
-			if len(chunk2) > maxChunkLen {
-				maxChunkLen = len(chunk2)
-			}
+			maxChunkLen := max(len(chunk2), len(chunk1))
 			totalRatio += float64(editDist) / float64(maxChunkLen)
 			validSamples++
 		}
@@ -786,10 +771,7 @@ func sampledEditDistanceRatio(s1, s2 []rune) float64 {
 	if lenDiff < 0 {
 		lenDiff = -lenDiff
 	}
-	maxLen := len1
-	if len2 > maxLen {
-		maxLen = len2
-	}
+	maxLen := max(len2, len1)
 	lenRatio := float64(lenDiff) / float64(maxLen)
 
 	// Combine sampled edit ratio with length ratio
@@ -801,11 +783,8 @@ func sampledEditDistanceRatio(s1, s2 []rune) float64 {
 
 // findFirstDifference finds the position of the first differing character
 func findFirstDifference(s1, s2 []rune) int {
-	minLen := len(s1)
-	if len(s2) < minLen {
-		minLen = len(s2)
-	}
-	for i := 0; i < minLen; i++ {
+	minLen := min(len(s2), len(s1))
+	for i := range minLen {
 		if s1[i] != s2[i] {
 			return i
 		}
@@ -1082,13 +1061,7 @@ func (a *Activities) addCitationsV2(ctx context.Context, input CitationAgentInpu
 	// Step 2: Build V2 prompt and call LLM
 	// Calculate max placements based on sentence count (roughly 30% of sentences, capped at 100)
 	// 依据 sentence 数量计算 max placements：约为 30%，并限制在 25 到 100 之间。
-	maxPlacements := len(sentences) * 30 / 100
-	if maxPlacements < 25 {
-		maxPlacements = 25
-	}
-	if maxPlacements > 100 {
-		maxPlacements = 100
-	}
+	maxPlacements := min(max(len(sentences)*30/100, 25), 100)
 	logger.Info("CitationAgent V2: calculated max placements",
 		"sentence_count", len(sentences),
 		"max_placements", maxPlacements,
@@ -1705,14 +1678,14 @@ func (a *Activities) AddCitationsWithVerify(ctx context.Context, input CitationA
 	// Chinese text: ~1.5 tokens per character; add 20% buffer for citations
 	// 按 report 长度估算 max_tokens：CJK 约 1.5 token/字符，再留出 citation 的余量；代码取的是字符数的 2 倍作为保守值。
 	reportLen := len(input.Report)
-	maxTokens := (reportLen * 2) // Conservative estimate for CJK text
-	if maxTokens < 8192 {
-		maxTokens = 8192
-	}
-	if maxTokens > 32000 {
-		maxTokens = 32000 // Cap at 32K to avoid excessive costs
+	maxTokens := min(
+		// Conservative estimate for CJK text
+		max(
+
+			(reportLen*2), 8192),
+		// Cap at 32K to avoid excessive costs
 		// 上限 32K，避免成本失控。
-	}
+		32000)
 
 	logger.Info("CitationAgent V2: calculated max_tokens",
 		"report_length", reportLen,
@@ -1737,10 +1710,7 @@ func (a *Activities) AddCitationsWithVerify(ctx context.Context, input CitationA
 	}
 
 	// Timeout based on report length (reportLen already calculated above)
-	timeoutSec := 120 + (reportLen/1000)*30
-	if timeoutSec > 300 {
-		timeoutSec = 300
-	}
+	timeoutSec := min(120+(reportLen/1000)*30, 300)
 
 	client := &http.Client{
 		Timeout:   time.Duration(timeoutSec) * time.Second,
@@ -2495,13 +2465,13 @@ func parsePlacementPlan2(response string) (*PlacementPlan2, error) {
 
 	// Remove markdown code blocks if present
 	// 先剥掉 markdown code fence，再解析 JSON。
-	if strings.HasPrefix(response, "```json") {
-		response = strings.TrimPrefix(response, "```json")
+	if after, ok := strings.CutPrefix(response, "```json"); ok {
+		response = after
 		if idx := strings.LastIndex(response, "```"); idx != -1 {
 			response = response[:idx]
 		}
-	} else if strings.HasPrefix(response, "```") {
-		response = strings.TrimPrefix(response, "```")
+	} else if after, ok := strings.CutPrefix(response, "```"); ok {
+		response = after
 		if idx := strings.LastIndex(response, "```"); idx != -1 {
 			response = response[:idx]
 		}

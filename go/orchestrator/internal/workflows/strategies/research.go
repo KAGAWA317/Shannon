@@ -3,9 +3,11 @@ package strategies
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -191,12 +193,9 @@ func FilterCitationsByEntity(citations []metadata.Citation, canonicalName string
 
 				// For short aliases, only match whole hostname labels to avoid false positives
 				// like "mind" matching "minders.io".
-				for _, label := range hostLabels {
-					if label == cleanAlias {
-						score += 0.4
-						matchedDomain = "alias-in-host:" + cleanAlias
-						break
-					}
+				if slices.Contains(hostLabels, cleanAlias) {
+					score += 0.4
+					matchedDomain = "alias-in-host:" + cleanAlias
 				}
 				if matchedDomain != "" {
 					break
@@ -942,8 +941,8 @@ func extractDomainBase(domain string) string {
 	// Remove common TLDs
 	commonTLDs := []string{".com", ".org", ".net", ".io", ".ai", ".co", ".app", ".dev", ".xyz"}
 	for _, tld := range commonTLDs {
-		if strings.HasSuffix(host, tld) {
-			host = strings.TrimSuffix(host, tld)
+		if before, ok := strings.CutSuffix(host, tld); ok {
+			host = before
 			break
 		}
 	}
@@ -1001,16 +1000,16 @@ func buildCompanyDomainDiscoverySearchQuery(canonicalName string, disambiguation
 
 func stripCodeFences(s string) string {
 	t := strings.TrimSpace(s)
-	if strings.HasPrefix(t, "```json") {
-		t = strings.TrimPrefix(t, "```json")
+	if after, ok := strings.CutPrefix(t, "```json"); ok {
+		t = after
 		t = strings.TrimPrefix(t, "```")
 		if idx := strings.LastIndex(t, "```"); idx != -1 {
 			t = t[:idx]
 		}
 		return strings.TrimSpace(t)
 	}
-	if strings.HasPrefix(t, "```") {
-		t = strings.TrimPrefix(t, "```")
+	if after, ok := strings.CutPrefix(t, "```"); ok {
+		t = after
 		if idx := strings.LastIndex(t, "```"); idx != -1 {
 			t = t[:idx]
 		}
@@ -1361,10 +1360,8 @@ func selectDomainsForPrefetch(discovered []string, requestedRegions []string, or
 		if r == "" {
 			return
 		}
-		for _, existing := range required {
-			if existing == r {
-				return
-			}
+		if slices.Contains(required, r) {
+			return
 		}
 		required = append(required, r)
 	}
@@ -1504,10 +1501,8 @@ func selectDomainsForPrefetchWithFocus(discovered []string, requestedRegions []s
 		if r == "" {
 			return
 		}
-		for _, existing := range required {
-			if existing == r {
-				return
-			}
+		if slices.Contains(required, r) {
+			return
 		}
 		required = append(required, r)
 	}
@@ -1987,12 +1982,12 @@ func domainsFromDiscoveryResponse(resp string) []string {
 }
 
 func extractFirstJSONObjectContainingDomains(resp string) string {
-	idx := strings.Index(resp, "\"domains\"")
-	if idx == -1 {
+	before, _, ok := strings.Cut(resp, "\"domains\"")
+	if !ok {
 		return ""
 	}
 
-	start := strings.LastIndex(resp[:idx], "{")
+	start := strings.LastIndex(before, "{")
 	if start == -1 {
 		return ""
 	}
@@ -2260,12 +2255,8 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 	// Prepare base context: start from SessionCtx, then overlay request Context
 	// Per-request context must take precedence over persisted session defaults
 	baseContext := make(map[string]any)
-	for k, v := range input.SessionCtx {
-		baseContext[k] = v
-	}
-	for k, v := range input.Context {
-		baseContext[k] = v
-	}
+	maps.Copy(baseContext, input.SessionCtx)
+	maps.Copy(baseContext, input.Context)
 	if input.ParentWorkflowID != "" {
 		baseContext["parent_workflow_id"] = input.ParentWorkflowID
 	}
@@ -2872,15 +2863,16 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 						// Build batch discovery prompt with all queries
 						var discoveryResult activities.AgentExecutionResult
-						discoveryQuery := fmt.Sprintf(
+						var discoveryQuery strings.Builder
+						discoveryQuery.WriteString(fmt.Sprintf(
 							"Find official domains for %q.\n\n"+
 								"STEP 1: Execute web_search for each query:\n",
 							refineResult.CanonicalName,
-						)
+						))
 						for _, q := range allQueries {
-							discoveryQuery += fmt.Sprintf("- %s\n", q)
+							discoveryQuery.WriteString(fmt.Sprintf("- %s\n", q))
 						}
-						discoveryQuery += "\n" +
+						discoveryQuery.WriteString("\n" +
 							"STEP 2: After ALL searches complete, respond with ONLY this JSON:\n" +
 							"{\"domains\":[\"domain1.com\",\"domain2.com\"]}\n\n" +
 							"RULES:\n" +
@@ -2888,21 +2880,21 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 							"- Exclude: login/accounts, store, support, third-party (wikipedia, linkedin)\n" +
 							"- Strip www prefix, no paths\n" +
 							"- Max 10 domains\n\n" +
-							"CRITICAL: Your response must be ONLY the JSON object, nothing else.\n"
+							"CRITICAL: Your response must be ONLY the JSON object, nothing else.\n")
 
 						// Add research focus using original query (not ResearchAreas)
 						// ResearchAreas come from Refiner's research_dimensions, which may not match user intent
-						discoveryQuery += fmt.Sprintf("\n=== RESEARCH FOCUS ===\n"+
+						discoveryQuery.WriteString(fmt.Sprintf("\n=== RESEARCH FOCUS ===\n"+
 							"Original query: %s\n"+
 							"Find official domains most relevant to answering this query.\n",
-							input.Query)
+							input.Query))
 
 						// Use ResearchAreas only as category hints for domain prioritization
 						if len(refineResult.ResearchAreas) > 0 {
 							focusCategories := classifyFocusCategories(refineResult.ResearchAreas)
 							if len(focusCategories) > 0 {
-								discoveryQuery += fmt.Sprintf("Domain type hints: %s\n",
-									strings.Join(focusCategories, ", "))
+								discoveryQuery.WriteString(fmt.Sprintf("Domain type hints: %s\n",
+									strings.Join(focusCategories, ", ")))
 							}
 						}
 
@@ -2911,7 +2903,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 						discoveryErr := workflow.ExecuteActivity(ctx,
 							"ExecuteAgent",
 							activities.AgentExecutionInput{
-								Query:     discoveryQuery,
+								Query:     discoveryQuery.String(),
 								AgentID:   "domain_discovery",
 								Context:   discoveryContext,
 								Mode:      "standard",
@@ -3315,13 +3307,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 					// Calculate base subpage limit from refiner recommendation (default 15, clamp 10-20)
 					baseSubpageLimit := 15
 					if refineResult.PrefetchSubpageLimit > 0 {
-						baseSubpageLimit = refineResult.PrefetchSubpageLimit
-						if baseSubpageLimit < 10 {
-							baseSubpageLimit = 10
-						}
-						if baseSubpageLimit > 20 {
-							baseSubpageLimit = 20
-						}
+						baseSubpageLimit = min(max(refineResult.PrefetchSubpageLimit, 10), 20)
 					}
 
 					// Helper to check if domain is primary (matches canonical name or is official)
@@ -3374,17 +3360,12 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 						domainLimit := baseSubpageLimit
 						if !isPrimaryDomain(url) {
 							// Secondary/product domains: reduce by 5, minimum 8
-							domainLimit = baseSubpageLimit - 5
-							if domainLimit < 8 {
-								domainLimit = 8
-							}
+							domainLimit = max(baseSubpageLimit-5, 8)
 						}
 
 						workflow.Go(ctx, func(gctx workflow.Context) {
 							prefetchContext := make(map[string]any)
-							for k, v := range baseContext {
-								prefetchContext[k] = v
-							}
+							maps.Copy(prefetchContext, baseContext)
 							prefetchContext["research_mode"] = "prefetch"
 							prefetchContext["prefetch_url"] = url
 							prefetchContext["role"] = "domain_prefetch" // Use specialized preset
@@ -3724,13 +3705,9 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 					// Build context with dependency results
 					subtaskContext := make(map[string]any)
-					for k, v := range baseContext {
-						subtaskContext[k] = v
-					}
+					maps.Copy(subtaskContext, baseContext)
 					if contract := buildTaskContractContext(subtask); contract != nil {
-						for k, v := range contract {
-							subtaskContext[k] = v
-						}
+						maps.Copy(subtaskContext, contract)
 					}
 					if len(subtask.Dependencies) > 0 {
 						depResults := make(map[string]string)
@@ -4071,13 +4048,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 					var task1DependentTasks []execution.HybridTask
 
 					for _, task := range hybridTasks {
-						dependsOnTask1 := false
-						for _, dep := range task.Dependencies {
-							if dep == domainAnalysisTaskID {
-								dependsOnTask1 = true
-								break
-							}
-						}
+						dependsOnTask1 := slices.Contains(task.Dependencies, domainAnalysisTaskID)
 						if dependsOnTask1 {
 							task1DependentTasks = append(task1DependentTasks, task)
 						} else {
@@ -4166,9 +4137,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 						}
 
 						// Add Phase 1 results (sub-agents) for cross-phase dependencies
-						for id, result := range phase1Results {
-							prefilledResults[id] = result
-						}
+						maps.Copy(prefilledResults, phase1Results)
 
 						logger.Info("Building PrefilledResults for Phase 3",
 							"domain_analysis_included", domainAnalysisResult != nil,
@@ -4519,7 +4488,6 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 				numLocalizedSearches := len(targetLanguages)
 
 				for _, lang := range targetLanguages {
-					lang := lang // Capture for goroutine
 					names := localizedNames[lang]
 					if len(names) == 0 {
 						names = []string{entityName}
@@ -4528,9 +4496,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 					workflow.Go(ctx, func(gctx workflow.Context) {
 						// Build localized search context
 						localCtx := make(map[string]any)
-						for k, v := range baseContext {
-							localCtx[k] = v
-						}
+						maps.Copy(localCtx, baseContext)
 						localCtx["search_language"] = lang
 						localCtx["localized_query"] = names[0] // Use first localized name
 						localCtx["is_localized_search"] = true
@@ -4584,7 +4550,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 				}
 
 				// Collect localized search results
-				for i := 0; i < numLocalizedSearches; i++ {
+				for range numLocalizedSearches {
 					var payload localizedPayload
 					localizedChan.Receive(ctx, &payload)
 					if len(payload.Results) > 0 {
@@ -4707,9 +4673,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 		logger.Warn("No successful tool executions found in research phase; running fallback web search")
 
 		fallbackCtx := make(map[string]any)
-		for k, v := range baseContext {
-			fallbackCtx[k] = v
-		}
+		maps.Copy(fallbackCtx, baseContext)
 		fallbackCtx["force_research"] = true
 
 		var fallbackResult activities.AgentExecutionResult
@@ -5258,7 +5222,6 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 			sem := workflow.NewSemaphore(ctx, 3) // Max 3 concurrent
 
 			for _, sq := range subqueryResult.Subqueries {
-				sq := sq // Capture
 				workflow.Go(ctx, func(gctx workflow.Context) {
 					if err := sem.Acquire(gctx, 1); err != nil {
 						var empty gapAgentResult
@@ -5269,9 +5232,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 					// Build context with task contract
 					gapContext := make(map[string]any)
-					for k, v := range baseContext {
-						gapContext[k] = v
-					}
+					maps.Copy(gapContext, baseContext)
 					gapContext["research_mode"] = "gap_fill"
 					gapContext["target_gap"] = sq.TargetGap
 					gapContext["iteration"] = iteration
@@ -5378,7 +5339,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 			gapMetrics := GapFillMetrics{TotalAgents: numGapAgents}
 
-			for i := 0; i < numGapAgents; i++ {
+			for i := range numGapAgents {
 				var payload gapAgentResult
 				gapChan.Receive(ctx, &payload)
 
@@ -5630,7 +5591,6 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 						sem := workflow.NewSemaphore(ctx, 3)
 
 						for _, gapQuery := range gapQueries {
-							gapQuery := gapQuery // Capture for goroutine
 
 							workflow.Go(ctx, func(gctx workflow.Context) {
 
@@ -5643,9 +5603,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 								defer sem.Release(1)
 
 								gapContext := make(map[string]any)
-								for k, v := range baseContext {
-									gapContext[k] = v
-								}
+								maps.Copy(gapContext, baseContext)
 								gapContext["research_mode"] = "gap_fill"
 								gapContext["target_area"] = gapQuery.TargetArea
 								gapContext["gap_iteration"] = iterationCount + 1
@@ -5707,7 +5665,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 						}
 
 						// Collect all gap results from channel (Temporal-safe)
-						for i := 0; i < numGapQueries; i++ {
+						for range numGapQueries {
 							var payload gapResultPayload
 							gapResultsChan.Receive(ctx, &payload)
 							if len(payload.Results) > 0 {
@@ -5789,9 +5747,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 								// Build enhanced context with new citations
 								enhancedContext := make(map[string]any)
-								for k, v := range baseContext {
-									enhancedContext[k] = v
-								}
+								maps.Copy(enhancedContext, baseContext)
 								enhancedContext["research_areas"] = refineResult.ResearchAreas
 								enhancedContext["gap_iteration"] = iterationCount + 1
 								// Inherit synthesis tier from initial synthesis (respects user override)
@@ -6243,9 +6199,7 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 	// Aggregate agent metadata (model, provider, tokens)
 	agentMeta := metadata.AggregateAgentMetadata(agentResults, synthesis.TokensUsed+reflectionTokens)
-	for k, v := range agentMeta {
-		meta[k] = v
-	}
+	maps.Copy(meta, agentMeta)
 
 	// Compute cost estimate from per-phase tokens using centralized pricing
 	// Sum per-agent usage using splits; then add synthesis using model from synthesis result
@@ -6546,15 +6500,15 @@ func analyzeGaps(synthesisText string, researchAreas []string, context map[strin
 		}
 
 		areaHeading := "### " + area
-		idx := strings.Index(synthesisText, areaHeading)
-		if idx == -1 {
+		_, after, ok := strings.Cut(synthesisText, areaHeading)
+		if !ok {
 			// Missing section heading - this is always a gap
 			gaps.UndercoveredAreas = append(gaps.UndercoveredAreas, area)
 			continue
 		}
 
 		// Extract section content
-		content := synthesisText[idx+len(areaHeading):]
+		content := after
 		nextSectionIdx := strings.Index(content, "\n### ") // Use ### for subsections
 		if nextSectionIdx == -1 {
 			nextSectionIdx = strings.Index(content, "\n## ") // Fallback to ## for main sections
@@ -6832,9 +6786,7 @@ func persistAgentExecutionLocalWithMeta(ctx workflow.Context, workflowID, agentI
 		"workflow": "research",
 		"strategy": "react",
 	}
-	for k, v := range extraMeta {
-		metadata[k] = v
-	}
+	maps.Copy(metadata, extraMeta)
 
 	// Truncate output for storage to avoid Temporal deadlock detection during JSON serialization.
 	// Large payloads (>50KB) can cause serialization to exceed 1 second, triggering TMPRL1101.

@@ -85,10 +85,7 @@ func (c *Chunker) ChunkText(text string) []Chunk {
 	}
 
 	for i := 0; i < len(tokens); i += step {
-		end := i + c.maxTokens
-		if end > len(tokens) {
-			end = len(tokens)
-		}
+		end := min(i+c.maxTokens, len(tokens))
 
 		chunkTokens := tokens[i:end]
 		chunks = append(chunks, Chunk{
@@ -163,10 +160,7 @@ func (c *Chunker) simpleTokenize(text string) []string {
 	runes := []rune(text)
 
 	for i := 0; i < len(runes); i += charsPerToken {
-		end := i + charsPerToken
-		if end > len(runes) {
-			end = len(runes)
-		}
+		end := min(i+charsPerToken, len(runes))
 		if i < len(runes) {
 			tokens = append(tokens, string(runes[i:end]))
 		}

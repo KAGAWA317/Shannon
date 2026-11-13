@@ -372,8 +372,8 @@ type decisionCache struct {
 	mu     sync.Mutex
 	list   *list.List               // MRU at front
 	m      map[string]*list.Element // key -> element
-	hits   int64
-	misses int64
+	hits   atomic.Int64
+	misses atomic.Int64
 }
 
 type cacheEntry struct {
@@ -419,14 +419,14 @@ func (c *decisionCache) Get(input *PolicyInput) (*Decision, bool) {
 		ce := el.Value.(cacheEntry)
 		if ce.expiresAt.After(now) {
 			c.list.MoveToFront(el)
-			atomic.AddInt64(&c.hits, 1)
+			c.hits.Add(1)
 			return ce.decision, true
 		}
 		// expired
 		c.list.Remove(el)
 		delete(c.m, key)
 	}
-	atomic.AddInt64(&c.misses, 1)
+	c.misses.Add(1)
 	return nil, false
 }
 
@@ -456,7 +456,7 @@ func (c *decisionCache) Set(input *PolicyInput, d *Decision) {
 
 // Stats returns cumulative cache hit/miss counts
 func (c *decisionCache) Stats() (hits, misses int64) {
-	return atomic.LoadInt64(&c.hits), atomic.LoadInt64(&c.misses)
+	return c.hits.Load(), c.misses.Load()
 }
 
 // --- Canary Enforcement Implementation ---
@@ -480,33 +480,27 @@ func (e *OPAEngine) determineEffectiveMode(input *PolicyInput) Mode {
 	}
 
 	// Check explicit dry-run user overrides (these always get dry-run)
-	for _, dryRunUser := range e.config.Canary.DryRunUsers {
-		if input.UserID == dryRunUser {
-			e.logger.Debug("User in dry-run override list",
-				zap.String("user_id", input.UserID),
-			)
-			return ModeDryRun
-		}
+	if slices.Contains(e.config.Canary.DryRunUsers, input.UserID) {
+		e.logger.Debug("User in dry-run override list",
+			zap.String("user_id", input.UserID),
+		)
+		return ModeDryRun
 	}
 
 	// Check explicit enforce user overrides (these always get enforce mode)
-	for _, enforceUser := range e.config.Canary.EnforceUsers {
-		if input.UserID == enforceUser {
-			e.logger.Debug("User in enforce list - using enforce mode",
-				zap.String("user_id", input.UserID),
-			)
-			return ModeEnforce
-		}
+	if slices.Contains(e.config.Canary.EnforceUsers, input.UserID) {
+		e.logger.Debug("User in enforce list - using enforce mode",
+			zap.String("user_id", input.UserID),
+		)
+		return ModeEnforce
 	}
 
 	// Check explicit enforce agent overrides (these always get enforce mode)
-	for _, enforceAgent := range e.config.Canary.EnforceAgents {
-		if input.AgentID == enforceAgent {
-			e.logger.Debug("Agent in enforce list - using enforce mode",
-				zap.String("agent_id", input.AgentID),
-			)
-			return ModeEnforce
-		}
+	if slices.Contains(e.config.Canary.EnforceAgents, input.AgentID) {
+		e.logger.Debug("Agent in enforce list - using enforce mode",
+			zap.String("agent_id", input.AgentID),
+		)
+		return ModeEnforce
 	}
 
 	// Apply percentage-based rollout using deterministic hash
@@ -675,22 +669,16 @@ func (e *OPAEngine) determineCanaryRoutingReason(input *PolicyInput, effectiveMo
 	}
 
 	// Check explicit overrides
-	for _, user := range e.config.Canary.DryRunUsers {
-		if input.UserID == user {
-			return "explicit_dry_run_user"
-		}
+	if slices.Contains(e.config.Canary.DryRunUsers, input.UserID) {
+		return "explicit_dry_run_user"
 	}
 
-	for _, user := range e.config.Canary.EnforceUsers {
-		if input.UserID == user {
-			return "explicit_enforce_user"
-		}
+	if slices.Contains(e.config.Canary.EnforceUsers, input.UserID) {
+		return "explicit_enforce_user"
 	}
 
-	for _, agent := range e.config.Canary.EnforceAgents {
-		if input.AgentID == agent {
-			return "explicit_enforce_agent"
-		}
+	if slices.Contains(e.config.Canary.EnforceAgents, input.AgentID) {
+		return "explicit_enforce_agent"
 	}
 
 	if e.config.Canary.EnforcePercentage > 0 {
@@ -703,17 +691,13 @@ func (e *OPAEngine) determineCanaryRoutingReason(input *PolicyInput, effectiveMo
 // classifyUserType categorizes users for metrics
 func (e *OPAEngine) classifyUserType(input *PolicyInput) string {
 	// Check if user is in enforce lists (privileged)
-	for _, user := range e.config.Canary.EnforceUsers {
-		if input.UserID == user {
-			return "enforce_user"
-		}
+	if slices.Contains(e.config.Canary.EnforceUsers, input.UserID) {
+		return "enforce_user"
 	}
 
 	// Check if user is in dry-run override list
-	for _, user := range e.config.Canary.DryRunUsers {
-		if input.UserID == user {
-			return "dry_run_user"
-		}
+	if slices.Contains(e.config.Canary.DryRunUsers, input.UserID) {
+		return "dry_run_user"
 	}
 
 	// Check if it's a system user

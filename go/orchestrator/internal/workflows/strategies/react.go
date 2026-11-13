@@ -2,6 +2,7 @@ package strategies
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -72,12 +73,8 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 
 	// Prepare base context
 	baseContext := make(map[string]any)
-	for k, v := range input.Context {
-		baseContext[k] = v
-	}
-	for k, v := range input.SessionCtx {
-		baseContext[k] = v
-	}
+	maps.Copy(baseContext, input.Context)
+	maps.Copy(baseContext, input.SessionCtx)
 	if input.ParentWorkflowID != "" {
 		baseContext["parent_workflow_id"] = input.ParentWorkflowID
 	}
@@ -481,9 +478,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		},
 	}
 	agentMeta := metadata.AggregateAgentMetadata(agentResults, reflectionTokens)
-	for k, v := range agentMeta {
-		meta[k] = v
-	}
+	maps.Copy(meta, agentMeta)
 
 	// Align: compute and include estimated cost using centralized pricing
 	if totalTokens > 0 {

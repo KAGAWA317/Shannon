@@ -2,6 +2,7 @@ package activities
 
 import (
 	"context"
+	"maps"
 	"regexp"
 	"strings"
 	"time"
@@ -172,30 +173,28 @@ func recordQueryCore(ctx context.Context, in RecordQueryInput) (RecordQueryResul
 				// Build payload with chunk metadata
 				// 构造带 chunk metadata 的 payload。
 				payload := map[string]any{
-					"query":       q,                // Original query
+					"query": q, // Original query
 					// 原始 query。
-					"chunk_text":  chunk.Text,       // The actual chunk (no full answer stored)
+					"chunk_text": chunk.Text, // The actual chunk (no full answer stored)
 					// 实际 chunk 内容（不存完整 answer）。
-					"qa_id":       chunk.QAID,       // UUID for this Q&A pair
+					"qa_id": chunk.QAID, // UUID for this Q&A pair
 					// 该 Q&A 对的 UUID。
-					"chunk_index": chunk.Index,      // 0-based chunk position
+					"chunk_index": chunk.Index, // 0-based chunk position
 					// chunk 位置，从 0 开始。
 					"chunk_count": chunk.TotalCount, // Total chunks for this Q&A
 					// 该 Q&A 的 chunk 总数。
-					"is_chunked":  true,             // Flag for retrieval
+					"is_chunked": true, // Flag for retrieval
 					// 供检索使用的标记。
-					"session_id":  in.SessionID,
-					"user_id":     in.UserID,
-					"tenant_id":   in.TenantID,
-					"model":       in.Model,
-					"timestamp":   timestamp,
+					"session_id": in.SessionID,
+					"user_id":    in.UserID,
+					"tenant_id":  in.TenantID,
+					"model":      in.Model,
+					"timestamp":  timestamp,
 				}
 
 				// Add any additional metadata
 				// 补充额外的 metadata。
-				for k, v := range in.Metadata {
-					payload[k] = v
-				}
+				maps.Copy(payload, in.Metadata)
 
 				// Create point with UUID for Qdrant compatibility
 				// Store qa_id and chunk_index in payload for idempotency checks
@@ -261,9 +260,7 @@ func recordQueryCore(ctx context.Context, in RecordQueryInput) (RecordQueryResul
 		"model":      in.Model,
 		"timestamp":  time.Now().Unix(),
 	}
-	for k, v := range in.Metadata {
-		payload[k] = v
-	}
+	maps.Copy(payload, in.Metadata)
 
 	// Upsert point
 	// upsert point。
@@ -290,7 +287,7 @@ func RecordQuery(ctx context.Context, in RecordQueryInput) (RecordQueryResult, e
 			msg := "Saved to task memory"
 			count := res.ChunksCreated
 			if count <= 0 { // single vector path
-			// 单向量路径。
+				// 单向量路径。
 				count = 1
 			}
 			streaming.Get().Publish(wfID, streaming.Event{

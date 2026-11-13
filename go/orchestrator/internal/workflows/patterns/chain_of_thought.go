@@ -1,17 +1,17 @@
 package patterns
 
 import (
-    "fmt"
-    "strings"
-    "time"
+	"fmt"
+	"strings"
+	"time"
 
-    "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/activities"
-    "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/constants"
-    imodels "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/models"
-    pricing "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/pricing"
-    wopts "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/workflows/opts"
-    "go.temporal.io/sdk/temporal"
-    "go.temporal.io/sdk/workflow"
+	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/activities"
+	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/constants"
+	imodels "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/models"
+	pricing "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/pricing"
+	wopts "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/workflows/opts"
+	"go.temporal.io/sdk/temporal"
+	"go.temporal.io/sdk/workflow"
 )
 
 // ChainOfThoughtConfig configures the chain-of-thought pattern
@@ -85,105 +85,105 @@ func ChainOfThought(
 	// Execute chain-of-thought reasoning
 	startTime := workflow.Now(ctx)
 
-    var cotResult activities.AgentExecutionResult
-    if opts.BudgetAgentMax > 0 {
-        wid := workflow.GetInfo(ctx).WorkflowExecution.ID
-        // Prefer parent workflow ID from context when available for budget tracking and streaming
-        // budget 记账与 event stream 都按 parent workflow 归集；用子 workflow 自己的 ID 会把统计割裂开。
-        if context != nil {
-            if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
-                wid = p
-            }
-        }
-        err := workflow.ExecuteActivity(ctx,
-            constants.ExecuteAgentWithBudgetActivity,
-            activities.BudgetedAgentInput{
-                AgentInput: activities.AgentExecutionInput{
-                    Query:             cotPrompt,
-					AgentID:           "cot-reasoner",
-					Context:           context,
-					Mode:              "reasoning",
-					SessionID:         sessionID,
-					UserID:            opts.UserID,
-					History:           history,
-                    ParentWorkflowID: wid,
+	var cotResult activities.AgentExecutionResult
+	if opts.BudgetAgentMax > 0 {
+		wid := workflow.GetInfo(ctx).WorkflowExecution.ID
+		// Prefer parent workflow ID from context when available for budget tracking and streaming
+		// budget 记账与 event stream 都按 parent workflow 归集；用子 workflow 自己的 ID 会把统计割裂开。
+		if context != nil {
+			if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
+				wid = p
+			}
+		}
+		err := workflow.ExecuteActivity(ctx,
+			constants.ExecuteAgentWithBudgetActivity,
+			activities.BudgetedAgentInput{
+				AgentInput: activities.AgentExecutionInput{
+					Query:            cotPrompt,
+					AgentID:          "cot-reasoner",
+					Context:          context,
+					Mode:             "reasoning",
+					SessionID:        sessionID,
+					UserID:           opts.UserID,
+					History:          history,
+					ParentWorkflowID: wid,
 				},
 				MaxTokens: opts.BudgetAgentMax,
 				UserID:    opts.UserID,
 				TaskID:    wid,
 				ModelTier: config.ModelTier,
 			}).Get(ctx, &cotResult)
-        if err != nil {
-            return nil, fmt.Errorf("chain-of-thought reasoning failed: %w", err)
-        }
-    } else {
-        // Determine parent workflow for streaming correlation
-        wid := workflow.GetInfo(ctx).WorkflowExecution.ID
-        if context != nil {
-            if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
-                wid = p
-            }
-        }
-        err := workflow.ExecuteActivity(ctx,
-            activities.ExecuteAgent,
-            activities.AgentExecutionInput{
-                Query:             cotPrompt,
-                AgentID:           "cot-reasoner",
-                Context:           context,
-                Mode:              "reasoning",
-                SessionID:         sessionID,
-                UserID:            opts.UserID,
-                History:           history,
-                ParentWorkflowID:  wid,
-            }).Get(ctx, &cotResult)
-        if err != nil {
-            return nil, fmt.Errorf("chain-of-thought reasoning failed: %w", err)
-        }
-    }
+		if err != nil {
+			return nil, fmt.Errorf("chain-of-thought reasoning failed: %w", err)
+		}
+	} else {
+		// Determine parent workflow for streaming correlation
+		wid := workflow.GetInfo(ctx).WorkflowExecution.ID
+		if context != nil {
+			if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
+				wid = p
+			}
+		}
+		err := workflow.ExecuteActivity(ctx,
+			activities.ExecuteAgent,
+			activities.AgentExecutionInput{
+				Query:            cotPrompt,
+				AgentID:          "cot-reasoner",
+				Context:          context,
+				Mode:             "reasoning",
+				SessionID:        sessionID,
+				UserID:           opts.UserID,
+				History:          history,
+				ParentWorkflowID: wid,
+			}).Get(ctx, &cotResult)
+		if err != nil {
+			return nil, fmt.Errorf("chain-of-thought reasoning failed: %w", err)
+		}
+	}
 
 	duration := workflow.Now(ctx).Sub(startTime)
 	result.StepDurations = append(result.StepDurations, duration)
-    result.TotalTokens = cotResult.TokensUsed
+	result.TotalTokens = cotResult.TokensUsed
 
-    // Record token usage for the main CoT reasoning step when not budgeted
-    // 走 budget activity 时已内部记账，这里只处理非 budget 路径，避免重复计费。
-    if opts.BudgetAgentMax <= 0 {
-        wid := workflow.GetInfo(ctx).WorkflowExecution.ID
-        if context != nil {
-            if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
-                wid = p
-            }
-        }
-        inTok := cotResult.InputTokens
-        outTok := cotResult.OutputTokens
-        if inTok == 0 && outTok == 0 && cotResult.TokensUsed > 0 {
-            inTok = cotResult.TokensUsed * 6 / 10
-            outTok = cotResult.TokensUsed - inTok
-        }
-        model := cotResult.ModelUsed
-        if strings.TrimSpace(model) == "" {
-            if m := pricing.GetPriorityOneModel(config.ModelTier); m != "" {
-                model = m
-            }
-        }
-        provider := cotResult.Provider
-        if strings.TrimSpace(provider) == "" {
-            provider = imodels.DetectProvider(model)
-        }
-        recCtx := wopts.WithTokenRecordOptions(ctx)
-        _ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
-            UserID:       opts.UserID,
-            SessionID:    sessionID,
-            TaskID:       wid,
-            AgentID:      "cot-reasoner",
-            Model:        model,
-            Provider:     provider,
-            InputTokens:  inTok,
-            OutputTokens: outTok,
-            Metadata:     map[string]any{"phase": "chain_of_thought"},
-        }).Get(recCtx, nil)
-        wopts.RecordToolCostEntries(ctx, cotResult, opts.UserID, sessionID, wid)
-    }
+	// Record token usage for the main CoT reasoning step when not budgeted
+	// 走 budget activity 时已内部记账，这里只处理非 budget 路径，避免重复计费。
+	if opts.BudgetAgentMax <= 0 {
+		wid := workflow.GetInfo(ctx).WorkflowExecution.ID
+		if context != nil {
+			if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
+				wid = p
+			}
+		}
+		inTok := cotResult.InputTokens
+		outTok := cotResult.OutputTokens
+		if inTok == 0 && outTok == 0 && cotResult.TokensUsed > 0 {
+			inTok = cotResult.TokensUsed * 6 / 10
+			outTok = cotResult.TokensUsed - inTok
+		}
+		model := cotResult.ModelUsed
+		if strings.TrimSpace(model) == "" {
+			if m := pricing.GetPriorityOneModel(config.ModelTier); m != "" {
+				model = m
+			}
+		}
+		provider := cotResult.Provider
+		if strings.TrimSpace(provider) == "" {
+			provider = imodels.DetectProvider(model)
+		}
+		recCtx := wopts.WithTokenRecordOptions(ctx)
+		_ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
+			UserID:       opts.UserID,
+			SessionID:    sessionID,
+			TaskID:       wid,
+			AgentID:      "cot-reasoner",
+			Model:        model,
+			Provider:     provider,
+			InputTokens:  inTok,
+			OutputTokens: outTok,
+			Metadata:     map[string]any{"phase": "chain_of_thought"},
+		}).Get(recCtx, nil)
+		wopts.RecordToolCostEntries(ctx, cotResult, opts.UserID, sessionID, wid)
+	}
 
 	// Parse reasoning steps from response
 	// 解析失败不报错：steps 为空会让 confidence 自然偏低，再由澄清分支兜底。
@@ -207,81 +207,81 @@ func ChainOfThought(
 			strings.Join(steps, config.StepDelimiter),
 		)
 
-        var clarifyResult activities.AgentExecutionResult
-        if opts.BudgetAgentMax > 0 {
-            wid := workflow.GetInfo(ctx).WorkflowExecution.ID
-            if context != nil {
-                if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
-                    wid = p
-                }
-            }
-            err := workflow.ExecuteActivity(ctx,
-                constants.ExecuteAgentWithBudgetActivity,
-                activities.BudgetedAgentInput{
-                    AgentInput: activities.AgentExecutionInput{
-						Query:             clarificationPrompt,
-						AgentID:           "cot-clarifier",
-						Context:           context,
-						Mode:              "reasoning",
-						SessionID:         sessionID,
-						UserID:            opts.UserID,
-						History:           append(history, fmt.Sprintf("Previous: %s", cotResult.Response)),
-                        ParentWorkflowID: wid,
+		var clarifyResult activities.AgentExecutionResult
+		if opts.BudgetAgentMax > 0 {
+			wid := workflow.GetInfo(ctx).WorkflowExecution.ID
+			if context != nil {
+				if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
+					wid = p
+				}
+			}
+			err := workflow.ExecuteActivity(ctx,
+				constants.ExecuteAgentWithBudgetActivity,
+				activities.BudgetedAgentInput{
+					AgentInput: activities.AgentExecutionInput{
+						Query:            clarificationPrompt,
+						AgentID:          "cot-clarifier",
+						Context:          context,
+						Mode:             "reasoning",
+						SessionID:        sessionID,
+						UserID:           opts.UserID,
+						History:          append(history, fmt.Sprintf("Previous: %s", cotResult.Response)),
+						ParentWorkflowID: wid,
 					},
-                    MaxTokens: opts.BudgetAgentMax / 2, // Use less budget for clarification
-                    UserID:    opts.UserID,
-                    TaskID:    wid,
-                    ModelTier: config.ModelTier,
-                }).Get(ctx, &clarifyResult)
-            if err == nil {
-                // Update with clarified reasoning
-                clarifiedSteps := parseReasoningSteps(clarifyResult.Response, config.StepDelimiter)
-                if len(clarifiedSteps) > 0 {
-                    result.ReasoningSteps = clarifiedSteps
-                    result.FinalAnswer = extractFinalAnswer(clarifyResult.Response, clarifiedSteps)
-                    result.Confidence = calculateReasoningConfidence(clarifiedSteps, clarifyResult.Response)
-                }
-                result.TotalTokens += clarifyResult.TokensUsed
-                // Record clarification usage when not budgeted
-                if opts.BudgetAgentMax <= 0 {
-                    wid := workflow.GetInfo(ctx).WorkflowExecution.ID
-                    if context != nil {
-                        if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
-                            wid = p
-                        }
-                    }
-                    inTok := clarifyResult.InputTokens
-                    outTok := clarifyResult.OutputTokens
-                    if inTok == 0 && outTok == 0 && clarifyResult.TokensUsed > 0 {
-                        inTok = clarifyResult.TokensUsed * 6 / 10
-                        outTok = clarifyResult.TokensUsed - inTok
-                    }
-                    model := clarifyResult.ModelUsed
-                    if strings.TrimSpace(model) == "" {
-                        if m := pricing.GetPriorityOneModel(config.ModelTier); m != "" {
-                            model = m
-                        }
-                    }
-                    provider := clarifyResult.Provider
-                    if strings.TrimSpace(provider) == "" {
-                        provider = imodels.DetectProvider(model)
-                    }
-                    recCtx := wopts.WithTokenRecordOptions(ctx)
-                    _ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
-                        UserID:       opts.UserID,
-                        SessionID:    sessionID,
-                        TaskID:       wid,
-                        AgentID:      "cot-clarifier",
-                        Model:        model,
-                        Provider:     provider,
-                        InputTokens:  inTok,
-                        OutputTokens: outTok,
-                        Metadata:     map[string]any{"phase": "chain_of_thought_clarify"},
-                    }).Get(recCtx, nil)
-                    wopts.RecordToolCostEntries(ctx, clarifyResult, opts.UserID, sessionID, wid)
-                }
-            }
-        }
+					MaxTokens: opts.BudgetAgentMax / 2, // Use less budget for clarification
+					UserID:    opts.UserID,
+					TaskID:    wid,
+					ModelTier: config.ModelTier,
+				}).Get(ctx, &clarifyResult)
+			if err == nil {
+				// Update with clarified reasoning
+				clarifiedSteps := parseReasoningSteps(clarifyResult.Response, config.StepDelimiter)
+				if len(clarifiedSteps) > 0 {
+					result.ReasoningSteps = clarifiedSteps
+					result.FinalAnswer = extractFinalAnswer(clarifyResult.Response, clarifiedSteps)
+					result.Confidence = calculateReasoningConfidence(clarifiedSteps, clarifyResult.Response)
+				}
+				result.TotalTokens += clarifyResult.TokensUsed
+				// Record clarification usage when not budgeted
+				if opts.BudgetAgentMax <= 0 {
+					wid := workflow.GetInfo(ctx).WorkflowExecution.ID
+					if context != nil {
+						if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
+							wid = p
+						}
+					}
+					inTok := clarifyResult.InputTokens
+					outTok := clarifyResult.OutputTokens
+					if inTok == 0 && outTok == 0 && clarifyResult.TokensUsed > 0 {
+						inTok = clarifyResult.TokensUsed * 6 / 10
+						outTok = clarifyResult.TokensUsed - inTok
+					}
+					model := clarifyResult.ModelUsed
+					if strings.TrimSpace(model) == "" {
+						if m := pricing.GetPriorityOneModel(config.ModelTier); m != "" {
+							model = m
+						}
+					}
+					provider := clarifyResult.Provider
+					if strings.TrimSpace(provider) == "" {
+						provider = imodels.DetectProvider(model)
+					}
+					recCtx := wopts.WithTokenRecordOptions(ctx)
+					_ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
+						UserID:       opts.UserID,
+						SessionID:    sessionID,
+						TaskID:       wid,
+						AgentID:      "cot-clarifier",
+						Model:        model,
+						Provider:     provider,
+						InputTokens:  inTok,
+						OutputTokens: outTok,
+						Metadata:     map[string]any{"phase": "chain_of_thought_clarify"},
+					}).Get(recCtx, nil)
+					wopts.RecordToolCostEntries(ctx, clarifyResult, opts.UserID, sessionID, wid)
+				}
+			}
+		}
 	}
 
 	// Format the result based on configuration
@@ -347,8 +347,8 @@ func parseReasoningSteps(response, delimiter string) []string {
 	// If no explicit steps found, try to extract logical segments
 	// 没有 step 标记时退化为按句切分，超过 20 字符才算有效片段。
 	if len(steps) == 0 {
-		segments := strings.Split(response, ". ")
-		for _, segment := range segments {
+		segments := strings.SplitSeq(response, ". ")
+		for segment := range segments {
 			if len(strings.TrimSpace(segment)) > 20 { // Meaningful segment
 				steps = append(steps, segment)
 				if len(steps) >= 5 { // Limit to reasonable number

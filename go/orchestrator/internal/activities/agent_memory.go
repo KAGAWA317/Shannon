@@ -2,6 +2,7 @@ package activities
 
 import (
 	"context"
+	"maps"
 
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/vectordb"
 )
@@ -82,9 +83,7 @@ func RecordAgentMemory(ctx context.Context, in RecordAgentMemoryInput) (RecordQu
 		"role":     in.Role,
 		"source":   "agent",
 	}
-	for k, v := range in.Extra {
-		meta[k] = v
-	}
+	maps.Copy(meta, in.Extra)
 	// Use the shared helper function instead of calling RecordQuery directly
 	// 走共享 helper，而不是直接调用 RecordQuery。
 	return recordQueryCore(ctx, RecordQueryInput{

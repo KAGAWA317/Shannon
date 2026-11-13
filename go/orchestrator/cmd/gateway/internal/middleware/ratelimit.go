@@ -166,7 +166,7 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 				zap.String("path", r.URL.Path),
 			)
 
-			retryAfter := max(int64(info.ResetAt.Sub(time.Now()).Seconds()), int64(1))
+			retryAfter := max(int64(time.Until(info.ResetAt).Seconds()), int64(1))
 			w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
 			rl.sendRateLimitError(w, info.Window)
 			return

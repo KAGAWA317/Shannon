@@ -184,7 +184,7 @@ func findCyclePath(graph map[string][]string, cycleNodes []string) []string {
 	for _, start := range cycleNodes {
 		visited = make(map[string]bool)
 		result := dfs(start, path)
-		if result != nil && len(result) > 1 {
+		if len(result) > 1 {
 			return result
 		}
 	}

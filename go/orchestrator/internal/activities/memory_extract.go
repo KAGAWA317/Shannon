@@ -153,12 +153,12 @@ func ExtractMemoryActivity(ctx context.Context, input MemoryExtractInput) (*Memo
 	}
 
 	var extraction struct {
-		WorthRemembering bool     `json:"worth_remembering"`
-		Title            string   `json:"title"`
-		Summary          string   `json:"summary"`
-		Content          string   `json:"content"`
-		SuggestedPath    string   `json:"suggested_path"`
-		Tags             []string `json:"tags"`
+		WorthRemembering bool           `json:"worth_remembering"`
+		Title            string         `json:"title"`
+		Summary          string         `json:"summary"`
+		Content          string         `json:"content"`
+		SuggestedPath    string         `json:"suggested_path"`
+		Tags             []string       `json:"tags"`
 		Triples          []memoryTriple `json:"triples"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&extraction); err != nil {
@@ -418,7 +418,7 @@ func extractTimestamp(body string) time.Time {
 // stripTimestampComment removes the <!-- updated:... --> line from body text.
 func stripTimestampComment(body string) string {
 	var lines []string
-	for _, line := range strings.Split(body, "\n") {
+	for line := range strings.SplitSeq(body, "\n") {
 		if strings.Contains(line, "<!-- updated:") {
 			continue
 		}

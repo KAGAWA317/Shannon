@@ -20,6 +20,7 @@ package strategies
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -267,10 +268,10 @@ func DomainAnalysisWorkflow(ctx workflow.Context, input DomainAnalysisInput) (Do
 		}
 
 		discoveryContext := map[string]any{
-			"user_id":    input.UserID,
-			"session_id": input.SessionID,
-			"model_tier": "small",
-			"role":            "domain_discovery",
+			"user_id":        input.UserID,
+			"session_id":     input.SessionID,
+			"model_tier":     "small",
+			"role":           "domain_discovery",
 			"force_research": true,
 			"response_format": map[string]any{
 				"type": "json_object",
@@ -288,15 +289,16 @@ func DomainAnalysisWorkflow(ctx workflow.Context, input DomainAnalysisInput) (Do
 			allQueries = append(allQueries, s.Query)
 		}
 
-		discoveryQuery := fmt.Sprintf(
+		var discoveryQuery strings.Builder
+		discoveryQuery.WriteString(fmt.Sprintf(
 			"Find official domains for %q.\n\n"+
 				"STEP 1: Execute web_search for each query:\n",
 			input.CanonicalName,
-		)
+		))
 		for _, q := range allQueries {
-			discoveryQuery += fmt.Sprintf("- %s\n", q)
+			discoveryQuery.WriteString(fmt.Sprintf("- %s\n", q))
 		}
-		discoveryQuery += "\n" +
+		discoveryQuery.WriteString("\n" +
 			"STEP 2: After ALL searches complete, respond with ONLY this JSON:\n" +
 			"{\"domains\":[\"domain1.com\",\"domain2.com\"]}\n\n" +
 			"RULES:\n" +
@@ -304,29 +306,29 @@ func DomainAnalysisWorkflow(ctx workflow.Context, input DomainAnalysisInput) (Do
 			"- Exclude: login/accounts, store, support, third-party (wikipedia, linkedin)\n" +
 			"- Strip www prefix, no paths\n" +
 			fmt.Sprintf("- Max %d domains\n\n", maxPrefetch) +
-			"CRITICAL: Your response must be ONLY the JSON object, nothing else.\n"
+			"CRITICAL: Your response must be ONLY the JSON object, nothing else.\n")
 
-		discoveryQuery += fmt.Sprintf("\n=== RESEARCH FOCUS ===\n"+
+		discoveryQuery.WriteString(fmt.Sprintf("\n=== RESEARCH FOCUS ===\n"+
 			"Original query: %s\n"+
 			"Find official domains most relevant to answering this query.\n",
-			input.Query)
+			input.Query))
 
 		if desc := strings.TrimSpace(input.SubtaskDescription); desc != "" {
-			discoveryQuery += fmt.Sprintf("Subtask focus: %s\n", desc)
+			discoveryQuery.WriteString(fmt.Sprintf("Subtask focus: %s\n", desc))
 		}
 
 		if len(input.ResearchAreas) > 0 {
 			focusCategories := classifyFocusCategories(input.ResearchAreas)
 			if len(focusCategories) > 0 {
-				discoveryQuery += fmt.Sprintf("Domain type hints: %s\n",
-					strings.Join(focusCategories, ", "))
+				discoveryQuery.WriteString(fmt.Sprintf("Domain type hints: %s\n",
+					strings.Join(focusCategories, ", ")))
 			}
 		}
 
 		discoveryErr := workflow.ExecuteActivity(ctx,
 			"ExecuteAgent",
 			activities.AgentExecutionInput{
-				Query:     discoveryQuery,
+				Query:     discoveryQuery.String(),
 				AgentID:   "domain_discovery",
 				Context:   discoveryContext,
 				Mode:      "standard",
@@ -526,13 +528,7 @@ func DomainAnalysisWorkflow(ctx workflow.Context, input DomainAnalysisInput) (Do
 	if len(prefetchURLs) > 0 {
 		baseSubpageLimit := 15
 		if input.PrefetchSubpageLimit > 0 {
-			baseSubpageLimit = input.PrefetchSubpageLimit
-			if baseSubpageLimit < 10 {
-				baseSubpageLimit = 10
-			}
-			if baseSubpageLimit > 20 {
-				baseSubpageLimit = 20
-			}
+			baseSubpageLimit = min(max(input.PrefetchSubpageLimit, 10), 20)
 		}
 
 		isPrimaryDomain := func(urlStr string) bool {
@@ -577,17 +573,12 @@ func DomainAnalysisWorkflow(ctx workflow.Context, input DomainAnalysisInput) (Do
 
 			domainLimit := baseSubpageLimit
 			if !isPrimaryDomain(url) {
-				domainLimit = baseSubpageLimit - 5
-				if domainLimit < 8 {
-					domainLimit = 8
-				}
+				domainLimit = max(baseSubpageLimit-5, 8)
 			}
 
 			workflow.Go(ctx, func(gctx workflow.Context) {
 				prefetchContext := make(map[string]any)
-				for k, v := range baseContext {
-					prefetchContext[k] = v
-				}
+				maps.Copy(prefetchContext, baseContext)
 				prefetchContext["research_mode"] = "prefetch"
 				prefetchContext["prefetch_url"] = url
 				prefetchContext["role"] = "domain_prefetch"
@@ -749,7 +740,7 @@ func DomainAnalysisWorkflow(ctx workflow.Context, input DomainAnalysisInput) (Do
 	digestQuery := buildDomainAnalysisDigestQuery(input.Query, input.CanonicalName, input.PlanHints)
 	digestContext := buildDomainAnalysisSynthesisContext(baseContext)
 	digestContext["synthesis_template"] = "domain_analysis_digest"
-	digestContext["model_tier"] = "large" // Digest is user-facing quality; override agent tier
+	digestContext["model_tier"] = "large"       // Digest is user-facing quality; override agent tier
 	delete(digestContext, "parent_workflow_id") // Suppress SSE: synthesis.go fallback reads this from context
 
 	var digest activities.SynthesisResult
@@ -826,9 +817,7 @@ func cloneContextMap(src map[string]any) map[string]any {
 		return map[string]any{}
 	}
 	dst := make(map[string]any, len(src))
-	for k, v := range src {
-		dst[k] = v
-	}
+	maps.Copy(dst, src)
 	return dst
 }
 
@@ -1090,9 +1079,7 @@ func mergeDomainAnalysisMeta(base, extra map[string]any) map[string]any {
 			out[k] = v
 		}
 	}
-	for k, v := range extra {
-		out[k] = v
-	}
+	maps.Copy(out, extra)
 	return out
 }
 
@@ -1121,9 +1108,7 @@ func persistAgentExecutionSyncWithMeta(ctx workflow.Context, workflowID, agentID
 		"workflow": "research",
 		"strategy": "react",
 	}
-	for k, v := range extraMeta {
-		metadata[k] = v
-	}
+	maps.Copy(metadata, extraMeta)
 
 	err := workflow.ExecuteActivity(actCtx,
 		activities.PersistAgentExecutionStandalone,

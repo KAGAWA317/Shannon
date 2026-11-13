@@ -2,6 +2,7 @@ package health
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"strconv"
 	"time"
@@ -167,9 +168,7 @@ func (h *HTTPHandler) handleDetailedHealth(w http.ResponseWriter, r *http.Reques
 		// 直接返回 cache 结果，不执行新的检查
 		lastResults := h.manager.GetLastResults()
 		components := make(map[string]CheckResult)
-		for name, result := range lastResults {
-			components[name] = result
-		}
+		maps.Copy(components, lastResults)
 
 		// Calculate summary from cached results
 		summary := HealthSummary{Total: len(components)}

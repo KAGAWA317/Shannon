@@ -191,10 +191,10 @@ func (s *Streamer) StreamResponse(ctx context.Context, sseReader io.Reader, w ht
 			}
 
 			// Parse SSE format
-			if strings.HasPrefix(line, "event:") {
-				eventType = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
-			} else if strings.HasPrefix(line, "data:") {
-				eventData = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+			if after, ok0 := strings.CutPrefix(line, "event:"); ok0 {
+				eventType = strings.TrimSpace(after)
+			} else if after, ok0 := strings.CutPrefix(line, "data:"); ok0 {
+				eventData = strings.TrimSpace(after)
 			} else if line == "" && eventData != "" {
 				// End of event, process it
 				if err := s.processEvent(eventType, eventData, w, flusher); err != nil {
@@ -416,10 +416,7 @@ func (s *Streamer) writeContentChunked(w http.ResponseWriter, flusher http.Flush
 	// Split content into chunks for progressive display
 	runes := []rune(content)
 	for i := 0; i < len(runes); i += FinalOutputChunkSize {
-		end := i + FinalOutputChunkSize
-		if end > len(runes) {
-			end = len(runes)
-		}
+		end := min(i+FinalOutputChunkSize, len(runes))
 		chunk := string(runes[i:end])
 		s.writeContentChunk(w, flusher, chunk)
 	}

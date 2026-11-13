@@ -2,6 +2,7 @@ package execution
 
 import (
 	"encoding/json"
+	"maps"
 	"strings"
 	"time"
 
@@ -93,8 +94,6 @@ func ExecuteParallel(
 
 	// Launch parallel executions
 	for i, task := range tasks {
-		i := i       // Capture for closure
-		task := task // Capture for closure
 
 		workflow.Go(ctx, func(ctx workflow.Context) {
 			// Acquire semaphore
@@ -111,13 +110,9 @@ func ExecuteParallel(
 
 			// Prepare task context
 			taskContext := make(map[string]any)
-			for k, v := range config.Context {
-				taskContext[k] = v
-			}
+			maps.Copy(taskContext, config.Context)
 			if task.ContextOverrides != nil {
-				for k, v := range task.ContextOverrides {
-					taskContext[k] = v
-				}
+				maps.Copy(taskContext, task.ContextOverrides)
 			}
 			taskContext["role"] = task.Role
 			taskContext["task_id"] = task.ID

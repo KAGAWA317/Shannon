@@ -3,6 +3,7 @@ package health
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sync"
 	"time"
 
@@ -183,9 +184,7 @@ func (m *Manager) GetOverallHealth(ctx context.Context) OverallHealth {
 func (m *Manager) GetDetailedHealth(ctx context.Context) DetailedHealth {
 	m.mu.RLock()
 	checkerStates := make(map[string]*CheckerState)
-	for name, state := range m.checkers {
-		checkerStates[name] = state
-	}
+	maps.Copy(checkerStates, m.checkers)
 	m.mu.RUnlock()
 
 	timestamp := time.Now()
@@ -233,9 +232,7 @@ func (m *Manager) GetDetailedHealth(ctx context.Context) DetailedHealth {
 
 	// Store results for future queries
 	m.mu.Lock()
-	for name, result := range components {
-		m.lastResults[name] = result
-	}
+	maps.Copy(m.lastResults, components)
 	m.mu.Unlock()
 
 	// Determine overall status
@@ -429,9 +426,7 @@ func (m *Manager) runBackgroundChecks() {
 
 	m.mu.RLock()
 	checkerStates := make(map[string]*CheckerState)
-	for name, state := range m.checkers {
-		checkerStates[name] = state
-	}
+	maps.Copy(checkerStates, m.checkers)
 	m.mu.RUnlock()
 
 	now := time.Now()
@@ -455,9 +450,7 @@ func (m *Manager) runBackgroundChecks() {
 	// 有新结果时更新最后一次结果
 	if len(checkResults) > 0 {
 		m.mu.Lock()
-		for name, result := range checkResults {
-			m.lastResults[name] = result
-		}
+		maps.Copy(m.lastResults, checkResults)
 		m.mu.Unlock()
 
 		m.logger.Debug("Background health checks completed",
@@ -482,9 +475,7 @@ func (m *Manager) GetLastResults() map[string]CheckResult {
 	defer m.mu.RUnlock()
 
 	results := make(map[string]CheckResult)
-	for name, result := range m.lastResults {
-		results[name] = result
-	}
+	maps.Copy(results, m.lastResults)
 	return results
 }
 

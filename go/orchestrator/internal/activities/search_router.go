@@ -12,12 +12,12 @@ import (
 // SearchRouteInput defines input for routing a search to appropriate sources
 // SearchRouteInput 是把一次 search 路由到合适来源的入参。
 type SearchRouteInput struct {
-	Query           string                 `json:"query"`
-	Dimension       string                 `json:"dimension,omitempty"`       // Research dimension (e.g., "funding", "technology")
-	SourceTypes     []string               `json:"source_types,omitempty"`    // Explicit source types to use
-	Priority        string                 `json:"priority,omitempty"`        // "high", "medium", "low"
-	Context         map[string]any `json:"context,omitempty"`         // Additional context
-	LocalizationCtx *LocalizationContext   `json:"localization_ctx,omitempty"` // For multi-language queries
+	Query           string               `json:"query"`
+	Dimension       string               `json:"dimension,omitempty"`        // Research dimension (e.g., "funding", "technology")
+	SourceTypes     []string             `json:"source_types,omitempty"`     // Explicit source types to use
+	Priority        string               `json:"priority,omitempty"`         // "high", "medium", "low"
+	Context         map[string]any       `json:"context,omitempty"`          // Additional context
+	LocalizationCtx *LocalizationContext `json:"localization_ctx,omitempty"` // For multi-language queries
 }
 
 // LocalizationContext provides localization info for searches
@@ -31,23 +31,23 @@ type LocalizationContext struct {
 // SearchRoute defines a single search to execute
 // SearchRoute 描述要执行的一次 search。
 type SearchRoute struct {
-	Query          string   `json:"query"`
-	SourceType     string   `json:"source_type"`
-	Sites          []string `json:"sites,omitempty"`
-	ExaCategory    string   `json:"exa_category,omitempty"`
-	RecencyDays    int      `json:"recency_days,omitempty"`
-	MaxResults     int      `json:"max_results"`
-	PriorityBoost  float64  `json:"priority_boost"`
-	QuerySuffix    string   `json:"query_suffix,omitempty"`
-	Language       string   `json:"language,omitempty"`        // For localized searches
-	IsLocalized    bool     `json:"is_localized,omitempty"`
+	Query         string   `json:"query"`
+	SourceType    string   `json:"source_type"`
+	Sites         []string `json:"sites,omitempty"`
+	ExaCategory   string   `json:"exa_category,omitempty"`
+	RecencyDays   int      `json:"recency_days,omitempty"`
+	MaxResults    int      `json:"max_results"`
+	PriorityBoost float64  `json:"priority_boost"`
+	QuerySuffix   string   `json:"query_suffix,omitempty"`
+	Language      string   `json:"language,omitempty"` // For localized searches
+	IsLocalized   bool     `json:"is_localized,omitempty"`
 }
 
 // SearchRouteResult contains the routing plan for a search
 type SearchRouteResult struct {
-	Routes         []SearchRoute `json:"routes"`
-	TotalMaxResults int          `json:"total_max_results"`
-	Strategy       string        `json:"strategy"` // "parallel", "sequential", "priority"
+	Routes          []SearchRoute `json:"routes"`
+	TotalMaxResults int           `json:"total_max_results"`
+	Strategy        string        `json:"strategy"` // "parallel", "sequential", "priority"
 }
 
 // RouteSearch generates a search routing plan based on dimension and source type config
@@ -116,7 +116,7 @@ func (a *Activities) RouteSearch(ctx context.Context, input SearchRouteInput) (*
 	strategy := "parallel"
 	if input.Priority == "high" && len(routes) > 3 {
 		strategy = "priority" // Execute high-priority routes first
-// 高优先级路由先执行。
+		// 高优先级路由先执行。
 	}
 
 	result := &SearchRouteResult{
@@ -272,11 +272,11 @@ func (a *Activities) buildLocalizedRoutes(cfg *config.SourceTypesConfig, input S
 		}
 
 		route := &SearchRoute{
-			Query:       localizedQuery,
-			SourceType:  regionalSource,
-			Language:    lang,
-			IsLocalized: true,
-			MaxResults:  5, // Default for localized
+			Query:         localizedQuery,
+			SourceType:    regionalSource,
+			Language:      lang,
+			IsLocalized:   true,
+			MaxResults:    5, // Default for localized
 			PriorityBoost: 1.1,
 		}
 
@@ -316,10 +316,10 @@ type MergeSearchInput struct {
 // SearchRouteResults holds results from a single search route
 // SearchRouteResults 保存单条 search 路由的结果。
 type SearchRouteResults struct {
-	Route    SearchRoute   `json:"route"`
-	Items    []SearchItem  `json:"items"`
-	Success  bool          `json:"success"`
-	Error    string        `json:"error,omitempty"`
+	Route   SearchRoute  `json:"route"`
+	Items   []SearchItem `json:"items"`
+	Success bool         `json:"success"`
+	Error   string       `json:"error,omitempty"`
 }
 
 // SearchItem represents a single search result
@@ -335,10 +335,10 @@ type SearchItem struct {
 // MergeSearchResult contains the merged, deduplicated results
 // MergeSearchResult 是合并去重后的结果。
 type MergeSearchResult struct {
-	Items           []SearchItem `json:"items"`
-	TotalResults    int          `json:"total_results"`
-	DeduplicatedCount int        `json:"deduplicated_count"`
-	SourceBreakdown map[string]int `json:"source_breakdown"`
+	Items             []SearchItem   `json:"items"`
+	TotalResults      int            `json:"total_results"`
+	DeduplicatedCount int            `json:"deduplicated_count"`
+	SourceBreakdown   map[string]int `json:"source_breakdown"`
 }
 
 // MergeSearchResults merges and deduplicates results from multiple search routes
@@ -457,7 +457,7 @@ func extractDomain(url string) string {
 func sortSearchItemsByScore(items []SearchItem) {
 	// Simple bubble sort for now - replace with sort.Slice in production
 	// 目前是简单冒泡排序；生产环境应换成 sort.Slice。
-	for i := 0; i < len(items); i++ {
+	for i := range items {
 		for j := i + 1; j < len(items); j++ {
 			if items[j].Score > items[i].Score {
 				items[i], items[j] = items[j], items[i]

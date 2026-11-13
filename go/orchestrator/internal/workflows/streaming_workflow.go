@@ -2,6 +2,7 @@ package workflows
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -267,9 +268,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 			"estimated_output", ar.OutputTokens)
 	}
 	agentMeta := metadata.AggregateAgentMetadata([]activities.AgentExecutionResult{ar}, 0)
-	for k, v := range agentMeta {
-		meta[k] = v
-	}
+	maps.Copy(meta, agentMeta)
 
 	// Add cost estimate if tokens available
 	if streamRes.TokensUsed > 0 {
@@ -489,9 +488,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	buildContext := func() map[string]any {
 		ctxMap := map[string]any{}
 		if input.Context != nil {
-			for k, v := range input.Context {
-				ctxMap[k] = v
-			}
+			maps.Copy(ctxMap, input.Context)
 		}
 		if _, ok := ctxMap["synthesis_style"]; !ok {
 			if _, hasAreas := ctxMap["research_areas"]; hasAreas {
@@ -625,9 +622,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 		agentResultsForMeta = append(agentResultsForMeta, ar)
 	}
 	agentMeta := metadata.AggregateAgentMetadata(agentResultsForMeta, 0)
-	for k, v := range agentMeta {
-		meta[k] = v
-	}
+	maps.Copy(meta, agentMeta)
 
 	// Add cost estimate if tokens available
 	if totalTokens > 0 {

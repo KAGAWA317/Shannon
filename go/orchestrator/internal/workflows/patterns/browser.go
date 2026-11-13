@@ -2,6 +2,7 @@ package patterns
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -142,9 +143,7 @@ func BrowserLoop(
 
 		// Build unified context for single agent call
 		agentContext := make(map[string]any)
-		for k, v := range baseContext {
-			agentContext[k] = v
-		}
+		maps.Copy(agentContext, baseContext)
 		agentContext["query"] = query
 		agentContext["iteration"] = iteration
 		agentContext["previous_actions"] = actions
@@ -508,10 +507,7 @@ func responseIndicatesToolUse(response string) bool {
 
 // hasRecentToolExecutions checks if tools were executed in recent iterations
 func hasRecentToolExecutions(results []activities.AgentExecutionResult, lookback int) bool {
-	start := len(results) - lookback
-	if start < 0 {
-		start = 0
-	}
+	start := max(len(results)-lookback, 0)
 	for i := start; i < len(results); i++ {
 		// Check Go struct first
 		if hasToolExecution(results[i].ToolExecutions) {

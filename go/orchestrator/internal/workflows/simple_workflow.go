@@ -3,6 +3,7 @@ package workflows
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -498,9 +499,7 @@ func SimpleTaskWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 		// Build context for synthesis and inject citations for inline formatting
 		ctxForSynth := make(map[string]any)
 		if input.Context != nil {
-			for k, v := range input.Context {
-				ctxForSynth[k] = v
-			}
+			maps.Copy(ctxForSynth, input.Context)
 		}
 		addCitationsToContext(ctxForSynth, collectedCitations)
 

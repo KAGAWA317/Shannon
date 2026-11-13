@@ -2,6 +2,7 @@ package activities
 
 import (
 	"context"
+	"maps"
 
 	"go.temporal.io/sdk/activity"
 	"go.uber.org/zap"
@@ -25,12 +26,12 @@ type ExecuteSimpleTaskInput struct {
 
 // ExecuteSimpleTaskResult contains the complete result
 type ExecuteSimpleTaskResult struct {
-	Response       string          `json:"response"`
-	TokensUsed     int             `json:"tokens_used"`
-	Success        bool            `json:"success"`
-	Error          string          `json:"error,omitempty"`
-	ModelUsed      string          `json:"model_used,omitempty"`
-	Provider       string          `json:"provider,omitempty"`
+	Response        string          `json:"response"`
+	TokensUsed      int             `json:"tokens_used"`
+	Success         bool            `json:"success"`
+	Error           string          `json:"error,omitempty"`
+	ModelUsed       string          `json:"model_used,omitempty"`
+	Provider        string          `json:"provider,omitempty"`
 	DurationMs      int64           `json:"duration_ms,omitempty"`
 	ToolExecutions  []ToolExecution `json:"tool_executions,omitempty"`
 	ScreenshotPaths []string        `json:"screenshot_paths,omitempty"`
@@ -62,12 +63,8 @@ func ExecuteSimpleTask(ctx context.Context, input ExecuteSimpleTaskInput) (Execu
 	// Step 1: Merge context (no separate activity)
 	// Step 1：合并 context，不单独开一个 activity。
 	mergedContext := make(map[string]any)
-	for k, v := range input.Context {
-		mergedContext[k] = v
-	}
-	for k, v := range input.SessionCtx {
-		mergedContext[k] = v
-	}
+	maps.Copy(mergedContext, input.Context)
+	maps.Copy(mergedContext, input.SessionCtx)
 
 	// Add user_id to context for audit logging in Python tools (e.g., session_file)
 	// 把 user_id 放进 context，供 Python tool 做审计日志（如 session_file）。

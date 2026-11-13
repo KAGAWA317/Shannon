@@ -54,20 +54,20 @@ type RefineResearchQueryResult struct {
 	OfficialDomains     []string `json:"official_domains,omitempty"`
 	DisambiguationTerms []string `json:"disambiguation_terms,omitempty"`
 	// Deep Research 2.0: Dynamic dimension generation
-	QueryType          string              `json:"query_type,omitempty"`          // company, industry, scientific, comparative, exploratory
-	ResearchDimensions []ResearchDimension `json:"research_dimensions,omitempty"` // Structured dimensions with source guidance
-	LocalizationNeeded bool                `json:"localization_needed,omitempty"` // Whether to search in local languages
-	TargetLanguages    []string            `json:"target_languages,omitempty"`    // Languages to search (e.g., ["en", "zh", "ja"])
-	LocalizedNames       map[string][]string `json:"localized_names,omitempty"`       // Entity names in local languages
+	QueryType            string              `json:"query_type,omitempty"`             // company, industry, scientific, comparative, exploratory
+	ResearchDimensions   []ResearchDimension `json:"research_dimensions,omitempty"`    // Structured dimensions with source guidance
+	LocalizationNeeded   bool                `json:"localization_needed,omitempty"`    // Whether to search in local languages
+	TargetLanguages      []string            `json:"target_languages,omitempty"`       // Languages to search (e.g., ["en", "zh", "ja"])
+	LocalizedNames       map[string][]string `json:"localized_names,omitempty"`        // Entity names in local languages
 	PrefetchSubpageLimit int                 `json:"prefetch_subpage_limit,omitempty"` // Recommended subpages per domain (5-20, default 15)
 	// 每个 domain 建议抓取的子页数（5-20，默认 15）。
 
 	// HITL: User intent from confirmed_plan (populated only when confirmed_plan exists)
 	// HITL：来自 confirmed_plan 的用户意图，仅在 confirmed_plan 存在时填充。
-	PriorityFocus   []string    `json:"priority_focus,omitempty"`   // Areas user wants deep research
-	SecondaryFocus  []string    `json:"secondary_focus,omitempty"`  // Areas for adequate coverage
-	SkipAreas       []string    `json:"skip_areas,omitempty"`       // Areas user explicitly excluded
-	UserIntent      *UserIntent `json:"user_intent,omitempty"`      // Structured user intent
+	PriorityFocus   []string    `json:"priority_focus,omitempty"`    // Areas user wants deep research
+	SecondaryFocus  []string    `json:"secondary_focus,omitempty"`   // Areas for adequate coverage
+	SkipAreas       []string    `json:"skip_areas,omitempty"`        // Areas user explicitly excluded
+	UserIntent      *UserIntent `json:"user_intent,omitempty"`       // Structured user intent
 	HITLParseFailed bool        `json:"hitl_parse_failed,omitempty"` // True if HITL plan parsing failed (degraded mode)
 	// HITL plan 解析失败（降级模式）时为 true。
 }
@@ -389,15 +389,15 @@ Constraints:
 	// 解析 response 中的 JSON，存在 markdown 代码围栏时先剥离。
 	responseText := llmResp.Response
 	responseText = strings.TrimSpace(responseText)
-	if strings.HasPrefix(responseText, "```json") {
-		responseText = strings.TrimPrefix(responseText, "```json")
+	if after, ok := strings.CutPrefix(responseText, "```json"); ok {
+		responseText = after
 		responseText = strings.TrimPrefix(responseText, "```")
 		if idx := strings.LastIndex(responseText, "```"); idx != -1 {
 			responseText = responseText[:idx]
 		}
 		responseText = strings.TrimSpace(responseText)
-	} else if strings.HasPrefix(responseText, "```") {
-		responseText = strings.TrimPrefix(responseText, "```")
+	} else if after, ok := strings.CutPrefix(responseText, "```"); ok {
+		responseText = after
 		if idx := strings.LastIndex(responseText, "```"); idx != -1 {
 			responseText = responseText[:idx]
 		}
@@ -747,7 +747,7 @@ func (a *Activities) refineWithHITL(ctx context.Context, in RefineResearchQueryI
 	url := fmt.Sprintf("%s/agent/query", base)
 
 	// Build conversation context (if available)
-	conversationText := ""
+	var conversationText strings.Builder
 	if convRaw, ok := in.Context["review_conversation"]; ok {
 		if convSlice, ok := convRaw.([]any); ok {
 			for _, r := range convSlice {
@@ -755,7 +755,7 @@ func (a *Activities) refineWithHITL(ctx context.Context, in RefineResearchQueryI
 					role, _ := round["role"].(string)
 					msg, _ := round["message"].(string)
 					if role != "" && msg != "" {
-						conversationText += fmt.Sprintf("[%s]: %s\n\n", role, msg)
+						conversationText.WriteString(fmt.Sprintf("[%s]: %s\n\n", role, msg))
 					}
 				}
 			}
@@ -764,8 +764,8 @@ func (a *Activities) refineWithHITL(ctx context.Context, in RefineResearchQueryI
 
 	// Build prompt for HITL plan parsing
 	conversationSection := ""
-	if conversationText != "" {
-		conversationSection = fmt.Sprintf("\nReview conversation (for additional context):\n%s", conversationText)
+	if conversationText.String() != "" {
+		conversationSection = fmt.Sprintf("\nReview conversation (for additional context):\n%s", conversationText.String())
 	}
 
 	hitlPrompt := fmt.Sprintf(`You are a research plan parser. Your task is to extract structured information from a user-approved research direction.

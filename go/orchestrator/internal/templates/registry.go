@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -204,9 +206,9 @@ func (r *Registry) Find(name, version string) (Entry, bool) {
 	}
 
 	summaries := r.List()
-	for i := len(summaries) - 1; i >= 0; i-- {
-		if summaries[i].Name == name {
-			if entry, ok := r.Get(summaries[i].Key); ok {
+	for _, summarie := range slices.Backward(summaries) {
+		if summarie.Name == name {
+			if entry, ok := r.Get(summarie.Key); ok {
 				return entry, true
 			}
 		}
@@ -345,9 +347,7 @@ func mergeTemplates(base, overlay *Template) *Template {
 		if result.Metadata == nil {
 			result.Metadata = make(map[string]any, len(overlay.Metadata))
 		}
-		for k, v := range overlay.Metadata {
-			result.Metadata[k] = v
-		}
+		maps.Copy(result.Metadata, overlay.Metadata)
 	}
 
 	nodeIndex := make(map[string]int, len(result.Nodes))
@@ -396,9 +396,7 @@ func mergeTemplateNode(base, overlay TemplateNode) TemplateNode {
 		if merged.Metadata == nil {
 			merged.Metadata = make(map[string]any, len(overlay.Metadata))
 		}
-		for k, v := range overlay.Metadata {
-			merged.Metadata[k] = v
-		}
+		maps.Copy(merged.Metadata, overlay.Metadata)
 	}
 
 	return merged
@@ -462,9 +460,7 @@ func cloneMetadata(m map[string]any) map[string]any {
 		return nil
 	}
 	out := make(map[string]any, len(m))
-	for k, v := range m {
-		out[k] = v
-	}
+	maps.Copy(out, m)
 	return out
 }
 

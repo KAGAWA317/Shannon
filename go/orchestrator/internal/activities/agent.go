@@ -1114,12 +1114,12 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	}
 
 	// Skip tool selection if we already have tool_parameters from decomposition
-	if !disableToolSelectRole && !isResearch && len(input.SuggestedTools) > 0 && len(allowedByRole) > 0 && (input.ToolParameters == nil || len(input.ToolParameters) == 0) {
+	if !disableToolSelectRole && !isResearch && len(input.SuggestedTools) > 0 && len(allowedByRole) > 0 && len(input.ToolParameters) == 0 {
 		if getenvInt("ENABLE_TOOL_SELECTION", 1) > 0 {
 			// Only select tools if we have valid parameters or the tool doesn't require them
 			// Skip tools that require parameters when none are provided to avoid execution errors
 			toolsToSelect := allowedByRole
-			if input.ToolParameters == nil || len(input.ToolParameters) == 0 {
+			if len(input.ToolParameters) == 0 {
 				// Filter out tools that require parameters when none are provided
 				filtered := make([]string, 0, len(allowedByRole))
 				for _, tool := range allowedByRole {
@@ -1163,7 +1163,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 			zap.String("agent_id", input.AgentID),
 			zap.String("query", input.Query),
 		)
-	} else if input.ToolParameters != nil && len(input.ToolParameters) > 0 {
+	} else if len(input.ToolParameters) > 0 {
 		logger.Info("Using tool_parameters from decomposition, skipping tool selection",
 			zap.String("agent_id", input.AgentID),
 			zap.Any("tool_parameters", input.ToolParameters),
@@ -1346,7 +1346,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	// streaming 是可选路径，仅在无 tool 时启用；有 tool 时强制走 unary，
 	// 以便拿到 ExecuteTaskResponse.metadata（含 tool_cost_entries）用于 budget 记录；若放宽该限制，runStreaming 也必须透传 metadata。
 	useStreaming := getenvInt("ENABLE_AGENT_STREAMING", 1) > 0
-	if len(allowedByRole) > 0 || len(selectedToolCalls) > 0 || (input.ToolParameters != nil && len(input.ToolParameters) > 0) {
+	if len(allowedByRole) > 0 || len(selectedToolCalls) > 0 || len(input.ToolParameters) > 0 {
 		useStreaming = false
 	}
 
@@ -1965,7 +1965,7 @@ func ExecuteAgent(ctx context.Context, input AgentExecutionInput) (AgentExecutio
 	)
 
 	// Use forced tools path if ToolParameters are pre-computed (analytics queries)
-	if input.ToolParameters != nil && len(input.ToolParameters) > 0 && len(input.SuggestedTools) > 0 {
+	if len(input.ToolParameters) > 0 && len(input.SuggestedTools) > 0 {
 		return ExecuteAgentWithForcedTools(ctx, input)
 	}
 
@@ -1988,7 +1988,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	)
 
 	// Bail if no tool parameters to use
-	if input.ToolParameters == nil || len(input.ToolParameters) == 0 {
+	if len(input.ToolParameters) == 0 {
 		logger.Warn("No ToolParameters provided; falling back to regular ExecuteAgent")
 		zapLogger := zap.L()
 		return executeAgentCore(ctx, input, zapLogger)

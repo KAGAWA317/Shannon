@@ -9,7 +9,6 @@ import (
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/attachments"
 )
 
-
 // RawAttachment holds extracted binary data from a content block.
 type RawAttachment struct {
 	MediaType  string // e.g. "image/png", "application/pdf"
@@ -143,8 +142,8 @@ func parseDataURI(uri string) (*RawAttachment, int, error) {
 
 	// Extract media type from header like "data:image/png;base64"
 	mediaType := ""
-	if strings.HasPrefix(header, "data:") {
-		mediaType = strings.TrimPrefix(header, "data:")
+	if after, ok := strings.CutPrefix(header, "data:"); ok {
+		mediaType = after
 		mediaType = strings.TrimSuffix(mediaType, ";base64")
 	}
 

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -65,7 +66,7 @@ func NewService(db *sqlx.DB, logger *zap.Logger, jwtSecret string) *Service {
 
 	// Start background worker pool for async updates (2 workers)
 	// 启动异步更新的后台 worker 池（2 个 worker）
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		go s.asyncUpdateWorker(i)
 	}
 
@@ -719,9 +720,7 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 // GetQuotaDefaults 返回所有套餐内置配额默认值的副本。
 func (s *Service) GetQuotaDefaults() map[string]QuotaDefaults {
 	result := make(map[string]QuotaDefaults, len(s.quotaDefaults))
-	for plan, defaults := range s.quotaDefaults {
-		result[plan] = defaults
-	}
+	maps.Copy(result, s.quotaDefaults)
 	return result
 }
 

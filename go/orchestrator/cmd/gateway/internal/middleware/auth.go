@@ -208,8 +208,8 @@ func (m *AuthMiddleware) extractToken(r *http.Request) string {
 
 func normalizePotentialAPIKey(token string) string {
 	token = strings.TrimSpace(token)
-	if strings.HasPrefix(token, "sk-shannon-") {
-		token = strings.TrimPrefix(token, "sk-shannon-")
+	if after, ok := strings.CutPrefix(token, "sk-shannon-"); ok {
+		token = after
 		if !strings.HasPrefix(token, "sk_") {
 			token = "sk_" + token
 		}

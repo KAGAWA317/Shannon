@@ -135,10 +135,7 @@ func (a *Activities) FetchAgentMessages(ctx context.Context, in FetchAgentMessag
 	// Get list length and compute range
 	// 取 list 长度并计算读取范围。
 	llen := rc.LLen(ctx, listKey).Val()
-	start := llen - in.Limit
-	if start < 0 {
-		start = 0
-	}
+	start := max(llen-in.Limit, 0)
 	vals, err := rc.LRange(ctx, listKey, start, llen).Result()
 	if err != nil && err != redis.Nil {
 		return nil, err
@@ -238,10 +235,7 @@ func (a *Activities) WorkspaceList(ctx context.Context, in WorkspaceListInput) (
 		in.Limit = 200
 	}
 	llen := rc.LLen(ctx, listKey).Val()
-	start := llen - in.Limit
-	if start < 0 {
-		start = 0
-	}
+	start := max(llen-in.Limit, 0)
 	vals, err := rc.LRange(ctx, listKey, start, llen).Result()
 	if err != nil && err != redis.Nil {
 		return nil, err
@@ -289,7 +283,7 @@ func (a *Activities) WorkspaceListAll(ctx context.Context, in WorkspaceListAllIn
 	for iter.Next(ctx) {
 		key := iter.Val()
 		if key != seqKey { // Skip the global seq counter
-		// 跳过全局 seq 计数器。
+			// 跳过全局 seq 计数器。
 			topicKeys = append(topicKeys, key)
 			if len(topicKeys) >= maxTopics {
 				break
@@ -305,11 +299,10 @@ func (a *Activities) WorkspaceListAll(ctx context.Context, in WorkspaceListAllIn
 	var out []WorkspaceEntry
 	for _, key := range topicKeys {
 		llen := rc.LLen(ctx, key).Val()
-		start := llen - 5 // Last 5 per topic
-		// 每个 topic 取最后 5 条。
-		if start < 0 {
-			start = 0
-		}
+		start := max(
+			// Last 5 per topic
+			// 每个 topic 取最后 5 条。
+			llen-5, 0)
 		vals, err := rc.LRange(ctx, key, start, llen).Result()
 		if err != nil && err != redis.Nil {
 			continue
@@ -517,18 +510,18 @@ func (a *Activities) SetupWorkspaceDirs(ctx context.Context, in SetupWorkspaceDi
 // SwarmTask represents a single task in the Redis-backed TaskList.
 // SwarmTask 表示 Redis-backed TaskList 中的单个 task。
 type SwarmTask struct {
-	ID          string   `json:"id"`
-	Description string   `json:"description"`
-	Status      string   `json:"status"`                // "pending", "in_progress", "completed"
+	ID          string `json:"id"`
+	Description string `json:"description"`
+	Status      string `json:"status"` // "pending", "in_progress", "completed"
 	// 取值："pending"、"in_progress"、"completed"。
-	Owner       string   `json:"owner"`                 // agent ID that owns this task
+	Owner string `json:"owner"` // agent ID that owns this task
 	// 拥有该 task 的 agent ID。
-	CreatedBy   string   `json:"created_by"`            // "decompose" or agent ID
+	CreatedBy string `json:"created_by"` // "decompose" or agent ID
 	// "decompose" 或 agent ID。
-	DependsOn   []string `json:"depends_on"`            // task IDs this depends on
+	DependsOn []string `json:"depends_on"` // task IDs this depends on
 	// 该 task 依赖的 task ID。
-	CreatedAt   string   `json:"created_at"`
-	CompletedAt string   `json:"completed_at,omitempty"`
+	CreatedAt   string `json:"created_at"`
+	CompletedAt string `json:"completed_at,omitempty"`
 }
 
 // taskListKey returns the Redis hash key for a workflow's task list.
@@ -693,9 +686,9 @@ func (a *Activities) GetTaskList(ctx context.Context, in GetTaskListInput) ([]Sw
 type UpdateTaskStatusInput struct {
 	WorkflowID string `json:"workflow_id"`
 	TaskID     string `json:"task_id"`
-	Status     string `json:"status"`   // target status
+	Status     string `json:"status"` // target status
 	// 目标状态。
-	AgentID    string `json:"agent_id"` // who is making the change
+	AgentID string `json:"agent_id"` // who is making the change
 	// 发起变更的 agent。
 }
 

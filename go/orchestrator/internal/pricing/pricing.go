@@ -74,7 +74,7 @@ func findUpConfig() (string, bool) {
 	}
 	// Walk upwards up to 6 levels to be safe in test/package paths
 	// 向上最多遍历 6 层，以适配测试/包路径
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		cand := filepath.Join(wd, "config", "models.yaml")
 		if _, err := os.Stat(cand); err == nil {
 			return cand, true
@@ -318,10 +318,7 @@ func CostForSplitWithCache(model string, inputTokens, outputTokens, cacheReadTok
 		// 按折扣价（读）/溢价（创建）单独累加。
 		// 1h TTL 创建按 2.0 倍计费；5m TTL 创建按 1.25 倍。
 		base += (float64(cacheReadTokens) / 1000.0) * inputPer1K * 0.1
-		cache5m := cacheCreationTokens - cacheCreation1hTokens
-		if cache5m < 0 {
-			cache5m = 0
-		}
+		cache5m := max(cacheCreationTokens-cacheCreation1hTokens, 0)
 		base += (float64(cache5m) / 1000.0) * inputPer1K * 1.25
 		base += (float64(cacheCreation1hTokens) / 1000.0) * inputPer1K * 2.0
 	case provider == "kimi" || provider == "xai":

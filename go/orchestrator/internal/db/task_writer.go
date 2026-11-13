@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -53,7 +54,7 @@ func buildTaskMetricsPayload(task *TaskExecution) JSONB {
 	if task.ComplexityScore > 0 {
 		metrics["complexity_score"] = task.ComplexityScore
 	}
-	if task.Metadata != nil && len(task.Metadata) > 0 {
+	if len(task.Metadata) > 0 {
 		metrics["metadata"] = map[string]any(task.Metadata)
 	}
 
@@ -558,11 +559,9 @@ func (c *Client) CreateSession(ctx context.Context, sessionID string, userID str
 	// Use provided context or create a minimal default
 	// 使用提供的 context，或创建最小的默认 context
 	var contextMap map[string]any
-	if sessionContext != nil && len(sessionContext) > 0 {
+	if len(sessionContext) > 0 {
 		contextMap = make(map[string]any)
-		for k, v := range sessionContext {
-			contextMap[k] = v
-		}
+		maps.Copy(contextMap, sessionContext)
 	} else {
 		contextMap = map[string]any{"created_from": "orchestrator"}
 	}

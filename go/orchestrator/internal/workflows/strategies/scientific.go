@@ -2,6 +2,7 @@ package strategies
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -390,15 +391,15 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 		},
 	}
 
-    finalResult, finalConfidence, reflectionTokens, err := patterns.ReflectOnResult(
-        ctx,
-        input.Query,
-        comprehensiveResult,
-        agentResults,
-        totContext,
-        reflectionConfig,
-        opts,
-    )
+	finalResult, finalConfidence, reflectionTokens, err := patterns.ReflectOnResult(
+		ctx,
+		input.Query,
+		comprehensiveResult,
+		agentResults,
+		totContext,
+		reflectionConfig,
+		opts,
+	)
 
 	if err != nil {
 		logger.Warn("Reflection failed, using synthesis result", "error", err)
@@ -488,20 +489,18 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 		},
 	}
 	agentMeta := metadata.AggregateAgentMetadata(mockAgentResults, 0) // No separate synthesis
-    for k, v := range agentMeta {
-        meta[k] = v
-    }
+	maps.Copy(meta, agentMeta)
 
-    // Align: compute and include estimated cost using centralized pricing
-    if totalTokens > 0 {
-        modelForCost := ""
-        if m, ok := meta["model"].(string); ok && m != "" {
-            modelForCost = m
-        } else {
-            modelForCost = pricing.GetPriorityOneModel(modelTierFromContext)
-        }
-        meta["cost_usd"] = pricing.CostForTokens(modelForCost, totalTokens)
-    }
+	// Align: compute and include estimated cost using centralized pricing
+	if totalTokens > 0 {
+		modelForCost := ""
+		if m, ok := meta["model"].(string); ok && m != "" {
+			modelForCost = m
+		} else {
+			modelForCost = pricing.GetPriorityOneModel(modelTierFromContext)
+		}
+		meta["cost_usd"] = pricing.CostForTokens(modelForCost, totalTokens)
+	}
 
 	// Check pause/cancel before completion
 	if err := controlHandler.CheckPausePoint(ctx, "pre_completion"); err != nil {
@@ -521,8 +520,8 @@ func extractHypothesesFromSteps(steps []string, finalAnswer string) []string {
 	hypotheses := []string{}
 
 	// First check the final answer for structured hypotheses
-	lines := strings.Split(finalAnswer, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(finalAnswer, "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		if strings.Contains(strings.ToLower(line), "hypothesis") {
 			// Extract the hypothesis after the colon
@@ -575,7 +574,7 @@ func buildScientificReport(
 ) string {
 	var report strings.Builder
 
-	report.WriteString(fmt.Sprintf("# Scientific Investigation Report\n\n"))
+	report.WriteString("# Scientific Investigation Report\n\n")
 	report.WriteString(fmt.Sprintf("**Research Question:** %s\n\n", query))
 
 	report.WriteString("## Hypotheses Tested\n\n")
@@ -604,7 +603,7 @@ func buildScientificReport(
 	report.WriteString(finalSynthesis)
 	report.WriteString("\n\n")
 
-	report.WriteString(fmt.Sprintf("## Confidence Assessment\n\n"))
+	report.WriteString("## Confidence Assessment\n\n")
 	report.WriteString(fmt.Sprintf("**Overall Confidence:** %.1f%%\n", confidence*100))
 	report.WriteString(fmt.Sprintf("**Exploration Depth:** %d levels\n", totResult.TreeDepth))
 	report.WriteString(fmt.Sprintf("**Total Thoughts Explored:** %d\n", totResult.TotalThoughts))

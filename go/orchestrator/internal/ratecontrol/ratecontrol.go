@@ -85,7 +85,7 @@ func findUpConfig() (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		cand := filepath.Join(wd, "config", "models.yaml")
 		if _, err := os.Stat(cand); err == nil {
 			return cand, true

@@ -16,10 +16,10 @@ import (
 	authpkg "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/auth"
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/circuitbreaker"
 	cfg "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/config"
+	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/daemon"
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/db"
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/embeddings"
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/health"
-	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/daemon"
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/httpapi"
 	_ "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/metrics" // Import for side effects
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/pricing"
@@ -647,10 +647,7 @@ func main() {
 			if err == nil {
 				break
 			}
-			delay := time.Duration(attempt)
-			if delay > 15 {
-				delay = 15
-			}
+			delay := min(time.Duration(attempt), 15)
 			logger.Warn("Temporal not ready, retrying", zap.Int("attempt", attempt), zap.String("host", host), zap.Duration("sleep", delay*time.Second), zap.Error(err))
 			time.Sleep(delay * time.Second)
 		}
@@ -829,8 +826,6 @@ func main() {
 	}
 
 	// Config manager runs async and will stop when context is cancelled
-
-	return
 }
 
 func getEnvOrDefault(key, defaultValue string) string {

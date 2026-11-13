@@ -78,10 +78,9 @@ func (c *Client) scrollRecent(ctx context.Context, sessionID string, must []map[
 	if poolMultiplier <= 0 {
 		poolMultiplier = 3 // Default multiplier
 	}
-	limit := topK * poolMultiplier
-	if limit > 100 {
-		limit = 100 // Cap to prevent excessive data transfer
-	}
+	limit := min(topK*poolMultiplier,
+		// Cap to prevent excessive data transfer
+		100)
 	body := map[string]any{
 		"limit":        limit,
 		"with_payload": true,

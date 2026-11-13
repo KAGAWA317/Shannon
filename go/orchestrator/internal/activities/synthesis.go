@@ -110,7 +110,7 @@ func extractFirstJSONResponse(text string) string {
 			fence := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(parts[0], "```")))
 			if fence == "" || fence == "json" {
 				body := strings.TrimSpace(parts[1])
-				if before, ok :=strings.CutSuffix(body, "```"); ok  {
+				if before, ok := strings.CutSuffix(body, "```"); ok {
 					trimmed = strings.TrimSpace(before)
 				}
 			}
@@ -1786,10 +1786,7 @@ Section requirements:
 	// Use adaptive threshold: min(25% of effective_max, 300 tokens absolute margin)
 	// 剩余容量不足时触发续写；
 	// 阈值取 min(effective_max 的 25%, 绝对余量 300 tokens)。
-	minMargin := effectiveMaxCompletion / 4
-	if minMargin > 300 {
-		minMargin = 300
-	}
+	minMargin := min(effectiveMaxCompletion/4, 300)
 	remainingTokens := effectiveMaxCompletion - outputTokens
 
 	if finishReason == "stop" && !looksComplete(finalResponse) && remainingTokens < minMargin {
@@ -1813,10 +1810,7 @@ Section requirements:
 			"- Output ONLY the continuation text (no preamble).\n\n" +
 			"Previous excerpt:\n" + excerpt
 
-		contMax := maxTokens / 2
-		if contMax > 4096 {
-			contMax = 4096
-		}
+		contMax := min(maxTokens/2, 4096)
 
 		contBody, _ := json.Marshal(map[string]any{
 			"query":         contQuery,

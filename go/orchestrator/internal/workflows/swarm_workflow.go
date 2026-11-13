@@ -149,7 +149,7 @@ func jaccardSimilarity(a, b string) float64 {
 
 func toWordSet(s string) map[string]bool {
 	set := make(map[string]bool)
-	for _, w := range strings.Fields(s) {
+	for w := range strings.FieldsSeq(s) {
 		if len(w) > 1 { // Skip single-char noise
 			set[w] = true
 		}
@@ -166,7 +166,7 @@ func isSearchSaturated(queries []string, window int, minSimilarity float64) bool
 	recent := queries[len(queries)-window:]
 	similarCount := 0
 	totalPairs := 0
-	for i := 0; i < len(recent); i++ {
+	for i := range recent {
 		for j := i + 1; j < len(recent); j++ {
 			totalPairs++
 			if jaccardSimilarity(recent[i], recent[j]) >= minSimilarity {
@@ -220,7 +220,7 @@ func toFloat64(v any) float64 {
 // convertHistoryForLead converts session conversation history into a concise format for Lead.
 // Keeps last few exchanges, truncates long assistant responses to avoid bloating Lead's context.
 func convertHistoryForLead(messages []Message) []map[string]any {
-	const maxMessages = 6   // Last 3 turns (user + assistant)
+	const maxMessages = 6 // Last 3 turns (user + assistant)
 	const maxAssistantLen = 800
 
 	start := 0
@@ -454,43 +454,41 @@ type TeamMember struct {
 
 // AgentLoopInput is the input for a persistent agent loop.
 type AgentLoopInput struct {
-	AgentID               string                 `json:"agent_id"`
-	WorkflowID            string                 `json:"workflow_id"`
-	Task                  string                 `json:"task"`
-	MaxIterations         int                    `json:"max_iterations"`
-	SessionID             string                 `json:"session_id,omitempty"`
-	UserID                string                 `json:"user_id,omitempty"`
-	Context               map[string]any `json:"context,omitempty"`
-	TeamRoster            []TeamMember           `json:"team_roster,omitempty"`
-	WorkspaceMaxEntries   int                    `json:"workspace_max_entries,omitempty"`
-	WorkspaceSnippetChars int                    `json:"workspace_snippet_chars,omitempty"`
-	Role                  string                 `json:"role,omitempty"` // Persona role: researcher, coder, analyst, generalist
-	ReassignCount         int                              `json:"reassign_count,omitempty"` // B1: tracks reassignment count per agent
-	OriginalQuery         string                           `json:"original_query,omitempty"` // User's original query for agent context
-	TeamKnowledge         []activities.TeamKnowledgeEntry  `json:"team_knowledge,omitempty"` // Cross-agent fetch knowledge (L2 dedup)
+	AgentID               string                          `json:"agent_id"`
+	WorkflowID            string                          `json:"workflow_id"`
+	Task                  string                          `json:"task"`
+	MaxIterations         int                             `json:"max_iterations"`
+	SessionID             string                          `json:"session_id,omitempty"`
+	UserID                string                          `json:"user_id,omitempty"`
+	Context               map[string]any                  `json:"context,omitempty"`
+	TeamRoster            []TeamMember                    `json:"team_roster,omitempty"`
+	WorkspaceMaxEntries   int                             `json:"workspace_max_entries,omitempty"`
+	WorkspaceSnippetChars int                             `json:"workspace_snippet_chars,omitempty"`
+	Role                  string                          `json:"role,omitempty"`           // Persona role: researcher, coder, analyst, generalist
+	ReassignCount         int                             `json:"reassign_count,omitempty"` // B1: tracks reassignment count per agent
+	OriginalQuery         string                          `json:"original_query,omitempty"` // User's original query for agent context
+	TeamKnowledge         []activities.TeamKnowledgeEntry `json:"team_knowledge,omitempty"` // Cross-agent fetch knowledge (L2 dedup)
 }
 
 // AgentLoopResult is the final result from a persistent agent.
 type AgentLoopResult struct {
-	AgentID             string `json:"agent_id"`
-	Role                string `json:"role,omitempty"`
-	Response            string `json:"response"`
-	Iterations          int    `json:"iterations"`
-	TokensUsed          int    `json:"tokens_used"`
-	InputTokens         int    `json:"input_tokens"`
-	OutputTokens        int    `json:"output_tokens"`
-	CacheReadTokens     int    `json:"cache_read_tokens"`
-	CacheCreationTokens   int    `json:"cache_creation_tokens"`
-	CacheCreation1hTokens int    `json:"cache_creation_1h_tokens"`
-	ModelUsed             string `json:"model_used"`
-	Provider            string `json:"provider"`
-	Success             bool                             `json:"success"`
-	Error               string                           `json:"error,omitempty"`
-	ToolsUsed           string                           `json:"tools_used,omitempty"` // Compact summary: "web_search(x3), file_read(x2)"
-	TeamKnowledge       []activities.TeamKnowledgeEntry  `json:"team_knowledge,omitempty"` // URLs fetched by this agent (for parent merge)
+	AgentID               string                          `json:"agent_id"`
+	Role                  string                          `json:"role,omitempty"`
+	Response              string                          `json:"response"`
+	Iterations            int                             `json:"iterations"`
+	TokensUsed            int                             `json:"tokens_used"`
+	InputTokens           int                             `json:"input_tokens"`
+	OutputTokens          int                             `json:"output_tokens"`
+	CacheReadTokens       int                             `json:"cache_read_tokens"`
+	CacheCreationTokens   int                             `json:"cache_creation_tokens"`
+	CacheCreation1hTokens int                             `json:"cache_creation_1h_tokens"`
+	ModelUsed             string                          `json:"model_used"`
+	Provider              string                          `json:"provider"`
+	Success               bool                            `json:"success"`
+	Error                 string                          `json:"error,omitempty"`
+	ToolsUsed             string                          `json:"tools_used,omitempty"`     // Compact summary: "web_search(x3), file_read(x2)"
+	TeamKnowledge         []activities.TeamKnowledgeEntry `json:"team_knowledge,omitempty"` // URLs fetched by this agent (for parent merge)
 }
-
-
 
 // AgentLoop is a persistent agent workflow that runs a reason-act cycle.
 // Each iteration: check mailbox → call LLM → execute action → loop.
@@ -562,18 +560,18 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 	var savedDoneResponse string // Preserved when "done" is converted to "idle"
 	var lastWorkspaceSeq uint64
 	var lastMailboxSeq uint64
-	var filesWritten []string // Paths written by file_write during current task
-	var consecutiveToolErrors int   // Track consecutive tool failures to prevent infinite loops
-	var consecutiveNonToolActions int    // Track iterations without tool calls for convergence detection
-	var consecutiveMsgWithoutWrite int // Track send_message/publish_data without file_write
-	var consecutiveTransientErrors int // Track transient errors for escalating backoff
+	var filesWritten []string                     // Paths written by file_write during current task
+	var consecutiveToolErrors int                 // Track consecutive tool failures to prevent infinite loops
+	var consecutiveNonToolActions int             // Track iterations without tool calls for convergence detection
+	var consecutiveMsgWithoutWrite int            // Track send_message/publish_data without file_write
+	var consecutiveTransientErrors int            // Track transient errors for escalating backoff
 	var stepResult activities.AgentLoopStepResult // Declared outside loop so shutdown check can reference previous iteration's result
 	var lastResponseID string                     // OpenAI Responses API: chain from previous response for cache reuse
 	var pendingSystemMessage string               // Urgent directive for next iteration (rendered at prompt end for recency bias)
 	var runningNotes string                       // Agent's cumulative notes — survives history truncation
 	var recentSearchQueries []string              // B3: Track web_search queries for saturation detection
 	var searchesSinceLastFetch int                // B4: Detect consecutive searches without fetch
-	var cumulativeToolCalls int                    // Total tool_calls across all tasks — survives reassignment
+	var cumulativeToolCalls int                   // Total tool_calls across all tasks — survives reassignment
 
 	// Extract model/provider overrides for tool execution calls
 	toolModelOverride := GetContextString(input.Context, "model_override")
@@ -610,20 +608,20 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 				shutdownResponse = fmt.Sprintf("Agent %s shutdown after %d iterations", input.AgentID, iteration)
 			}
 			return AgentLoopResult{
-				AgentID:      input.AgentID,
-				Role:         input.Role,
-				Response:     shutdownResponse,
-				Iterations:   iteration,
-				TokensUsed:          totalTokens,
-				InputTokens:         totalInput,
-				OutputTokens:        totalOutput,
-				CacheReadTokens:     totalCacheRead,
+				AgentID:               input.AgentID,
+				Role:                  input.Role,
+				Response:              shutdownResponse,
+				Iterations:            iteration,
+				TokensUsed:            totalTokens,
+				InputTokens:           totalInput,
+				OutputTokens:          totalOutput,
+				CacheReadTokens:       totalCacheRead,
 				CacheCreationTokens:   totalCacheCreation,
 				CacheCreation1hTokens: totalCacheCreation1h,
-				ModelUsed:           lastModel,
-				Provider:            lastProvider,
-				Success:             true,
-				TeamKnowledge:       ft.Knowledge(),
+				ModelUsed:             lastModel,
+				Provider:              lastProvider,
+				Success:               true,
+				TeamKnowledge:         ft.Knowledge(),
 			}, nil
 		}
 
@@ -700,57 +698,57 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 		// Step 2: Call LLM to decide next action
 		stepResult = activities.AgentLoopStepResult{} // Reset for this iteration
 		if err := workflow.ExecuteActivity(ctx, constants.AgentLoopStepActivity, activities.AgentLoopStepInput{
-			AgentID:            input.AgentID,
-			WorkflowID:         input.WorkflowID,
-			Task:               input.Task,
-			Iteration:          iteration,
-			MaxIterations:      input.MaxIterations,
-			Messages:           mailboxMsgs,
-			History:            history,
-			Context:            input.Context,
-			SessionID:          input.SessionID,
-			TeamRoster:         teamRoster,
-			WorkspaceData:      wsSnippets,
-			SuggestedTools:     []string{"web_search", "web_fetch", "web_subpage_fetch", "web_crawl", "python_executor", "calculator", "file_read", "file_write", "file_edit", "file_delete", "file_list", "file_search", "diff_files", "json_query"},
-			RoleDescription:    input.Task,
-			Role:               input.Role,
-			TaskList:           currentTaskList,
-			ModelTier:          modelTier,
-			PreviousResponseID: lastResponseID,
-			SystemMessage:      pendingSystemMessage,
-			RunningNotes:       runningNotes,
-			IsSwarm:            true,
+			AgentID:             input.AgentID,
+			WorkflowID:          input.WorkflowID,
+			Task:                input.Task,
+			Iteration:           iteration,
+			MaxIterations:       input.MaxIterations,
+			Messages:            mailboxMsgs,
+			History:             history,
+			Context:             input.Context,
+			SessionID:           input.SessionID,
+			TeamRoster:          teamRoster,
+			WorkspaceData:       wsSnippets,
+			SuggestedTools:      []string{"web_search", "web_fetch", "web_subpage_fetch", "web_crawl", "python_executor", "calculator", "file_read", "file_write", "file_edit", "file_delete", "file_list", "file_search", "diff_files", "json_query"},
+			RoleDescription:     input.Task,
+			Role:                input.Role,
+			TaskList:            currentTaskList,
+			ModelTier:           modelTier,
+			PreviousResponseID:  lastResponseID,
+			SystemMessage:       pendingSystemMessage,
+			RunningNotes:        runningNotes,
+			IsSwarm:             true,
 			CumulativeToolCalls: cumulativeToolCalls,
-			TeamKnowledge:      ft.Knowledge(),
-			OriginalQuery:      input.OriginalQuery,
+			TeamKnowledge:       ft.Knowledge(),
+			OriginalQuery:       input.OriginalQuery,
 		}).Get(ctx, &stepResult); err != nil {
 			logger.Error("AgentLoop LLM step failed", "agent_id", input.AgentID, "error", err)
 			// Build fallback response from accumulated state
 			fallbackResponse := savedDoneResponse
 			if fallbackResponse == "" && len(history) > 0 {
-				for i := len(history) - 1; i >= 0; i-- {
-					if history[i].DecisionSummary != "" {
-						fallbackResponse = history[i].DecisionSummary
+				for _, h := range slices.Backward(history) {
+					if h.DecisionSummary != "" {
+						fallbackResponse = h.DecisionSummary
 						break
 					}
 				}
 			}
 			return AgentLoopResult{
-				AgentID:             input.AgentID,
-				Role:                input.Role,
-				Response:            fallbackResponse,
-				Success:             false,
-				Error:               fmt.Sprintf("LLM step failed at iteration %d: %v", iteration, err),
-				Iterations:          iteration,
-				TokensUsed:          totalTokens,
-				InputTokens:         totalInput,
-				OutputTokens:        totalOutput,
-				CacheReadTokens:     totalCacheRead,
+				AgentID:               input.AgentID,
+				Role:                  input.Role,
+				Response:              fallbackResponse,
+				Success:               false,
+				Error:                 fmt.Sprintf("LLM step failed at iteration %d: %v", iteration, err),
+				Iterations:            iteration,
+				TokensUsed:            totalTokens,
+				InputTokens:           totalInput,
+				OutputTokens:          totalOutput,
+				CacheReadTokens:       totalCacheRead,
 				CacheCreationTokens:   totalCacheCreation,
 				CacheCreation1hTokens: totalCacheCreation1h,
-				ModelUsed:           lastModel,
-				Provider:            lastProvider,
-				TeamKnowledge:       ft.Knowledge(),
+				ModelUsed:             lastModel,
+				Provider:              lastProvider,
+				TeamKnowledge:         ft.Knowledge(),
 			}, nil
 		}
 
@@ -777,19 +775,19 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 				provider = detectProviderFromModel(stepResult.ModelUsed)
 			}
 			_ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
-				UserID:              input.UserID,
-				SessionID:           input.SessionID,
-				TaskID:              input.WorkflowID,
-				AgentID:             input.AgentID,
-				Model:               stepResult.ModelUsed,
-				Provider:            provider,
-				InputTokens:         stepResult.InputTokens,
-				OutputTokens:        stepResult.OutputTokens,
-				CacheReadTokens:     stepResult.CacheReadTokens,
+				UserID:                input.UserID,
+				SessionID:             input.SessionID,
+				TaskID:                input.WorkflowID,
+				AgentID:               input.AgentID,
+				Model:                 stepResult.ModelUsed,
+				Provider:              provider,
+				InputTokens:           stepResult.InputTokens,
+				OutputTokens:          stepResult.OutputTokens,
+				CacheReadTokens:       stepResult.CacheReadTokens,
 				CacheCreationTokens:   stepResult.CacheCreationTokens,
-				CacheCreation1hTokens: 0, // AgentLoopStepResult doesn't carry per-TTL breakdown
-				CallSequence:        iteration, // Use Go iteration (per-agent), not Python global counter
-				Metadata:            map[string]any{"workflow": "swarm", "phase": "agent_step", "iteration": iteration},
+				CacheCreation1hTokens: 0,         // AgentLoopStepResult doesn't carry per-TTL breakdown
+				CallSequence:          iteration, // Use Go iteration (per-agent), not Python global counter
+				Metadata:              map[string]any{"workflow": "swarm", "phase": "agent_step", "iteration": iteration},
 			}).Get(ctx, nil)
 		}
 		if stepResult.ResponseID != "" {
@@ -831,20 +829,20 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 					shutdownResponse = fmt.Sprintf("Agent %s shutdown after %d iterations", input.AgentID, iteration)
 				}
 				return AgentLoopResult{
-					AgentID:      input.AgentID,
-					Role:         input.Role,
-					Response:     shutdownResponse,
-					Iterations:   iteration + 1,
-					TokensUsed:          totalTokens,
-					InputTokens:         totalInput,
-					OutputTokens:        totalOutput,
-					CacheReadTokens:     totalCacheRead,
+					AgentID:               input.AgentID,
+					Role:                  input.Role,
+					Response:              shutdownResponse,
+					Iterations:            iteration + 1,
+					TokensUsed:            totalTokens,
+					InputTokens:           totalInput,
+					OutputTokens:          totalOutput,
+					CacheReadTokens:       totalCacheRead,
 					CacheCreationTokens:   totalCacheCreation,
-				CacheCreation1hTokens: totalCacheCreation1h,
-					ModelUsed:           lastModel,
-					Provider:     lastProvider,
-					Success:      true,
-					TeamKnowledge: ft.Knowledge(),
+					CacheCreation1hTokens: totalCacheCreation1h,
+					ModelUsed:             lastModel,
+					Provider:              lastProvider,
+					Success:               true,
+					TeamKnowledge:         ft.Knowledge(),
 				}, nil
 			}
 		}
@@ -857,10 +855,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 			)
 			// Build summary from last 3 iterations only (avoid blowing synthesis context)
 			var histSummary string
-			startIdx := len(history) - 3
-			if startIdx < 0 {
-				startIdx = 0
-			}
+			startIdx := max(len(history)-3, 0)
 			for _, h := range history[startIdx:] {
 				s := fmt.Sprintf("%v", h.Result)
 				if s == "" || s == "<nil>" {
@@ -935,20 +930,20 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 			}).Get(ctx, nil)
 
 			return AgentLoopResult{
-				AgentID:      input.AgentID,
-				Role:         input.Role,
-				Response:     stepResult.Response,
-				Iterations:   iteration + 1,
-				TokensUsed:          totalTokens,
-				InputTokens:         totalInput,
-				OutputTokens:        totalOutput,
-				CacheReadTokens:     totalCacheRead,
+				AgentID:               input.AgentID,
+				Role:                  input.Role,
+				Response:              stepResult.Response,
+				Iterations:            iteration + 1,
+				TokensUsed:            totalTokens,
+				InputTokens:           totalInput,
+				OutputTokens:          totalOutput,
+				CacheReadTokens:       totalCacheRead,
 				CacheCreationTokens:   totalCacheCreation,
 				CacheCreation1hTokens: totalCacheCreation1h,
-				ModelUsed:           lastModel,
-				Provider:     lastProvider,
-				Success:      true,
-				TeamKnowledge: ft.Knowledge(),
+				ModelUsed:             lastModel,
+				Provider:              lastProvider,
+				Success:               true,
+				TeamKnowledge:         ft.Knowledge(),
 			}, nil
 
 		case "tool_call":
@@ -987,140 +982,137 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 			}
 
 			if turnResult == nil {
-			// Execute tool via standard agent execution (one-shot)
-			var toolRes activities.AgentExecutionResult
-			toolErr := workflow.ExecuteActivity(ctx, activities.ExecuteAgent, activities.AgentExecutionInput{
-				Query:            fmt.Sprintf("Execute tool %s with params: %v", stepResult.Tool, stepResult.ToolParams),
-				AgentID:          input.AgentID,
-				Context: func() map[string]any {
-					c := map[string]any{"force_swarm": true}
-					if toolModelOverride != "" {
-						c["model_override"] = toolModelOverride
-					}
-					if toolProviderOverride != "" {
-						c["provider_override"] = toolProviderOverride
-					}
-					return c
-				}(),
-				SuggestedTools:   []string{stepResult.Tool},
-				ToolParameters:   stepResult.ToolParams,
-				SessionID:        input.SessionID,
-				UserID:           input.UserID,
-				ParentWorkflowID: input.WorkflowID,
-			}).Get(ctx, &toolRes)
-
-			if toolErr == nil {
-				turnResult = toolRes.Response
-				consecutiveToolErrors = 0
-				consecutiveTransientErrors = 0
-				cumulativeToolCalls++ // Survives history truncation and reassignment
-
-				// Record tool execution LLM tokens (typically Haiku)
-				if toolRes.InputTokens > 0 || toolRes.OutputTokens > 0 {
-					recCtx := opts.WithTokenRecordOptions(ctx)
-					provider := toolRes.Provider
-					if provider == "" {
-						provider = detectProviderFromModel(toolRes.ModelUsed)
-					}
-					_ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
-						UserID:              input.UserID,
-						SessionID:           input.SessionID,
-						TaskID:              input.WorkflowID,
-						AgentID:             input.AgentID,
-						Model:               toolRes.ModelUsed,
-						Provider:            provider,
-						InputTokens:         toolRes.InputTokens,
-						OutputTokens:        toolRes.OutputTokens,
-						CacheReadTokens:     toolRes.CacheReadTokens,
-						CacheCreationTokens:   toolRes.CacheCreationTokens,
-						CacheCreation1hTokens: toolRes.CacheCreation1hTokens,
-						CallSequence:        iteration, // Use Go iteration (per-agent)
-						Metadata:            map[string]any{"workflow": "swarm", "phase": "tool_exec", "tool": stepResult.Tool},
-					}).Get(ctx, nil)
-				}
-
-				// Record tool cost entries (e.g., web_search API costs)
-				opts.RecordToolCostEntries(ctx, toolRes, input.UserID, input.SessionID, input.WorkflowID)
-
-				// Auto-register files written by agents
-				if stepResult.Tool == "file_write" {
-					if path, ok := stepResult.ToolParams["path"].(string); ok && path != "" {
-						filesWritten = append(filesWritten, path)
-						if p2pV >= 1 {
-							_ = workflow.ExecuteActivity(p2pCtx, constants.RegisterFileActivity, activities.RegisterFileInput{
-								WorkflowID: input.WorkflowID,
-								Path:       path,
-								Author:     input.AgentID,
-								Size:       len(fmt.Sprintf("%v", stepResult.ToolParams["content"])),
-								Summary:    truncateDecisionSummary(stepResult.DecisionSummary),
-							}).Get(ctx, nil)
+				// Execute tool via standard agent execution (one-shot)
+				var toolRes activities.AgentExecutionResult
+				toolErr := workflow.ExecuteActivity(ctx, activities.ExecuteAgent, activities.AgentExecutionInput{
+					Query:   fmt.Sprintf("Execute tool %s with params: %v", stepResult.Tool, stepResult.ToolParams),
+					AgentID: input.AgentID,
+					Context: func() map[string]any {
+						c := map[string]any{"force_swarm": true}
+						if toolModelOverride != "" {
+							c["model_override"] = toolModelOverride
 						}
+						if toolProviderOverride != "" {
+							c["provider_override"] = toolProviderOverride
+						}
+						return c
+					}(),
+					SuggestedTools:   []string{stepResult.Tool},
+					ToolParameters:   stepResult.ToolParams,
+					SessionID:        input.SessionID,
+					UserID:           input.UserID,
+					ParentWorkflowID: input.WorkflowID,
+				}).Get(ctx, &toolRes)
 
-						// Prevent double-write: inject system message reminding agent
-						// it already wrote its deliverable. This survives history truncation
-						// (unlike notes which may be too short after large file_write).
-						// 防止重复写入：注入系统消息提醒 agent 已交付过成果；
-						// 该提醒在历史被截断后仍保留（笔记类信息在大文件写入后往往太短而丢失）。
-						pendingSystemMessage = fmt.Sprintf(
-							"FILE ALREADY WRITTEN: You saved your deliverable to '%s' in the previous iteration. "+
-								"Do NOT write another file. Proceed to publish_data and then idle.",
-							path,
-						)
-					}
-				}
+				if toolErr == nil {
+					turnResult = toolRes.Response
+					consecutiveToolErrors = 0
+					consecutiveTransientErrors = 0
+					cumulativeToolCalls++ // Survives history truncation and reassignment
 
-				// L1 fetch cache write
-				if added := ft.writeCache(stepResult.Tool, stepResult.ToolParams, toolRes.Response, input.AgentID); len(added) > 0 {
-					for _, u := range added {
-						logger.Info("L1 fetch cache write", "agent_id", input.AgentID, "url", u, "chars", len(fmt.Sprintf("%v", toolRes.Response)))
+					// Record tool execution LLM tokens (typically Haiku)
+					if toolRes.InputTokens > 0 || toolRes.OutputTokens > 0 {
+						recCtx := opts.WithTokenRecordOptions(ctx)
+						provider := toolRes.Provider
+						if provider == "" {
+							provider = detectProviderFromModel(toolRes.ModelUsed)
+						}
+						_ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
+							UserID:                input.UserID,
+							SessionID:             input.SessionID,
+							TaskID:                input.WorkflowID,
+							AgentID:               input.AgentID,
+							Model:                 toolRes.ModelUsed,
+							Provider:              provider,
+							InputTokens:           toolRes.InputTokens,
+							OutputTokens:          toolRes.OutputTokens,
+							CacheReadTokens:       toolRes.CacheReadTokens,
+							CacheCreationTokens:   toolRes.CacheCreationTokens,
+							CacheCreation1hTokens: toolRes.CacheCreation1hTokens,
+							CallSequence:          iteration, // Use Go iteration (per-agent)
+							Metadata:              map[string]any{"workflow": "swarm", "phase": "tool_exec", "tool": stepResult.Tool},
+						}).Get(ctx, nil)
 					}
-				}
 
-				// Accumulate tool execution tokens into agent totals
-				totalTokens += toolRes.TokensUsed
-				totalInput += toolRes.InputTokens
-				totalOutput += toolRes.OutputTokens
-				totalCacheRead += toolRes.CacheReadTokens
-				totalCacheCreation += toolRes.CacheCreationTokens
-			totalCacheCreation1h += toolRes.CacheCreation1hTokens
-			} else {
-				if isTransientError(toolErr) {
-					consecutiveTransientErrors++
-					backoff := time.Duration(consecutiveTransientErrors) * 5 * time.Second
-					if backoff > 30*time.Second {
-						backoff = 30 * time.Second
+					// Record tool cost entries (e.g., web_search API costs)
+					opts.RecordToolCostEntries(ctx, toolRes, input.UserID, input.SessionID, input.WorkflowID)
+
+					// Auto-register files written by agents
+					if stepResult.Tool == "file_write" {
+						if path, ok := stepResult.ToolParams["path"].(string); ok && path != "" {
+							filesWritten = append(filesWritten, path)
+							if p2pV >= 1 {
+								_ = workflow.ExecuteActivity(p2pCtx, constants.RegisterFileActivity, activities.RegisterFileInput{
+									WorkflowID: input.WorkflowID,
+									Path:       path,
+									Author:     input.AgentID,
+									Size:       len(fmt.Sprintf("%v", stepResult.ToolParams["content"])),
+									Summary:    truncateDecisionSummary(stepResult.DecisionSummary),
+								}).Get(ctx, nil)
+							}
+
+							// Prevent double-write: inject system message reminding agent
+							// it already wrote its deliverable. This survives history truncation
+							// (unlike notes which may be too short after large file_write).
+							// 防止重复写入：注入系统消息提醒 agent 已交付过成果；
+							// 该提醒在历史被截断后仍保留（笔记类信息在大文件写入后往往太短而丢失）。
+							pendingSystemMessage = fmt.Sprintf(
+								"FILE ALREADY WRITTEN: You saved your deliverable to '%s' in the previous iteration. "+
+									"Do NOT write another file. Proceed to publish_data and then idle.",
+								path,
+							)
+						}
 					}
-					logger.Warn("Transient tool error, backing off",
-						"agent_id", input.AgentID,
-						"tool", stepResult.Tool,
-						"backoff", backoff,
-						"attempt", consecutiveTransientErrors,
-						"error", toolErr,
-					)
-					if err := workflow.Sleep(ctx, backoff); err != nil {
-						return AgentLoopResult{
-							AgentID:             input.AgentID,
-							Role:                input.Role,
-							Response:            savedDoneResponse,
-							Success:             false,
-							Error:               fmt.Sprintf("cancelled during backoff: %v", err),
-							TokensUsed:          totalTokens,
-							InputTokens:         totalInput,
-							OutputTokens:        totalOutput,
-							CacheReadTokens:     totalCacheRead,
-							CacheCreationTokens:   totalCacheCreation,
-				CacheCreation1hTokens: totalCacheCreation1h,
-							ModelUsed:           lastModel,
-							Provider:            lastProvider,
-							TeamKnowledge:       ft.Knowledge(),
-						}, nil
+
+					// L1 fetch cache write
+					if added := ft.writeCache(stepResult.Tool, stepResult.ToolParams, toolRes.Response, input.AgentID); len(added) > 0 {
+						for _, u := range added {
+							logger.Info("L1 fetch cache write", "agent_id", input.AgentID, "url", u, "chars", len(fmt.Sprintf("%v", toolRes.Response)))
+						}
 					}
-					turnResult = fmt.Sprintf("transient error (will retry): %v", toolErr)
+
+					// Accumulate tool execution tokens into agent totals
+					totalTokens += toolRes.TokensUsed
+					totalInput += toolRes.InputTokens
+					totalOutput += toolRes.OutputTokens
+					totalCacheRead += toolRes.CacheReadTokens
+					totalCacheCreation += toolRes.CacheCreationTokens
+					totalCacheCreation1h += toolRes.CacheCreation1hTokens
 				} else {
-					turnResult = fmt.Sprintf("tool error: %v", toolErr)
-					consecutiveToolErrors++
+					if isTransientError(toolErr) {
+						consecutiveTransientErrors++
+						backoff := min(time.Duration(consecutiveTransientErrors)*5*time.Second, 30*time.Second)
+						logger.Warn("Transient tool error, backing off",
+							"agent_id", input.AgentID,
+							"tool", stepResult.Tool,
+							"backoff", backoff,
+							"attempt", consecutiveTransientErrors,
+							"error", toolErr,
+						)
+						if err := workflow.Sleep(ctx, backoff); err != nil {
+							return AgentLoopResult{
+								AgentID:               input.AgentID,
+								Role:                  input.Role,
+								Response:              savedDoneResponse,
+								Success:               false,
+								Error:                 fmt.Sprintf("cancelled during backoff: %v", err),
+								TokensUsed:            totalTokens,
+								InputTokens:           totalInput,
+								OutputTokens:          totalOutput,
+								CacheReadTokens:       totalCacheRead,
+								CacheCreationTokens:   totalCacheCreation,
+								CacheCreation1hTokens: totalCacheCreation1h,
+								ModelUsed:             lastModel,
+								Provider:              lastProvider,
+								TeamKnowledge:         ft.Knowledge(),
+							}, nil
+						}
+						turnResult = fmt.Sprintf("transient error (will retry): %v", toolErr)
+					} else {
+						turnResult = fmt.Sprintf("tool error: %v", toolErr)
+						consecutiveToolErrors++
+					}
 				}
-			}
 			} // end if turnResult == nil (cache miss → execute tool)
 			history = append(history, activities.AgentLoopTurn{
 				Iteration:       iteration,
@@ -1377,20 +1369,20 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 					idleResponse = "Agent shutdown after idle"
 				}
 				return AgentLoopResult{
-					AgentID:      input.AgentID,
-					Role:         input.Role,
-					Response:     idleResponse,
-					Iterations:   iteration + 1,
-					TokensUsed:          totalTokens,
-					InputTokens:         totalInput,
-					OutputTokens:        totalOutput,
-					CacheReadTokens:     totalCacheRead,
+					AgentID:               input.AgentID,
+					Role:                  input.Role,
+					Response:              idleResponse,
+					Iterations:            iteration + 1,
+					TokensUsed:            totalTokens,
+					InputTokens:           totalInput,
+					OutputTokens:          totalOutput,
+					CacheReadTokens:       totalCacheRead,
 					CacheCreationTokens:   totalCacheCreation,
-				CacheCreation1hTokens: totalCacheCreation1h,
-					ModelUsed:           lastModel,
-					Provider:     lastProvider,
-					Success:      true,
-					TeamKnowledge: ft.Knowledge(),
+					CacheCreation1hTokens: totalCacheCreation1h,
+					ModelUsed:             lastModel,
+					Provider:              lastProvider,
+					Success:               true,
+					TeamKnowledge:         ft.Knowledge(),
 				}, nil
 			}
 
@@ -1434,10 +1426,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 				continue
 			}
 
-			newMax := input.MaxIterations + iterationsPerReassign
-			if newMax > maxTotalIterations {
-				newMax = maxTotalIterations
-			}
+			newMax := min(input.MaxIterations+iterationsPerReassign, maxTotalIterations)
 			if newMax > input.MaxIterations {
 				logger.Info("Extending iteration budget on reassignment",
 					"agent_id", input.AgentID,
@@ -1448,7 +1437,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 				input.MaxIterations = newMax
 			}
 
-			savedDoneResponse = ""     // Clear stale response so shutdown returns fresh result
+			savedDoneResponse = "" // Clear stale response so shutdown returns fresh result
 			continue
 
 		default:
@@ -1494,139 +1483,136 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 				}
 
 				if turnResult == nil {
-				var toolRes activities.AgentExecutionResult
-				toolErr := workflow.ExecuteActivity(ctx, activities.ExecuteAgent, activities.AgentExecutionInput{
-					Query:            fmt.Sprintf("Execute tool %s with params: %v", toolName, params),
-					AgentID:          input.AgentID,
-					Context: func() map[string]any {
-						c := map[string]any{"force_swarm": true}
-						if toolModelOverride != "" {
-							c["model_override"] = toolModelOverride
-						}
-						if toolProviderOverride != "" {
-							c["provider_override"] = toolProviderOverride
-						}
-						return c
-					}(),
-					SuggestedTools:   []string{toolName},
-					ToolParameters:   params,
-					SessionID:        input.SessionID,
-					UserID:           input.UserID,
-					ParentWorkflowID: input.WorkflowID,
-				}).Get(ctx, &toolRes)
-
-				if toolErr == nil {
-					turnResult = toolRes.Response
-					consecutiveToolErrors = 0
-					consecutiveTransientErrors = 0
-					cumulativeToolCalls++ // Survives history truncation and reassignment
-
-					// Record tool execution LLM tokens (typically Haiku)
-					if toolRes.InputTokens > 0 || toolRes.OutputTokens > 0 {
-						recCtx := opts.WithTokenRecordOptions(ctx)
-						provider := toolRes.Provider
-						if provider == "" {
-							provider = detectProviderFromModel(toolRes.ModelUsed)
-						}
-						_ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
-							UserID:              input.UserID,
-							SessionID:           input.SessionID,
-							TaskID:              input.WorkflowID,
-							AgentID:             input.AgentID,
-							Model:               toolRes.ModelUsed,
-							Provider:            provider,
-							InputTokens:         toolRes.InputTokens,
-							OutputTokens:        toolRes.OutputTokens,
-							CacheReadTokens:     toolRes.CacheReadTokens,
-							CacheCreationTokens:   toolRes.CacheCreationTokens,
-						CacheCreation1hTokens: toolRes.CacheCreation1hTokens,
-							CallSequence:        iteration, // Use Go iteration (per-agent)
-							Metadata:            map[string]any{"workflow": "swarm", "phase": "tool_exec", "tool": toolName},
-						}).Get(ctx, nil)
-					}
-
-					// Record tool cost entries (e.g., web_search API costs)
-					opts.RecordToolCostEntries(ctx, toolRes, input.UserID, input.SessionID, input.WorkflowID)
-
-					// Auto-register files written by agents
-					if toolName == "file_write" {
-						if path, ok := params["path"].(string); ok && path != "" {
-							if p2pV >= 1 {
-								_ = workflow.ExecuteActivity(p2pCtx, constants.RegisterFileActivity, activities.RegisterFileInput{
-									WorkflowID: input.WorkflowID,
-									Path:       path,
-									Author:     input.AgentID,
-									Size:       len(fmt.Sprintf("%v", params["content"])),
-									Summary:    truncateDecisionSummary(stepResult.DecisionSummary),
-								}).Get(ctx, nil)
+					var toolRes activities.AgentExecutionResult
+					toolErr := workflow.ExecuteActivity(ctx, activities.ExecuteAgent, activities.AgentExecutionInput{
+						Query:   fmt.Sprintf("Execute tool %s with params: %v", toolName, params),
+						AgentID: input.AgentID,
+						Context: func() map[string]any {
+							c := map[string]any{"force_swarm": true}
+							if toolModelOverride != "" {
+								c["model_override"] = toolModelOverride
 							}
+							if toolProviderOverride != "" {
+								c["provider_override"] = toolProviderOverride
+							}
+							return c
+						}(),
+						SuggestedTools:   []string{toolName},
+						ToolParameters:   params,
+						SessionID:        input.SessionID,
+						UserID:           input.UserID,
+						ParentWorkflowID: input.WorkflowID,
+					}).Get(ctx, &toolRes)
 
-							// Track for completion report (same as tool_call case)
-							filesWritten = append(filesWritten, path)
-							pendingSystemMessage = fmt.Sprintf(
-								"SUCCESS: File written to '%s'. Do NOT write to this file again. "+
-									"If you have more findings, go idle with key_findings.", path)
-						}
-					}
+					if toolErr == nil {
+						turnResult = toolRes.Response
+						consecutiveToolErrors = 0
+						consecutiveTransientErrors = 0
+						cumulativeToolCalls++ // Survives history truncation and reassignment
 
-					// L1 fetch cache write
-					if added := ft.writeCache(toolName, params, toolRes.Response, input.AgentID); len(added) > 0 {
-						for _, u := range added {
-							logger.Info("L1 fetch cache write", "agent_id", input.AgentID, "url", u, "chars", len(fmt.Sprintf("%v", toolRes.Response)))
+						// Record tool execution LLM tokens (typically Haiku)
+						if toolRes.InputTokens > 0 || toolRes.OutputTokens > 0 {
+							recCtx := opts.WithTokenRecordOptions(ctx)
+							provider := toolRes.Provider
+							if provider == "" {
+								provider = detectProviderFromModel(toolRes.ModelUsed)
+							}
+							_ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
+								UserID:                input.UserID,
+								SessionID:             input.SessionID,
+								TaskID:                input.WorkflowID,
+								AgentID:               input.AgentID,
+								Model:                 toolRes.ModelUsed,
+								Provider:              provider,
+								InputTokens:           toolRes.InputTokens,
+								OutputTokens:          toolRes.OutputTokens,
+								CacheReadTokens:       toolRes.CacheReadTokens,
+								CacheCreationTokens:   toolRes.CacheCreationTokens,
+								CacheCreation1hTokens: toolRes.CacheCreation1hTokens,
+								CallSequence:          iteration, // Use Go iteration (per-agent)
+								Metadata:              map[string]any{"workflow": "swarm", "phase": "tool_exec", "tool": toolName},
+							}).Get(ctx, nil)
 						}
-					}
 
-					// Accumulate tool execution tokens into agent totals
-					totalTokens += toolRes.TokensUsed
-					totalInput += toolRes.InputTokens
-					totalOutput += toolRes.OutputTokens
-					totalCacheRead += toolRes.CacheReadTokens
-					totalCacheCreation += toolRes.CacheCreationTokens
-			totalCacheCreation1h += toolRes.CacheCreation1hTokens
-				} else {
-					if isTransientError(toolErr) {
-						consecutiveTransientErrors++
-						backoff := time.Duration(consecutiveTransientErrors) * 5 * time.Second
-						if backoff > 30*time.Second {
-							backoff = 30 * time.Second
+						// Record tool cost entries (e.g., web_search API costs)
+						opts.RecordToolCostEntries(ctx, toolRes, input.UserID, input.SessionID, input.WorkflowID)
+
+						// Auto-register files written by agents
+						if toolName == "file_write" {
+							if path, ok := params["path"].(string); ok && path != "" {
+								if p2pV >= 1 {
+									_ = workflow.ExecuteActivity(p2pCtx, constants.RegisterFileActivity, activities.RegisterFileInput{
+										WorkflowID: input.WorkflowID,
+										Path:       path,
+										Author:     input.AgentID,
+										Size:       len(fmt.Sprintf("%v", params["content"])),
+										Summary:    truncateDecisionSummary(stepResult.DecisionSummary),
+									}).Get(ctx, nil)
+								}
+
+								// Track for completion report (same as tool_call case)
+								filesWritten = append(filesWritten, path)
+								pendingSystemMessage = fmt.Sprintf(
+									"SUCCESS: File written to '%s'. Do NOT write to this file again. "+
+										"If you have more findings, go idle with key_findings.", path)
+							}
 						}
-						logger.Warn("Transient tool error, backing off",
-							"agent_id", input.AgentID,
-							"tool", toolName,
-							"backoff", backoff,
-							"attempt", consecutiveTransientErrors,
-							"error", toolErr,
-						)
-						if err := workflow.Sleep(ctx, backoff); err != nil {
-							return AgentLoopResult{
-								AgentID:             input.AgentID,
-								Role:                input.Role,
-								Response:            savedDoneResponse,
-								Success:             false,
-								Error:               fmt.Sprintf("cancelled during backoff: %v", err),
-								TokensUsed:          totalTokens,
-								InputTokens:         totalInput,
-								OutputTokens:        totalOutput,
-								CacheReadTokens:     totalCacheRead,
-								CacheCreationTokens:   totalCacheCreation,
-				CacheCreation1hTokens: totalCacheCreation1h,
-								ModelUsed:           lastModel,
-								Provider:            lastProvider,
-								TeamKnowledge:       ft.Knowledge(),
-							}, nil
+
+						// L1 fetch cache write
+						if added := ft.writeCache(toolName, params, toolRes.Response, input.AgentID); len(added) > 0 {
+							for _, u := range added {
+								logger.Info("L1 fetch cache write", "agent_id", input.AgentID, "url", u, "chars", len(fmt.Sprintf("%v", toolRes.Response)))
+							}
 						}
-						turnResult = fmt.Sprintf("transient error (will retry): %v", toolErr)
+
+						// Accumulate tool execution tokens into agent totals
+						totalTokens += toolRes.TokensUsed
+						totalInput += toolRes.InputTokens
+						totalOutput += toolRes.OutputTokens
+						totalCacheRead += toolRes.CacheReadTokens
+						totalCacheCreation += toolRes.CacheCreationTokens
+						totalCacheCreation1h += toolRes.CacheCreation1hTokens
 					} else {
-						turnResult = fmt.Sprintf("tool error: %v", toolErr)
-						consecutiveToolErrors++
-						logger.Warn("Tool execution failed",
-							"agent_id", input.AgentID,
-							"tool", toolName,
-							"consecutive_errors", consecutiveToolErrors,
-							"error", toolErr,
-						)
+						if isTransientError(toolErr) {
+							consecutiveTransientErrors++
+							backoff := min(time.Duration(consecutiveTransientErrors)*5*time.Second, 30*time.Second)
+							logger.Warn("Transient tool error, backing off",
+								"agent_id", input.AgentID,
+								"tool", toolName,
+								"backoff", backoff,
+								"attempt", consecutiveTransientErrors,
+								"error", toolErr,
+							)
+							if err := workflow.Sleep(ctx, backoff); err != nil {
+								return AgentLoopResult{
+									AgentID:               input.AgentID,
+									Role:                  input.Role,
+									Response:              savedDoneResponse,
+									Success:               false,
+									Error:                 fmt.Sprintf("cancelled during backoff: %v", err),
+									TokensUsed:            totalTokens,
+									InputTokens:           totalInput,
+									OutputTokens:          totalOutput,
+									CacheReadTokens:       totalCacheRead,
+									CacheCreationTokens:   totalCacheCreation,
+									CacheCreation1hTokens: totalCacheCreation1h,
+									ModelUsed:             lastModel,
+									Provider:              lastProvider,
+									TeamKnowledge:         ft.Knowledge(),
+								}, nil
+							}
+							turnResult = fmt.Sprintf("transient error (will retry): %v", toolErr)
+						} else {
+							turnResult = fmt.Sprintf("tool error: %v", toolErr)
+							consecutiveToolErrors++
+							logger.Warn("Tool execution failed",
+								"agent_id", input.AgentID,
+								"tool", toolName,
+								"consecutive_errors", consecutiveToolErrors,
+								"error", toolErr,
+							)
+						}
 					}
-				}
 				} // end if !defaultCacheHit
 				history = append(history, activities.AgentLoopTurn{
 					Iteration:       iteration,
@@ -1644,21 +1630,21 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 						"last_tool", toolName,
 					)
 					return AgentLoopResult{
-						AgentID:      input.AgentID,
-						Role:         input.Role,
-						Response:     fmt.Sprintf("Agent stopped after %d consecutive tool failures. Last attempted: %s", consecutiveToolErrors, toolName),
-						Iterations:   iteration + 1,
-						TokensUsed:          totalTokens,
-						InputTokens:         totalInput,
-						OutputTokens:        totalOutput,
-						CacheReadTokens:     totalCacheRead,
+						AgentID:               input.AgentID,
+						Role:                  input.Role,
+						Response:              fmt.Sprintf("Agent stopped after %d consecutive tool failures. Last attempted: %s", consecutiveToolErrors, toolName),
+						Iterations:            iteration + 1,
+						TokensUsed:            totalTokens,
+						InputTokens:           totalInput,
+						OutputTokens:          totalOutput,
+						CacheReadTokens:       totalCacheRead,
 						CacheCreationTokens:   totalCacheCreation,
-				CacheCreation1hTokens: totalCacheCreation1h,
-						ModelUsed:           lastModel,
-						Provider:     lastProvider,
-						Success:      false,
-						Error:        "consecutive tool errors",
-						TeamKnowledge: ft.Knowledge(),
+						CacheCreation1hTokens: totalCacheCreation1h,
+						ModelUsed:             lastModel,
+						Provider:              lastProvider,
+						Success:               false,
+						Error:                 "consecutive tool errors",
+						TeamKnowledge:         ft.Knowledge(),
 					}, nil
 				}
 			}
@@ -1682,10 +1668,7 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 			)
 			// Build partial findings from history
 			var summary string
-			startIdx := len(history) - 3
-			if startIdx < 0 {
-				startIdx = 0
-			}
+			startIdx := max(len(history)-3, 0)
 			for _, h := range history[startIdx:] {
 				s := fmt.Sprintf("%v", h.Result)
 				if s == "" || s == "<nil>" {
@@ -1700,20 +1683,20 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 				summary = fmt.Sprintf("Agent %s converged after %d iterations with no further tool use.", input.AgentID, iteration+1)
 			}
 			return AgentLoopResult{
-				AgentID:      input.AgentID,
-				Role:         input.Role,
-				Response:     summary,
-				Iterations:   iteration + 1,
-				TokensUsed:          totalTokens,
-				InputTokens:         totalInput,
-				OutputTokens:        totalOutput,
-				CacheReadTokens:     totalCacheRead,
+				AgentID:               input.AgentID,
+				Role:                  input.Role,
+				Response:              summary,
+				Iterations:            iteration + 1,
+				TokensUsed:            totalTokens,
+				InputTokens:           totalInput,
+				OutputTokens:          totalOutput,
+				CacheReadTokens:       totalCacheRead,
 				CacheCreationTokens:   totalCacheCreation,
 				CacheCreation1hTokens: totalCacheCreation1h,
-				ModelUsed:           lastModel,
-				Provider:     lastProvider,
-				Success:      true,
-				TeamKnowledge: ft.Knowledge(),
+				ModelUsed:             lastModel,
+				Provider:              lastProvider,
+				Success:               true,
+				TeamKnowledge:         ft.Knowledge(),
 			}, nil
 		}
 
@@ -1739,20 +1722,20 @@ func AgentLoop(ctx workflow.Context, input AgentLoopInput) (AgentLoopResult, err
 		partialResponse = "Max iterations reached without completing task"
 	}
 	return AgentLoopResult{
-		AgentID:             input.AgentID,
-		Role:                input.Role,
-		Response:            partialResponse,
-		Iterations:          input.MaxIterations,
-		TokensUsed:          totalTokens,
-		InputTokens:         totalInput,
-		OutputTokens:        totalOutput,
-		CacheReadTokens:     totalCacheRead,
+		AgentID:               input.AgentID,
+		Role:                  input.Role,
+		Response:              partialResponse,
+		Iterations:            input.MaxIterations,
+		TokensUsed:            totalTokens,
+		InputTokens:           totalInput,
+		OutputTokens:          totalOutput,
+		CacheReadTokens:       totalCacheRead,
 		CacheCreationTokens:   totalCacheCreation,
-				CacheCreation1hTokens: totalCacheCreation1h,
-		ModelUsed:           lastModel,
-		Provider:            lastProvider,
-		Success:             true,
-		TeamKnowledge:       ft.Knowledge(),
+		CacheCreation1hTokens: totalCacheCreation1h,
+		ModelUsed:             lastModel,
+		Provider:              lastProvider,
+		Success:               true,
+		TeamKnowledge:         ft.Knowledge(),
 	}, nil
 }
 
@@ -1934,10 +1917,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 				if readErr != nil {
 					out = append(out, activities.FileReadResult{Path: fr.Path, Error: readErr.Error()})
 				} else {
-					out = append(out, activities.FileReadResult{
-						Path: readResult.Path, Content: readResult.Content,
-						Truncated: readResult.Truncated, Error: readResult.Error,
-					})
+					out = append(out, activities.FileReadResult(readResult))
 				}
 			}
 		}
@@ -1952,13 +1932,13 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	var agentFutures []agentFuture
 	var roster []TeamMember
 	results := make(map[string]AgentLoopResult)
-	idleSnapshots := make(map[string]AgentLoopResult)       // Best-effort snapshots from idle notifications
+	idleSnapshots := make(map[string]AgentLoopResult)              // Best-effort snapshots from idle notifications
 	swarmTeamKnowledge := make([]activities.TeamKnowledgeEntry, 0) // Cross-agent knowledge accumulator (L2)
 	completionCh := workflow.NewChannel(ctx)
 	agentStates := make(map[string]activities.LeadAgentState)
 	agentTaskStartTimes := make(map[string]time.Time) // agentID → when current task started
-	agentTaskMap := make(map[string]string)            // agentID → current taskID
-	leadHistory := make([]map[string]any, 0) // Must be non-nil for JSON → Pydantic List
+	agentTaskMap := make(map[string]string)           // agentID → current taskID
+	leadHistory := make([]map[string]any, 0)          // Must be non-nil for JSON → Pydantic List
 
 	// Version gate for Lead tool_call support (Temporal replay safety)
 	leadToolCallV := workflow.GetVersion(ctx, "lead-tool-call-v1", workflow.DefaultVersion, 1)
@@ -2010,10 +1990,10 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	for phase1ToolRound := 0; phase1ToolRound <= maxToolCallRounds; phase1ToolRound++ {
 		elapsed = int(workflow.Now(ctx).Sub(swarmStartTime).Seconds())
 		planErr := workflow.ExecuteActivity(leadCtx, constants.LeadDecisionActivity, activities.LeadDecisionInput{
-			WorkflowID: workflowID,
-			Event:      planEvent,
-			TaskList:   make([]activities.SwarmTask, 0),
-			AgentStates: make([]activities.LeadAgentState, 0),
+			WorkflowID:           workflowID,
+			Event:                planEvent,
+			TaskList:             make([]activities.SwarmTask, 0),
+			AgentStates:          make([]activities.LeadAgentState, 0),
 			Budget:               leadBudget(elapsed),
 			History:              leadHistory,
 			OriginalQuery:        input.Query,
@@ -2098,8 +2078,8 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 					EventType:  activities.StreamEventLeadToolCall,
 					AgentID:    "swarm-lead",
 					Message:    fmt.Sprintf("Lead executing %s", tc.Tool),
-					Payload: map[string]any{"tool": tc.Tool, "phase": "initial_plan"},
-					Timestamp: workflow.Now(ctx),
+					Payload:    map[string]any{"tool": tc.Tool, "phase": "initial_plan"},
+					Timestamp:  workflow.Now(ctx),
 				}).Get(ctx, nil)
 				var toolResult activities.LeadToolResult
 				toolErr := workflow.ExecuteActivity(toolCtx, constants.LeadExecuteToolActivity,
@@ -2234,9 +2214,7 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		// swarm agent 在 Lead 未指定 model_tier 时默认 "medium"，
 		// 避免落到 budget_agent_max 而被错误映射为 "small"。
 		agentCtx := make(map[string]any, len(input.Context)+1)
-		for k, v := range input.Context {
-			agentCtx[k] = v
-		}
+		maps.Copy(agentCtx, input.Context)
 		// Default: agents receive attachments. Lead can opt-out via skipAttachments
 		// to save tokens for agents that don't need files (e.g. web research).
 		if _, hasAtt := agentCtx["attachments"]; hasAtt && skipAttachments {
@@ -3015,10 +2993,10 @@ func SwarmWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			elapsed = int(workflow.Now(ctx).Sub(swarmStartTime).Seconds())
 			// Call Lead LLM for decision (D2: Temporal Activity ensures replay determinism)
 			leadErr := workflow.ExecuteActivity(leadCtx, constants.LeadDecisionActivity, activities.LeadDecisionInput{
-				WorkflowID:  workflowID,
-				Event:       event,
-				TaskList:    currentTaskList,
-				AgentStates: statesList,
+				WorkflowID:           workflowID,
+				Event:                event,
+				TaskList:             currentTaskList,
+				AgentStates:          statesList,
 				Budget:               leadBudget(elapsed),
 				History:              leadHistory,
 				Messages:             leadMsgMaps,
@@ -3752,13 +3730,13 @@ synthesis:
 		closingElapsed := int(workflow.Now(ctx).Sub(swarmStartTime).Seconds())
 
 		closingErr = workflow.ExecuteActivity(closingCtx, constants.LeadDecisionActivity, activities.LeadDecisionInput{
-			WorkflowID: workflowID,
-			Event:      closingEvent,
-			TaskList:   make([]activities.SwarmTask, 0),
-			AgentStates: make([]activities.LeadAgentState, 0),
+			WorkflowID:           workflowID,
+			Event:                closingEvent,
+			TaskList:             make([]activities.SwarmTask, 0),
+			AgentStates:          make([]activities.LeadAgentState, 0),
 			Budget:               leadBudget(closingElapsed),
-			History:             leadHistory,
-			OriginalQuery:       input.Query,
+			History:              leadHistory,
+			OriginalQuery:        input.Query,
 			ConversationHistory:  conversationHistory,
 			HitlMessages:         hitlMessages,
 			LeadModelOverride:    leadModelOverride,
@@ -3951,9 +3929,7 @@ synthesis:
 
 	// LLM synthesis — use medium model tier for swarm (agents already did heavy lifting)
 	synthContext := make(map[string]any, len(input.Context)+1)
-	for k, v := range input.Context {
-		synthContext[k] = v
-	}
+	maps.Copy(synthContext, input.Context)
 	if _, exists := synthContext["synthesis_model_tier"]; !exists {
 		synthContext["synthesis_model_tier"] = "medium"
 	}
@@ -4079,7 +4055,7 @@ func buildSwarmMetadata(results map[string]AgentLoopResult) map[string]any {
 	// 只用扁平 key：嵌套结构（如 agentSummaries）会让 Temporal JSON codec
 	// 反序列化 map[string]interface{} 失败，导致 metadata 为空、持久化的成本/token 归零。
 	meta := map[string]any{
-		"workflow_type":          "swarm",
+		"workflow_type":         "swarm",
 		"total_agents":          len(results),
 		"num_agents":            len(results),
 		"input_tokens":          totalInput,

@@ -2,6 +2,7 @@ package execution
 
 import (
 	"encoding/json"
+	"maps"
 	"strings"
 	"time"
 
@@ -82,9 +83,7 @@ func ExecuteSequential(
 	for i, task := range tasks {
 		// Prepare task context
 		taskContext := make(map[string]any)
-		for k, v := range config.Context {
-			taskContext[k] = v
-		}
+		maps.Copy(taskContext, config.Context)
 		taskContext["role"] = task.Role
 		taskContext["task_id"] = task.ID
 

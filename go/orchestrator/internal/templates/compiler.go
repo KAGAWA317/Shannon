@@ -2,6 +2,7 @@ package templates
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 )
 
@@ -168,8 +169,6 @@ func cloneMap(in map[string]any) map[string]any {
 		return nil
 	}
 	out := make(map[string]any, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
+	maps.Copy(out, in)
 	return out
 }

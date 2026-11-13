@@ -1,17 +1,17 @@
 package patterns
 
 import (
-    "fmt"
-    "sort"
-    "strings"
+	"fmt"
+	"sort"
+	"strings"
 
-    "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/activities"
-    "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/constants"
-    imodels "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/models"
-    pricing "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/pricing"
-    "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/util"
-    wopts "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/workflows/opts"
-    "go.temporal.io/sdk/workflow"
+	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/activities"
+	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/constants"
+	imodels "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/models"
+	pricing "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/pricing"
+	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/util"
+	wopts "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/workflows/opts"
+	"go.temporal.io/sdk/workflow"
 )
 
 // TreeOfThoughtsConfig configures the tree-of-thoughts pattern
@@ -273,90 +273,90 @@ Format each as a clear, concise thought.`,
 
 	// Generate branches
 	var branchResult activities.AgentExecutionResult
-    if tokenBudget > 0 {
-        wid := workflow.GetInfo(ctx).WorkflowExecution.ID
-        if context != nil {
-            if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
-                wid = p
-            }
-        }
-        err := workflow.ExecuteActivity(ctx,
-            constants.ExecuteAgentWithBudgetActivity,
-            activities.BudgetedAgentInput{
+	if tokenBudget > 0 {
+		wid := workflow.GetInfo(ctx).WorkflowExecution.ID
+		if context != nil {
+			if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
+				wid = p
+			}
+		}
+		err := workflow.ExecuteActivity(ctx,
+			constants.ExecuteAgentWithBudgetActivity,
+			activities.BudgetedAgentInput{
 				AgentInput: activities.AgentExecutionInput{
-					Query:             branchPrompt,
-					AgentID:           fmt.Sprintf("tot-generator-%s", parent.ID),
-					Context:           context,
-					Mode:              "exploration",
-					SessionID:         sessionID,
-					UserID:            opts.UserID,
-					History:           history,
-                        ParentWorkflowID: wid,
+					Query:            branchPrompt,
+					AgentID:          fmt.Sprintf("tot-generator-%s", parent.ID),
+					Context:          context,
+					Mode:             "exploration",
+					SessionID:        sessionID,
+					UserID:           opts.UserID,
+					History:          history,
+					ParentWorkflowID: wid,
 				},
 				MaxTokens: tokenBudget,
 				UserID:    opts.UserID,
 				TaskID:    wid,
 				ModelTier: modelTier,
 			}).Get(ctx, &branchResult)
-        if err != nil {
-            logger.Warn("Failed to generate branches", "error", err)
-            return branches
-        }
-    } else {
-        // Determine parent workflow for streaming correlation
-        wid := workflow.GetInfo(ctx).WorkflowExecution.ID
-        if context != nil {
-            if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
-                wid = p
-            }
-        }
-        err := workflow.ExecuteActivity(ctx,
-            activities.ExecuteAgent,
-            activities.AgentExecutionInput{
-                Query:             branchPrompt,
-                AgentID:           fmt.Sprintf("tot-generator-%s", parent.ID),
-                Context:           context,
-                Mode:              "exploration",
-                SessionID:         sessionID,
-                UserID:            opts.UserID,
-                History:           history,
-                ParentWorkflowID:  wid,
-            }).Get(ctx, &branchResult)
-        if err != nil {
-            logger.Warn("Failed to generate branches", "error", err)
-            return branches
-        }
-        // Record branch generation usage when not budgeted
-        inTok := branchResult.InputTokens
-        outTok := branchResult.OutputTokens
-        if inTok == 0 && outTok == 0 && branchResult.TokensUsed > 0 {
-            inTok = branchResult.TokensUsed * 6 / 10
-            outTok = branchResult.TokensUsed - inTok
-        }
-        model := branchResult.ModelUsed
-        if strings.TrimSpace(model) == "" {
-            if m := pricing.GetPriorityOneModel(modelTier); m != "" {
-                model = m
-            }
-        }
-        provider := branchResult.Provider
-        if strings.TrimSpace(provider) == "" {
-            provider = imodels.DetectProvider(model)
-        }
-        recCtx := wopts.WithTokenRecordOptions(ctx)
-        _ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
-            UserID:       opts.UserID,
-            SessionID:    sessionID,
-            TaskID:       wid,
-            AgentID:      fmt.Sprintf("tot-generator-%s", parent.ID),
-            Model:        model,
-            Provider:     provider,
-            InputTokens:  inTok,
-            OutputTokens: outTok,
-            Metadata:     map[string]any{"phase": "tree_of_thoughts"},
-        }).Get(recCtx, nil)
-        wopts.RecordToolCostEntries(ctx, branchResult, opts.UserID, sessionID, wid)
-    }
+		if err != nil {
+			logger.Warn("Failed to generate branches", "error", err)
+			return branches
+		}
+	} else {
+		// Determine parent workflow for streaming correlation
+		wid := workflow.GetInfo(ctx).WorkflowExecution.ID
+		if context != nil {
+			if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
+				wid = p
+			}
+		}
+		err := workflow.ExecuteActivity(ctx,
+			activities.ExecuteAgent,
+			activities.AgentExecutionInput{
+				Query:            branchPrompt,
+				AgentID:          fmt.Sprintf("tot-generator-%s", parent.ID),
+				Context:          context,
+				Mode:             "exploration",
+				SessionID:        sessionID,
+				UserID:           opts.UserID,
+				History:          history,
+				ParentWorkflowID: wid,
+			}).Get(ctx, &branchResult)
+		if err != nil {
+			logger.Warn("Failed to generate branches", "error", err)
+			return branches
+		}
+		// Record branch generation usage when not budgeted
+		inTok := branchResult.InputTokens
+		outTok := branchResult.OutputTokens
+		if inTok == 0 && outTok == 0 && branchResult.TokensUsed > 0 {
+			inTok = branchResult.TokensUsed * 6 / 10
+			outTok = branchResult.TokensUsed - inTok
+		}
+		model := branchResult.ModelUsed
+		if strings.TrimSpace(model) == "" {
+			if m := pricing.GetPriorityOneModel(modelTier); m != "" {
+				model = m
+			}
+		}
+		provider := branchResult.Provider
+		if strings.TrimSpace(provider) == "" {
+			provider = imodels.DetectProvider(model)
+		}
+		recCtx := wopts.WithTokenRecordOptions(ctx)
+		_ = workflow.ExecuteActivity(recCtx, constants.RecordTokenUsageActivity, activities.TokenUsageInput{
+			UserID:       opts.UserID,
+			SessionID:    sessionID,
+			TaskID:       wid,
+			AgentID:      fmt.Sprintf("tot-generator-%s", parent.ID),
+			Model:        model,
+			Provider:     provider,
+			InputTokens:  inTok,
+			OutputTokens: outTok,
+			Metadata:     map[string]any{"phase": "tree_of_thoughts"},
+		}).Get(recCtx, nil)
+		wopts.RecordToolCostEntries(ctx, branchResult, opts.UserID, sessionID, wid)
+	}
 
 	// Parse generated branches
 	thoughts := parseBranches(branchResult.Response, branchingFactor)
@@ -547,23 +547,24 @@ func synthesizeSolution(path []*ThoughtNode, query string) string {
 	}
 
 	// Build solution narrative
-	solution := fmt.Sprintf("Solution to: %s\n\n", query)
-	solution += "Reasoning path:\n"
+	var solution strings.Builder
+	solution.WriteString(fmt.Sprintf("Solution to: %s\n\n", query))
+	solution.WriteString("Reasoning path:\n")
 
 	for i, node := range path {
 		if i == 0 {
 			continue // Skip root
 		}
-		solution += fmt.Sprintf("%d. %s\n", i, node.Thought)
+		solution.WriteString(fmt.Sprintf("%d. %s\n", i, node.Thought))
 	}
 
 	// Add final answer if present
 	lastNode := path[len(path)-1]
 	if lastNode.IsTerminal {
-		solution += fmt.Sprintf("\nFinal Answer: %s", lastNode.Thought)
+		solution.WriteString(fmt.Sprintf("\nFinal Answer: %s", lastNode.Thought))
 	}
 
-	return solution
+	return solution.String()
 }
 
 // calculatePathConfidence calculates confidence for a solution path
@@ -589,8 +590,8 @@ func parseBranches(response string, expectedCount int) []string {
 	thoughts := []string{}
 
 	// Look for numbered items
-	lines := strings.Split(response, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(response, "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 
 		// Check for numbered points
@@ -610,8 +611,8 @@ func parseBranches(response string, expectedCount int) []string {
 
 	// If not enough structured thoughts, split by sentences
 	if len(thoughts) < expectedCount {
-		sentences := strings.Split(response, ". ")
-		for _, sent := range sentences {
+		sentences := strings.SplitSeq(response, ". ")
+		for sent := range sentences {
 			if len(thoughts) >= expectedCount {
 				break
 			}

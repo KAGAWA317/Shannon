@@ -77,14 +77,14 @@ type RegisterRequest struct {
 
 // RegisterResponse represents the successful registration/login response
 type RegisterResponse struct {
-	UserID       string                 `json:"user_id"`
-	TenantID     string                 `json:"tenant_id"`
-	AccessToken  string                 `json:"access_token"`            // JWT for web session
-	RefreshToken string                 `json:"refresh_token"`           // For token refresh
-	ExpiresIn    int                    `json:"expires_in"`              // Access token expiry in seconds
-	APIKey       string                 `json:"api_key"`                 // Only for NEW registrations (empty for existing users)
-	Tier         string                 `json:"tier"`
-	IsNewUser    bool                   `json:"is_new_user"`             // True if user was just created
+	UserID       string         `json:"user_id"`
+	TenantID     string         `json:"tenant_id"`
+	AccessToken  string         `json:"access_token"`  // JWT for web session
+	RefreshToken string         `json:"refresh_token"` // For token refresh
+	ExpiresIn    int            `json:"expires_in"`    // Access token expiry in seconds
+	APIKey       string         `json:"api_key"`       // Only for NEW registrations (empty for existing users)
+	Tier         string         `json:"tier"`
+	IsNewUser    bool           `json:"is_new_user"` // True if user was just created
 	Quotas       map[string]any `json:"quotas"`
 	User         UserInfo       `json:"user"`
 }
@@ -153,12 +153,12 @@ type CreateAPIKeyRequest struct {
 
 // CreateAPIKeyResponse represents the response after creating an API key
 type CreateAPIKeyResponse struct {
-	ID        string  `json:"id"`
-	Name      string  `json:"name"`
-	APIKey    string  `json:"api_key"` // Full key - only returned once!
-	KeyPrefix string  `json:"key_prefix"`
-	CreatedAt string  `json:"created_at"`
-	Warning   string  `json:"warning"` // Remind user to save the key
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	APIKey    string `json:"api_key"` // Full key - only returned once!
+	KeyPrefix string `json:"key_prefix"`
+	CreatedAt string `json:"created_at"`
+	Warning   string `json:"warning"` // Remind user to save the key
 }
 
 // ErrorResponse represents an error response
@@ -627,8 +627,8 @@ func getClientIP(r *http.Request) string {
 		// Take the rightmost non-empty IP (added by ALB, not spoofable)
 		// 取最右侧的非空 IP（由 ALB 追加，不可伪造）。
 		parts := strings.Split(xff, ",")
-		for i := len(parts) - 1; i >= 0; i-- {
-			ip := strings.TrimSpace(parts[i])
+		for _, part := range slices.Backward(parts) {
+			ip := strings.TrimSpace(part)
 			if ip != "" {
 				return ip
 			}

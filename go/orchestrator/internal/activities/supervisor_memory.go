@@ -515,12 +515,7 @@ func loadUserPreferences(ctx context.Context, memory *SupervisorMemoryContext, s
 
 // RecommendWorkflowStrategy provides a suggested workflow strategy using supervisor memory.
 func RecommendWorkflowStrategy(ctx context.Context, input RecommendStrategyInput) (RecommendStrategyOutput, error) {
-	memory, err := FetchSupervisorMemory(ctx, FetchSupervisorMemoryInput{
-		SessionID: input.SessionID,
-		UserID:    input.UserID,
-		TenantID:  input.TenantID,
-		Query:     input.Query,
-	})
+	memory, err := FetchSupervisorMemory(ctx, FetchSupervisorMemoryInput(input))
 	if err != nil {
 		return RecommendStrategyOutput{}, err
 	}
@@ -809,8 +804,8 @@ func calculateSimilarity(a, b string) float64 {
 	common := 0
 	for _, aw := range aWords {
 		if slices.Contains(bWords, aw) {
-				common++
-			}
+			common++
+		}
 	}
 
 	if len(aWords) == 0 || len(bWords) == 0 {
@@ -828,13 +823,6 @@ func matchesPattern(query string, pattern FailurePattern) bool {
 		}
 	}
 	return false
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 // RecordDecompositionResult stores the decomposition outcome for future learning
@@ -968,7 +956,7 @@ func cleanupStrategyPerformance(memory *SupervisorMemoryContext, logger log.Logg
 		// Remove oldest entries to stay within limit
 		// 删除最旧的 entry，回到上限之内
 		toRemove := len(entries) - MaxStrategyPerformanceEntries
-		for i := 0; i < toRemove; i++ {
+		for i := range toRemove {
 			delete(memory.StrategyPerformance, entries[i].strategy)
 			expiredCount++
 		}

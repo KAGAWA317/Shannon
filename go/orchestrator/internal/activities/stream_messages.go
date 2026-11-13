@@ -463,8 +463,8 @@ func extractSummary(text string, maxLen int) string {
 
 	// Try to get first line that's not empty or a header
 	// 找第一行非空、且不是标题的内容。
-	lines := strings.Split(text, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(text, "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		// Skip empty lines, headers, and JSON-like content
 		// 跳过空行、标题行与类 JSON 内容。

@@ -26,7 +26,6 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-
 // Handler handles OpenAI-compatible API requests.
 type Handler struct {
 	orchClient     orchpb.OrchestratorServiceClient
@@ -36,8 +35,8 @@ type Handler struct {
 	registry       *Registry
 	translator     *Translator
 	sessionManager *SessionManager
-	adminURL      string // URL for SSE streaming (e.g., "http://orchestrator:8081")
-	llmServiceURL string
+	adminURL       string // URL for SSE streaming (e.g., "http://orchestrator:8081")
+	llmServiceURL  string
 	attStore       *attachments.Store
 }
 
@@ -67,8 +66,8 @@ func NewHandler(
 		registry:       registry,
 		translator:     NewTranslator(registry),
 		sessionManager: NewSessionManager(redisClient, logger),
-		adminURL:      strings.TrimRight(adminURL, "/"),
-		llmServiceURL: strings.TrimRight(llmURL, "/"),
+		adminURL:       strings.TrimRight(adminURL, "/"),
+		llmServiceURL:  strings.TrimRight(llmURL, "/"),
 		attStore:       attachments.NewStore(redisClient, 30*time.Minute),
 	}, nil
 }
@@ -506,8 +505,8 @@ func (h *Handler) withGRPCMetadata(ctx context.Context, r *http.Request) context
 
 func normalizeAPIKey(token string) string {
 	token = strings.TrimSpace(token)
-	if strings.HasPrefix(token, "sk-shannon-") {
-		token = strings.TrimPrefix(token, "sk-shannon-")
+	if after, ok := strings.CutPrefix(token, "sk-shannon-"); ok {
+		token = after
 		if !strings.HasPrefix(token, "sk_") {
 			token = "sk_" + token
 		}
@@ -788,8 +787,8 @@ func (h *Handler) handleCompletionsStream(
 		line := scanner.Text()
 
 		// Track data lines for usage extraction
-		if strings.HasPrefix(line, "data: ") {
-			payload := strings.TrimPrefix(line, "data: ")
+		if after, ok0 := strings.CutPrefix(line, "data: "); ok0 {
+			payload := after
 			prevDataLine = lastDataLine
 			lastDataLine = payload
 		}

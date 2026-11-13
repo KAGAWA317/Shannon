@@ -134,14 +134,8 @@ func shapeHistory(messages []Message, nPrimers, nRecents int) []Message {
 	if nPrimers+nRecents >= m {
 		return messages
 	}
-	primersEnd := nPrimers
-	if primersEnd > m {
-		primersEnd = m
-	}
-	recentsStart := m - nRecents
-	if recentsStart < primersEnd {
-		recentsStart = primersEnd
-	}
+	primersEnd := min(nPrimers, m)
+	recentsStart := max(m-nRecents, primersEnd)
 	shaped := make([]Message, 0, primersEnd+(m-recentsStart))
 	shaped = append(shaped, messages[:primersEnd]...)
 	shaped = append(shaped, messages[recentsStart:]...)
@@ -202,7 +196,7 @@ func AddTaskContextToMetadata(result TaskResult, taskContext map[string]any) Tas
 	if result.Metadata == nil {
 		result.Metadata = make(map[string]any)
 	}
-	if taskContext != nil && len(taskContext) > 0 {
+	if len(taskContext) > 0 {
 		result.Metadata["task_context"] = taskContext
 	}
 	return result

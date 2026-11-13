@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"sync"
@@ -206,9 +207,7 @@ func (cm *ConfigManager) GetConfig(filename string) (map[string]any, bool) {
 	// Return a copy to prevent concurrent modification
 	// 返回副本，防止并发修改
 	result := make(map[string]any)
-	for k, v := range config {
-		result[k] = v
-	}
+	maps.Copy(result, config)
 
 	return result, true
 }
@@ -221,9 +220,7 @@ func (cm *ConfigManager) GetAllConfigs() map[string]map[string]any {
 	result := make(map[string]map[string]any)
 	for filename, config := range cm.configs {
 		configCopy := make(map[string]any)
-		for k, v := range config {
-			configCopy[k] = v
-		}
+		maps.Copy(configCopy, config)
 		result[filename] = configCopy
 	}
 
@@ -260,9 +257,7 @@ func (cm *ConfigManager) SetConfig(filename string, config map[string]any) error
 	// Create a deep copy of the config for handlers
 	// 为 handler 深拷贝配置
 	configCopy := make(map[string]any)
-	for k, v := range config {
-		configCopy[k] = v
-	}
+	maps.Copy(configCopy, config)
 
 	// Update config and copy handlers under lock
 	// 在锁内更新配置并复制 handler 列表
@@ -525,9 +520,7 @@ func (cm *ConfigManager) loadConfigFile(filePath, action string) error {
 	// Create a deep copy of the config for handlers to avoid sharing mutable data
 	// 为 handler 深拷贝配置，避免共享可变数据
 	configCopy := make(map[string]any)
-	for k, v := range config {
-		configCopy[k] = v
-	}
+	maps.Copy(configCopy, config)
 
 	// Update configuration and get handlers in one lock operation
 	// 一次加锁完成配置更新与 handler 获取
@@ -592,9 +585,7 @@ func (cm *ConfigManager) handleFileRemoval(filename string) {
 	var configCopy map[string]any
 	if config != nil {
 		configCopy = make(map[string]any)
-		for k, v := range config {
-			configCopy[k] = v
-		}
+		maps.Copy(configCopy, config)
 	}
 
 	// Notify handlers asynchronously without holding locks

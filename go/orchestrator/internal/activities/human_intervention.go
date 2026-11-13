@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"sync"
 	"time"
 
@@ -178,19 +179,15 @@ func EvaluateApprovalPolicy(policy ApprovalPolicy, context map[string]any) (bool
 		switch tools := context["tools_to_use"].(type) {
 		case []string:
 			for _, tool := range tools {
-				for _, requiredTool := range policy.RequireForTools {
-					if tool == requiredTool {
-						return true, fmt.Sprintf("Tool '%s' requires approval", tool)
-					}
+				if slices.Contains(policy.RequireForTools, tool) {
+					return true, fmt.Sprintf("Tool '%s' requires approval", tool)
 				}
 			}
 		case []any:
 			for _, toolInterface := range tools {
 				if tool, ok := toolInterface.(string); ok {
-					for _, requiredTool := range policy.RequireForTools {
-						if tool == requiredTool {
-							return true, fmt.Sprintf("Tool '%s' requires approval", tool)
-						}
+					if slices.Contains(policy.RequireForTools, tool) {
+						return true, fmt.Sprintf("Tool '%s' requires approval", tool)
 					}
 				}
 			}

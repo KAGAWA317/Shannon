@@ -316,7 +316,7 @@ func (h *TimelineHandler) buildTimeline(ctx context.Context, workflowID, runID, 
 			}
 		default:
 			if mode == "full" {
-				add("EVENT", fmt.Sprintf("%s", e.EventType.String()), ts, uint64(e.GetEventId()))
+				add("EVENT", e.EventType.String(), ts, uint64(e.GetEventId()))
 			}
 		}
 	}

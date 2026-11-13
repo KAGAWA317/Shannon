@@ -3,6 +3,7 @@ package workflows
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -409,7 +410,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 			needsTools = true
 			break
 		}
-		if subtask.ToolParameters != nil && len(subtask.ToolParameters) > 0 {
+		if len(subtask.ToolParameters) > 0 {
 			needsTools = true
 			break
 		}
@@ -539,9 +540,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 
 		// Build context, injecting role when enabled
 		childCtx := make(map[string]any)
-		for k, v := range input.Context {
-			childCtx[k] = v
-		}
+		maps.Copy(childCtx, input.Context)
 		// Multimodal: all subtask agents receive attachments by default.
 		// Go bool can't distinguish "unset" from "false", so we can't safely opt-out
 		// based on NeedsAttachments. Cost optimization happens at the Swarm layer
@@ -722,10 +721,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 					attempts++
 
 					// Increase backoff up to max
-					backoff = backoff * 2
-					if backoff > maxBackoff {
-						backoff = maxBackoff
-					}
+					backoff = min(backoff*2, maxBackoff)
 				}
 				if workflow.Now(ctx).Sub(startTime) >= maxWaitTime {
 					logger.Warn("Dependency wait timeout", "topic", topic, "wait_time", maxWaitTime, "attempts", attempts)
@@ -1051,9 +1047,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	// Prepare synthesis context with collected citations from child results
 	ctxForSynth := make(map[string]any)
 	if input.Context != nil {
-		for k, v := range input.Context {
-			ctxForSynth[k] = v
-		}
+		maps.Copy(ctxForSynth, input.Context)
 	}
 	var collectedCitations []metadata.Citation
 	{
@@ -1552,9 +1546,7 @@ func SupervisorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 
 	// Aggregate agent metadata (model, provider, tokens, cost)
 	agentMeta := metadata.AggregateAgentMetadata(childResults, synth.TokensUsed)
-	for k, v := range agentMeta {
-		meta[k] = v
-	}
+	maps.Copy(meta, agentMeta)
 
 	// Ensure total_tokens present (fallback to computed workflow total)
 	if tv, ok := meta["total_tokens"]; !ok || (ok && ((func() int {

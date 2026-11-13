@@ -2,6 +2,7 @@ package patterns
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 	"time" // Used for activity timeout durations
 
@@ -123,9 +124,7 @@ func ReactLoop(
 		})
 
 		reasonContext := make(map[string]any)
-		for k, v := range baseContext {
-			reasonContext[k] = v
-		}
+		maps.Copy(reasonContext, baseContext)
 		reasonContext["query"] = query
 		reasonContext["observations"] = getRecentObservations(observations, config.ObservationWindow)
 		reasonContext["thoughts"] = thoughts
@@ -288,9 +287,7 @@ func ReactLoop(
 
 		// Phase 2: ACT - Execute the planned action
 		actionContext := make(map[string]any)
-		for k, v := range baseContext {
-			actionContext[k] = v
-		}
+		maps.Copy(actionContext, baseContext)
 		actionContext["query"] = query
 		actionContext["current_thought"] = reasonResult.Response
 		actionContext["observations"] = getRecentObservations(observations, config.ObservationWindow)

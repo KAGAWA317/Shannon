@@ -2,6 +2,7 @@ package strategies
 
 import (
 	"fmt"
+	"maps"
 	"time"
 
 	"go.temporal.io/sdk/temporal"
@@ -64,12 +65,8 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 
 	// Prepare base context
 	baseContext := make(map[string]any)
-	for k, v := range input.Context {
-		baseContext[k] = v
-	}
-	for k, v := range input.SessionCtx {
-		baseContext[k] = v
-	}
+	maps.Copy(baseContext, input.Context)
+	maps.Copy(baseContext, input.SessionCtx)
 	if input.ParentWorkflowID != "" {
 		baseContext["parent_workflow_id"] = input.ParentWorkflowID
 	}
@@ -86,7 +83,7 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 
 	// Configure browser loop
 	browserConfig := patterns.BrowserConfig{
-		MaxIterations: 15, // Browser tasks typically need more iterations
+		MaxIterations: 15,     // Browser tasks typically need more iterations
 		ActionTimeout: 180000, // 3 minutes per action
 	}
 
@@ -219,9 +216,7 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 		},
 	}
 	agentMeta := metadata.AggregateAgentMetadata(agentResults, 0)
-	for k, v := range agentMeta {
-		meta[k] = v
-	}
+	maps.Copy(meta, agentMeta)
 
 	// Compute estimated cost
 	if totalTokens > 0 {

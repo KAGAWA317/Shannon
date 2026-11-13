@@ -52,7 +52,7 @@ func sanitizeValue(v any) any {
 func sanitizeSliceValue(rv reflect.Value) []any {
 	length := rv.Len()
 	result := make([]any, length)
-	for i := 0; i < length; i++ {
+	for i := range length {
 		result[i] = sanitizeValue(rv.Index(i).Interface())
 	}
 	return result

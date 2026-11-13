@@ -2,6 +2,7 @@ package session
 
 import (
 	"errors"
+	"slices"
 	"time"
 )
 
@@ -129,8 +130,8 @@ func (s *Session) GetHistorySummary(maxTokens int) string {
 	currentTokens := 0
 
 	// Start from most recent messages
-	for i := len(s.History) - 1; i >= 0; i-- {
-		msg := s.History[i]
+	for _, msg := range slices.Backward(s.History) {
+
 		// Rough token estimate: 1 token per 4 characters
 		// 粗略的 token 估算：每 4 个字符 1 token
 		msgTokens := len(msg.Content) / 4

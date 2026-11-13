@@ -2,6 +2,7 @@ package strategies
 
 import (
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/activities"
@@ -66,10 +67,10 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 
 	// Phase 1: Use Tree-of-Thoughts for systematic exploration
 	totConfig := patterns.TreeOfThoughtsConfig{
-		MaxDepth:          config.ExploratoryMaxIterations,
-		BranchingFactor:   config.ExploratoryBranchFactor,
-		EvaluationMethod:  "scoring",
-		PruningThreshold:  1.0 - config.ExploratoryConfidenceThreshold, // Invert for pruning
+		MaxDepth:         config.ExploratoryMaxIterations,
+		BranchingFactor:  config.ExploratoryBranchFactor,
+		EvaluationMethod: "scoring",
+		PruningThreshold: 1.0 - config.ExploratoryConfidenceThreshold, // Invert for pruning
 		// 配置里是"可接受置信度"，剪枝要的是"最低分"，两者互为补数。
 		ExplorationBudget: config.ExploratoryMaxIterations * config.ExploratoryBranchFactor,
 		BacktrackEnabled:  true,
@@ -83,9 +84,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 
 	// Ensure parent workflow ID is available in context passed to patterns
 	ctxMap := make(map[string]any)
-	for k, v := range input.Context {
-		ctxMap[k] = v
-	}
+	maps.Copy(ctxMap, input.Context)
 	if input.ParentWorkflowID != "" {
 		ctxMap["parent_workflow_id"] = input.ParentWorkflowID
 	}
@@ -251,9 +250,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 
 		// Prepare debate context with exploration findings
 		debateContext := make(map[string]any)
-		for k, v := range input.Context {
-			debateContext[k] = v
-		}
+		maps.Copy(debateContext, input.Context)
 		if input.ParentWorkflowID != "" {
 			debateContext["parent_workflow_id"] = input.ParentWorkflowID
 		}
@@ -312,15 +309,15 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 			},
 		}
 
-        reflectedResult, reflectedConfidence, reflectionTokens, err := patterns.ReflectOnResult(
-            ctx,
-            input.Query,
-            finalResult,
-            agentResults,
-            ctxMap,
-            reflectionConfig,
-            opts,
-        )
+		reflectedResult, reflectedConfidence, reflectionTokens, err := patterns.ReflectOnResult(
+			ctx,
+			input.Query,
+			finalResult,
+			agentResults,
+			ctxMap,
+			reflectionConfig,
+			opts,
+		)
 
 		if err == nil {
 			finalResult = reflectedResult
@@ -407,9 +404,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	}
 	reflectionTokensCount := totalTokens - totResult.TotalTokens // Approximate reflection tokens
 	agentMeta := metadata.AggregateAgentMetadata(agentResults, reflectionTokensCount)
-	for k, v := range agentMeta {
-		meta[k] = v
-	}
+	maps.Copy(meta, agentMeta)
 
 	// Align: compute and include estimated cost using centralized pricing
 	if totalTokens > 0 {

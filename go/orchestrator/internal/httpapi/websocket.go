@@ -36,7 +36,7 @@ func (h *StreamingHandler) handleWS(w http.ResponseWriter, r *http.Request) {
 	// Optional filters
 	typeFilter := map[string]struct{}{}
 	if s := r.URL.Query().Get("types"); s != "" {
-		for _, t := range strings.Split(s, ",") {
+		for t := range strings.SplitSeq(s, ",") {
 			t = strings.TrimSpace(t)
 			if t != "" {
 				typeFilter[t] = struct{}{}

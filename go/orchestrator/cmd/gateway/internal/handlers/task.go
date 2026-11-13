@@ -8,9 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -203,9 +205,7 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 	// Ensure context map exists so we can inject optional fields safely
 	ctxMap := map[string]any{}
 	if len(req.Context) > 0 {
-		for k, v := range req.Context {
-			ctxMap[k] = v
-		}
+		maps.Copy(ctxMap, req.Context)
 	}
 
 	// Normalize alias: context.template_name -> context.template (if not already set)
@@ -246,11 +246,8 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 					authorized = true
 				}
 				// Check for explicit skills:dangerous scope
-				for _, scope := range userCtx.Scopes {
-					if scope == auth.ScopeSkillsDangerous {
-						authorized = true
-						break
-					}
+				if slices.Contains(userCtx.Scopes, auth.ScopeSkillsDangerous) {
+					authorized = true
 				}
 			}
 			if !authorized {
@@ -315,13 +312,7 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 	if po := strings.TrimSpace(strings.ToLower(req.ProviderOverride)); po != "" {
 		// Validate provider exists
 		validProviders := []string{"openai", "anthropic", "google", "groq", "xai", "deepseek", "qwen", "zai", "kimi", "minimax", "ollama", "mistral", "cohere"}
-		isValid := false
-		for _, valid := range validProviders {
-			if po == valid {
-				isValid = true
-				break
-			}
-		}
+		isValid := slices.Contains(validProviders, po)
 		if !isValid {
 			h.sendError(w, fmt.Sprintf("Invalid provider_override: %s (allowed: %s)", po, strings.Join(validProviders, ", ")), http.StatusBadRequest)
 			return false
@@ -532,7 +523,6 @@ type TaskSummary struct {
 	CompletedAt     *time.Time     `json:"completed_at,omitempty"`
 	TotalTokenUsage map[string]any `json:"total_token_usage,omitempty"`
 }
-
 
 // SubmitTask handles POST /api/v1/tasks
 func (h *TaskHandler) SubmitTask(w http.ResponseWriter, r *http.Request) {
@@ -956,10 +946,7 @@ func (h *TaskHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	offset := parseIntDefault(q.Get("offset"), 0)
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(parseIntDefault(q.Get("offset"), 0), 0)
 	sessionID := q.Get("session_id")
 	statusStr := q.Get("status")
 
@@ -1060,10 +1047,7 @@ func (h *TaskHandler) GetTaskEvents(w http.ResponseWriter, r *http.Request) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	offset := parseIntDefault(q.Get("offset"), 0)
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(parseIntDefault(q.Get("offset"), 0), 0)
 
 	rows, err := h.db.QueryxContext(ctx, `
         SELECT workflow_id, type, COALESCE(agent_id,''), COALESCE(message,''), timestamp, COALESCE(seq,0), COALESCE(stream_id,''), COALESCE(payload, '{}')
@@ -1520,7 +1504,6 @@ func (h *TaskHandler) extractAndStoreContextAttachments(ctx context.Context, ses
 		return nil
 	}
 
-
 	attStore := attachments.NewStore(h.redis, 30*time.Minute)
 	var refs []any
 	var totalDecodedBytes int
@@ -1552,9 +1535,7 @@ func (h *TaskHandler) extractAndStoreContextAttachments(ctx context.Context, ses
 				return fmt.Errorf("rejected attachment type: %s (executables / installers are not accepted)", mt)
 			}
 			ref := make(map[string]any, len(am))
-			for k, v := range am {
-				ref[k] = v
-			}
+			maps.Copy(ref, am)
 			if thumb, ok := sanitizeAttachmentThumbnail(am["thumbnail"]); ok {
 				ref["thumbnail"] = thumb
 			} else {
@@ -1636,7 +1617,6 @@ func sanitizeAttachmentThumbnail(raw any) (string, bool) {
 	}
 	return thumb, true
 }
-
 
 // checkWorkspaceQuota checks if the tenant has exceeded their workspace quota.
 // Uses count-based approach: count active sessions for tenant, compare to workspace_max_size_gb.
