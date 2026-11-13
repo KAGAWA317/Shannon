@@ -143,10 +143,8 @@ func ReactLoop(
 		// Execute reasoning with optional budget
 		if opts.BudgetAgentMax > 0 {
 			wid := workflow.GetInfo(ctx).WorkflowExecution.ID
-			if reasonContext != nil {
-				if p, ok := reasonContext["parent_workflow_id"].(string); ok && p != "" {
-					wid = p
-				}
+			if p, ok := reasonContext["parent_workflow_id"].(string); ok && p != "" {
+				wid = p
 			}
 			err = workflow.ExecuteActivity(ctx,
 				constants.ExecuteAgentWithBudgetActivity,
@@ -169,10 +167,8 @@ func ReactLoop(
 		} else {
 			// Determine parent workflow for streaming correlation
 			wid := workflow.GetInfo(ctx).WorkflowExecution.ID
-			if reasonContext != nil {
-				if p, ok := reasonContext["parent_workflow_id"].(string); ok && p != "" {
-					wid = p
-				}
+			if p, ok := reasonContext["parent_workflow_id"].(string); ok && p != "" {
+				wid = p
 			}
 			err = workflow.ExecuteActivity(ctx,
 				"ExecuteAgent",
@@ -323,70 +319,64 @@ func ReactLoop(
 			// Research mode: be explicit about tool usage and reporting
 			// Build quoted queries and site filters from context when available
 			quoted := ""
-			if actionContext != nil {
-				if eq, ok := actionContext["exact_queries"]; ok {
-					switch t := eq.(type) {
-					case []string:
-						if len(t) > 0 {
-							quoted = strings.Join(t, " OR ")
+			if eq, ok := actionContext["exact_queries"]; ok {
+				switch t := eq.(type) {
+				case []string:
+					if len(t) > 0 {
+						quoted = strings.Join(t, " OR ")
+					}
+				case []any:
+					parts := make([]string, 0, len(t))
+					for _, it := range t {
+						if s, ok := it.(string); ok && s != "" {
+							parts = append(parts, s)
 						}
-					case []any:
-						parts := make([]string, 0, len(t))
-						for _, it := range t {
-							if s, ok := it.(string); ok && s != "" {
-								parts = append(parts, s)
-							}
-						}
-						if len(parts) > 0 {
-							quoted = strings.Join(parts, " OR ")
-						}
+					}
+					if len(parts) > 0 {
+						quoted = strings.Join(parts, " OR ")
 					}
 				}
 			}
 			domains := ""
-			if actionContext != nil {
-				if od, ok := actionContext["official_domains"]; ok {
-					switch t := od.(type) {
-					case []string:
-						if len(t) > 0 {
-							// Create new slice to avoid mutating the original context
-							prefixed := make([]string, len(t))
-							for i, d := range t {
-								prefixed[i] = fmt.Sprintf("site:%s", d)
-							}
-							domains = strings.Join(prefixed, " OR ")
+			if od, ok := actionContext["official_domains"]; ok {
+				switch t := od.(type) {
+				case []string:
+					if len(t) > 0 {
+						// Create new slice to avoid mutating the original context
+						prefixed := make([]string, len(t))
+						for i, d := range t {
+							prefixed[i] = fmt.Sprintf("site:%s", d)
 						}
-					case []any:
-						parts := []string{}
-						for _, it := range t {
-							if s, ok := it.(string); ok && s != "" {
-								parts = append(parts, fmt.Sprintf("site:%s", s))
-							}
+						domains = strings.Join(prefixed, " OR ")
+					}
+				case []any:
+					parts := []string{}
+					for _, it := range t {
+						if s, ok := it.(string); ok && s != "" {
+							parts = append(parts, fmt.Sprintf("site:%s", s))
 						}
-						if len(parts) > 0 {
-							domains = strings.Join(parts, " OR ")
-						}
+					}
+					if len(parts) > 0 {
+						domains = strings.Join(parts, " OR ")
 					}
 				}
 			}
 			disamb := ""
-			if actionContext != nil {
-				if dt, ok := actionContext["disambiguation_terms"]; ok {
-					switch t := dt.(type) {
-					case []string:
-						if len(t) > 0 {
-							disamb = strings.Join(t, ", ")
+			if dt, ok := actionContext["disambiguation_terms"]; ok {
+				switch t := dt.(type) {
+				case []string:
+					if len(t) > 0 {
+						disamb = strings.Join(t, ", ")
+					}
+				case []any:
+					parts := []string{}
+					for _, it := range t {
+						if s, ok := it.(string); ok && s != "" {
+							parts = append(parts, s)
 						}
-					case []any:
-						parts := []string{}
-						for _, it := range t {
-							if s, ok := it.(string); ok && s != "" {
-								parts = append(parts, s)
-							}
-						}
-						if len(parts) > 0 {
-							disamb = strings.Join(parts, ", ")
-						}
+					}
+					if len(parts) > 0 {
+						disamb = strings.Join(parts, ", ")
 					}
 				}
 			}
@@ -428,10 +418,8 @@ func ReactLoop(
 		// Execute action with optional budget
 		if opts.BudgetAgentMax > 0 {
 			wid := workflow.GetInfo(ctx).WorkflowExecution.ID
-			if actionContext != nil {
-				if p, ok := actionContext["parent_workflow_id"].(string); ok && p != "" {
-					wid = p
-				}
+			if p, ok := actionContext["parent_workflow_id"].(string); ok && p != "" {
+				wid = p
 			}
 			err = workflow.ExecuteActivity(ctx,
 				constants.ExecuteAgentWithBudgetActivity,
@@ -455,10 +443,8 @@ func ReactLoop(
 		} else {
 			// Determine parent workflow for streaming correlation
 			wid := workflow.GetInfo(ctx).WorkflowExecution.ID
-			if actionContext != nil {
-				if p, ok := actionContext["parent_workflow_id"].(string); ok && p != "" {
-					wid = p
-				}
+			if p, ok := actionContext["parent_workflow_id"].(string); ok && p != "" {
+				wid = p
 			}
 			err = workflow.ExecuteActivity(ctx,
 				"ExecuteAgent",
@@ -531,10 +517,8 @@ func ReactLoop(
 			// Avoid double-recording when budgeted execution already recorded usage inside the activity
 			if opts.BudgetAgentMax <= 0 {
 				wid := workflow.GetInfo(ctx).WorkflowExecution.ID
-				if actionContext != nil {
-					if p, ok := actionContext["parent_workflow_id"].(string); ok && p != "" {
-						wid = p
-					}
+				if p, ok := actionContext["parent_workflow_id"].(string); ok && p != "" {
+					wid = p
 				}
 				inTok := actionResult.InputTokens
 				outTok := actionResult.OutputTokens

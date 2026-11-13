@@ -124,14 +124,10 @@ func Debate(
 
 		if opts.BudgetAgentMax > 0 {
 			wid := workflow.GetInfo(ctx).WorkflowExecution.ID
-			if debateContext != nil {
-				if p, ok := debateContext["parent_workflow_id"].(string); ok && p != "" {
-					wid = p
-				}
-			} else if context != nil {
-				if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
-					wid = p
-				}
+			if p, ok := debateContext["parent_workflow_id"].(string); ok && p != "" {
+				wid = p
+			} else if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
+				wid = p
 			}
 			futures[i] = workflow.ExecuteActivity(ctx,
 				constants.ExecuteAgentWithBudgetActivity,
@@ -154,14 +150,10 @@ func Debate(
 		} else {
 			// Determine parent workflow for streaming correlation
 			wid := workflow.GetInfo(ctx).WorkflowExecution.ID
-			if debateContext != nil {
-				if p, ok := debateContext["parent_workflow_id"].(string); ok && p != "" {
-					wid = p
-				}
-			} else if context != nil {
-				if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
-					wid = p
-				}
+			if p, ok := debateContext["parent_workflow_id"].(string); ok && p != "" {
+				wid = p
+			} else if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
+				wid = p
 			}
 			futures[i] = workflow.ExecuteActivity(ctx,
 				activities.ExecuteAgent,
@@ -280,14 +272,10 @@ func Debate(
 
 			if opts.BudgetAgentMax > 0 {
 				wid := workflow.GetInfo(ctx).WorkflowExecution.ID
-				if debateContext != nil {
-					if p, ok := debateContext["parent_workflow_id"].(string); ok && p != "" {
-						wid = p
-					}
-				} else if context != nil {
-					if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
-						wid = p
-					}
+				if p, ok := debateContext["parent_workflow_id"].(string); ok && p != "" {
+					wid = p
+				} else if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
+					wid = p
 				}
 				roundFutures[i] = workflow.ExecuteActivity(ctx,
 					constants.ExecuteAgentWithBudgetActivity,
@@ -310,14 +298,10 @@ func Debate(
 			} else {
 				// Determine parent workflow for streaming correlation
 				wid := workflow.GetInfo(ctx).WorkflowExecution.ID
-				if debateContext != nil {
-					if p, ok := debateContext["parent_workflow_id"].(string); ok && p != "" {
-						wid = p
-					}
-				} else if context != nil {
-					if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
-						wid = p
-					}
+				if p, ok := debateContext["parent_workflow_id"].(string); ok && p != "" {
+					wid = p
+				} else if p, ok := context["parent_workflow_id"].(string); ok && p != "" {
+					wid = p
 				}
 				roundFutures[i] = workflow.ExecuteActivity(ctx,
 					activities.ExecuteAgent,

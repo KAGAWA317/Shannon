@@ -1462,11 +1462,9 @@ Section requirements:
 
 	// Explicitly set model_tier if present in context to avoid Python API defaulting to "small"
 	// context 里有 model_tier 就显式传，避免 Python API 默认落到 "small"。
-	if contextMap != nil {
-		if tierVal, ok := contextMap["model_tier"]; ok {
-			if tierStr, ok := tierVal.(string); ok && tierStr != "" {
-				reqBody["model_tier"] = tierStr
-			}
+	if tierVal, ok := contextMap["model_tier"]; ok {
+		if tierStr, ok := tierVal.(string); ok && tierStr != "" {
+			reqBody["model_tier"] = tierStr
 		}
 	}
 
@@ -1474,13 +1472,11 @@ Section requirements:
 	// (allows swarm experiments to use consistent model across all LLM calls)
 	// 把 context 里的 model/provider 覆盖值透传给 synthesis request；
 	// 便于 swarm 实验在所有 LLM 调用上保持同一 model。
-	if contextMap != nil {
-		if mo, ok := contextMap["agent_model_override"].(string); ok && mo != "" {
-			reqBody["model_override"] = mo
-		}
-		if po, ok := contextMap["agent_provider_override"].(string); ok && po != "" {
-			reqBody["context"].(map[string]any)["provider_override"] = po
-		}
+	if mo, ok := contextMap["agent_model_override"].(string); ok && mo != "" {
+		reqBody["model_override"] = mo
+	}
+	if po, ok := contextMap["agent_provider_override"].(string); ok && po != "" {
+		reqBody["context"].(map[string]any)["provider_override"] = po
 	}
 
 	// If role is present, ensure it's in context
