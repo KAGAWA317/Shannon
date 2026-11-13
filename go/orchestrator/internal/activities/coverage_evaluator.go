@@ -279,7 +279,7 @@ that is a GAP for [target], not coverage. Do NOT count proxy/substitute informat
 
 `)
 
-	sb.WriteString(fmt.Sprintf("Current iteration: %d of %d\n\n", input.Iteration, input.MaxIterations))
+	fmt.Fprintf(&sb, "Current iteration: %d of %d\n\n", input.Iteration, input.MaxIterations)
 
 	sb.WriteString(`## Response Format:
 Return a JSON object:
@@ -306,14 +306,14 @@ Return a JSON object:
 func buildCoverageEvaluationContent(input CoverageEvaluationInput) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("## Original Query:\n%s\n\n", input.Query))
+	fmt.Fprintf(&sb, "## Original Query:\n%s\n\n", input.Query)
 
 	if len(input.ResearchDimensions) > 0 {
 		sb.WriteString("## Expected Research Dimensions:\n")
 		for _, dim := range input.ResearchDimensions {
-			sb.WriteString(fmt.Sprintf("- **%s** (priority: %s)\n", dim.Dimension, dim.Priority))
+			fmt.Fprintf(&sb, "- **%s** (priority: %s)\n", dim.Dimension, dim.Priority)
 			for _, q := range dim.Questions {
-				sb.WriteString(fmt.Sprintf("  - %s\n", q))
+				fmt.Fprintf(&sb, "  - %s\n", q)
 			}
 		}
 		sb.WriteString("\n")
@@ -322,7 +322,7 @@ func buildCoverageEvaluationContent(input CoverageEvaluationInput) string {
 	sb.WriteString("## Current Coverage:\n")
 	if len(input.CoveredAreas) > 0 {
 		for _, area := range input.CoveredAreas {
-			sb.WriteString(fmt.Sprintf("- %s\n", area))
+			fmt.Fprintf(&sb, "- %s\n", area)
 		}
 	} else {
 		sb.WriteString("(No areas explicitly covered yet)\n")
@@ -332,7 +332,7 @@ func buildCoverageEvaluationContent(input CoverageEvaluationInput) string {
 	if len(input.KeyFindings) > 0 {
 		sb.WriteString("## Key Findings So Far:\n")
 		for _, finding := range input.KeyFindings {
-			sb.WriteString(fmt.Sprintf("- %s\n", finding))
+			fmt.Fprintf(&sb, "- %s\n", finding)
 		}
 		sb.WriteString("\n")
 	}
@@ -342,7 +342,7 @@ func buildCoverageEvaluationContent(input CoverageEvaluationInput) string {
 		if len(synthesis) > 2000 {
 			synthesis = synthesis[:2000] + "...[truncated]"
 		}
-		sb.WriteString(fmt.Sprintf("## Current Synthesis:\n%s\n", synthesis))
+		fmt.Fprintf(&sb, "## Current Synthesis:\n%s\n", synthesis)
 	}
 
 	return sb.String()

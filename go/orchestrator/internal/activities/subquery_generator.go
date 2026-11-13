@@ -225,8 +225,8 @@ When standard searches fail to find information about a company/entity, try thes
    - This directly retrieves page content vs. searching
 
 `)
-	sb.WriteString(fmt.Sprintf("Maximum subqueries to generate: %d\n", maxSub))
-	sb.WriteString(fmt.Sprintf("Current iteration: %d\n\n", input.Iteration))
+	fmt.Fprintf(&sb, "Maximum subqueries to generate: %d\n", maxSub)
+	fmt.Fprintf(&sb, "Current iteration: %d\n\n", input.Iteration)
 
 	sb.WriteString(`## Response Format:
 Return a JSON object:
@@ -259,20 +259,20 @@ Return a JSON object:
 func buildSubqueryGenerationContent(input SubqueryGeneratorInput) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("## Original Query:\n%s\n\n", input.Query))
+	fmt.Fprintf(&sb, "## Original Query:\n%s\n\n", input.Query)
 
 	sb.WriteString("## Coverage Gaps to Address:\n\n")
 	for i, gap := range input.CoverageGaps {
-		sb.WriteString(fmt.Sprintf("### Gap %d: %s\n", i+1, gap.Area))
-		sb.WriteString(fmt.Sprintf("- Importance: %s\n", gap.Importance))
+		fmt.Fprintf(&sb, "### Gap %d: %s\n", i+1, gap.Area)
+		fmt.Fprintf(&sb, "- Importance: %s\n", gap.Importance)
 		if len(gap.Questions) > 0 {
 			sb.WriteString("- Questions to answer:\n")
 			for _, q := range gap.Questions {
-				sb.WriteString(fmt.Sprintf("  - %s\n", q))
+				fmt.Fprintf(&sb, "  - %s\n", q)
 			}
 		}
 		if len(gap.SourceTypes) > 0 {
-			sb.WriteString(fmt.Sprintf("- Recommended sources: %s\n", strings.Join(gap.SourceTypes, ", ")))
+			fmt.Fprintf(&sb, "- Recommended sources: %s\n", strings.Join(gap.SourceTypes, ", "))
 		}
 		sb.WriteString("\n")
 	}
@@ -282,7 +282,7 @@ func buildSubqueryGenerationContent(input SubqueryGeneratorInput) string {
 		if len(synthesis) > 1000 {
 			synthesis = synthesis[:1000] + "...[truncated]"
 		}
-		sb.WriteString(fmt.Sprintf("## Current Understanding (avoid overlap):\n%s\n", synthesis))
+		fmt.Fprintf(&sb, "## Current Understanding (avoid overlap):\n%s\n", synthesis)
 	}
 
 	return sb.String()

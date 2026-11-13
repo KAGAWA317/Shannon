@@ -2864,13 +2864,13 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 						// Build batch discovery prompt with all queries
 						var discoveryResult activities.AgentExecutionResult
 						var discoveryQuery strings.Builder
-						discoveryQuery.WriteString(fmt.Sprintf(
+						fmt.Fprintf(&discoveryQuery,
 							"Find official domains for %q.\n\n"+
 								"STEP 1: Execute web_search for each query:\n",
 							refineResult.CanonicalName,
-						))
+						)
 						for _, q := range allQueries {
-							discoveryQuery.WriteString(fmt.Sprintf("- %s\n", q))
+							fmt.Fprintf(&discoveryQuery, "- %s\n", q)
 						}
 						discoveryQuery.WriteString("\n" +
 							"STEP 2: After ALL searches complete, respond with ONLY this JSON:\n" +
@@ -2884,17 +2884,17 @@ func ResearchWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error)
 
 						// Add research focus using original query (not ResearchAreas)
 						// ResearchAreas come from Refiner's research_dimensions, which may not match user intent
-						discoveryQuery.WriteString(fmt.Sprintf("\n=== RESEARCH FOCUS ===\n"+
+						fmt.Fprintf(&discoveryQuery, "\n=== RESEARCH FOCUS ===\n"+
 							"Original query: %s\n"+
 							"Find official domains most relevant to answering this query.\n",
-							input.Query))
+							input.Query)
 
 						// Use ResearchAreas only as category hints for domain prioritization
 						if len(refineResult.ResearchAreas) > 0 {
 							focusCategories := classifyFocusCategories(refineResult.ResearchAreas)
 							if len(focusCategories) > 0 {
-								discoveryQuery.WriteString(fmt.Sprintf("Domain type hints: %s\n",
-									strings.Join(focusCategories, ", ")))
+								fmt.Fprintf(&discoveryQuery, "Domain type hints: %s\n",
+									strings.Join(focusCategories, ", "))
 							}
 						}
 

@@ -1197,7 +1197,7 @@ func CollectCitations(results []any, now time.Time, maxCitations int) ([]Citatio
 				if i > 0 {
 					topDomainsStr.WriteString(", ")
 				}
-				topDomainsStr.WriteString(fmt.Sprintf("%s(%d)", d.Domain, d.Count))
+				fmt.Fprintf(&topDomainsStr, "%s(%d)", d.Domain, d.Count)
 				if i >= 4 { // Show top 5 in log
 					break
 				}

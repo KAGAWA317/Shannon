@@ -243,12 +243,12 @@ Return a JSON object:
 func buildFactExtractionContent(input FactExtractionInput) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("## Original Query:\n%s\n\n", input.Query))
+	fmt.Fprintf(&sb, "## Original Query:\n%s\n\n", input.Query)
 
 	if len(input.ResearchAreas) > 0 {
 		sb.WriteString("## Research Areas:\n")
 		for _, area := range input.ResearchAreas {
-			sb.WriteString(fmt.Sprintf("- %s\n", area))
+			fmt.Fprintf(&sb, "- %s\n", area)
 		}
 		sb.WriteString("\n")
 	}
@@ -268,7 +268,7 @@ func buildFactExtractionContent(input FactExtractionInput) string {
 			if title == "" {
 				title = c.Source
 			}
-			sb.WriteString(fmt.Sprintf("[%d] %s - %s\n", i+1, title, c.URL))
+			fmt.Fprintf(&sb, "[%d] %s - %s\n", i+1, title, c.URL)
 		}
 	}
 

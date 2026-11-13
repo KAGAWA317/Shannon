@@ -572,9 +572,9 @@ func buildCitationUserContent(report string, citations []CitationForAgent) strin
 		if len(snippet) > 200 {
 			snippet = snippet[:200] + "..."
 		}
-		sb.WriteString(fmt.Sprintf("[%d] %s (%s)\n", i+1, title, c.URL))
+		fmt.Fprintf(&sb, "[%d] %s (%s)\n", i+1, title, c.URL)
 		if snippet != "" {
-			sb.WriteString(fmt.Sprintf("    Content: %s\n", snippet))
+			fmt.Fprintf(&sb, "    Content: %s\n", snippet)
 		}
 	}
 
@@ -1305,7 +1305,7 @@ func addSentenceNumbers(sentences []string) (string, []string) {
 		hashes[i] = computeSentenceHash(s)
 
 		// Add numbered prefix
-		sb.WriteString(fmt.Sprintf("[%d] %s", i, s))
+		fmt.Fprintf(&sb, "[%d] %s", i, s)
 	}
 
 	return sb.String(), hashes
@@ -1424,15 +1424,15 @@ func buildCitationUserContentV2(numberedReport string, citations []CitationForAg
 		if len(snippet) > 400 {
 			snippet = snippet[:400] + "..."
 		}
-		sb.WriteString(fmt.Sprintf("[%d] %s (%s)\n", i+1, title, c.URL))
+		fmt.Fprintf(&sb, "[%d] %s (%s)\n", i+1, title, c.URL)
 		if snippet != "" {
-			sb.WriteString(fmt.Sprintf("    Content: %s\n", snippet))
+			fmt.Fprintf(&sb, "    Content: %s\n", snippet)
 		}
 	}
 
 	sb.WriteString("\n## Sentence Hashes:\n")
 	for i, h := range hashes {
-		sb.WriteString(fmt.Sprintf("[%d] hash=%s\n", i, h))
+		fmt.Fprintf(&sb, "[%d] hash=%s\n", i, h)
 	}
 
 	sb.WriteString("\n## Report to Analyze:\n")
@@ -1558,7 +1558,7 @@ func appendCitationsToSentence(sentence string, citationIDs []int) string {
 	// Build citation markers
 	var markers strings.Builder
 	for _, id := range citationIDs {
-		markers.WriteString(fmt.Sprintf("[%d]", id))
+		fmt.Fprintf(&markers, "[%d]", id)
 	}
 
 	return trimmed + markers.String() + trailing
@@ -1924,8 +1924,8 @@ func buildCitationUserContentWithMappings(report string, citations []CitationWit
 		for j, id := range m.SupportingIDs {
 			idsStr[j] = fmt.Sprintf("[%d]", id)
 		}
-		sb.WriteString(fmt.Sprintf("%d. Claim: \"%s\"\n", i+1, m.Claim))
-		sb.WriteString(fmt.Sprintf("   Citations: %s (confidence: %.2f)\n\n", strings.Join(idsStr, " "), m.Confidence))
+		fmt.Fprintf(&sb, "%d. Claim: \"%s\"\n", i+1, m.Claim)
+		fmt.Fprintf(&sb, "   Citations: %s (confidence: %.2f)\n\n", strings.Join(idsStr, " "), m.Confidence)
 	}
 
 	sb.WriteString("\n## Citation Reference (for context only):\n")
@@ -1934,7 +1934,7 @@ func buildCitationUserContentWithMappings(report string, citations []CitationWit
 		if title == "" {
 			title = c.Source
 		}
-		sb.WriteString(fmt.Sprintf("[%d] %s (%s)\n", c.ID, title, c.URL))
+		fmt.Fprintf(&sb, "[%d] %s (%s)\n", c.ID, title, c.URL)
 	}
 
 	sb.WriteString("\n## Report to Cite:\n")
@@ -2005,7 +2005,7 @@ func buildSourcesSectionV2(usedIDs []int, allCitations []CitationWithIDForAgent,
 		}
 
 		// Format: [n] Title (URL) - domain - Status
-		sb.WriteString(fmt.Sprintf("[%d] %s (%s) - %s - %s\n", entry.id, title, displayURL, c.Source, status))
+		fmt.Fprintf(&sb, "[%d] %s (%s) - %s - %s\n", entry.id, title, displayURL, c.Source, status)
 	}
 
 	return sb.String()
@@ -2440,15 +2440,15 @@ func buildPlacementUserContent(numberedReport string, citations []CitationForAge
 		}
 		// Use full snippet (up to MaxSnippetLength chars from collection)
 		snippet := c.Snippet
-		sb.WriteString(fmt.Sprintf("[%d] %s (%s)\n", i+1, title, c.URL))
+		fmt.Fprintf(&sb, "[%d] %s (%s)\n", i+1, title, c.URL)
 		if snippet != "" {
-			sb.WriteString(fmt.Sprintf("    Content: %s\n", snippet))
+			fmt.Fprintf(&sb, "    Content: %s\n", snippet)
 		}
 	}
 
 	sb.WriteString("\n## Sentence Hashes:\n")
 	for i, h := range hashes {
-		sb.WriteString(fmt.Sprintf("[%d] hash=%s\n", i, h))
+		fmt.Fprintf(&sb, "[%d] hash=%s\n", i, h)
 	}
 
 	sb.WriteString("\n## Report to Analyze:\n")
@@ -2600,7 +2600,7 @@ func applyPlacements(sentences []string, plan *PlacementPlan2, hashes []string, 
 			trimmed := strings.TrimRight(sentence, "\n\r")
 			trailing := sentence[len(trimmed):]
 			sb.WriteString(trimmed)
-			sb.WriteString(fmt.Sprintf("[%d]", citationID))
+			fmt.Fprintf(&sb, "[%d]", citationID)
 			sb.WriteString(trailing)
 		} else {
 			sb.WriteString(sentence)

@@ -628,7 +628,7 @@ func synthesizePositions(positions []DebatePosition, query string) string {
 
 	// Build synthesis
 	var synthesis strings.Builder
-	synthesis.WriteString(fmt.Sprintf("After debate on '%s':\n\n", query))
+	fmt.Fprintf(&synthesis, "After debate on '%s':\n\n", query)
 
 	// Add strongest position
 	strongest := positions[0]
@@ -637,7 +637,7 @@ func synthesizePositions(positions []DebatePosition, query string) string {
 			strongest = pos
 		}
 	}
-	synthesis.WriteString(fmt.Sprintf("Strongest Position: %s\n\n", strongest.Position))
+	fmt.Fprintf(&synthesis, "Strongest Position: %s\n\n", strongest.Position)
 
 	// Add key arguments
 	if len(allArguments) > 0 {
@@ -646,7 +646,7 @@ func synthesizePositions(positions []DebatePosition, query string) string {
 			if i >= 5 { // Limit to top arguments
 				break
 			}
-			synthesis.WriteString(fmt.Sprintf("- %s\n", arg))
+			fmt.Fprintf(&synthesis, "- %s\n", arg)
 		}
 	}
 

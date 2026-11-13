@@ -227,13 +227,13 @@ Return a JSON object:
 func buildEntityLocalizationContent(input EntityLocalizationInput) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("## Entity Name: %s\n", input.EntityName))
+	fmt.Fprintf(&sb, "## Entity Name: %s\n", input.EntityName)
 
 	if input.EntityType != "" {
-		sb.WriteString(fmt.Sprintf("## Entity Type: %s\n", input.EntityType))
+		fmt.Fprintf(&sb, "## Entity Type: %s\n", input.EntityType)
 	}
 
-	sb.WriteString(fmt.Sprintf("## Target Languages: %s\n\n", strings.Join(input.TargetLanguages, ", ")))
+	fmt.Fprintf(&sb, "## Target Languages: %s\n\n", strings.Join(input.TargetLanguages, ", "))
 
 	sb.WriteString("Please identify localized versions of this entity name for each target language.\n")
 	sb.WriteString("Include:\n")

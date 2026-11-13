@@ -163,7 +163,7 @@ into a coherent intermediate synthesis.
 
 ## Iteration Context:
 `)
-	sb.WriteString(fmt.Sprintf("- Current iteration: %d of %d\n", input.Iteration, input.MaxIterations))
+	fmt.Fprintf(&sb, "- Current iteration: %d of %d\n", input.Iteration, input.MaxIterations)
 
 	if input.PreviousSynthesis != "" {
 		sb.WriteString("- Building on previous synthesis (provided below)\n")
@@ -172,7 +172,7 @@ into a coherent intermediate synthesis.
 	}
 
 	if len(input.CoverageGaps) > 0 {
-		sb.WriteString(fmt.Sprintf("- Known gaps to address: %s\n", strings.Join(input.CoverageGaps, ", ")))
+		fmt.Fprintf(&sb, "- Known gaps to address: %s\n", strings.Join(input.CoverageGaps, ", "))
 	}
 
 	sb.WriteString(`
@@ -201,15 +201,15 @@ Return a JSON object with these fields:
 func buildAgentResultsContent(input IntermediateSynthesisInput) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("## Original Query:\n%s\n\n", input.Query))
+	fmt.Fprintf(&sb, "## Original Query:\n%s\n\n", input.Query)
 
 	if input.PreviousSynthesis != "" {
-		sb.WriteString(fmt.Sprintf("## Previous Synthesis:\n%s\n\n", input.PreviousSynthesis))
+		fmt.Fprintf(&sb, "## Previous Synthesis:\n%s\n\n", input.PreviousSynthesis)
 	}
 
 	sb.WriteString("## New Agent Results:\n\n")
 	for i, result := range input.AgentResults {
-		sb.WriteString(fmt.Sprintf("### Agent %d (%s):\n", i+1, result.AgentID))
+		fmt.Fprintf(&sb, "### Agent %d (%s):\n", i+1, result.AgentID)
 		if result.Success {
 			response := result.Response
 			if len(response) > 10000 {
@@ -217,7 +217,7 @@ func buildAgentResultsContent(input IntermediateSynthesisInput) string {
 			}
 			sb.WriteString(response)
 		} else {
-			sb.WriteString(fmt.Sprintf("(Failed: %s)", result.Error))
+			fmt.Fprintf(&sb, "(Failed: %s)", result.Error)
 		}
 		sb.WriteString("\n\n---\n\n")
 	}

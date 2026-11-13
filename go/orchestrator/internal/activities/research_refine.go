@@ -755,7 +755,7 @@ func (a *Activities) refineWithHITL(ctx context.Context, in RefineResearchQueryI
 					role, _ := round["role"].(string)
 					msg, _ := round["message"].(string)
 					if role != "" && msg != "" {
-						conversationText.WriteString(fmt.Sprintf("[%s]: %s\n\n", role, msg))
+						fmt.Fprintf(&conversationText, "[%s]: %s\n\n", role, msg)
 					}
 				}
 			}

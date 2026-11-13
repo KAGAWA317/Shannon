@@ -575,22 +575,22 @@ func buildScientificReport(
 	var report strings.Builder
 
 	report.WriteString("# Scientific Investigation Report\n\n")
-	report.WriteString(fmt.Sprintf("**Research Question:** %s\n\n", query))
+	fmt.Fprintf(&report, "**Research Question:** %s\n\n", query)
 
 	report.WriteString("## Hypotheses Tested\n\n")
 	for i, hypothesis := range hypotheses {
-		report.WriteString(fmt.Sprintf("%d. %s\n", i+1, hypothesis))
+		fmt.Fprintf(&report, "%d. %s\n", i+1, hypothesis)
 	}
 
 	report.WriteString("\n## Investigation Results\n\n")
-	report.WriteString(fmt.Sprintf("**Winning Hypothesis:** %s\n\n", debateResult.WinningArgument))
-	report.WriteString(fmt.Sprintf("**Consensus Reached:** %v\n", debateResult.ConsensusReached))
-	report.WriteString(fmt.Sprintf("**Debate Rounds:** %d\n\n", debateResult.Rounds))
+	fmt.Fprintf(&report, "**Winning Hypothesis:** %s\n\n", debateResult.WinningArgument)
+	fmt.Fprintf(&report, "**Consensus Reached:** %v\n", debateResult.ConsensusReached)
+	fmt.Fprintf(&report, "**Debate Rounds:** %d\n\n", debateResult.Rounds)
 
 	if len(debateResult.Votes) > 0 {
 		report.WriteString("### Hypothesis Support (Votes)\n")
 		for agent, votes := range debateResult.Votes {
-			report.WriteString(fmt.Sprintf("- %s: %d\n", agent, votes))
+			fmt.Fprintf(&report, "- %s: %d\n", agent, votes)
 		}
 		report.WriteString("\n")
 	}
@@ -604,9 +604,9 @@ func buildScientificReport(
 	report.WriteString("\n\n")
 
 	report.WriteString("## Confidence Assessment\n\n")
-	report.WriteString(fmt.Sprintf("**Overall Confidence:** %.1f%%\n", confidence*100))
-	report.WriteString(fmt.Sprintf("**Exploration Depth:** %d levels\n", totResult.TreeDepth))
-	report.WriteString(fmt.Sprintf("**Total Thoughts Explored:** %d\n", totResult.TotalThoughts))
+	fmt.Fprintf(&report, "**Overall Confidence:** %.1f%%\n", confidence*100)
+	fmt.Fprintf(&report, "**Exploration Depth:** %d levels\n", totResult.TreeDepth)
+	fmt.Fprintf(&report, "**Total Thoughts Explored:** %d\n", totResult.TotalThoughts)
 
 	return report.String()
 }

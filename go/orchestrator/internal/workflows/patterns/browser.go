@@ -314,14 +314,14 @@ func buildBrowserAgentPromptV1(query string, actions []string, observations []st
 	var sb strings.Builder
 
 	sb.WriteString("You are a browser automation agent. Analyze the current page state and take the next action to complete the task.\n\n")
-	sb.WriteString(fmt.Sprintf("TASK: %s\n\n", query))
+	fmt.Fprintf(&sb, "TASK: %s\n\n", query)
 
 	if len(actions) > 0 {
 		sb.WriteString("PREVIOUS ACTIONS:\n")
 		for i, a := range actions {
 			// Only show last 5 actions to save context
 			if i >= len(actions)-5 {
-				sb.WriteString(fmt.Sprintf("- %s\n", truncateString(a, 200)))
+				fmt.Fprintf(&sb, "- %s\n", truncateString(a, 200))
 			}
 		}
 		sb.WriteString("\n")
@@ -330,7 +330,7 @@ func buildBrowserAgentPromptV1(query string, actions []string, observations []st
 	if len(observations) > 0 {
 		sb.WriteString("CURRENT STATE (from previous tool results):\n")
 		for _, obs := range observations {
-			sb.WriteString(fmt.Sprintf("- %s\n", truncateString(obs, 300)))
+			fmt.Fprintf(&sb, "- %s\n", truncateString(obs, 300))
 		}
 		sb.WriteString("\n")
 	}
@@ -349,14 +349,14 @@ func buildBrowserAgentPromptV2(query string, actions []string, observations []st
 	var sb strings.Builder
 
 	sb.WriteString("You are a browser automation agent. Analyze the current page state and take the next action to complete the task.\n\n")
-	sb.WriteString(fmt.Sprintf("TASK: %s\n\n", query))
+	fmt.Fprintf(&sb, "TASK: %s\n\n", query)
 
 	if len(actions) > 0 {
 		sb.WriteString("PREVIOUS ACTIONS:\n")
 		for i, a := range actions {
 			// Only show last 5 actions to save context
 			if i >= len(actions)-5 {
-				sb.WriteString(fmt.Sprintf("- %s\n", truncateString(a, 200)))
+				fmt.Fprintf(&sb, "- %s\n", truncateString(a, 200))
 			}
 		}
 		sb.WriteString("\n")
@@ -365,7 +365,7 @@ func buildBrowserAgentPromptV2(query string, actions []string, observations []st
 	if len(observations) > 0 {
 		sb.WriteString("CURRENT STATE (from previous tool results):\n")
 		for _, obs := range observations {
-			sb.WriteString(fmt.Sprintf("- %s\n", truncateString(obs, 300)))
+			fmt.Fprintf(&sb, "- %s\n", truncateString(obs, 300))
 		}
 		sb.WriteString("\n")
 	}

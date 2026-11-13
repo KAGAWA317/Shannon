@@ -290,13 +290,13 @@ func DomainAnalysisWorkflow(ctx workflow.Context, input DomainAnalysisInput) (Do
 		}
 
 		var discoveryQuery strings.Builder
-		discoveryQuery.WriteString(fmt.Sprintf(
+		fmt.Fprintf(&discoveryQuery,
 			"Find official domains for %q.\n\n"+
 				"STEP 1: Execute web_search for each query:\n",
 			input.CanonicalName,
-		))
+		)
 		for _, q := range allQueries {
-			discoveryQuery.WriteString(fmt.Sprintf("- %s\n", q))
+			fmt.Fprintf(&discoveryQuery, "- %s\n", q)
 		}
 		discoveryQuery.WriteString("\n" +
 			"STEP 2: After ALL searches complete, respond with ONLY this JSON:\n" +
@@ -308,20 +308,20 @@ func DomainAnalysisWorkflow(ctx workflow.Context, input DomainAnalysisInput) (Do
 			fmt.Sprintf("- Max %d domains\n\n", maxPrefetch) +
 			"CRITICAL: Your response must be ONLY the JSON object, nothing else.\n")
 
-		discoveryQuery.WriteString(fmt.Sprintf("\n=== RESEARCH FOCUS ===\n"+
+		fmt.Fprintf(&discoveryQuery, "\n=== RESEARCH FOCUS ===\n"+
 			"Original query: %s\n"+
 			"Find official domains most relevant to answering this query.\n",
-			input.Query))
+			input.Query)
 
 		if desc := strings.TrimSpace(input.SubtaskDescription); desc != "" {
-			discoveryQuery.WriteString(fmt.Sprintf("Subtask focus: %s\n", desc))
+			fmt.Fprintf(&discoveryQuery, "Subtask focus: %s\n", desc)
 		}
 
 		if len(input.ResearchAreas) > 0 {
 			focusCategories := classifyFocusCategories(input.ResearchAreas)
 			if len(focusCategories) > 0 {
-				discoveryQuery.WriteString(fmt.Sprintf("Domain type hints: %s\n",
-					strings.Join(focusCategories, ", ")))
+				fmt.Fprintf(&discoveryQuery, "Domain type hints: %s\n",
+					strings.Join(focusCategories, ", "))
 			}
 		}
 

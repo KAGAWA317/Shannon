@@ -921,7 +921,7 @@ func SynthesizeResultsLLM(ctx context.Context, input SynthesisInput) (SynthesisR
 				// 给出显式的标题骨架，让 model 照此组织内容。
 				var sb strings.Builder
 				sb.WriteString("## MANDATORY Research Area Coverage:\n")
-				sb.WriteString(fmt.Sprintf("You MUST create a subsection for EACH of the %d research areas below.\n", len(areas)))
+				fmt.Fprintf(&sb, "You MUST create a subsection for EACH of the %d research areas below.\n", len(areas))
 				sb.WriteString("Each subsection should be 250–400 words with inline citations.\n")
 				sb.WriteString("Structure your Detailed Findings section with these exact headings:\n")
 				for _, a := range areas {

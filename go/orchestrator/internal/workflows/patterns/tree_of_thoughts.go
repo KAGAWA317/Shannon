@@ -548,20 +548,20 @@ func synthesizeSolution(path []*ThoughtNode, query string) string {
 
 	// Build solution narrative
 	var solution strings.Builder
-	solution.WriteString(fmt.Sprintf("Solution to: %s\n\n", query))
+	fmt.Fprintf(&solution, "Solution to: %s\n\n", query)
 	solution.WriteString("Reasoning path:\n")
 
 	for i, node := range path {
 		if i == 0 {
 			continue // Skip root
 		}
-		solution.WriteString(fmt.Sprintf("%d. %s\n", i, node.Thought))
+		fmt.Fprintf(&solution, "%d. %s\n", i, node.Thought)
 	}
 
 	// Add final answer if present
 	lastNode := path[len(path)-1]
 	if lastNode.IsTerminal {
-		solution.WriteString(fmt.Sprintf("\nFinal Answer: %s", lastNode.Thought))
+		fmt.Fprintf(&solution, "\nFinal Answer: %s", lastNode.Thought)
 	}
 
 	return solution.String()
