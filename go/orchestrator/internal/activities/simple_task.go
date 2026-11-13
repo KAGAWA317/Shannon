@@ -98,7 +98,7 @@ func ExecuteSimpleTask(ctx context.Context, input ExecuteSimpleTaskInput) (Execu
 
 	// If we have pre-computed tool parameters and tools, use the forced-tools path so events are emitted.
 	// 若已预计算好 tool parameters 与 tools，走 forced-tools 路径，以便正常发出 events。
-	if agentInput.ToolParameters != nil && len(agentInput.ToolParameters) > 0 && len(agentInput.SuggestedTools) > 0 {
+	if len(agentInput.ToolParameters) > 0 && len(agentInput.SuggestedTools) > 0 {
 		agentResult, err = ExecuteAgentWithForcedTools(ctx, agentInput)
 	} else {
 		agentResult, err = executeAgentCore(ctx, agentInput, logger)

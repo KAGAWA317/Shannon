@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -807,12 +808,9 @@ func calculateSimilarity(a, b string) float64 {
 
 	common := 0
 	for _, aw := range aWords {
-		for _, bw := range bWords {
-			if aw == bw {
+		if slices.Contains(bWords, aw) {
 				common++
-				break
 			}
-		}
 	}
 
 	if len(aWords) == 0 || len(bWords) == 0 {

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -109,8 +110,8 @@ func extractFirstJSONResponse(text string) string {
 			fence := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(parts[0], "```")))
 			if fence == "" || fence == "json" {
 				body := strings.TrimSpace(parts[1])
-				if strings.HasSuffix(body, "```") {
-					trimmed = strings.TrimSpace(strings.TrimSuffix(body, "```"))
+				if before, ok :=strings.CutSuffix(body, "```"); ok  {
+					trimmed = strings.TrimSpace(before)
 				}
 			}
 		}
@@ -745,9 +746,7 @@ func SynthesizeResultsLLM(ctx context.Context, input SynthesisInput) (SynthesisR
 		}
 		// Copy all context (includes prompt_params, language, etc.)
 		// 复制全部 context（含 prompt_params、language 等）。
-		for k, v := range input.Context {
-			contextMap[k] = v
-		}
+		maps.Copy(contextMap, input.Context)
 		// Remove large duplicates from LLM prompt but save for post-processing
 		// 从 LLM prompt 里去掉体积大的重复内容，但保留下来供后处理使用。
 		if v, ok := contextMap["available_citations"]; ok {
