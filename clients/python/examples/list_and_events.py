@@ -4,6 +4,7 @@
 """
 
 import os
+
 from shannon import ShannonClient
 
 

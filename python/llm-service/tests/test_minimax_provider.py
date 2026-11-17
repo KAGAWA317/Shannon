@@ -8,25 +8,24 @@ Integration tests are skipped unless MINIMAX_API_KEY is set in the environment.
 MINIMAX_API_KEY 时运行，否则整个用例类被跳过。
 """
 
-from __future__ import annotations  # PEP 604 `X | None` syntax on Python 3.9 注：让 Python 3.9 也能写 `X | None` 这类注解
+from __future__ import (
+    annotations,  # PEP 604 `X | None` syntax on Python 3.9 注：让 Python 3.9 也能写 `X | None` 这类注解
+)
 
-import asyncio
 import os
 import sys
-import types
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from llm_provider.base import (  # noqa: E402
+    CompletionRequest,
+    ModelTier,
+)
 from llm_provider.minimax_provider import (  # noqa: E402
     MiniMaxProvider,
     _clamp_temperature,
     _strip_think_tags,
 )
-from llm_provider.base import (  # noqa: E402
-    CompletionRequest,
-    ModelTier,
-)
-
 
 # ===========================================================================
 # Helpers
@@ -283,7 +282,6 @@ class TestMiniMaxProviderComplete(unittest.IsolatedAsyncioTestCase):
 class TestManagerMiniMaxRegistration(unittest.TestCase):
     def test_minimax_type_recognized_in_manager(self):
         """Manager should instantiate MiniMaxProvider for type='minimax'."""
-        import sys
         import types as _types
 
         # Stub out heavy deps before importing manager

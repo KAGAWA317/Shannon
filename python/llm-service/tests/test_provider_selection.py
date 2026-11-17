@@ -2,12 +2,12 @@ import asyncio
 import unittest
 
 from llm_provider.base import (
-    LLMProvider,
     CompletionRequest,
     CompletionResponse,
-    TokenUsage,
+    LLMProvider,
     ModelConfig,
     ModelTier,
+    TokenUsage,
 )
 from llm_provider.manager import LLMManager
 

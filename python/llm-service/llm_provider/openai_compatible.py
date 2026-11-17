@@ -7,21 +7,23 @@ OpenAI 兼容 provider 实现
 """
 
 import logging
-from typing import Dict, List, Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
+
 from openai import AsyncOpenAI
 
-logger = logging.getLogger(__name__)
-
 from .base import (
+    CompletionRequest,
+    CompletionResponse,
     LLMProvider,
     ModelConfig,
     ModelTier,
-    CompletionRequest,
-    CompletionResponse,
-    TokenUsage,
     TokenCounter,
+    TokenUsage,
     prepare_openai_messages,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class OpenAICompatibleProvider(LLMProvider):
@@ -30,7 +32,7 @@ class OpenAICompatibleProvider(LLMProvider):
     OpenAI 兼容 API 的 provider。
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         # Get API configuration
         # 获取 API 配置
         self.api_key = config.get("api_key", "dummy")  # Some providers don't need keys 注：部分 provider 不需要 key
@@ -198,7 +200,7 @@ class OpenAICompatibleProvider(LLMProvider):
             output_price_per_1k=0.0,
         )
 
-    def count_tokens(self, messages: List[Dict[str, Any]], model: str) -> int:
+    def count_tokens(self, messages: list[dict[str, Any]], model: str) -> int:
         """
         Count tokens for the model.
         Uses generic estimation since tokenizers vary by provider.
@@ -386,7 +388,7 @@ class OpenAICompatibleProvider(LLMProvider):
                 if isinstance(content, str) and content.strip():
                     return content
                 if isinstance(content, list):
-                    parts: List[str] = []
+                    parts: list[str] = []
                     for part in content:
                         try:
                             text = getattr(part, "text", None)

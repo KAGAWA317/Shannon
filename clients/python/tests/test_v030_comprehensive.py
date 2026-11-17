@@ -6,15 +6,14 @@ Requires a running Shannon backend at localhost:8080.
 Run with: SHANNON_LIVE_TESTS=1 pytest tests/test_v030_comprehensive.py -v -s
 """
 
-import pytest
 import sys
-import time
+
+import pytest
 
 sys.path.insert(0, "src")
 
+from shannon import AsyncShannonClient, EventType, ShannonClient, TaskStatusEnum
 from tests._live import live_backend_required
-from shannon import ShannonClient, AsyncShannonClient, TaskStatusEnum, EventType
-
 
 pytestmark = live_backend_required()
 
@@ -176,7 +175,7 @@ class TestResearchWorkflow:
                 if "num_agents" in status.metadata:
                     print(f"  Agents used: {status.metadata['num_agents']}")
                 if "model_breakdown" in status.metadata:
-                    print(f"  Model breakdown:")
+                    print("  Model breakdown:")
                     for m in status.metadata["model_breakdown"]:
                         pct = m.get('percentage', 0)
                         print(f"    - {m.get('model')}: {pct}% ({m.get('tokens')} tokens)")
@@ -226,7 +225,7 @@ class TestSSEStreaming:
                 # Check for completion
                 # 检查是否已完成
                 if event.type == "WORKFLOW_COMPLETED":
-                    print(f"    ... workflow completed")
+                    print("    ... workflow completed")
                     break
 
             print(f"\n  Total events received: {event_count}")
@@ -241,7 +240,7 @@ class TestSSEStreaming:
             # Verify event structure
             # 校验事件结构
             if last_event:
-                print(f"\n  Last event structure:")
+                print("\n  Last event structure:")
                 print(f"    type: {last_event.type}")
                 print(f"    workflow_id: {last_event.workflow_id}")
                 print(f"    timestamp: {last_event.timestamp}")
@@ -341,7 +340,7 @@ class TestModelTierVariations:
 
             status = client.wait(handle.task_id, timeout=60)
 
-            print(f"\n  Model tier requested: small")
+            print("\n  Model tier requested: small")
             print(f"  Model used: {status.model_used}")
             print(f"  Provider: {status.provider}")
 
@@ -364,7 +363,7 @@ class TestModelTierVariations:
 
             status = client.wait(handle.task_id, timeout=90)
 
-            print(f"\n  Model tier requested: medium")
+            print("\n  Model tier requested: medium")
             print(f"  Model used: {status.model_used}")
             print(f"  Provider: {status.provider}")
 
@@ -419,7 +418,7 @@ class TestMetadataBreakdown:
                     print(f"      - Cost: ${cost:.6f}")
                     print(f"      - Executions: {executions}")
 
-                print(f"\n  Totals from breakdown:")
+                print("\n  Totals from breakdown:")
                 print(f"    Total tokens: {total_tokens}")
                 print(f"    Total cost: ${total_cost:.6f}")
 
@@ -428,7 +427,7 @@ class TestMetadataBreakdown:
                 if status.usage:
                     usage_tokens = status.usage.get("total_tokens", 0)
                     usage_cost = status.usage.get("cost_usd", status.usage.get("estimated_cost", 0))
-                    print(f"\n  From usage field:")
+                    print("\n  From usage field:")
                     print(f"    Total tokens: {usage_tokens}")
                     print(f"    Total cost: ${usage_cost:.6f}")
 
@@ -473,13 +472,13 @@ class TestTaskListMetadata:
                 print(f"    Mode: {t.mode}")
 
                 if t.total_token_usage:
-                    print(f"    Token usage:")
+                    print("    Token usage:")
                     print(f"      Total: {t.total_token_usage.total_tokens}")
                     print(f"      Prompt: {t.total_token_usage.prompt_tokens}")
                     print(f"      Completion: {t.total_token_usage.completion_tokens}")
                     print(f"      Cost: ${t.total_token_usage.cost_usd:.6f}")
                 else:
-                    print(f"    Token usage: N/A")
+                    print("    Token usage: N/A")
 
             print("\n  ✓ Task list usage metadata validated")
 

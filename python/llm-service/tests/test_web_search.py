@@ -4,16 +4,14 @@ web_search tool 的测试 —— SerpAPI/SearchAPI.io 多引擎支持与参数�
 """
 
 from contextlib import contextmanager
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from llm_service.tools.builtin.web_search import (
     SearchAPISearchProvider,
     SerpAPISearchProvider,
     WebSearchTool,
 )
-from llm_service.tools.base import ToolResult
 
 # Valid API key format (at least 10 chars, not test values)
 # 合法的 API key 格式（至少 10 个字符，且不是测试占位值）

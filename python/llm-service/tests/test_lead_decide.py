@@ -3,18 +3,17 @@
 Lead Agent 决策端点的测试。
 """
 
-import json
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from llm_service.api.lead import (
+    LEAD_SYSTEM_PROMPT,
+    AgentState,
+    LeadAction,
+    LeadBudget,
     LeadDecisionRequest,
     LeadDecisionResponse,
     LeadEvent,
-    AgentState,
-    LeadBudget,
-    LeadAction,
-    LEAD_SYSTEM_PROMPT,
     _auto_link_task_ids,
     _best_match,
 )
@@ -322,8 +321,8 @@ class TestLeadEndpoint:
     @pytest.mark.asyncio
     async def test_lead_decide_providers_not_configured(self):
         """Should return 503 when providers not configured."""
-        from llm_service.api.lead import lead_decide
         from fastapi import HTTPException
+        from llm_service.api.lead import lead_decide
 
         request = MagicMock()
         request.app.state.providers = None
@@ -450,7 +449,7 @@ class TestLeadStructuredOutput:
 
         发给 LLM 的 messages 不应包含 assistant prefill。
         """
-        from llm_service.api.lead import lead_decide, LEAD_DECISION_SCHEMA
+        from llm_service.api.lead import lead_decide
 
         captured_kwargs = {}
 
@@ -483,7 +482,7 @@ class TestLeadStructuredOutput:
 
         应传入 output_config 以启用 Anthropic structured output。
         """
-        from llm_service.api.lead import lead_decide, LEAD_DECISION_SCHEMA
+        from llm_service.api.lead import LEAD_DECISION_SCHEMA, lead_decide
 
         captured_kwargs = {}
 

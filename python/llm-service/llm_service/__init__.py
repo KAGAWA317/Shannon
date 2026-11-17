@@ -3,8 +3,8 @@
 Shannon LLM Service —— 与 provider 无关的 LLM 集成。
 """
 
-import sys
 import logging
+import sys
 from pathlib import Path
 
 logger = logging.getLogger(__name__)

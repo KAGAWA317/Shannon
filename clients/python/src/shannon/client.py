@@ -4,15 +4,56 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime
 import logging
 import re
-from typing import Any, AsyncIterator, Dict, Iterator, List, Optional, Union, Literal
+from collections.abc import AsyncIterator, Iterator
+from datetime import datetime
+from typing import Any, Literal
 from urllib.parse import quote
 
 import httpx
 
 from shannon import errors
+from shannon.models import (
+    AgentExecution,
+    AgentInfo,
+    ControlState,
+    DownloadedFile,
+    Event,
+    EventType,
+    FileEntry,
+    OpenAIChatChoice,
+    OpenAIChatCompletion,
+    OpenAIChatCompletionChunk,
+    OpenAIChatDelta,
+    OpenAIChatMessage,
+    OpenAIModel,
+    OpenAIShannonEvent,
+    OpenAIShannonOptions,
+    OpenAIUsage,
+    ReviewRound,
+    ReviewState,
+    Schedule,
+    ScheduleRun,
+    ScheduleSummary,
+    Session,
+    SessionEventTurn,
+    SessionHistoryItem,
+    SessionSummary,
+    Skill,
+    SkillDetail,
+    SkillVersion,
+    SwarmMessageResult,
+    TaskHandle,
+    TaskStatus,
+    TaskStatusEnum,
+    TaskSummary,
+    TokenUsage,
+    ToolDetail,
+    ToolExecutionResult,
+    ToolSchema,
+    ToolUsage,
+)
 
 logger = logging.getLogger(__name__)
 _ID_RE = re.compile(r'^[A-Za-z0-9:_\-.]{1,128}$')
@@ -63,46 +104,6 @@ def _parse_timestamp(ts_str: str) -> datetime:
         return datetime.fromisoformat(ts_str)
 
 
-from shannon.models import (
-    AgentExecution,
-    AgentInfo,
-    ControlState,
-    DownloadedFile,
-    Event,
-    EventType,
-    FileEntry,
-    OpenAIChatChoice,
-    OpenAIChatCompletion,
-    OpenAIChatCompletionChunk,
-    OpenAIChatDelta,
-    OpenAIChatMessage,
-    OpenAIModel,
-    OpenAIShannonEvent,
-    OpenAIShannonOptions,
-    OpenAIUsage,
-    ReviewRound,
-    ReviewState,
-    Schedule,
-    ScheduleRun,
-    ScheduleSummary,
-    Session,
-    SessionEventTurn,
-    SessionHistoryItem,
-    SessionSummary,
-    Skill,
-    SkillDetail,
-    SkillVersion,
-    TaskHandle,
-    TaskStatus,
-    TaskStatusEnum,
-    TaskSummary,
-    SwarmMessageResult,
-    ToolDetail,
-    ToolExecutionResult,
-    ToolSchema,
-    ToolUsage,
-    TokenUsage,
-)
 
 
 class AsyncShannonClient:
@@ -111,8 +112,8 @@ class AsyncShannonClient:
     def __init__(
         self,
         base_url: str = "http://localhost:8080",
-        api_key: Optional[str] = None,
-        bearer_token: Optional[str] = None,
+        api_key: str | None = None,
+        bearer_token: str | None = None,
         default_timeout: float = 30.0,
     ):
         """
@@ -128,7 +129,7 @@ class AsyncShannonClient:
         self.api_key = api_key
         self.bearer_token = bearer_token
         self.default_timeout = default_timeout
-        self._http_client: Optional[httpx.AsyncClient] = None
+        self._http_client: httpx.AsyncClient | None = None
 
     async def _ensure_client(self) -> httpx.AsyncClient:
         """Ensure HTTP client is initialized."""
@@ -136,7 +137,7 @@ class AsyncShannonClient:
             self._http_client = httpx.AsyncClient(timeout=self.default_timeout)
         return self._http_client
 
-    def _get_headers(self, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+    def _get_headers(self, extra: dict[str, str] | None = None) -> dict[str, str]:
         """Build HTTP headers with authentication."""
         headers = {"Content-Type": "application/json"}
 
@@ -198,16 +199,16 @@ class AsyncShannonClient:
         self,
         query: str,
         *,
-        session_id: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        idempotency_key: Optional[str] = None,
-        traceparent: Optional[str] = None,
-        model_tier: Optional[Literal["small", "medium", "large"]] = None,
-        model_override: Optional[str] = None,
-        provider_override: Optional[str] = None,
-        mode: Optional[Literal["simple", "standard", "complex", "supervisor"]] = None,
+        session_id: str | None = None,
+        context: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+        traceparent: str | None = None,
+        model_tier: Literal["small", "medium", "large"] | None = None,
+        model_override: str | None = None,
+        provider_override: str | None = None,
+        mode: Literal["simple", "standard", "complex", "supervisor"] | None = None,
         force_swarm: bool = False,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> TaskHandle:
         """
         Submit a task to Shannon.
@@ -255,7 +256,7 @@ class AsyncShannonClient:
             payload["provider_override"] = provider_override
 
         try:
-            extra_headers: Dict[str, str] = {}
+            extra_headers: dict[str, str] = {}
             if idempotency_key:
                 extra_headers["Idempotency-Key"] = idempotency_key
             if traceparent:
@@ -293,16 +294,16 @@ class AsyncShannonClient:
         self,
         query: str,
         *,
-        session_id: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        idempotency_key: Optional[str] = None,
-        traceparent: Optional[str] = None,
-        model_tier: Optional[Literal["small", "medium", "large"]] = None,
-        model_override: Optional[str] = None,
-        provider_override: Optional[str] = None,
-        mode: Optional[Literal["simple", "standard", "complex", "supervisor"]] = None,
+        session_id: str | None = None,
+        context: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+        traceparent: str | None = None,
+        model_tier: Literal["small", "medium", "large"] | None = None,
+        model_override: str | None = None,
+        provider_override: str | None = None,
+        mode: Literal["simple", "standard", "complex", "supervisor"] | None = None,
         force_swarm: bool = False,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> tuple[TaskHandle, str]:
         """
         Submit task and get stream URL in one call.
@@ -349,7 +350,7 @@ class AsyncShannonClient:
             payload["provider_override"] = provider_override
 
         try:
-            extra_headers: Dict[str, str] = {}
+            extra_headers: dict[str, str] = {}
             if idempotency_key:
                 extra_headers["Idempotency-Key"] = idempotency_key
             if traceparent:
@@ -387,7 +388,7 @@ class AsyncShannonClient:
             )
 
     async def get_status(
-        self, task_id: str, timeout: Optional[float] = None
+        self, task_id: str, timeout: float | None = None
     ) -> TaskStatus:
         """
         Get current task status.
@@ -485,10 +486,10 @@ class AsyncShannonClient:
         *,
         limit: int = 20,
         offset: int = 0,
-        status: Optional[str] = None,
-        session_id: Optional[str] = None,
-        timeout: Optional[float] = None,
-    ) -> tuple[List[TaskSummary], int]:
+        status: str | None = None,
+        session_id: str | None = None,
+        timeout: float | None = None,
+    ) -> tuple[list[TaskSummary], int]:
         """
         List tasks with pagination and filters.
 
@@ -556,8 +557,8 @@ class AsyncShannonClient:
             )
 
     async def get_task_events(
-        self, task_id: str, timeout: Optional[float] = None
-    ) -> List[Event]:
+        self, task_id: str, timeout: float | None = None
+    ) -> list[Event]:
         """
         Get persistent event history for a task.
 
@@ -606,8 +607,8 @@ class AsyncShannonClient:
             )
 
     async def get_task_timeline(
-        self, task_id: str, timeout: Optional[float] = None
-    ) -> Dict[str, Any]:
+        self, task_id: str, timeout: float | None = None
+    ) -> dict[str, Any]:
         """
         Get Temporal workflow timeline (deterministic event history).
 
@@ -642,7 +643,7 @@ class AsyncShannonClient:
             )
 
     async def wait(
-        self, task_id: str, timeout: Optional[float] = None, poll_interval: float = 2.0
+        self, task_id: str, timeout: float | None = None, poll_interval: float = 2.0
     ) -> TaskStatus:
         """
         Wait for task completion by polling status.
@@ -683,7 +684,7 @@ class AsyncShannonClient:
             await asyncio.sleep(poll_interval)
 
     async def cancel(
-        self, task_id: str, reason: Optional[str] = None, timeout: Optional[float] = None
+        self, task_id: str, reason: str | None = None, timeout: float | None = None
     ) -> bool:
         """
         Cancel a running task.
@@ -728,7 +729,7 @@ class AsyncShannonClient:
             )
 
     async def pause_task(
-        self, task_id: str, reason: Optional[str] = None, timeout: Optional[float] = None
+        self, task_id: str, reason: str | None = None, timeout: float | None = None
     ) -> bool:
         """
         Pause a running task at safe checkpoints.
@@ -743,7 +744,7 @@ class AsyncShannonClient:
         """
         client = await self._ensure_client()
 
-        payload: Dict[str, Any] = {}
+        payload: dict[str, Any] = {}
         if reason:
             payload["reason"] = reason
 
@@ -776,7 +777,7 @@ class AsyncShannonClient:
             )
 
     async def resume_task(
-        self, task_id: str, reason: Optional[str] = None, timeout: Optional[float] = None
+        self, task_id: str, reason: str | None = None, timeout: float | None = None
     ) -> bool:
         """
         Resume a previously paused task.
@@ -791,7 +792,7 @@ class AsyncShannonClient:
         """
         client = await self._ensure_client()
 
-        payload: Dict[str, Any] = {}
+        payload: dict[str, Any] = {}
         if reason:
             payload["reason"] = reason
 
@@ -822,7 +823,7 @@ class AsyncShannonClient:
             )
 
     async def get_control_state(
-        self, task_id: str, timeout: Optional[float] = None
+        self, task_id: str, timeout: float | None = None
     ) -> ControlState:
         """
         Get current pause/cancel control state for a task.
@@ -882,8 +883,8 @@ class AsyncShannonClient:
         workflow_id: str,
         *,
         approved: bool = True,
-        feedback: Optional[str] = None,
-        timeout: Optional[float] = None,
+        feedback: str | None = None,
+        timeout: float | None = None,
     ) -> bool:
         """
         Approve or reject a pending approval request.
@@ -934,7 +935,7 @@ class AsyncShannonClient:
     # ===== HITL Review Operations =====
     # ===== HITL 评审操作 =====
 
-    def _parse_review_state(self, data: Dict[str, Any]) -> ReviewState:
+    def _parse_review_state(self, data: dict[str, Any]) -> ReviewState:
         """把 /review 响应体解析成 ReviewState（get/submit-feedback 共用）。"""
         rounds = []
         for r in data.get("rounds", []):
@@ -960,7 +961,7 @@ class AsyncShannonClient:
         )
 
     async def get_review_state(
-        self, workflow_id: str, *, timeout: Optional[float] = None
+        self, workflow_id: str, *, timeout: float | None = None
     ) -> ReviewState:
         """
         Get the current review state for a workflow.
@@ -991,7 +992,7 @@ class AsyncShannonClient:
                         error_data = response.json()
                         error_msg = error_data.get("error", response.text)
                     except Exception:
-                        error_msg = response.text or f"HTTP 404"
+                        error_msg = response.text or "HTTP 404"
                     raise errors.TaskNotFoundError(error_msg, code="404")
                 self._handle_http_error(response)
 
@@ -1009,8 +1010,8 @@ class AsyncShannonClient:
         workflow_id: str,
         message: str,
         *,
-        version: Optional[int] = None,
-        timeout: Optional[float] = None,
+        version: int | None = None,
+        timeout: float | None = None,
     ) -> ReviewState:
         """
         Submit feedback during a review cycle.
@@ -1033,7 +1034,7 @@ class AsyncShannonClient:
 
         payload = {"action": "feedback", "message": message}
 
-        extra_headers: Dict[str, str] = {}
+        extra_headers: dict[str, str] = {}
         if version is not None:
             extra_headers["If-Match"] = str(version)
 
@@ -1070,9 +1071,9 @@ class AsyncShannonClient:
         self,
         workflow_id: str,
         *,
-        version: Optional[int] = None,
-        timeout: Optional[float] = None,
-    ) -> Dict[str, Any]:
+        version: int | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
         """
         Approve a review, allowing the workflow to proceed.
 
@@ -1093,7 +1094,7 @@ class AsyncShannonClient:
 
         payload = {"action": "approve"}
 
-        extra_headers: Dict[str, str] = {}
+        extra_headers: dict[str, str] = {}
         if version is not None:
             extra_headers["If-Match"] = str(version)
 
@@ -1132,8 +1133,8 @@ class AsyncShannonClient:
         *,
         limit: int = 20,
         offset: int = 0,
-        timeout: Optional[float] = None,
-    ) -> tuple[List[SessionSummary], int]:
+        timeout: float | None = None,
+    ) -> tuple[list[SessionSummary], int]:
         """
         List sessions with pagination.
 
@@ -1230,7 +1231,7 @@ class AsyncShannonClient:
             )
 
     async def get_session(
-        self, session_id: str, timeout: Optional[float] = None
+        self, session_id: str, timeout: float | None = None
     ) -> Session:
         """
         Get session details.
@@ -1299,8 +1300,8 @@ class AsyncShannonClient:
             )
 
     async def get_session_history(
-        self, session_id: str, timeout: Optional[float] = None
-    ) -> List[SessionHistoryItem]:
+        self, session_id: str, timeout: float | None = None
+    ) -> list[SessionHistoryItem]:
         """
         Get session conversation history (all tasks in session).
 
@@ -1357,8 +1358,8 @@ class AsyncShannonClient:
         *,
         limit: int = 10,
         offset: int = 0,
-        timeout: Optional[float] = None,
-    ) -> tuple[List[SessionEventTurn], int]:
+        timeout: float | None = None,
+    ) -> tuple[list[SessionEventTurn], int]:
         """
         Get session events grouped by turn (task).
 
@@ -1424,7 +1425,7 @@ class AsyncShannonClient:
             )
 
     async def update_session_title(
-        self, session_id: str, title: str, timeout: Optional[float] = None
+        self, session_id: str, title: str, timeout: float | None = None
     ) -> bool:
         """
         Update session title.
@@ -1465,7 +1466,7 @@ class AsyncShannonClient:
             )
 
     async def delete_session(
-        self, session_id: str, timeout: Optional[float] = None
+        self, session_id: str, timeout: float | None = None
     ) -> bool:
         """
         Delete a session (soft delete).
@@ -1509,9 +1510,9 @@ class AsyncShannonClient:
         self,
         session_id: str,
         *,
-        path: Optional[str] = None,
-        timeout: Optional[float] = None,
-    ) -> List[FileEntry]:
+        path: str | None = None,
+        timeout: float | None = None,
+    ) -> list[FileEntry]:
         """
         List files in a session workspace.
 
@@ -1525,7 +1526,7 @@ class AsyncShannonClient:
         """
         client = await self._ensure_client()
 
-        params: Dict[str, Any] = {}
+        params: dict[str, Any] = {}
         if path:
             params["path"] = path
 
@@ -1566,7 +1567,7 @@ class AsyncShannonClient:
         session_id: str,
         path: str,
         *,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> DownloadedFile:
         """
         Download a file from a session workspace.
@@ -1608,8 +1609,8 @@ class AsyncShannonClient:
             )
 
     async def list_memory_files(
-        self, *, timeout: Optional[float] = None
-    ) -> List[FileEntry]:
+        self, *, timeout: float | None = None
+    ) -> list[FileEntry]:
         """
         List files in the authenticated user's memory directory.
         """
@@ -1647,7 +1648,7 @@ class AsyncShannonClient:
             )
 
     async def download_memory_file(
-        self, path: str, *, timeout: Optional[float] = None
+        self, path: str, *, timeout: float | None = None
     ) -> DownloadedFile:
         """
         Download a file from the authenticated user's memory directory.
@@ -1692,8 +1693,8 @@ class AsyncShannonClient:
     # ===== Agent 管理 =====
 
     async def list_agents(
-        self, *, timeout: Optional[float] = None
-    ) -> List[AgentInfo]:
+        self, *, timeout: float | None = None
+    ) -> list[AgentInfo]:
         """
         List deterministic agents exposed by the gateway.
         """
@@ -1730,7 +1731,7 @@ class AsyncShannonClient:
             )
 
     async def get_agent(
-        self, agent_id: str, *, timeout: Optional[float] = None
+        self, agent_id: str, *, timeout: float | None = None
     ) -> AgentInfo:
         """
         Get a deterministic agent definition.
@@ -1766,18 +1767,18 @@ class AsyncShannonClient:
     async def execute_agent(
         self,
         agent_id: str,
-        input_data: Dict[str, Any],
+        input_data: dict[str, Any],
         *,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         stream: bool = False,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> AgentExecution:
         """
         Execute a deterministic agent.
         """
         client = await self._ensure_client()
 
-        payload: Dict[str, Any] = {"input": input_data, "stream": stream}
+        payload: dict[str, Any] = {"input": input_data, "stream": stream}
         if session_id:
             payload["session_id"] = session_id
 
@@ -1828,7 +1829,7 @@ class AsyncShannonClient:
         workflow_id: str,
         message: str,
         *,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> SwarmMessageResult:
         """
         Send a message to a running swarm workflow.
@@ -1862,8 +1863,8 @@ class AsyncShannonClient:
     # ===== OpenAI 兼容 API =====
 
     def _serialize_openai_message(
-        self, message: Union[OpenAIChatMessage, Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        self, message: OpenAIChatMessage | dict[str, Any]
+    ) -> dict[str, Any]:
         """Serialize an OpenAI-compatible message payload."""
         if isinstance(message, OpenAIChatMessage):
             payload = {
@@ -1881,14 +1882,14 @@ class AsyncShannonClient:
 
     def _serialize_openai_shannon_options(
         self,
-        shannon_options: Optional[Union[OpenAIShannonOptions, Dict[str, Any]]],
-    ) -> Optional[Dict[str, Any]]:
+        shannon_options: OpenAIShannonOptions | dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
         """Serialize Shannon-specific OpenAI extensions."""
         if shannon_options is None:
             return None
 
         if isinstance(shannon_options, OpenAIShannonOptions):
-            payload: Dict[str, Any] = {}
+            payload: dict[str, Any] = {}
             if shannon_options.context:
                 payload["context"] = shannon_options.context
             if shannon_options.agent:
@@ -1913,26 +1914,26 @@ class AsyncShannonClient:
 
     def _build_openai_chat_payload(
         self,
-        messages: List[Union[OpenAIChatMessage, Dict[str, Any]]],
+        messages: list[OpenAIChatMessage | dict[str, Any]],
         *,
-        model: Optional[str] = None,
+        model: str | None = None,
         stream: bool = False,
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        top_p: Optional[float] = None,
-        n: Optional[int] = None,
-        stop: Optional[List[str]] = None,
-        presence_penalty: Optional[float] = None,
-        frequency_penalty: Optional[float] = None,
-        user: Optional[str] = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        n: int | None = None,
+        stop: list[str] | None = None,
+        presence_penalty: float | None = None,
+        frequency_penalty: float | None = None,
+        user: str | None = None,
         include_usage: bool = False,
-        shannon_options: Optional[Union[OpenAIShannonOptions, Dict[str, Any]]] = None,
-    ) -> Dict[str, Any]:
+        shannon_options: OpenAIShannonOptions | dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Build an OpenAI-compatible chat completion payload."""
         if not messages:
             raise errors.ValidationError("messages array is required", code="400")
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "messages": [self._serialize_openai_message(message) for message in messages],
         }
         if model:
@@ -1964,7 +1965,7 @@ class AsyncShannonClient:
 
         return payload
 
-    def _parse_openai_usage(self, data: Optional[Dict[str, Any]]) -> Optional[OpenAIUsage]:
+    def _parse_openai_usage(self, data: dict[str, Any] | None) -> OpenAIUsage | None:
         """Parse OpenAI-compatible usage metadata."""
         if not data:
             return None
@@ -1976,8 +1977,8 @@ class AsyncShannonClient:
         )
 
     def _parse_openai_chat_message(
-        self, data: Optional[Dict[str, Any]]
-    ) -> Optional[OpenAIChatMessage]:
+        self, data: dict[str, Any] | None
+    ) -> OpenAIChatMessage | None:
         """Parse an OpenAI-compatible message object."""
         if not data:
             return None
@@ -1989,8 +1990,8 @@ class AsyncShannonClient:
         )
 
     def _parse_openai_chat_delta(
-        self, data: Optional[Dict[str, Any]]
-    ) -> Optional[OpenAIChatDelta]:
+        self, data: dict[str, Any] | None
+    ) -> OpenAIChatDelta | None:
         """Parse an OpenAI-compatible delta object."""
         if not data:
             return None
@@ -2001,10 +2002,10 @@ class AsyncShannonClient:
         )
 
     def _parse_openai_chat_choices(
-        self, items: Optional[List[Dict[str, Any]]]
-    ) -> List[OpenAIChatChoice]:
+        self, items: list[dict[str, Any]] | None
+    ) -> list[OpenAIChatChoice]:
         """Parse OpenAI-compatible choice entries."""
-        choices: List[OpenAIChatChoice] = []
+        choices: list[OpenAIChatChoice] = []
         for item in items or []:
             choices.append(OpenAIChatChoice(
                 index=item.get("index", 0),
@@ -2015,10 +2016,10 @@ class AsyncShannonClient:
         return choices
 
     def _parse_openai_shannon_events(
-        self, items: Optional[List[Dict[str, Any]]]
-    ) -> List[OpenAIShannonEvent]:
+        self, items: list[dict[str, Any]] | None
+    ) -> list[OpenAIShannonEvent]:
         """Parse Shannon streaming events embedded in OpenAI chunks."""
-        events: List[OpenAIShannonEvent] = []
+        events: list[OpenAIShannonEvent] = []
         for item in items or []:
             events.append(OpenAIShannonEvent(
                 type=item.get("type", ""),
@@ -2031,8 +2032,8 @@ class AsyncShannonClient:
 
     def _parse_openai_chat_completion(
         self,
-        data: Dict[str, Any],
-        response_headers: Optional[Dict[str, str]] = None,
+        data: dict[str, Any],
+        response_headers: dict[str, str] | None = None,
     ) -> OpenAIChatCompletion:
         """Parse a non-streaming OpenAI-compatible chat completion."""
         response_headers = response_headers or {}
@@ -2050,8 +2051,8 @@ class AsyncShannonClient:
 
     def _parse_openai_chat_completion_chunk(
         self,
-        data: Dict[str, Any],
-        response_headers: Optional[Dict[str, str]] = None,
+        data: dict[str, Any],
+        response_headers: dict[str, str] | None = None,
     ) -> OpenAIChatCompletionChunk:
         """Parse a streaming OpenAI-compatible chat completion chunk."""
         response_headers = response_headers or {}
@@ -2070,9 +2071,9 @@ class AsyncShannonClient:
 
     def _parse_openai_model(
         self,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         *,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> OpenAIModel:
         """Parse a model object from the OpenAI-compatible models API."""
         return OpenAIModel(
@@ -2083,7 +2084,7 @@ class AsyncShannonClient:
             description=description,
         )
 
-    def _resolve_session_id(self, data: Dict[str, Any]) -> str:
+    def _resolve_session_id(self, data: dict[str, Any]) -> str:
         """Prefer external session IDs when the gateway stores UUID-backed sessions."""
         context = data.get("context")
         if isinstance(context, dict):
@@ -2092,7 +2093,7 @@ class AsyncShannonClient:
                 return external_id
         return data.get("session_id", "")
 
-    def _resolve_session_title(self, data: Dict[str, Any]) -> Optional[str]:
+    def _resolve_session_title(self, data: dict[str, Any]) -> str | None:
         """Read session title from the top level or from session context."""
         title = data.get("title")
         if isinstance(title, str) and title.strip():
@@ -2109,11 +2110,11 @@ class AsyncShannonClient:
     async def _stream_sse_request(
         self,
         url: str,
-        payload: Dict[str, Any],
-        headers: Dict[str, str],
+        payload: dict[str, Any],
+        headers: dict[str, str],
         *,
-        timeout: Optional[float] = None,
-    ) -> AsyncIterator[tuple[str, Dict[str, str]]]:
+        timeout: float | None = None,
+    ) -> AsyncIterator[tuple[str, dict[str, str]]]:
         """Send a POST request and yield SSE event payloads as strings."""
         sse_timeout = httpx.Timeout(timeout, connect=self.default_timeout) if timeout is not None else httpx.Timeout(None, connect=self.default_timeout)
 
@@ -2125,7 +2126,7 @@ class AsyncShannonClient:
                         self._handle_http_error(response)
 
                     response_headers = dict(response.headers)
-                    event_data: List[str] = []
+                    event_data: list[str] = []
 
                     async for line in response.aiter_lines():
                         if not line:
@@ -2152,8 +2153,8 @@ class AsyncShannonClient:
             )
 
     async def list_openai_models(
-        self, *, timeout: Optional[float] = None
-    ) -> List[OpenAIModel]:
+        self, *, timeout: float | None = None
+    ) -> list[OpenAIModel]:
         """
         List models from the OpenAI-compatible models endpoint.
         """
@@ -2179,7 +2180,7 @@ class AsyncShannonClient:
             )
 
     async def get_openai_model(
-        self, model: str, *, timeout: Optional[float] = None
+        self, model: str, *, timeout: float | None = None
     ) -> OpenAIModel:
         """
         Get a model from the OpenAI-compatible models endpoint.
@@ -2210,20 +2211,20 @@ class AsyncShannonClient:
 
     async def create_chat_completion(
         self,
-        messages: List[Union[OpenAIChatMessage, Dict[str, Any]]],
+        messages: list[OpenAIChatMessage | dict[str, Any]],
         *,
-        model: Optional[str] = None,
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        top_p: Optional[float] = None,
-        n: Optional[int] = None,
-        stop: Optional[List[str]] = None,
-        presence_penalty: Optional[float] = None,
-        frequency_penalty: Optional[float] = None,
-        user: Optional[str] = None,
-        shannon_options: Optional[Union[OpenAIShannonOptions, Dict[str, Any]]] = None,
-        session_id: Optional[str] = None,
-        timeout: Optional[float] = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        n: int | None = None,
+        stop: list[str] | None = None,
+        presence_penalty: float | None = None,
+        frequency_penalty: float | None = None,
+        user: str | None = None,
+        shannon_options: OpenAIShannonOptions | dict[str, Any] | None = None,
+        session_id: str | None = None,
+        timeout: float | None = None,
     ) -> OpenAIChatCompletion:
         """
         Create a non-streaming chat completion via the OpenAI-compatible API.
@@ -2266,21 +2267,21 @@ class AsyncShannonClient:
 
     async def stream_chat_completion(
         self,
-        messages: List[Union[OpenAIChatMessage, Dict[str, Any]]],
+        messages: list[OpenAIChatMessage | dict[str, Any]],
         *,
-        model: Optional[str] = None,
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        top_p: Optional[float] = None,
-        n: Optional[int] = None,
-        stop: Optional[List[str]] = None,
-        presence_penalty: Optional[float] = None,
-        frequency_penalty: Optional[float] = None,
-        user: Optional[str] = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        n: int | None = None,
+        stop: list[str] | None = None,
+        presence_penalty: float | None = None,
+        frequency_penalty: float | None = None,
+        user: str | None = None,
         include_usage: bool = False,
-        shannon_options: Optional[Union[OpenAIShannonOptions, Dict[str, Any]]] = None,
-        session_id: Optional[str] = None,
-        timeout: Optional[float] = None,
+        shannon_options: OpenAIShannonOptions | dict[str, Any] | None = None,
+        session_id: str | None = None,
+        timeout: float | None = None,
     ) -> AsyncIterator[OpenAIChatCompletionChunk]:
         """
         Stream chat completion chunks from the OpenAI-compatible API.
@@ -2319,10 +2320,10 @@ class AsyncShannonClient:
 
     async def create_completion(
         self,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         *,
-        timeout: Optional[float] = None,
-    ) -> Dict[str, Any]:
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
         """
         Call the thin OpenAI-compatible /v1/completions proxy directly.
         """
@@ -2352,10 +2353,10 @@ class AsyncShannonClient:
 
     async def stream_completion(
         self,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         *,
-        timeout: Optional[float] = None,
-    ) -> AsyncIterator[Dict[str, Any]]:
+        timeout: float | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
         """
         Stream raw JSON events from the thin /v1/completions proxy.
         """
@@ -2382,9 +2383,9 @@ class AsyncShannonClient:
     async def list_tools(
         self,
         *,
-        category: Optional[str] = None,
-        timeout: Optional[float] = None,
-    ) -> List[ToolSchema]:
+        category: str | None = None,
+        timeout: float | None = None,
+    ) -> list[ToolSchema]:
         """
         List available tools for direct execution.
 
@@ -2397,7 +2398,7 @@ class AsyncShannonClient:
         """
         client = await self._ensure_client()
 
-        params: Dict[str, Any] = {}
+        params: dict[str, Any] = {}
         if category:
             params["category"] = category
 
@@ -2431,7 +2432,7 @@ class AsyncShannonClient:
             )
 
     async def get_tool(
-        self, name: str, *, timeout: Optional[float] = None
+        self, name: str, *, timeout: float | None = None
     ) -> ToolDetail:
         """
         Get direct-execution tool metadata and parameter schema.
@@ -2478,9 +2479,9 @@ class AsyncShannonClient:
         self,
         name: str,
         *,
-        arguments: Optional[Dict[str, Any]] = None,
-        session_id: Optional[str] = None,
-        timeout: Optional[float] = None,
+        arguments: dict[str, Any] | None = None,
+        session_id: str | None = None,
+        timeout: float | None = None,
     ) -> ToolExecutionResult:
         """
         Execute a tool directly through the gateway.
@@ -2497,7 +2498,7 @@ class AsyncShannonClient:
         client = await self._ensure_client()
         encoded_name = quote(name, safe="")
 
-        payload: Dict[str, Any] = {"arguments": arguments or {}}
+        payload: dict[str, Any] = {"arguments": arguments or {}}
         if session_id:
             payload["session_id"] = session_id
 
@@ -2541,9 +2542,9 @@ class AsyncShannonClient:
     async def list_skills(
         self,
         *,
-        category: Optional[str] = None,
-        timeout: Optional[float] = None,
-    ) -> List[Skill]:
+        category: str | None = None,
+        timeout: float | None = None,
+    ) -> list[Skill]:
         """
         List available skills.
 
@@ -2559,7 +2560,7 @@ class AsyncShannonClient:
         """
         client = await self._ensure_client()
 
-        params: Dict[str, Any] = {}
+        params: dict[str, Any] = {}
         if category:
             params["category"] = category
 
@@ -2596,7 +2597,7 @@ class AsyncShannonClient:
             )
 
     async def get_skill(
-        self, name: str, *, timeout: Optional[float] = None
+        self, name: str, *, timeout: float | None = None
     ) -> SkillDetail:
         """
         Get detailed information about a skill.
@@ -2653,8 +2654,8 @@ class AsyncShannonClient:
             )
 
     async def get_skill_versions(
-        self, name: str, *, timeout: Optional[float] = None
-    ) -> List[SkillVersion]:
+        self, name: str, *, timeout: float | None = None
+    ) -> list[SkillVersion]:
         """
         Get all versions of a skill.
 
@@ -2711,13 +2712,13 @@ class AsyncShannonClient:
         cron_expression: str,
         task_query: str,
         *,
-        description: Optional[str] = None,
-        timezone: Optional[str] = None,
-        task_context: Optional[Dict[str, str]] = None,
-        max_budget_per_run_usd: Optional[float] = None,
-        timeout_seconds: Optional[int] = None,
-        timeout: Optional[float] = None,
-    ) -> Dict[str, Any]:
+        description: str | None = None,
+        timezone: str | None = None,
+        task_context: dict[str, str] | None = None,
+        max_budget_per_run_usd: float | None = None,
+        timeout_seconds: int | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
         """
         Create a new scheduled task.
 
@@ -2741,7 +2742,7 @@ class AsyncShannonClient:
         """
         client = await self._ensure_client()
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "name": name,
             "cron_expression": cron_expression,
             "task_query": task_query,
@@ -2776,7 +2777,7 @@ class AsyncShannonClient:
             )
 
     async def get_schedule(
-        self, schedule_id: str, timeout: Optional[float] = None
+        self, schedule_id: str, timeout: float | None = None
     ) -> Schedule:
         """
         Get schedule details.
@@ -2839,9 +2840,9 @@ class AsyncShannonClient:
         *,
         page: int = 1,
         page_size: int = 50,
-        status: Optional[str] = None,
-        timeout: Optional[float] = None,
-    ) -> tuple[List[ScheduleSummary], int]:
+        status: str | None = None,
+        timeout: float | None = None,
+    ) -> tuple[list[ScheduleSummary], int]:
         """
         List schedules with pagination.
 
@@ -2859,7 +2860,7 @@ class AsyncShannonClient:
         """
         client = await self._ensure_client()
 
-        params: Dict[str, Any] = {"page": page, "page_size": page_size}
+        params: dict[str, Any] = {"page": page, "page_size": page_size}
         if status:
             params["status"] = status
 
@@ -2903,17 +2904,17 @@ class AsyncShannonClient:
         self,
         schedule_id: str,
         *,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        cron_expression: Optional[str] = None,
-        timezone: Optional[str] = None,
-        task_query: Optional[str] = None,
-        task_context: Optional[Dict[str, str]] = None,
-        max_budget_per_run_usd: Optional[float] = None,
-        timeout_seconds: Optional[int] = None,
+        name: str | None = None,
+        description: str | None = None,
+        cron_expression: str | None = None,
+        timezone: str | None = None,
+        task_query: str | None = None,
+        task_context: dict[str, str] | None = None,
+        max_budget_per_run_usd: float | None = None,
+        timeout_seconds: int | None = None,
         clear_task_context: bool = False,
-        timeout: Optional[float] = None,
-    ) -> Dict[str, Any]:
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
         """
         Update a schedule.
 
@@ -2940,7 +2941,7 @@ class AsyncShannonClient:
         """
         client = await self._ensure_client()
 
-        payload: Dict[str, Any] = {}
+        payload: dict[str, Any] = {}
         if name is not None:
             payload["name"] = name
         if description is not None:
@@ -2979,7 +2980,7 @@ class AsyncShannonClient:
             )
 
     async def pause_schedule(
-        self, schedule_id: str, reason: Optional[str] = None, timeout: Optional[float] = None
+        self, schedule_id: str, reason: str | None = None, timeout: float | None = None
     ) -> bool:
         """
         Pause a schedule.
@@ -2998,7 +2999,7 @@ class AsyncShannonClient:
         """
         client = await self._ensure_client()
 
-        payload: Dict[str, Any] = {}
+        payload: dict[str, Any] = {}
         if reason:
             payload["reason"] = reason
 
@@ -3021,7 +3022,7 @@ class AsyncShannonClient:
             )
 
     async def resume_schedule(
-        self, schedule_id: str, reason: Optional[str] = None, timeout: Optional[float] = None
+        self, schedule_id: str, reason: str | None = None, timeout: float | None = None
     ) -> bool:
         """
         Resume a paused schedule.
@@ -3040,7 +3041,7 @@ class AsyncShannonClient:
         """
         client = await self._ensure_client()
 
-        payload: Dict[str, Any] = {}
+        payload: dict[str, Any] = {}
         if reason:
             payload["reason"] = reason
 
@@ -3063,7 +3064,7 @@ class AsyncShannonClient:
             )
 
     async def delete_schedule(
-        self, schedule_id: str, timeout: Optional[float] = None
+        self, schedule_id: str, timeout: float | None = None
     ) -> bool:
         """
         Delete a schedule.
@@ -3104,8 +3105,8 @@ class AsyncShannonClient:
         *,
         page: int = 1,
         page_size: int = 20,
-        timeout: Optional[float] = None,
-    ) -> tuple[List[ScheduleRun], int]:
+        timeout: float | None = None,
+    ) -> tuple[list[ScheduleRun], int]:
         """
         Get execution history for a schedule.
 
@@ -3167,7 +3168,7 @@ class AsyncShannonClient:
     # ===== Health & Discovery =====
     # ===== 健康检查与发现 =====
 
-    async def health(self, timeout: Optional[float] = None) -> Dict[str, Any]:
+    async def health(self, timeout: float | None = None) -> dict[str, Any]:
         """
         Check service health status.
 
@@ -3198,7 +3199,7 @@ class AsyncShannonClient:
                 f"Failed to get health status: {str(e)}", details={"http_error": str(e)}
             )
 
-    async def readiness(self, timeout: Optional[float] = None) -> Dict[str, Any]:
+    async def readiness(self, timeout: float | None = None) -> dict[str, Any]:
         """
         Check service readiness status.
 
@@ -3229,7 +3230,7 @@ class AsyncShannonClient:
                 f"Failed to get readiness status: {str(e)}", details={"http_error": str(e)}
             )
 
-    async def get_openapi_spec(self, timeout: Optional[float] = None) -> Dict[str, Any]:
+    async def get_openapi_spec(self, timeout: float | None = None) -> dict[str, Any]:
         """
         Get OpenAPI 3.0 specification.
 
@@ -3267,13 +3268,13 @@ class AsyncShannonClient:
         self,
         workflow_id: str,
         *,
-        types: Optional[List[Union[str, EventType]]] = None,
-        last_event_id: Optional[str] = None,
+        types: list[str | EventType] | None = None,
+        last_event_id: str | None = None,
         reconnect: bool = True,
         max_retries: int = 5,
-        traceparent: Optional[str] = None,
-        timeout: Optional[float] = None,
-        total_timeout: Optional[float] = None,
+        traceparent: str | None = None,
+        timeout: float | None = None,
+        total_timeout: float | None = None,
     ) -> AsyncIterator[Event]:
         """
         Stream events from a workflow execution via SSE.
@@ -3320,20 +3321,20 @@ class AsyncShannonClient:
         self,
         workflow_id: str,
         *,
-        types: Optional[List[str]] = None,
-        last_event_id: Optional[str] = None,
+        types: list[str] | None = None,
+        last_event_id: str | None = None,
         reconnect: bool = True,
         max_retries: int = 5,
-        traceparent: Optional[str] = None,
-        timeout: Optional[float] = None,
-        total_timeout: Optional[float] = None,
+        traceparent: str | None = None,
+        timeout: float | None = None,
+        total_timeout: float | None = None,
     ) -> AsyncIterator[Event]:
         """Stream events via HTTP SSE."""
         import time
         start_time = time.time()
         retries = 0
         last_resume_id = last_event_id
-        server_retry_ms: Optional[int] = None
+        server_retry_ms: int | None = None
 
         while True:
             try:
@@ -3380,9 +3381,9 @@ class AsyncShannonClient:
 
                         # Parse SSE stream
                         # 解析 SSE stream
-                        event_data: List[str] = []
-                        event_id: Optional[str] = None
-                        event_name: Optional[str] = None
+                        event_data: list[str] = []
+                        event_id: str | None = None
+                        event_name: str | None = None
 
                         async for line in response.aiter_lines():
                             if not line:
@@ -3482,7 +3483,7 @@ class AsyncShannonClient:
                     raise errors.ConnectionError("SSE stream timed out", code="TIMEOUT")
                 await asyncio.sleep(wait_time)
 
-    def _parse_sse_event(self, data: Dict[str, Any], event_id: Optional[str] = None) -> Event:
+    def _parse_sse_event(self, data: dict[str, Any], event_id: str | None = None) -> Event:
         """Parse SSE event data into Event model."""
         # Parse timestamp
         # 解析 timestamp
@@ -3507,10 +3508,10 @@ class AsyncShannonClient:
         self,
         workflow_id: str,
         *,
-        types: Optional[List[Union[str, EventType]]] = None,
-        last_event_id: Optional[str] = None,
-        traceparent: Optional[str] = None,
-        timeout: Optional[float] = None,
+        types: list[str | EventType] | None = None,
+        last_event_id: str | None = None,
+        traceparent: str | None = None,
+        timeout: float | None = None,
     ) -> AsyncIterator[Event]:
         """
         Stream events via WebSocket if the optional 'websockets' package is installed.
@@ -3529,7 +3530,7 @@ class AsyncShannonClient:
         # Build ws url
         # 构造 ws url
         base = self.base_url.replace("https://", "wss://").replace("http://", "ws://")
-        params: List[str] = [f"workflow_id={workflow_id}"]
+        params: list[str] = [f"workflow_id={workflow_id}"]
         if types:
             t = [t.value if isinstance(t, EventType) else t for t in types]
             params.append("types=" + ",".join(t))
@@ -3540,7 +3541,7 @@ class AsyncShannonClient:
 
         # Headers
         # 请求头（header）
-        headers: List[tuple[str, str]] = []
+        headers: list[tuple[str, str]] = []
         if self.bearer_token:
             headers.append(("Authorization", f"Bearer {self.bearer_token}"))
         elif self.api_key:
@@ -3583,8 +3584,8 @@ class ShannonClient:
     def __init__(
         self,
         base_url: str = "http://localhost:8080",
-        api_key: Optional[str] = None,
-        bearer_token: Optional[str] = None,
+        api_key: str | None = None,
+        bearer_token: str | None = None,
         default_timeout: float = 30.0,
     ):
         """Initialize synchronous Shannon client."""
@@ -3595,7 +3596,7 @@ class ShannonClient:
             default_timeout=default_timeout,
         )
         import threading
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._loop: asyncio.AbstractEventLoop | None = None
         self._loop_lock = threading.Lock()
 
     def _get_loop(self) -> asyncio.AbstractEventLoop:
@@ -3620,16 +3621,16 @@ class ShannonClient:
         self,
         query: str,
         *,
-        session_id: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        idempotency_key: Optional[str] = None,
-        traceparent: Optional[str] = None,
-        model_tier: Optional[Literal["small", "medium", "large"]] = None,
-        model_override: Optional[str] = None,
-        provider_override: Optional[str] = None,
-        mode: Optional[Literal["simple", "standard", "complex", "supervisor"]] = None,
+        session_id: str | None = None,
+        context: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+        traceparent: str | None = None,
+        model_tier: Literal["small", "medium", "large"] | None = None,
+        model_override: str | None = None,
+        provider_override: str | None = None,
+        mode: Literal["simple", "standard", "complex", "supervisor"] | None = None,
         force_swarm: bool = False,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> TaskHandle:
         """Submit a task (blocking)."""
         handle = self._run(
@@ -3654,16 +3655,16 @@ class ShannonClient:
         self,
         query: str,
         *,
-        session_id: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        idempotency_key: Optional[str] = None,
-        traceparent: Optional[str] = None,
-        model_tier: Optional[Literal["small", "medium", "large"]] = None,
-        model_override: Optional[str] = None,
-        provider_override: Optional[str] = None,
-        mode: Optional[Literal["simple", "standard", "complex", "supervisor"]] = None,
+        session_id: str | None = None,
+        context: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+        traceparent: str | None = None,
+        model_tier: Literal["small", "medium", "large"] | None = None,
+        model_override: str | None = None,
+        provider_override: str | None = None,
+        mode: Literal["simple", "standard", "complex", "supervisor"] | None = None,
         force_swarm: bool = False,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> tuple[TaskHandle, str]:
         """Submit task and get stream URL (blocking)."""
         handle, url = self._run(
@@ -3685,7 +3686,7 @@ class ShannonClient:
         return handle, url
 
     def get_status(
-        self, task_id: str, timeout: Optional[float] = None
+        self, task_id: str, timeout: float | None = None
     ) -> TaskStatus:
         """Get task status (blocking)."""
         return self._run(self._async_client.get_status(task_id, timeout))
@@ -3695,10 +3696,10 @@ class ShannonClient:
         *,
         limit: int = 20,
         offset: int = 0,
-        status: Optional[str] = None,
-        session_id: Optional[str] = None,
-        timeout: Optional[float] = None,
-    ) -> tuple[List[TaskSummary], int]:
+        status: str | None = None,
+        session_id: str | None = None,
+        timeout: float | None = None,
+    ) -> tuple[list[TaskSummary], int]:
         """List tasks (blocking)."""
         return self._run(
             self._async_client.list_tasks(
@@ -3707,19 +3708,19 @@ class ShannonClient:
         )
 
     def get_task_events(
-        self, task_id: str, timeout: Optional[float] = None
-    ) -> List[Event]:
+        self, task_id: str, timeout: float | None = None
+    ) -> list[Event]:
         """Get task events (blocking)."""
         return self._run(self._async_client.get_task_events(task_id, timeout))
 
     def get_task_timeline(
-        self, task_id: str, timeout: Optional[float] = None
-    ) -> Dict[str, Any]:
+        self, task_id: str, timeout: float | None = None
+    ) -> dict[str, Any]:
         """Get task timeline (blocking)."""
         return self._run(self._async_client.get_task_timeline(task_id, timeout))
 
     def wait(
-        self, task_id: str, timeout: Optional[float] = None, poll_interval: float = 2.0
+        self, task_id: str, timeout: float | None = None, poll_interval: float = 2.0
     ) -> TaskStatus:
         """Wait for task completion (blocking)."""
         return self._run(
@@ -3727,25 +3728,25 @@ class ShannonClient:
         )
 
     def cancel(
-        self, task_id: str, reason: Optional[str] = None, timeout: Optional[float] = None
+        self, task_id: str, reason: str | None = None, timeout: float | None = None
     ) -> bool:
         """Cancel task (blocking)."""
         return self._run(self._async_client.cancel(task_id, reason, timeout))
 
     def pause_task(
-        self, task_id: str, reason: Optional[str] = None, timeout: Optional[float] = None
+        self, task_id: str, reason: str | None = None, timeout: float | None = None
     ) -> bool:
         """Pause task at safe checkpoints (blocking)."""
         return self._run(self._async_client.pause_task(task_id, reason, timeout))
 
     def resume_task(
-        self, task_id: str, reason: Optional[str] = None, timeout: Optional[float] = None
+        self, task_id: str, reason: str | None = None, timeout: float | None = None
     ) -> bool:
         """Resume a previously paused task (blocking)."""
         return self._run(self._async_client.resume_task(task_id, reason, timeout))
 
     def get_control_state(
-        self, task_id: str, timeout: Optional[float] = None
+        self, task_id: str, timeout: float | None = None
     ) -> ControlState:
         """Get pause/cancel control state for a task (blocking)."""
         return self._run(self._async_client.get_control_state(task_id, timeout))
@@ -3756,8 +3757,8 @@ class ShannonClient:
         workflow_id: str,
         *,
         approved: bool = True,
-        feedback: Optional[str] = None,
-        timeout: Optional[float] = None,
+        feedback: str | None = None,
+        timeout: float | None = None,
     ) -> bool:
         """Approve task (blocking)."""
         return self._run(
@@ -3769,7 +3770,7 @@ class ShannonClient:
     # HITL Review operations
     # HITL 评审操作
     def get_review_state(
-        self, workflow_id: str, *, timeout: Optional[float] = None
+        self, workflow_id: str, *, timeout: float | None = None
     ) -> ReviewState:
         """Get review state for a workflow (blocking)."""
         return self._run(self._async_client.get_review_state(workflow_id, timeout=timeout))
@@ -3779,8 +3780,8 @@ class ShannonClient:
         workflow_id: str,
         message: str,
         *,
-        version: Optional[int] = None,
-        timeout: Optional[float] = None,
+        version: int | None = None,
+        timeout: float | None = None,
     ) -> ReviewState:
         """Submit review feedback (blocking)."""
         return self._run(
@@ -3793,9 +3794,9 @@ class ShannonClient:
         self,
         workflow_id: str,
         *,
-        version: Optional[int] = None,
-        timeout: Optional[float] = None,
-    ) -> Dict[str, Any]:
+        version: int | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
         """Approve a review (blocking)."""
         return self._run(
             self._async_client.approve_review(workflow_id, version=version, timeout=timeout)
@@ -3808,22 +3809,22 @@ class ShannonClient:
         *,
         limit: int = 20,
         offset: int = 0,
-        timeout: Optional[float] = None,
-    ) -> tuple[List[SessionSummary], int]:
+        timeout: float | None = None,
+    ) -> tuple[list[SessionSummary], int]:
         """List sessions (blocking)."""
         return self._run(
             self._async_client.list_sessions(limit=limit, offset=offset, timeout=timeout)
         )
 
     def get_session(
-        self, session_id: str, timeout: Optional[float] = None
+        self, session_id: str, timeout: float | None = None
     ) -> Session:
         """Get session details (blocking)."""
         return self._run(self._async_client.get_session(session_id, timeout))
 
     def get_session_history(
-        self, session_id: str, timeout: Optional[float] = None
-    ) -> List[SessionHistoryItem]:
+        self, session_id: str, timeout: float | None = None
+    ) -> list[SessionHistoryItem]:
         """Get session history (blocking)."""
         return self._run(self._async_client.get_session_history(session_id, timeout))
 
@@ -3833,8 +3834,8 @@ class ShannonClient:
         *,
         limit: int = 10,
         offset: int = 0,
-        timeout: Optional[float] = None,
-    ) -> tuple[List[SessionEventTurn], int]:
+        timeout: float | None = None,
+    ) -> tuple[list[SessionEventTurn], int]:
         """Get session events (blocking)."""
         return self._run(
             self._async_client.get_session_events(
@@ -3843,13 +3844,13 @@ class ShannonClient:
         )
 
     def update_session_title(
-        self, session_id: str, title: str, timeout: Optional[float] = None
+        self, session_id: str, title: str, timeout: float | None = None
     ) -> bool:
         """Update session title (blocking)."""
         return self._run(self._async_client.update_session_title(session_id, title, timeout))
 
     def delete_session(
-        self, session_id: str, timeout: Optional[float] = None
+        self, session_id: str, timeout: float | None = None
     ) -> bool:
         """Delete session (blocking)."""
         return self._run(self._async_client.delete_session(session_id, timeout))
@@ -3860,9 +3861,9 @@ class ShannonClient:
         self,
         session_id: str,
         *,
-        path: Optional[str] = None,
-        timeout: Optional[float] = None,
-    ) -> List[FileEntry]:
+        path: str | None = None,
+        timeout: float | None = None,
+    ) -> list[FileEntry]:
         """List session workspace files (blocking)."""
         return self._run(
             self._async_client.list_session_files(
@@ -3873,7 +3874,7 @@ class ShannonClient:
         )
 
     def download_session_file(
-        self, session_id: str, path: str, *, timeout: Optional[float] = None
+        self, session_id: str, path: str, *, timeout: float | None = None
     ) -> DownloadedFile:
         """Download a session workspace file (blocking)."""
         return self._run(
@@ -3885,13 +3886,13 @@ class ShannonClient:
         )
 
     def list_memory_files(
-        self, *, timeout: Optional[float] = None
-    ) -> List[FileEntry]:
+        self, *, timeout: float | None = None
+    ) -> list[FileEntry]:
         """List memory files (blocking)."""
         return self._run(self._async_client.list_memory_files(timeout=timeout))
 
     def download_memory_file(
-        self, path: str, *, timeout: Optional[float] = None
+        self, path: str, *, timeout: float | None = None
     ) -> DownloadedFile:
         """Download a memory file (blocking)."""
         return self._run(self._async_client.download_memory_file(path, timeout=timeout))
@@ -3899,13 +3900,13 @@ class ShannonClient:
     # Agent operations
     # Agent 操作
     def list_agents(
-        self, *, timeout: Optional[float] = None
-    ) -> List[AgentInfo]:
+        self, *, timeout: float | None = None
+    ) -> list[AgentInfo]:
         """List deterministic agents (blocking)."""
         return self._run(self._async_client.list_agents(timeout=timeout))
 
     def get_agent(
-        self, agent_id: str, *, timeout: Optional[float] = None
+        self, agent_id: str, *, timeout: float | None = None
     ) -> AgentInfo:
         """Get deterministic agent details (blocking)."""
         return self._run(self._async_client.get_agent(agent_id, timeout=timeout))
@@ -3913,11 +3914,11 @@ class ShannonClient:
     def execute_agent(
         self,
         agent_id: str,
-        input_data: Dict[str, Any],
+        input_data: dict[str, Any],
         *,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         stream: bool = False,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> AgentExecution:
         """Execute a deterministic agent (blocking)."""
         return self._run(
@@ -3935,7 +3936,7 @@ class ShannonClient:
         workflow_id: str,
         message: str,
         *,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> SwarmMessageResult:
         """Send a message to a running swarm workflow (blocking)."""
         return self._run(
@@ -3947,33 +3948,33 @@ class ShannonClient:
         )
 
     def list_openai_models(
-        self, *, timeout: Optional[float] = None
-    ) -> List[OpenAIModel]:
+        self, *, timeout: float | None = None
+    ) -> list[OpenAIModel]:
         """List models from the OpenAI-compatible models endpoint."""
         return self._run(self._async_client.list_openai_models(timeout=timeout))
 
     def get_openai_model(
-        self, model: str, *, timeout: Optional[float] = None
+        self, model: str, *, timeout: float | None = None
     ) -> OpenAIModel:
         """Get a model from the OpenAI-compatible models endpoint."""
         return self._run(self._async_client.get_openai_model(model, timeout=timeout))
 
     def create_chat_completion(
         self,
-        messages: List[Union[OpenAIChatMessage, Dict[str, Any]]],
+        messages: list[OpenAIChatMessage | dict[str, Any]],
         *,
-        model: Optional[str] = None,
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        top_p: Optional[float] = None,
-        n: Optional[int] = None,
-        stop: Optional[List[str]] = None,
-        presence_penalty: Optional[float] = None,
-        frequency_penalty: Optional[float] = None,
-        user: Optional[str] = None,
-        shannon_options: Optional[Union[OpenAIShannonOptions, Dict[str, Any]]] = None,
-        session_id: Optional[str] = None,
-        timeout: Optional[float] = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        n: int | None = None,
+        stop: list[str] | None = None,
+        presence_penalty: float | None = None,
+        frequency_penalty: float | None = None,
+        user: str | None = None,
+        shannon_options: OpenAIShannonOptions | dict[str, Any] | None = None,
+        session_id: str | None = None,
+        timeout: float | None = None,
     ) -> OpenAIChatCompletion:
         """Create a non-streaming chat completion via the OpenAI-compatible API."""
         return self._run(
@@ -3996,21 +3997,21 @@ class ShannonClient:
 
     def stream_chat_completion(
         self,
-        messages: List[Union[OpenAIChatMessage, Dict[str, Any]]],
+        messages: list[OpenAIChatMessage | dict[str, Any]],
         *,
-        model: Optional[str] = None,
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        top_p: Optional[float] = None,
-        n: Optional[int] = None,
-        stop: Optional[List[str]] = None,
-        presence_penalty: Optional[float] = None,
-        frequency_penalty: Optional[float] = None,
-        user: Optional[str] = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        n: int | None = None,
+        stop: list[str] | None = None,
+        presence_penalty: float | None = None,
+        frequency_penalty: float | None = None,
+        user: str | None = None,
         include_usage: bool = False,
-        shannon_options: Optional[Union[OpenAIShannonOptions, Dict[str, Any]]] = None,
-        session_id: Optional[str] = None,
-        timeout: Optional[float] = None,
+        shannon_options: OpenAIShannonOptions | dict[str, Any] | None = None,
+        session_id: str | None = None,
+        timeout: float | None = None,
     ) -> Iterator[OpenAIChatCompletionChunk]:
         """Stream chat completion chunks from the OpenAI-compatible API."""
         loop = self._get_loop()
@@ -4046,19 +4047,19 @@ class ShannonClient:
 
     def create_completion(
         self,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         *,
-        timeout: Optional[float] = None,
-    ) -> Dict[str, Any]:
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
         """Call the thin OpenAI-compatible /v1/completions proxy directly."""
         return self._run(self._async_client.create_completion(payload, timeout=timeout))
 
     def stream_completion(
         self,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         *,
-        timeout: Optional[float] = None,
-    ) -> Iterator[Dict[str, Any]]:
+        timeout: float | None = None,
+    ) -> Iterator[dict[str, Any]]:
         """Stream raw JSON events from the thin /v1/completions proxy."""
         loop = self._get_loop()
 
@@ -4084,14 +4085,14 @@ class ShannonClient:
     def list_tools(
         self,
         *,
-        category: Optional[str] = None,
-        timeout: Optional[float] = None,
-    ) -> List[ToolSchema]:
+        category: str | None = None,
+        timeout: float | None = None,
+    ) -> list[ToolSchema]:
         """List direct-execution tools (blocking)."""
         return self._run(self._async_client.list_tools(category=category, timeout=timeout))
 
     def get_tool(
-        self, name: str, *, timeout: Optional[float] = None
+        self, name: str, *, timeout: float | None = None
     ) -> ToolDetail:
         """Get direct-execution tool details (blocking)."""
         return self._run(self._async_client.get_tool(name, timeout=timeout))
@@ -4100,9 +4101,9 @@ class ShannonClient:
         self,
         name: str,
         *,
-        arguments: Optional[Dict[str, Any]] = None,
-        session_id: Optional[str] = None,
-        timeout: Optional[float] = None,
+        arguments: dict[str, Any] | None = None,
+        session_id: str | None = None,
+        timeout: float | None = None,
     ) -> ToolExecutionResult:
         """Execute a tool directly (blocking)."""
         return self._run(
@@ -4119,21 +4120,21 @@ class ShannonClient:
     def list_skills(
         self,
         *,
-        category: Optional[str] = None,
-        timeout: Optional[float] = None,
-    ) -> List[Skill]:
+        category: str | None = None,
+        timeout: float | None = None,
+    ) -> list[Skill]:
         """List available skills (blocking)."""
         return self._run(self._async_client.list_skills(category=category, timeout=timeout))
 
     def get_skill(
-        self, name: str, *, timeout: Optional[float] = None
+        self, name: str, *, timeout: float | None = None
     ) -> SkillDetail:
         """Get skill details (blocking)."""
         return self._run(self._async_client.get_skill(name, timeout=timeout))
 
     def get_skill_versions(
-        self, name: str, *, timeout: Optional[float] = None
-    ) -> List[SkillVersion]:
+        self, name: str, *, timeout: float | None = None
+    ) -> list[SkillVersion]:
         """Get skill versions (blocking)."""
         return self._run(self._async_client.get_skill_versions(name, timeout=timeout))
 
@@ -4145,13 +4146,13 @@ class ShannonClient:
         cron_expression: str,
         task_query: str,
         *,
-        description: Optional[str] = None,
-        timezone: Optional[str] = None,
-        task_context: Optional[Dict[str, str]] = None,
-        max_budget_per_run_usd: Optional[float] = None,
-        timeout_seconds: Optional[int] = None,
-        timeout: Optional[float] = None,
-    ) -> Dict[str, Any]:
+        description: str | None = None,
+        timezone: str | None = None,
+        task_context: dict[str, str] | None = None,
+        max_budget_per_run_usd: float | None = None,
+        timeout_seconds: int | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
         """Create a scheduled task (blocking)."""
         return self._run(
             self._async_client.create_schedule(
@@ -4168,7 +4169,7 @@ class ShannonClient:
         )
 
     def get_schedule(
-        self, schedule_id: str, timeout: Optional[float] = None
+        self, schedule_id: str, timeout: float | None = None
     ) -> Schedule:
         """Get schedule details (blocking)."""
         return self._run(self._async_client.get_schedule(schedule_id, timeout))
@@ -4178,9 +4179,9 @@ class ShannonClient:
         *,
         page: int = 1,
         page_size: int = 50,
-        status: Optional[str] = None,
-        timeout: Optional[float] = None,
-    ) -> tuple[List[ScheduleSummary], int]:
+        status: str | None = None,
+        timeout: float | None = None,
+    ) -> tuple[list[ScheduleSummary], int]:
         """List schedules (blocking)."""
         return self._run(
             self._async_client.list_schedules(
@@ -4192,17 +4193,17 @@ class ShannonClient:
         self,
         schedule_id: str,
         *,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        cron_expression: Optional[str] = None,
-        timezone: Optional[str] = None,
-        task_query: Optional[str] = None,
-        task_context: Optional[Dict[str, str]] = None,
-        max_budget_per_run_usd: Optional[float] = None,
-        timeout_seconds: Optional[int] = None,
+        name: str | None = None,
+        description: str | None = None,
+        cron_expression: str | None = None,
+        timezone: str | None = None,
+        task_query: str | None = None,
+        task_context: dict[str, str] | None = None,
+        max_budget_per_run_usd: float | None = None,
+        timeout_seconds: int | None = None,
         clear_task_context: bool = False,
-        timeout: Optional[float] = None,
-    ) -> Dict[str, Any]:
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
         """Update a schedule (blocking)."""
         return self._run(
             self._async_client.update_schedule(
@@ -4221,19 +4222,19 @@ class ShannonClient:
         )
 
     def pause_schedule(
-        self, schedule_id: str, reason: Optional[str] = None, timeout: Optional[float] = None
+        self, schedule_id: str, reason: str | None = None, timeout: float | None = None
     ) -> bool:
         """Pause a schedule (blocking)."""
         return self._run(self._async_client.pause_schedule(schedule_id, reason, timeout))
 
     def resume_schedule(
-        self, schedule_id: str, reason: Optional[str] = None, timeout: Optional[float] = None
+        self, schedule_id: str, reason: str | None = None, timeout: float | None = None
     ) -> bool:
         """Resume a paused schedule (blocking)."""
         return self._run(self._async_client.resume_schedule(schedule_id, reason, timeout))
 
     def delete_schedule(
-        self, schedule_id: str, timeout: Optional[float] = None
+        self, schedule_id: str, timeout: float | None = None
     ) -> bool:
         """Delete a schedule (blocking)."""
         return self._run(self._async_client.delete_schedule(schedule_id, timeout))
@@ -4244,8 +4245,8 @@ class ShannonClient:
         *,
         page: int = 1,
         page_size: int = 20,
-        timeout: Optional[float] = None,
-    ) -> tuple[List[ScheduleRun], int]:
+        timeout: float | None = None,
+    ) -> tuple[list[ScheduleRun], int]:
         """Get schedule execution history (blocking)."""
         return self._run(
             self._async_client.get_schedule_runs(
@@ -4255,15 +4256,15 @@ class ShannonClient:
 
     # Health & Discovery
     # 健康检查与发现
-    def health(self, timeout: Optional[float] = None) -> Dict[str, Any]:
+    def health(self, timeout: float | None = None) -> dict[str, Any]:
         """Get health status (blocking)."""
         return self._run(self._async_client.health(timeout))
 
-    def readiness(self, timeout: Optional[float] = None) -> Dict[str, Any]:
+    def readiness(self, timeout: float | None = None) -> dict[str, Any]:
         """Get readiness status (blocking)."""
         return self._run(self._async_client.readiness(timeout))
 
-    def get_openapi_spec(self, timeout: Optional[float] = None) -> Dict[str, Any]:
+    def get_openapi_spec(self, timeout: float | None = None) -> dict[str, Any]:
         """Get OpenAPI spec (blocking)."""
         return self._run(self._async_client.get_openapi_spec(timeout))
 
@@ -4273,13 +4274,13 @@ class ShannonClient:
         self,
         workflow_id: str,
         *,
-        types: Optional[List[Union[str, EventType]]] = None,
-        last_event_id: Optional[str] = None,
+        types: list[str | EventType] | None = None,
+        last_event_id: str | None = None,
         reconnect: bool = True,
         max_retries: int = 5,
-        traceparent: Optional[str] = None,
-        timeout: Optional[float] = None,
-        total_timeout: Optional[float] = None,
+        traceparent: str | None = None,
+        timeout: float | None = None,
+        total_timeout: float | None = None,
     ) -> Iterator[Event]:
         """
         Stream events (blocking iterator).
@@ -4317,10 +4318,10 @@ class ShannonClient:
         self,
         workflow_id: str,
         *,
-        types: Optional[List[Union[str, EventType]]] = None,
-        last_event_id: Optional[str] = None,
-        traceparent: Optional[str] = None,
-        timeout: Optional[float] = None,
+        types: list[str | EventType] | None = None,
+        last_event_id: str | None = None,
+        traceparent: str | None = None,
+        timeout: float | None = None,
     ) -> Iterator[Event]:
         """WebSocket streaming (blocking iterator). Requires 'websockets'."""
         loop = self._get_loop()

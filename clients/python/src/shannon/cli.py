@@ -7,9 +7,8 @@ import argparse
 import json
 import os
 import sys
-import time
 
-from shannon import ShannonClient, TaskStatusEnum, EventType, errors
+from shannon import EventType, ShannonClient, TaskStatusEnum, errors
 
 
 def main():
@@ -206,14 +205,14 @@ def main():
     session_file_get.add_argument("session_id", help="Session ID")
     session_file_get.add_argument("path", help="Workspace file path")
 
-    memory_files = subparsers.add_parser("memory-files", help="List user memory files")
+    subparsers.add_parser("memory-files", help="List user memory files")
 
     memory_file_get = subparsers.add_parser("memory-file-get", help="Download a user memory file")
     memory_file_get.add_argument("path", help="Memory file path")
 
     # Agent and swarm commands
     # agent 与 swarm 命令
-    agents_list = subparsers.add_parser("agents-list", help="List deterministic agents")
+    subparsers.add_parser("agents-list", help="List deterministic agents")
 
     agent_get = subparsers.add_parser("agent-get", help="Get deterministic agent details")
     agent_get.add_argument("agent_id", help="Agent ID")
@@ -358,7 +357,7 @@ def main():
                 mode=args.mode,
                 force_swarm=args.swarm,
             )
-            print(f"Task submitted:")
+            print("Task submitted:")
             print(f"  Task ID: {handle.task_id}")
             print(f"  Workflow ID: {handle.workflow_id}")
 
@@ -464,7 +463,7 @@ def main():
                 action = "approved" if args.approved else "rejected"
                 print(f"✓ Request {action}")
             else:
-                print(f"✗ Failed to submit approval")
+                print("✗ Failed to submit approval")
                 sys.exit(1)
 
         elif args.command == "review-get":
@@ -486,7 +485,7 @@ def main():
             state = client.submit_review_feedback(
                 args.workflow_id, args.message, version=args.version
             )
-            print(f"✓ Feedback submitted")
+            print("✓ Feedback submitted")
             print(f"  Status: {state.status}")
             print(f"  Round: {state.round}")
             print(f"  Version: {state.version}")
@@ -495,7 +494,7 @@ def main():
 
         elif args.command == "review-approve":
             result = client.approve_review(args.workflow_id, version=args.version)
-            print(f"✓ Review approved")
+            print("✓ Review approved")
             print(f"  Status: {result.get('status')}")
             if result.get("message"):
                 print(f"  Message: {result.get('message')}")
@@ -736,7 +735,7 @@ def main():
                 max_budget_per_run_usd=args.budget,
                 timeout_seconds=args.timeout,
             )
-            print(f"✓ Schedule created:")
+            print("✓ Schedule created:")
             print(f"  ID: {result.get('schedule_id')}")
             print(f"  Next run: {result.get('next_run_at')}")
 

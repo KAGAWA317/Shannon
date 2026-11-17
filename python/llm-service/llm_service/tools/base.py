@@ -3,15 +3,15 @@ Base Tool interface for Shannon platform
 Shannon 平台的基础 tool 接口
 """
 
-from abc import ABC, abstractmethod
 import asyncio
-from dataclasses import dataclass
-from datetime import datetime, timedelta
-from enum import Enum
-from typing import Any, Dict, List, Optional, Union
 import json
 import time
 import uuid
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any, Union
 
 # Rate limiting constants
 # rate limit 常量
@@ -43,11 +43,11 @@ class ToolParameter:
     description: str
     required: bool = True
     default: Any = None
-    enum: Optional[List[Any]] = None  # For enumerated values 注：用于枚举值
-    min_value: Optional[Union[int, float]] = None
-    max_value: Optional[Union[int, float]] = None
-    pattern: Optional[str] = None  # Regex pattern for validation 注：用于校验的正则模式
-    items: Optional[Dict[str, Any]] = None  # For ARRAY types: {"type": "string"} 注：用于 ARRAY 类型：{"type": "string"}
+    enum: list[Any] | None = None  # For enumerated values 注：用于枚举值
+    min_value: Union[int, float] | None = None
+    max_value: Union[int, float] | None = None
+    pattern: str | None = None  # Regex pattern for validation 注：用于校验的正则模式
+    items: dict[str, Any] | None = None  # For ARRAY types: {"type": "string"} 注：用于 ARRAY 类型：{"type": "string"}
 
 
 @dataclass
@@ -61,14 +61,14 @@ class ToolMetadata:
     category: str  # e.g., "search", "calculation", "file", "database" 注：例如 "search"、"calculation"、"file"、"database"
     author: str = "Shannon"
     requires_auth: bool = False
-    rate_limit: Optional[int] = None  # Requests per minute 注：每分钟请求数
+    rate_limit: int | None = None  # Requests per minute 注：每分钟请求数
     timeout_seconds: int = 30
     memory_limit_mb: int = 512
     sandboxed: bool = True  # Whether to run in sandbox 注：是否在 sandbox 中运行
     session_aware: bool = True  # Whether tool uses session context (default True to avoid footgun) 注：tool 是否使用 session context（默认 True 以避免误用）
     dangerous: bool = False  # Requires extra confirmation 注：需要额外确认
     cost_per_use: float = 0.0  # Cost in USD per invocation 注：每次调用的费用（USD）
-    input_examples: Optional[List[Dict[str, Any]]] = None  # Examples for tool usage (Anthropic-specific) 注：tool 用法示例（Anthropic 专用）
+    input_examples: list[dict[str, Any]] | None = None  # Examples for tool usage (Anthropic-specific) 注：tool 用法示例（Anthropic 专用）
 
 
 @dataclass
@@ -78,14 +78,14 @@ class ToolResult:
 
     success: bool
     output: Any
-    error: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    execution_time_ms: Optional[int] = None
-    tokens_used: Optional[int] = None
-    cost_usd: Optional[float] = None
-    cost_model: Optional[str] = None  # synthetic model name for cost attribution 注：用于费用归因的虚拟模型名称
+    error: str | None = None
+    metadata: dict[str, Any] | None = None
+    execution_time_ms: int | None = None
+    tokens_used: int | None = None
+    cost_usd: float | None = None
+    cost_model: str | None = None  # synthetic model name for cost attribution 注：用于费用归因的虚拟模型名称
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization
         转换为字典以便序列化"""
         d = {
@@ -118,10 +118,10 @@ class Tool(ABC):
         self._execution_count = 0
         # Track rate limits per session/user instead of globally
         # # 按 session/user 分别跟踪 rate limit，而不是全局跟踪。
-        self._execution_tracker: Dict[str, datetime] = {}
+        self._execution_tracker: dict[str, datetime] = {}
         # Request-scoped ID for rate limiting when no session/agent context
         # # 无 session/agent context 时用于 rate limit 的 request 级 ID。
-        self._current_request_id: Optional[str] = None
+        self._current_request_id: str | None = None
 
     @abstractmethod
     def _get_metadata(self) -> ToolMetadata:
@@ -129,13 +129,13 @@ class Tool(ABC):
         pass
 
     @abstractmethod
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         """Return list of tool parameters"""
         pass
 
     @abstractmethod
     async def _execute_impl(
-        self, session_context: Optional[Dict] = None, **kwargs
+        self, session_context: dict | None = None, **kwargs
     ) -> ToolResult:
         """
         Actual tool execution implementation.
@@ -149,8 +149,8 @@ class Tool(ABC):
 
     async def execute(
         self,
-        session_context: Optional[Dict] = None,
-        observer: Optional[Any] = None,
+        session_context: dict | None = None,
+        observer: Any | None = None,
         **kwargs,
     ) -> ToolResult:
         """
@@ -245,7 +245,7 @@ class Tool(ABC):
                 execution_time_ms=int((time.time() - start_time) * 1000),
             )
 
-    def _coerce_parameters(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _coerce_parameters(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         """Best-effort coercion of incoming parameters to expected types.
         - INTEGER: accept floats with integral value (e.g., 3.0) and numeric strings
         - FLOAT: accept ints and numeric strings
@@ -307,7 +307,7 @@ class Tool(ABC):
                 pass
         return out
 
-    def _validate_parameters(self, kwargs: Dict[str, Any]) -> None:
+    def _validate_parameters(self, kwargs: dict[str, Any]) -> None:
         """Validate input parameters against tool definition
         按 tool 定义校验输入参数"""
         # Check required parameters
@@ -381,7 +381,7 @@ class Tool(ABC):
         return False
 
     def _get_tracker_key(
-        self, session_id: Optional[str], agent_id: Optional[str] = None
+        self, session_id: str | None, agent_id: str | None = None
     ) -> str:
         """Generate consistent tracker key for rate limiting.
         为 rate limit 生成一致的跟踪器键。
@@ -428,7 +428,7 @@ class Tool(ABC):
         """
         self._current_request_id = None
 
-    def _get_retry_after(self, tracker_key: str) -> Optional[float]:
+    def _get_retry_after(self, tracker_key: str) -> float | None:
         """Check rate limit and return remaining wait time if limited.
         检查 rate limit；若已超限则返回剩余等待时间。
 
@@ -463,7 +463,7 @@ class Tool(ABC):
         remaining = min_interval - elapsed
         return remaining.total_seconds()
 
-    def get_schema(self) -> Dict[str, Any]:
+    def get_schema(self) -> dict[str, Any]:
         """
         Get JSON schema for this tool (compatible with OpenAI function calling)
         获取此 tool 的 JSON schema（兼容 OpenAI function calling）

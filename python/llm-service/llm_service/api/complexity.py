@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Request
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
 import json
 import re
+from typing import Any
+
+from fastapi import APIRouter, Request
+from pydantic import BaseModel, Field
 
 from ..providers.base import ModelTier
 from ._json import extract_json_block as _extract_json_block
@@ -12,10 +13,10 @@ router = APIRouter()
 
 class ComplexityRequest(BaseModel):
     query: str = Field(..., description="Query to analyze")
-    context: Optional[Dict[str, Any]] = Field(
+    context: dict[str, Any] | None = Field(
         default_factory=dict, description="Additional context"
     )
-    available_tools: Optional[List[str]] = Field(
+    available_tools: list[str] | None = Field(
         default_factory=list, description="Available tools"
     )
 
@@ -23,18 +24,18 @@ class ComplexityRequest(BaseModel):
 class ComplexityResponse(BaseModel):
     recommended_mode: str
     complexity_score: float
-    required_capabilities: List[str]
+    required_capabilities: list[str]
     estimated_agents: int
     estimated_tokens: int
     estimated_cost_usd: float
     reasoning: str
-    source: Optional[str] = Field(
+    source: str | None = Field(
         default="heuristic", description="'model' when provider used, else 'heuristic'"
     )
-    provider: Optional[str] = Field(
+    provider: str | None = Field(
         default=None, description="Provider used when source=model"
     )
-    raw_output: Optional[str] = Field(
+    raw_output: str | None = Field(
         default=None, description="Raw model output (debug only)"
     )
 
@@ -118,7 +119,7 @@ def _heuristic_analysis(body: ComplexityRequest) -> ComplexityResponse:
 
 @router.post("/analyze", response_model=ComplexityResponse)
 async def analyze_complexity(
-    request: Request, body: ComplexityRequest, debug: Optional[bool] = False
+    request: Request, body: ComplexityRequest, debug: bool | None = False
 ):
     """Analyze the complexity of a query. If providers are configured, ask a model; otherwise, use heuristics.
 
@@ -203,7 +204,7 @@ async def analyze_complexity(
 # 面向 FSM 现代化的 task 分析 API
 class TaskAnalysisRequest(BaseModel):
     task: str = Field(..., description="Task to analyze")
-    context: Optional[Dict[str, Any]] = Field(
+    context: dict[str, Any] | None = Field(
         default_factory=dict, description="Additional context"
     )
 
@@ -216,14 +217,14 @@ class TaskAnalysisResponse(BaseModel):
     complexity_score: float = Field(
         ..., ge=0.0, le=1.0, description="Complexity score between 0 and 1"
     )
-    key_entities: List[str] = Field(
+    key_entities: list[str] = Field(
         default_factory=list, description="Key entities extracted from the task"
     )
-    required_capabilities: List[str] = Field(
+    required_capabilities: list[str] = Field(
         default_factory=list, description="Required capabilities for the task"
     )
-    constraints: List[str] = Field(default_factory=list, description="Task constraints")
-    success_criteria: List[str] = Field(
+    constraints: list[str] = Field(default_factory=list, description="Task constraints")
+    success_criteria: list[str] = Field(
         default_factory=list, description="Success criteria for the task"
     )
     reasoning: str = Field(
@@ -281,7 +282,6 @@ def _heuristic_task_analysis(task: str) -> TaskAnalysisResponse:
     entities = []
     # Extract quoted strings
     # 抽取引号内的字符串
-    import re
 
     quoted = re.findall(r'"([^"]+)"', task)
     entities.extend(quoted)

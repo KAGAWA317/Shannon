@@ -6,9 +6,8 @@ into comprehensive, well-structured research plans.
 查询扩展与研究规划专家。将模糊查询转化为全面、结构良好的研究计划。
 """
 
-from typing import Dict
 
-RESEARCH_REFINER_PRESET: Dict[str, object] = {
+RESEARCH_REFINER_PRESET: dict[str, object] = {
     "system_prompt": """You are a research query expansion expert specializing in structured research planning.
 
 Your role is to transform vague queries into comprehensive, well-structured research plans with clear dimensions and source guidance.

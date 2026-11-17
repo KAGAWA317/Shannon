@@ -3,24 +3,25 @@ Web Search Tool supporting multiple providers: Exa, Firecrawl, Google, Serper, a
 Web Search tool，支持多个 provider：Exa、Firecrawl、Google、Serper 与 Bing
 """
 
-import aiohttp
+import logging
 import os
 import re
-from typing import List, Dict, Any, Optional
-import logging
 from enum import Enum
-from urllib.parse import urlparse, urljoin
+from typing import Any
+from urllib.parse import urljoin, urlparse
+
+import aiohttp
 from bs4 import BeautifulSoup
 
-from ..base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolResult
 from ...config import Settings
+from ..base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolResult
 from ..openapi_parser import _is_private_ip
 from .web_fetch import WebFetchTool
 
 logger = logging.getLogger(__name__)
 
 
-def _ensure_snippet(result: Dict[str, Any], min_length: int = 30) -> str:
+def _ensure_snippet(result: dict[str, Any], min_length: int = 30) -> str:
     """
     Ensure result has a meaningful snippet, generate from available fields if missing.
     确保结果包含有意义的 snippet，缺失时从可用字段生成。
@@ -74,7 +75,7 @@ class SearchProvider(Enum):
 # Recorded as 7500 synthetic tokens in token_usage ($2/1M billing rate).
 # 每次搜索调用产生的第三方 API 成本（美元）。
 # 在 token_usage 中记为 7500 个合成 token（按 $2/1M 计费）。
-SEARCH_PROVIDER_COSTS: Dict[str, float] = {
+SEARCH_PROVIDER_COSTS: dict[str, float] = {
     SearchProvider.SERPAPI.value: 0.015,
     SearchProvider.SEARCHAPI.value: 0.004,
     SearchProvider.SERPER.value: 0.002,
@@ -84,7 +85,7 @@ SEARCH_PROVIDER_COSTS: Dict[str, float] = {
     SearchProvider.BING.value: 0.005,
 }
 
-SEARCH_PROVIDER_MODELS: Dict[str, str] = {
+SEARCH_PROVIDER_MODELS: dict[str, str] = {
     SearchProvider.SERPAPI.value: "shannon_web_search",
     SearchProvider.SEARCHAPI.value: "shannon_web_search",
     SearchProvider.SERPER.value: "shannon_web_search",
@@ -174,7 +175,7 @@ class WebSearchProvider:
             return 100
         return max_results
 
-    async def search(self, query: str, max_results: int = 5) -> List[Dict[str, Any]]:
+    async def search(self, query: str, max_results: int = 5) -> list[dict[str, Any]]:
         raise NotImplementedError
 
 
@@ -196,7 +197,7 @@ class ExaSearchProvider(WebSearchProvider):
         max_results: int = 5,
         search_type: str = "auto",
         category: str = None
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Search using Exa AI.
         使用 Exa AI 进行搜索。
@@ -327,7 +328,7 @@ class FirecrawlSearchProvider(WebSearchProvider):
         self.api_key = api_key
         self.base_url = "https://api.firecrawl.dev/v2/search"
 
-    async def search(self, query: str, max_results: int = 5) -> List[Dict[str, Any]]:
+    async def search(self, query: str, max_results: int = 5) -> list[dict[str, Any]]:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -407,7 +408,7 @@ class GoogleSearchProvider(WebSearchProvider):
             raise ValueError("Google Search Engine ID is required")
         self.base_url = "https://customsearch.googleapis.com/customsearch/v1"
 
-    async def search(self, query: str, max_results: int = 5) -> List[Dict[str, Any]]:
+    async def search(self, query: str, max_results: int = 5) -> list[dict[str, Any]]:
         params = {
             "key": self.api_key,
             "cx": self.search_engine_id,
@@ -484,7 +485,7 @@ class SerperSearchProvider(WebSearchProvider):
         self.api_key = api_key
         self.base_url = "https://google.serper.dev/search"
 
-    async def search(self, query: str, max_results: int = 5) -> List[Dict[str, Any]]:
+    async def search(self, query: str, max_results: int = 5) -> list[dict[str, Any]]:
         headers = {"X-API-KEY": self.api_key, "Content-Type": "application/json"}
 
         payload = {
@@ -573,9 +574,9 @@ class SerpAPISearchProvider(WebSearchProvider):
         self,
         query: str,
         max_results: int = 5,
-        engine: Optional[str] = None,
+        engine: str | None = None,
         **extra_params: Any,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         # Validate max_results
         # 校验 max_results
         max_results = self.validate_max_results(max_results)
@@ -785,9 +786,9 @@ class SearchAPISearchProvider(WebSearchProvider):
         self,
         query: str,
         max_results: int = 5,
-        engine: Optional[str] = None,
+        engine: str | None = None,
         **extra_params: Any,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         max_results = self.validate_max_results(max_results)
         effective_engine = engine.lower() if engine else self.engine
 
@@ -897,7 +898,7 @@ class BingSearchProvider(WebSearchProvider):
         self.api_key = api_key
         self.base_url = "https://api.cognitive.microsoft.com/bing/v7.0/search"
 
-    async def search(self, query: str, max_results: int = 5) -> List[Dict[str, Any]]:
+    async def search(self, query: str, max_results: int = 5) -> list[dict[str, Any]]:
         headers = {
             "Ocp-Apim-Subscription-Key": self.api_key,
         }
@@ -966,12 +967,12 @@ class WebSearchTool(Tool):
     """
 
     def __init__(self):
-        self._provider_enum_value: Optional[str] = None
+        self._provider_enum_value: str | None = None
         self.provider = self._initialize_provider()
         self.settings = Settings()
         super().__init__()
 
-    def _extract_site_url(self, query: str) -> Optional[str]:
+    def _extract_site_url(self, query: str) -> str | None:
         """Extract a single site URL from the query for providerless fallback."""
         if not query:
             return None
@@ -1055,7 +1056,7 @@ class WebSearchTool(Tool):
                 error=f"Fallback scrape failed: {str(e)}",
             )
 
-    def _initialize_provider(self) -> Optional[WebSearchProvider]:
+    def _initialize_provider(self) -> WebSearchProvider | None:
         """Initialize the search provider based on environment configuration"""
 
         # Default to Google, then Serper, then others
@@ -1272,7 +1273,7 @@ class WebSearchTool(Tool):
             session_aware=True,  # Enable session context for official_domains auto-fetch 注：启用 session context，供 official_domains 自动抓取使用
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         # Base parameters (common to all providers)
         # 基础参数（所有 provider 通用）
         params = [
@@ -1392,7 +1393,7 @@ class WebSearchTool(Tool):
 
         return params
 
-    async def _execute_impl(self, session_context: Optional[Dict] = None, **kwargs) -> ToolResult:
+    async def _execute_impl(self, session_context: dict | None = None, **kwargs) -> ToolResult:
         """
         Execute web search using configured provider
         """
@@ -1682,7 +1683,7 @@ class WebSearchTool(Tool):
 
                 # Build extra params dict
                 # 构建 extra params 字典
-                extra_params: Dict[str, Any] = {}
+                extra_params: dict[str, Any] = {}
                 if gl:
                     # Basic validation: 2-letter country code
                     # 基础校验：两位国家代码
@@ -1787,7 +1788,7 @@ class WebSearchTool(Tool):
                     fetcher = WebFetchTool()
                     total_chars_cap = int(os.getenv("WEB_SEARCH_EXA_AUTO_FETCH_TOTAL_CHARS_CAP", "30000"))
                     consumed_chars = 0
-                    auto_fetch_results: List[Dict[str, Any]] = []
+                    auto_fetch_results: list[dict[str, Any]] = []
 
                     # Step 1: Official domains (deep)
                     # 第 1 步：官方域名（深度抓取）

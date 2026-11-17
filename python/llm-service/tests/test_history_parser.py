@@ -3,7 +3,6 @@
 _parse_history_entries —— session history 反序列化的测试。
 """
 
-import pytest
 
 from llm_service.api.agent import _parse_history_entries
 

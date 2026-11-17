@@ -6,9 +6,8 @@ investigation with source verification and epistemic honesty.
 深度研究 workflow 的主要 subtask agent。在来源核验与认知诚实的前提下开展全面调查。
 """
 
-from typing import Dict
 
-DEEP_RESEARCH_AGENT_PRESET: Dict[str, object] = {
+DEEP_RESEARCH_AGENT_PRESET: dict[str, object] = {
     "system_prompt": """You are a research subagent conducting deep investigation on the user's topic.
 
 # PLANNING PHASE (First, before any tool call)

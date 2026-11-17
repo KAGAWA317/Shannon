@@ -4,6 +4,8 @@
 complete()/stream_complete() 中注入 extra_body，以及 Lead 决策 schema 的契约。
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 from llm_provider.base import CompletionRequest, ModelTier
 
@@ -40,9 +42,6 @@ class TestCompletionRequestOutputConfig:
         assert req.output_config["format"]["type"] == "json_schema"
 
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-
 class TestAnthropicOutputConfig:
     """Test Anthropic provider injects output_config into API request.
 
@@ -56,7 +55,7 @@ class TestAnthropicOutputConfig:
         output_config 应出现在 Anthropic 的 API request dict 中。
         """
         from llm_provider.anthropic_provider import AnthropicProvider
-        from llm_provider.base import CompletionRequest, ModelTier
+        from llm_provider.base import CompletionRequest
 
         schema = {
             "format": {
@@ -126,7 +125,7 @@ class TestAnthropicOutputConfig:
         未提供 output_config 时，API request 中不应出现该字段。
         """
         from llm_provider.anthropic_provider import AnthropicProvider
-        from llm_provider.base import CompletionRequest, ModelTier
+        from llm_provider.base import CompletionRequest
 
         request = CompletionRequest(
             messages=[{"role": "user", "content": "Hello"}],
@@ -182,7 +181,7 @@ class TestAnthropicStreamOutputConfig:
         output_config 应通过 extra_body 出现在 stream_complete() 的 API request 中。
         """
         from llm_provider.anthropic_provider import AnthropicProvider
-        from llm_provider.base import CompletionRequest, ModelTier
+        from llm_provider.base import CompletionRequest
 
         schema = {
             "format": {
@@ -275,7 +274,7 @@ class TestAnthropicStreamOutputConfig:
         未提供 output_config 时，stream API request 中不应出现该字段。
         """
         from llm_provider.anthropic_provider import AnthropicProvider
-        from llm_provider.base import CompletionRequest, ModelTier
+        from llm_provider.base import CompletionRequest
 
         request = CompletionRequest(
             messages=[{"role": "user", "content": "Hello"}],

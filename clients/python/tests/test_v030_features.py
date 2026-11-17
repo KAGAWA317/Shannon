@@ -4,14 +4,14 @@ Requires a running Shannon backend at localhost:8080.
 Run with: SHANNON_LIVE_TESTS=1 pytest tests/test_v030_features.py -v -s
 """
 
-import pytest
 import sys
+
+import pytest
 
 sys.path.insert(0, "src")
 
+from shannon import AsyncShannonClient, ShannonClient, TaskStatusEnum
 from tests._live import live_backend_required
-from shannon import ShannonClient, AsyncShannonClient, TaskStatusEnum
-
 
 pytestmark = live_backend_required()
 
@@ -135,7 +135,7 @@ class TestSessionFields:
 
                 # Budget tracking
                 # budget 追踪
-                print(f"\n  Budget Tracking:")
+                print("\n  Budget Tracking:")
                 print(f"    token_budget: {s.token_budget}")
                 print(f"    budget_remaining: {s.budget_remaining}")
                 print(f"    budget_utilization: {s.budget_utilization}")
@@ -143,34 +143,34 @@ class TestSessionFields:
 
                 # Activity
                 # 活跃度
-                print(f"\n  Activity:")
+                print("\n  Activity:")
                 print(f"    is_active: {s.is_active}")
                 print(f"    last_activity_at: {s.last_activity_at}")
                 print(f"    expires_at: {s.expires_at}")
 
                 # Success metrics
                 # 成功率指标
-                print(f"\n  Success Metrics:")
+                print("\n  Success Metrics:")
                 print(f"    successful_tasks: {s.successful_tasks}")
                 print(f"    failed_tasks: {s.failed_tasks}")
                 print(f"    success_rate: {s.success_rate}")
 
                 # Cost tracking
                 # 成本追踪
-                print(f"\n  Cost Tracking:")
+                print("\n  Cost Tracking:")
                 print(f"    total_tokens_used: {s.total_tokens_used}")
                 print(f"    total_cost_usd: {s.total_cost_usd}")
                 print(f"    average_cost_per_task: {s.average_cost_per_task}")
 
                 # Latest task preview
                 # 最近一次 task 预览
-                print(f"\n  Latest Task Preview:")
+                print("\n  Latest Task Preview:")
                 print(f"    latest_task_query: {s.latest_task_query}")
                 print(f"    latest_task_status: {s.latest_task_status}")
 
                 # Research detection
                 # 研究型 session 识别
-                print(f"\n  Research Detection:")
+                print("\n  Research Detection:")
                 print(f"    is_research_session: {s.is_research_session}")
                 print(f"    first_task_mode: {s.first_task_mode}")
 

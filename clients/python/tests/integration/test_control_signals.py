@@ -16,12 +16,12 @@ They are skipped by default. To run:
 """
 
 import os
-import time
 import sys
+import time
 
 import pytest
 
-from shannon import ShannonClient, ControlState
+from shannon import ShannonClient
 
 # Skip in pytest unless explicitly enabled
 # 除非显式开启，否则在 pytest 中跳过
@@ -88,7 +88,7 @@ def test_control_signals():
     print("\n[4] Testing get_control_state()...")
     try:
         state = client.get_control_state(handle.task_id)
-        print(f"✓ Control state retrieved:")
+        print("✓ Control state retrieved:")
         print(f"  - is_paused: {state.is_paused}")
         print(f"  - is_cancelled: {state.is_cancelled}")
         if state.paused_at:
@@ -124,7 +124,7 @@ def test_control_signals():
     time.sleep(2)
 
     state = client.get_control_state(handle.task_id)
-    print(f"✓ Control state after resume:")
+    print("✓ Control state after resume:")
     print(f"  - is_paused: {state.is_paused}")
 
     if not state.is_paused:

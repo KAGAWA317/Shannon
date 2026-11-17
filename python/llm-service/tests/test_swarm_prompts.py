@@ -7,7 +7,6 @@ Write tests first, then implement the prompts to make them pass.
 再改 prompt 让它们通过。
 """
 
-import pytest
 
 
 class TestAgentProtocol:
@@ -46,7 +45,7 @@ class TestAgentProtocol:
         # Check they're not listed as numbered actions (they may appear in general text)
         # 只检查编号动作列表：这些词在正文里出现不算
         lines = AGENT_LOOP_SYSTEM_PROMPT.split("\n")
-        action_lines = [l for l in lines if l.strip().startswith(("4.", "5.", "6.", "7.", "8.", "9."))]
+        action_lines = [ln for ln in lines if ln.strip().startswith(("4.", "5.", "6.", "7.", "8.", "9."))]
         for line in action_lines:
             assert "claim_task" not in line, "claim_task should be removed from actions"
             assert "create_task" not in line, "create_task should be removed from actions"
@@ -189,8 +188,8 @@ class TestRoleCatalog:
 
     def test_catalog_roles_have_presets(self):
         """Every role in the catalog should have a corresponding preset."""
-        from llm_service.roles.swarm import get_swarm_role_catalog
         from llm_service.roles.presets import get_role_preset
+        from llm_service.roles.swarm import get_swarm_role_catalog
 
         catalog = get_swarm_role_catalog()
         for role_key in catalog:
@@ -414,6 +413,7 @@ class TestDateInjection:
     def test_lead_prompt_has_date(self):
         """Lead user prompt must include current date for temporal awareness."""
         import inspect
+
         from llm_service.api.lead import _build_lead_user_prompt
         source = inspect.getsource(_build_lead_user_prompt)
         assert "current_date" in source, \
@@ -424,6 +424,7 @@ class TestDateInjection:
     def test_agent_loop_prompt_has_date(self):
         """Agent loop system prompt must include current date prefix."""
         import inspect
+
         from llm_service.api.agent import build_agent_messages
         source = inspect.getsource(build_agent_messages)
         assert "current_date" in source, \

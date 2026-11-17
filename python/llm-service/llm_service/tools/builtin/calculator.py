@@ -4,15 +4,12 @@ Calculator tool——安全的数学表达式求值
 """
 
 import ast
-import operator
 import math
-from typing import List, Any
+import operator
+from typing import Any
 
-from typing import Dict, Optional
-
-from ..base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolResult
 from ...config import Settings
-
+from ..base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolResult
 
 # Safe operators for expression evaluation
 # 用于表达式求值的安全运算符
@@ -80,7 +77,7 @@ class CalculatorTool(Tool):
             cost_per_use=0.0,
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter(
                 name="expression",
@@ -100,7 +97,7 @@ class CalculatorTool(Tool):
         ]
 
     async def _execute_impl(
-        self, session_context: Optional[Dict] = None, **kwargs
+        self, session_context: dict | None = None, **kwargs
     ) -> ToolResult:
         """
         Safely evaluate mathematical expression
@@ -240,7 +237,7 @@ class StatisticalCalculatorTool(Tool):
             cost_per_use=0.0,
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter(
                 name="data",
@@ -268,7 +265,7 @@ class StatisticalCalculatorTool(Tool):
         ]
 
     async def _execute_impl(
-        self, session_context: Optional[Dict] = None, **kwargs
+        self, session_context: dict | None = None, **kwargs
     ) -> ToolResult:
         """
         Perform statistical calculation

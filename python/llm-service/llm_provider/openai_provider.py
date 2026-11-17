@@ -9,13 +9,22 @@ OpenAI provider 实现
 """
 
 import os
-from typing import Dict, List, Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
+
 import openai
+import tiktoken
 from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
-import tiktoken
 
-from .base import LLMProvider, CompletionRequest, CompletionResponse, TokenUsage, extract_text_from_content, prepare_openai_messages
+from .base import (
+    CompletionRequest,
+    CompletionResponse,
+    LLMProvider,
+    TokenUsage,
+    extract_text_from_content,
+    prepare_openai_messages,
+)
 
 
 class OpenAIProvider(LLMProvider):
@@ -24,7 +33,7 @@ class OpenAIProvider(LLMProvider):
     OpenAI API 的 provider 实现。
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         # Initialize OpenAI client
         # 初始化 OpenAI 客户端
         api_key = config.get("api_key") or os.getenv("OPENAI_API_KEY")
@@ -80,7 +89,7 @@ class OpenAIProvider(LLMProvider):
                 self.encoders[model] = tiktoken.get_encoding("cl100k_base")
         return self.encoders[model]
 
-    def count_tokens(self, messages: List[Dict[str, Any]], model: str) -> int:
+    def count_tokens(self, messages: list[dict[str, Any]], model: str) -> int:
         """Count tokens using tiktoken
 
         使用 tiktoken 统计 token 数。
@@ -327,7 +336,7 @@ class OpenAIProvider(LLMProvider):
                 # 2. List of content parts (each may have a .text attribute or be a dict)
                 # 2. content 分片列表（每片可能带 .text 属性，或是 dict）
                 if isinstance(content, list):
-                    parts: List[str] = []
+                    parts: list[str] = []
                     for part in content:
                         try:
                             # Try part.text attribute
@@ -365,7 +374,7 @@ class OpenAIProvider(LLMProvider):
                         # Check if content is a list in the dump
                         # 检查 dump 中的 content 是否为列表
                         if isinstance(dump.get("content"), list):
-                            parts: List[str] = []
+                            parts: list[str] = []
                             for item in dump["content"]:
                                 if isinstance(item, dict):
                                     # Try output_text, text, or any text field
@@ -391,7 +400,7 @@ class OpenAIProvider(LLMProvider):
                         elif isinstance(alt_value, list):
                             # Handle list of reasoning parts
                             # 处理推理分片列表
-                            parts: List[str] = []
+                            parts: list[str] = []
                             for part in alt_value:
                                 if isinstance(part, dict) and "text" in part:
                                     parts.append(str(part["text"]))
@@ -732,7 +741,7 @@ class OpenAIProvider(LLMProvider):
             # OpenAI streams tool calls incrementally (name/arguments chunks).
             # 跨 streaming delta 累计 tool/function call。
             # OpenAI 会增量流式输出 tool call（name/arguments 分块）
-            tool_calls_by_index: Dict[int, Dict[str, Any]] = {}
+            tool_calls_by_index: dict[int, dict[str, Any]] = {}
             last_model = model
             last_finish_reason = None
             yielded_final_meta = False
@@ -865,7 +874,7 @@ class OpenAIProvider(LLMProvider):
 
     async def generate_embedding(
         self, text: str, model: str = "text-embedding-3-small"
-    ) -> List[float]:
+    ) -> list[float]:
         """Generate embeddings using OpenAI API.
 
         使用 OpenAI API 生成 embedding。
@@ -995,7 +1004,7 @@ class OpenAIProvider(LLMProvider):
 
         # Map OpenAI chat-style messages to Responses input blocks
         # 将 OpenAI chat 风格消息映射为 Responses 的 input block
-        inputs: List[Dict[str, Any]] = []
+        inputs: list[dict[str, Any]] = []
         for msg in request.messages:
             role = msg.get("role", "user")
             text = extract_text_from_content(msg.get("content", ""))
@@ -1012,7 +1021,7 @@ class OpenAIProvider(LLMProvider):
         headroom = max(0, model_context - prompt_tokens_est - safety_margin)
         adjusted_max = max(1, min(requested_max, model_max_output, headroom))
 
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "model": model,
             "max_output_tokens": adjusted_max,
         }
@@ -1044,7 +1053,7 @@ class OpenAIProvider(LLMProvider):
         if request.functions:
             # Minimal pass-through using function blocks
             # 使用 function block 做最小化透传
-            tools: List[Dict[str, Any]] = []
+            tools: list[dict[str, Any]] = []
             for fn in request.functions:
                 if not isinstance(fn, dict):
                     continue
@@ -1102,7 +1111,7 @@ class OpenAIProvider(LLMProvider):
         else:
             # Extract text blocks; usage may be a dict-like
             # 提取文本 block；usage 可能是类 dict 对象
-            text_parts: List[str] = []
+            text_parts: list[str] = []
             try:
                 raw = response.model_dump()
             except Exception:

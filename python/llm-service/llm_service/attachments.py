@@ -19,7 +19,6 @@ import asyncio
 import base64
 import json
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +55,7 @@ class AttachmentResolver:
     def __init__(self, redis_client):
         self.redis = redis_client
 
-    async def resolve(self, attachment_id: str, session_id: str = "") -> Optional[dict]:
+    async def resolve(self, attachment_id: str, session_id: str = "") -> dict | None:
         """Resolve an attachment ID to its data from Redis.
 
         When session_id is provided, validates it against the stored record

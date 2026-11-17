@@ -1,11 +1,11 @@
 import asyncio
+import contextlib
 import json
 import os
 import time
-from typing import Optional, Dict, Any
+from typing import Any
 
 import httpx
-import contextlib
 
 
 class EventEmitter:
@@ -17,7 +17,7 @@ class EventEmitter:
     def __init__(
         self,
         ingest_url: str = "http://orchestrator:8081/events",
-        auth_token: Optional[str] = None,
+        auth_token: str | None = None,
         queue_max: int = 1000,
         timeout_seconds: float = 2.0,
     ):
@@ -25,8 +25,8 @@ class EventEmitter:
         self.auth_token = auth_token
         self.timeout = timeout_seconds
         self._q: asyncio.Queue = asyncio.Queue(maxsize=queue_max)
-        self._task: Optional[asyncio.Task] = None
-        self._client: Optional[httpx.AsyncClient] = None
+        self._task: asyncio.Task | None = None
+        self._client: httpx.AsyncClient | None = None
 
     async def start(self):
         if self._client is None:
@@ -48,10 +48,10 @@ class EventEmitter:
         self,
         workflow_id: str,
         etype: str,
-        agent_id: Optional[str] = None,
+        agent_id: str | None = None,
         message: str = "",
-        timestamp: Optional[float] = None,
-        payload: Optional[Dict[str, Any]] = None,
+        timestamp: float | None = None,
+        payload: dict[str, Any] | None = None,
     ):
         if not workflow_id or not etype:
             return

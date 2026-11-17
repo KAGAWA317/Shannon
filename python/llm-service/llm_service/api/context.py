@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Request, HTTPException
+from typing import Any
+
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional
 
 router = APIRouter()
 
@@ -11,15 +12,15 @@ class Message(BaseModel):
 
 
 class CompressRequest(BaseModel):
-    messages: List[Message]
-    target_tokens: Optional[int] = Field(default=400, ge=64, le=2000)
+    messages: list[Message]
+    target_tokens: int | None = Field(default=400, ge=64, le=2000)
 
 
 class CompressResponse(BaseModel):
     summary: str
     tokens_saved: int = 0
     model_used: str = "unknown"
-    usage: Dict[str, Any] = Field(default_factory=dict)
+    usage: dict[str, Any] = Field(default_factory=dict)
 
 
 @router.post("/context/compress", response_model=CompressResponse)

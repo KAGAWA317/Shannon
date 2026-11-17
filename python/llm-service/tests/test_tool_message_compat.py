@@ -13,8 +13,13 @@ Tests production bugs:
 """
 import importlib
 import re
+
 import pytest
-from llm_provider.base import prepare_openai_messages, _has_function_call_tool_mismatch, sanitize_completion_messages
+from llm_provider.base import (
+    _has_function_call_tool_mismatch,
+    prepare_openai_messages,
+    sanitize_completion_messages,
+)
 
 TOOL_ID_PATTERN = re.compile(r'^[a-zA-Z0-9_-]+$')
 

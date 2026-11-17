@@ -89,7 +89,7 @@ def test_simple_control():
 
         # Verify metadata
         # 校验 metadata
-        print(f"\nMetadata:")
+        print("\nMetadata:")
         print(f"  Model: {final.model_used}")
         print(f"  Provider: {final.provider}")
         if final.usage:

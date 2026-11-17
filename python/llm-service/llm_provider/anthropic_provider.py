@@ -6,26 +6,28 @@ Anthropic Claude provider 实现。
 
 import hashlib
 import json
-import os
 import logging
+import os
 import time
 from collections import OrderedDict
-from typing import Dict, List, Any, AsyncIterator, Optional
+from collections.abc import AsyncIterator
+from typing import Any
+
 import anthropic
 from anthropic import AsyncAnthropic
 
 from .base import (
-    LLMProvider,
     CompletionRequest,
     CompletionResponse,
-    TokenUsage,
+    LLMProvider,
     TokenCounter,
-    extract_text_from_content,
+    TokenUsage,
     _ensure_tool_id,
+    extract_text_from_content,
 )
 
 
-def _block_to_dict(content_block: Any, block_type: Optional[str]) -> Optional[Dict[str, Any]]:
+def _block_to_dict(content_block: Any, block_type: str | None) -> dict[str, Any] | None:
     """Serialize a single Anthropic content block into a verbatim dict.
 
     Strategy (most → least preferred):
@@ -154,7 +156,7 @@ except Exception:
 def _record_cache_metrics(
     provider: str,
     model: str,
-    source: Optional[str],
+    source: str | None,
     cache_read: int,
     cache_creation: int,
     cache_creation_1h: int,
@@ -208,7 +210,7 @@ _LONG_CACHE_SOURCES = frozenset({
 })
 
 
-def resolve_prompt_cache_ttl_block(cache_source: Optional[str]) -> Optional[Dict[str, str]]:
+def resolve_prompt_cache_ttl_block(cache_source: str | None) -> dict[str, str] | None:
     """Pure function: map a cache_source string to the cache_control block.
 
     Public API so upstream callers (e.g. llm_service.api.agent) can resolve
@@ -248,7 +250,7 @@ def resolve_prompt_cache_ttl_block(cache_source: Optional[str]) -> Optional[Dict
     return CACHE_TTL_SHORT
 
 
-def _ttl_block(request) -> Optional[Dict[str, str]]:
+def _ttl_block(request) -> dict[str, str] | None:
     """Resolve the cache_control block for a CompletionRequest.
 
     Thin wrapper over resolve_prompt_cache_ttl_block so provider and upstream
@@ -293,7 +295,7 @@ _PREV_ROLLING_MAX = 1000
 _prev_rolling = OrderedDict()  # session_id → marker hash; LRU evicted 注：session_id → 标记哈希；按 LRU 淘汰
 
 
-def _msg_stable_hash(msg: Dict[str, Any]) -> str:
+def _msg_stable_hash(msg: dict[str, Any]) -> str:
     """Semantic hash of a claude_message for cross-turn marker matching.
 
     Why semantic instead of full JSON: clients re-serialize messages between
@@ -391,7 +393,7 @@ def _remember_marker(session_id: str, msg_hash: str) -> None:
         _prev_rolling.popitem(last=False)
 
 
-def _recall_marker(session_id: str) -> Optional[str]:
+def _recall_marker(session_id: str) -> str | None:
     if not session_id:
         return None
     return _prev_rolling.get(session_id)
@@ -401,7 +403,7 @@ def _build_beta_header(
     *,
     thinking: bool,
     any_deferred: bool,
-) -> Optional[str]:
+) -> str | None:
     """Build comma-separated anthropic-beta header value. Returns None when no beta is needed.
 
     Combines interleaved-thinking-2025-05-14 (when thinking enabled) and
@@ -449,7 +451,7 @@ class CacheBreakDetector:
         system_text: str,
         tool_names: list[str],
         model: str,
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Compare current state against previous. Returns None if no break.
 
         Returns dict with keys: changed (list[str]), tools_added, tools_removed,
@@ -511,7 +513,7 @@ class AnthropicProvider(LLMProvider):
     Anthropic Claude API 的 provider 实现。
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         # Initialize Anthropic client
         # 初始化 Anthropic 客户端
         api_key = config.get("api_key") or os.getenv("ANTHROPIC_API_KEY")
@@ -542,7 +544,7 @@ class AnthropicProvider(LLMProvider):
 
         self._load_models_from_config()
 
-    def count_tokens(self, messages: List[Dict[str, Any]], model: str) -> int:
+    def count_tokens(self, messages: list[dict[str, Any]], model: str) -> int:
         """
         Count tokens for Claude models.
         Note: Anthropic doesn't provide a public tokenizer, so we estimate.
@@ -556,9 +558,9 @@ class AnthropicProvider(LLMProvider):
 
     def _convert_messages_to_claude_format(
         self,
-        messages: List[Dict[str, Any]],
-        ttl_block: Optional[Dict[str, str]] = CACHE_TTL_LONG,
-    ) -> tuple[str, List[Dict]]:
+        messages: list[dict[str, Any]],
+        ttl_block: dict[str, str] | None = CACHE_TTL_LONG,
+    ) -> tuple[str, list[dict]]:
         """Convert OpenAI-style messages to Claude format.
 
         ttl_block: the cache_control dict to apply at cache_break positions and
@@ -591,7 +593,7 @@ class AnthropicProvider(LLMProvider):
                     raw_stable = parts[0]
                     volatile = parts[1]
                     if raw_stable.strip():
-                        stable_block: Dict[str, Any] = {"type": "text", "text": raw_stable}
+                        stable_block: dict[str, Any] = {"type": "text", "text": raw_stable}
                         if ttl_block is not None:
                             stable_block["cache_control"] = ttl_block
                         claude_messages.append({
@@ -707,7 +709,7 @@ class AnthropicProvider(LLMProvider):
         return system_message, claude_messages
 
     @staticmethod
-    def _mark_last_block(msg: Dict[str, Any], ttl_block: Dict[str, str]) -> bool:
+    def _mark_last_block(msg: dict[str, Any], ttl_block: dict[str, str]) -> bool:
         """Add cache_control to the last block of msg. Returns True if applied.
         No-op if any block already has cache_control (de-dup).
 
@@ -729,7 +731,7 @@ class AnthropicProvider(LLMProvider):
         return False
 
     @staticmethod
-    def _strip_message_cache_control(msg: Dict[str, Any]) -> None:
+    def _strip_message_cache_control(msg: dict[str, Any]) -> None:
         """Remove cache_control from all blocks in msg (used to free a breakpoint
         slot when promoting prev_rolling marker — user_1's bytes remain readable
         as part of prev_rolling's larger cached prefix, no info loss).
@@ -746,9 +748,9 @@ class AnthropicProvider(LLMProvider):
 
     def _apply_rolling_cache_marker(
         self,
-        claude_messages: List[Dict[str, Any]],
-        session_id: Optional[str],
-        ttl_block: Optional[Dict[str, str]] = CACHE_TTL_LONG,
+        claude_messages: list[dict[str, Any]],
+        session_id: str | None,
+        ttl_block: dict[str, str] | None = CACHE_TTL_LONG,
     ) -> None:
         """Apply rolling cache_control marker on penultimate message; when a
         previous turn's marker is still present in messages, also preserve it.
@@ -788,7 +790,7 @@ class AnthropicProvider(LLMProvider):
 
         # Locate prev marker by hash (None if first turn or compaction event).
         # 按哈希定位上一轮标记（第一轮或发生压缩时为 None）。
-        prev_idx: Optional[int] = None
+        prev_idx: int | None = None
         if session_id:
             prev_hash = _recall_marker(session_id)
             if prev_hash:
@@ -821,7 +823,7 @@ class AnthropicProvider(LLMProvider):
     def _split_system_message(
         self,
         system_message: str,
-        ttl_block: Optional[Dict[str, str]] = CACHE_TTL_LONG,
+        ttl_block: dict[str, str] | None = CACHE_TTL_LONG,
     ) -> list[dict]:
         """Split system message at <!-- volatile --> marker.
 
@@ -846,7 +848,7 @@ class AnthropicProvider(LLMProvider):
             stable, volatile = system_message.split(VOLATILE_MARKER, 1)
             blocks: list[dict] = []
             if stable.strip():
-                stable_block: Dict[str, Any] = {"type": "text", "text": stable.strip()}
+                stable_block: dict[str, Any] = {"type": "text", "text": stable.strip()}
                 if ttl_block is not None:
                     stable_block["cache_control"] = ttl_block
                 blocks.append(stable_block)
@@ -854,12 +856,12 @@ class AnthropicProvider(LLMProvider):
                 blocks.append({"type": "text", "text": volatile.strip()})
             if blocks:
                 return blocks
-        full_block: Dict[str, Any] = {"type": "text", "text": system_message}
+        full_block: dict[str, Any] = {"type": "text", "text": system_message}
         if ttl_block is not None:
             full_block["cache_control"] = ttl_block
         return [full_block]
 
-    def _convert_functions_to_tools(self, functions: List[Dict]) -> List[Dict]:
+    def _convert_functions_to_tools(self, functions: list[dict]) -> list[dict]:
         """Convert OpenAI function format to Claude tools format.
 
         Frozen by tool name set: same names → return cached schemas (prevents
@@ -940,7 +942,7 @@ class AnthropicProvider(LLMProvider):
 
 
 
-    def _convert_attachments_for_anthropic(self, messages: List[Dict]) -> List[Dict]:
+    def _convert_attachments_for_anthropic(self, messages: list[dict]) -> list[dict]:
         """Convert shannon_attachment blocks in user messages to Anthropic-native format.
 
         shannon_attachment is a Shannon-internal marker that must never be sent raw
@@ -963,7 +965,7 @@ class AnthropicProvider(LLMProvider):
         return messages
 
     @staticmethod
-    def _shannon_att_to_anthropic(block: Dict) -> Dict:
+    def _shannon_att_to_anthropic(block: dict) -> dict:
         """Convert a single shannon_attachment block to Anthropic format.
 
         将单个 shannon_attachment block 转换为 Anthropic 格式。
@@ -1003,7 +1005,7 @@ class AnthropicProvider(LLMProvider):
             },
         }
 
-    def _build_api_request(self, request: CompletionRequest, model_config) -> Dict[str, Any]:
+    def _build_api_request(self, request: CompletionRequest, model_config) -> dict[str, Any]:
         """Build the Anthropic API request dict shared by complete() and stream_complete().
 
         Handles: message conversion, context window headroom, temperature/top_p
@@ -1103,7 +1105,7 @@ class AnthropicProvider(LLMProvider):
             logger.info(f"Capping max_tokens {adjusted_max} → {MAX_NON_STREAMING} for non-streaming Anthropic call")
             adjusted_max = MAX_NON_STREAMING
 
-        api_request: Dict[str, Any] = {
+        api_request: dict[str, Any] = {
             "model": model,
             "messages": claude_messages,
             "max_tokens": adjusted_max,
@@ -1236,7 +1238,7 @@ class AnthropicProvider(LLMProvider):
         return api_request
 
     @staticmethod
-    def _force_uniform_cache_ttl(api_request: Dict[str, Any], ttl_block: Optional[Dict[str, str]]) -> None:
+    def _force_uniform_cache_ttl(api_request: dict[str, Any], ttl_block: dict[str, str] | None) -> None:
         """Boundary invariant: enforce a single uniform TTL on every cache_control
         block before the request leaves the provider.
 
@@ -1349,7 +1351,7 @@ class AnthropicProvider(LLMProvider):
         # assistant 消息 content block 的逐字有序副本。
         # 按原始索引顺序保留，以满足 Anthropic "thinking block 必须在 assistant
         # 轨迹中原样保留"的要求 —— 包括出现在相邻 tool_use block 之间的交错思考。
-        content_blocks_out: List[Dict[str, Any]] = []
+        content_blocks_out: list[dict[str, Any]] = []
 
         for content_block in response.content:
             # Handle both Anthropic SDK objects (.type attr) and plain dicts (MiniMax compat)
@@ -1498,7 +1500,7 @@ class AnthropicProvider(LLMProvider):
                 # 两者都是往返所必需的 —— function calls 驱动 tool 执行，content_blocks
                 # 驱动逐字的 assistant 轨迹，包括客户端在下一轮回传的 thinking block）。
                 function_calls = []
-                content_blocks_out: List[Dict[str, Any]] = []
+                content_blocks_out: list[dict[str, Any]] = []
                 if final_message and hasattr(final_message, "content"):
                     for content_block in final_message.content:
                         block_type = getattr(content_block, "type", None) or (

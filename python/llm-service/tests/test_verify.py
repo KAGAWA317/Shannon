@@ -4,15 +4,14 @@
 以及 Pydantic 模型的默认值。
 """
 
-import pytest
 from llm_service.api.verify import (
-    detect_language,
-    tokenize,
-    bm25_score,
-    _extract_cited_numbers,
     Citation,
     ClaimVerification,
     VerificationResult,
+    _extract_cited_numbers,
+    bm25_score,
+    detect_language,
+    tokenize,
 )
 
 

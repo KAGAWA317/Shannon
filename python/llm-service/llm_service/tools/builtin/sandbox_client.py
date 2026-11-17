@@ -10,11 +10,10 @@ instead of executing locally.
 
 import logging
 import os
-from typing import List, Optional, Tuple
-
-logger = logging.getLogger(__name__)
 
 import grpc
+
+logger = logging.getLogger(__name__)
 
 # Proto imports - generated from sandbox.proto
 # Proto 导入——由 sandbox.proto 生成
@@ -36,12 +35,12 @@ class SandboxClient:
     # 允许的最大命令 timeout（防止通过无界等待造成 DoS）
     MAX_COMMAND_TIMEOUT = 60
 
-    def __init__(self, address: Optional[str] = None, timeout: Optional[int] = None):
+    def __init__(self, address: str | None = None, timeout: int | None = None):
         self.address = address or os.getenv(
             "AGENT_CORE_ADDR", "agent-core:50051"
         )
         self.timeout = timeout or self.DEFAULT_TIMEOUT
-        self._channel: Optional[grpc.aio.Channel] = None
+        self._channel: grpc.aio.Channel | None = None
         self._stub = None
 
     async def _ensure_connected(self):
@@ -59,7 +58,7 @@ class SandboxClient:
         user_id: str = "",
         max_bytes: int = 0,
         encoding: str = "utf-8",
-    ) -> Tuple[bool, str, str, dict]:
+    ) -> tuple[bool, str, str, dict]:
         """
         Read a file from session workspace.
         从 session workspace 读取文件。
@@ -105,7 +104,7 @@ class SandboxClient:
         append: bool = False,
         create_dirs: bool = False,
         encoding: str = "utf-8",
-    ) -> Tuple[bool, int, str, dict]:
+    ) -> tuple[bool, int, str, dict]:
         """
         Write a file to session workspace.
         向 session workspace 写入文件。
@@ -151,7 +150,7 @@ class SandboxClient:
         pattern: str = "",
         recursive: bool = False,
         include_hidden: bool = False,
-    ) -> Tuple[bool, List[dict], str, dict]:
+    ) -> tuple[bool, list[dict], str, dict]:
         """
         List files in session workspace.
         列出 session workspace 中的文件。
@@ -208,7 +207,7 @@ class SandboxClient:
         regex: bool = False,
         include: str = "",
         context_lines: int = 0,
-    ) -> Tuple[bool, List[dict], str, dict]:
+    ) -> tuple[bool, list[dict], str, dict]:
         """
         Search file contents in session workspace.
         在 session workspace 中搜索文件内容。
@@ -268,7 +267,7 @@ class SandboxClient:
         old_text: str,
         new_text: str,
         replace_all: bool = False,
-    ) -> Tuple[bool, str, str, dict]:
+    ) -> tuple[bool, str, str, dict]:
         """
         Edit a file in session workspace by replacing text.
         通过替换文本编辑 session workspace 中的文件。
@@ -311,7 +310,7 @@ class SandboxClient:
         path: str,
         pattern: str = "",
         recursive: bool = False,
-    ) -> Tuple[bool, int, List[str], str]:
+    ) -> tuple[bool, int, list[str], str]:
         """
         Delete file(s) or empty directory from session workspace.
         从 session workspace 删除文件或空目录。
@@ -350,7 +349,7 @@ class SandboxClient:
         command: str,
         user_id: str = "",
         timeout_seconds: int = 30,
-    ) -> Tuple[bool, str, str, int, str, dict]:
+    ) -> tuple[bool, str, str, int, str, dict]:
         """
         Execute a safe command in session workspace.
         在 session workspace 中执行安全命令。
@@ -409,7 +408,7 @@ class SandboxClient:
 
 # Singleton client instance
 # 单例 client 实例
-_client: Optional[SandboxClient] = None
+_client: SandboxClient | None = None
 
 
 def get_sandbox_client() -> SandboxClient:

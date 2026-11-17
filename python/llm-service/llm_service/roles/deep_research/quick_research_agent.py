@@ -10,9 +10,8 @@ deep_research_agent 的轻量版本，用于 quick 策略。
 但去掉详细的 OODA 框架、地区来源表、关系分类以及重型输出结构。
 """
 
-from typing import Dict
 
-QUICK_RESEARCH_AGENT_PRESET: Dict[str, object] = {
+QUICK_RESEARCH_AGENT_PRESET: dict[str, object] = {
     "system_prompt": """You are a research subagent conducting focused investigation on the user's topic.
 
 # PLANNING PHASE (First, before any tool call)

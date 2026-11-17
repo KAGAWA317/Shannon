@@ -4,7 +4,8 @@
 """
 
 import os
-from shannon import ShannonClient, EventType
+
+from shannon import EventType, ShannonClient
 
 # Initialize client
 # 初始化客户端
@@ -22,7 +23,7 @@ handle = client.submit_task(
     session_id="analysis-session",
 )
 
-print(f"✓ Task submitted")
+print("✓ Task submitted")
 print(f"  Task ID: {handle.task_id}")
 print(f"  Workflow ID: {handle.workflow_id}")
 print()

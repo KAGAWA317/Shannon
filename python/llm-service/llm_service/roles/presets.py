@@ -8,7 +8,6 @@ conservative tool allowlist. This file intentionally avoids dynamic I/O.
 我们将其映射为 system prompt 和一份保守的 tool 白名单。本文件刻意避免动态 I/O。
 """
 
-from typing import Dict
 import logging
 import re
 
@@ -19,10 +18,10 @@ logger = logging.getLogger(__name__)
 try:
     from .deep_research import (
         DEEP_RESEARCH_AGENT_PRESET,
-        QUICK_RESEARCH_AGENT_PRESET,
-        RESEARCH_REFINER_PRESET,
         DOMAIN_DISCOVERY_PRESET,
         DOMAIN_PREFETCH_PRESET,
+        QUICK_RESEARCH_AGENT_PRESET,
+        RESEARCH_REFINER_PRESET,
     )
 
     _DEEP_RESEARCH_PRESETS_LOADED = True
@@ -31,7 +30,7 @@ except ImportError as e:
     _DEEP_RESEARCH_PRESETS_LOADED = False
 
 
-_PRESETS: Dict[str, Dict[str, object]] = {
+_PRESETS: dict[str, dict[str, object]] = {
     "analysis": {
         "system_prompt": (
             "You are an analytical assistant. Provide concise, structured reasoning, "
@@ -271,7 +270,7 @@ _PRESETS["financial_news"] = {
 }
 
 
-def get_role_preset(name: str) -> Dict[str, object]:
+def get_role_preset(name: str) -> dict[str, object]:
     """Return a role preset by name with safe default fallback.
     按名称返回角色预设，并在找不到时安全回退到默认值。
 
@@ -291,7 +290,7 @@ def get_role_preset(name: str) -> Dict[str, object]:
     return _PRESETS.get(key, _PRESETS["generalist"]).copy()
 
 
-def render_system_prompt(prompt: str, context: Dict[str, object]) -> str:
+def render_system_prompt(prompt: str, context: dict[str, object]) -> str:
     """Render a system prompt by substituting ${variable} placeholders from context.
     通过从 context 中替换 ${variable} 占位符来渲染 system prompt。
 
@@ -316,7 +315,7 @@ def render_system_prompt(prompt: str, context: Dict[str, object]) -> str:
 
     # Build variable lookup from prompt_params only
     # 仅使用 prompt_params 构建变量查找表
-    variables: Dict[str, str] = {}
+    variables: dict[str, str] = {}
     if "prompt_params" in context and isinstance(context["prompt_params"], dict):
         for key, value in context["prompt_params"].items():
             variables[key] = str(value) if value is not None else ""

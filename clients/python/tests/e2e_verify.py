@@ -9,7 +9,6 @@ Usage: uv run --extra dev python tests/e2e_verify.py
 """
 
 import asyncio
-import json
 import os
 import sys
 import time
@@ -21,7 +20,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from shannon import (
     AsyncShannonClient,
-    ShannonClient,
     TaskStatusEnum,
 )
 
@@ -652,7 +650,7 @@ async def test_task_list_and_events(client: AsyncShannonClient, handle):
 
 
 async def main():
-    print(f"Shannon Python SDK E2E Verification")
+    print("Shannon Python SDK E2E Verification")
     print(f"Target: {BASE_URL}")
     print(f"{'=' * 60}")
 
@@ -681,7 +679,7 @@ async def main():
     print(f"\n{'=' * 60}")
     print(f"Results: {PASS} passed, {FAIL} failed, {SKIP} skipped")
     if ISSUES:
-        print(f"\nFailures:")
+        print("\nFailures:")
         for name, detail in ISSUES:
             print(f"  - {name}: {detail}")
     print()

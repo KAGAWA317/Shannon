@@ -23,19 +23,20 @@ Features:
   - session 持久化（可选）
 """
 
-import os
-import json
-import asyncio
 import ast
-import logging
-from typing import Dict, Any, Optional, List
-from dataclasses import dataclass, field
-import time
+import asyncio
 import hashlib
+import json
+import logging
+import os
+import time
+from dataclasses import dataclass, field
+from typing import Any
 
 import grpc
 from google.protobuf import struct_pb2
 
+from ...config import Settings
 from ...grpc_gen.agent import agent_pb2, agent_pb2_grpc
 from ...grpc_gen.common import common_pb2
 from ..base import (
@@ -45,7 +46,6 @@ from ..base import (
     ToolParameterType,
     ToolResult,
 )
-from ...config import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +56,8 @@ class ExecutionSession:
     表示一个持久化的 Python 执行 session"""
 
     session_id: str
-    variables: Dict[str, Any] = field(default_factory=dict)
-    imports: List[str] = field(default_factory=list)
+    variables: dict[str, Any] = field(default_factory=dict)
+    imports: list[str] = field(default_factory=list)
     last_accessed: float = field(default_factory=time.time)
     execution_count: int = 0
 
@@ -76,9 +76,9 @@ class PythonWasiExecutorTool(Tool):
 
     # Class-level interpreter cache for performance
     # 类级别的解释器 cache，用于提升性能
-    _interpreter_cache: Optional[bytes] = None
-    _cache_hash: Optional[str] = None
-    _sessions: Dict[str, ExecutionSession] = {}
+    _interpreter_cache: bytes | None = None
+    _cache_hash: str | None = None
+    _sessions: dict[str, ExecutionSession] = {}
     _session_lock: asyncio.Lock = asyncio.Lock()  # Thread-safe session access 注：线程安全的 session 访问
     _max_sessions: int = 100
     _session_timeout: int = int(
@@ -129,7 +129,7 @@ class PythonWasiExecutorTool(Tool):
             session_aware=True,  # Required for Firecracker workspace isolation 注：Firecracker 的 workspace 隔离所必需
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter(
                 name="code",
@@ -191,8 +191,8 @@ class PythonWasiExecutorTool(Tool):
             logger.error(f"Failed to cache interpreter: {e}")
 
     async def _get_or_create_session(
-        self, session_id: Optional[str]
-    ) -> Optional[ExecutionSession]:
+        self, session_id: str | None
+    ) -> ExecutionSession | None:
         """Get or create a persistent execution session (thread-safe)
         获取或创建持久化的执行 session（线程安全）"""
         if not session_id:
@@ -230,7 +230,7 @@ class PythonWasiExecutorTool(Tool):
             return session
 
     def _prepare_code_with_session(
-        self, code: str, session: Optional[ExecutionSession]
+        self, code: str, session: ExecutionSession | None
     ) -> str:
         """Prepare code with session context if available
         若存在 session 则为其准备带 session context 的代码"""
@@ -278,7 +278,7 @@ print("__SESSION_STATE__", json.dumps({
         return full_code + "\n" + capture_code
 
     async def _extract_session_state(
-        self, output: str, session: Optional[ExecutionSession]
+        self, output: str, session: ExecutionSession | None
     ) -> str:
         """Extract and store session state from output (thread-safe).
         从输出中提取并存储 session 状态（线程安全）。
@@ -331,7 +331,7 @@ print("__SESSION_STATE__", json.dumps({
         return output
 
     async def _execute_impl(
-        self, session_context: Optional[Dict] = None, **kwargs
+        self, session_context: dict | None = None, **kwargs
     ) -> ToolResult:
         """Execute Python code in WASI sandbox
         在 WASI sandbox 中执行 Python 代码"""
@@ -527,7 +527,7 @@ print("__SESSION_STATE__", json.dumps({
         logger.info("Cleared all Python execution sessions")
 
     @classmethod
-    def get_session_info(cls, session_id: str) -> Optional[Dict[str, Any]]:
+    def get_session_info(cls, session_id: str) -> dict[str, Any] | None:
         """Get information about a session
         获取某个 session 的信息"""
         if session_id in cls._sessions:

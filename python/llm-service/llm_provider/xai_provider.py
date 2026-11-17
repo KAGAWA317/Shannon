@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import os
 import time
+from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any
 
 from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -37,7 +38,7 @@ class XAIProvider(LLMProvider):
     使用 OpenAI 兼容 chat completions API 的 xAI provider。
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         api_key = config.get("api_key") or os.getenv("XAI_API_KEY")
         if not api_key:
             raise ValueError("xAI API key not provided")
@@ -74,7 +75,7 @@ class XAIProvider(LLMProvider):
         未通过 config 提供 model 时，填充一个最小目录。
         """
 
-        defaults: Dict[str, Dict[str, Any]] = {
+        defaults: dict[str, dict[str, Any]] = {
             "grok-4-1-fast-non-reasoning": {
                 "model_id": "grok-4-1-fast-non-reasoning",
                 "tier": "small",
@@ -98,7 +99,7 @@ class XAIProvider(LLMProvider):
         for alias, meta in defaults.items():
             self.models[alias] = self._make_model_config("xai", alias, meta)
 
-    def count_tokens(self, messages: List[Dict[str, Any]], model: str) -> int:
+    def count_tokens(self, messages: list[dict[str, Any]], model: str) -> int:
         return TokenCounter.count_messages_tokens(messages, model)
 
     def _supports_reasoning(self, model_alias: str) -> bool:
@@ -108,7 +109,7 @@ class XAIProvider(LLMProvider):
         caps = getattr(config, "capabilities", None)
         return bool(getattr(caps, "supports_reasoning", False))
 
-    def _sanitize_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _sanitize_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Remove tool_calls and non-string content that xAI API rejects.
 
         移除 xAI API 会拒绝的 tool_calls 与非字符串 content。
@@ -186,7 +187,7 @@ class XAIProvider(LLMProvider):
         # 清理消息，移除 tool call 与非字符串 content
         clean_messages = self._sanitize_messages(request.messages)
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": model_id,
             "messages": clean_messages,
             "temperature": request.temperature,
@@ -201,7 +202,7 @@ class XAIProvider(LLMProvider):
         if request.functions and model_config.supports_functions:
             # Convert functions to tools format (idempotent if already tools)
             # 将 functions 转成 tools 格式（已经是 tools 时幂等）
-            tools: List[Dict[str, Any]] = []
+            tools: list[dict[str, Any]] = []
             for func in request.functions:
                 if isinstance(func, dict) and func.get("type") == "function" and isinstance(func.get("function"), dict):
                     tools.append(func)
@@ -310,7 +311,7 @@ class XAIProvider(LLMProvider):
         )
 
         finish_reason = getattr(choice, "finish_reason", None) or "stop"
-        function_call: Optional[Dict[str, Any]] = None
+        function_call: dict[str, Any] | None = None
         if message and hasattr(message, "function_call"):
             function_call = message.function_call  # type: ignore[assignment]
         elif message and hasattr(message, "tool_calls"):
@@ -364,14 +365,14 @@ class XAIProvider(LLMProvider):
 
         # Map sanitized messages to Responses input blocks
         # 将清理后的消息映射为 Responses 的 input block
-        inputs: List[Dict[str, Any]] = []
+        inputs: list[dict[str, Any]] = []
         for msg in self._sanitize_messages(request.messages):
             role = msg.get("role", "user")
             text = msg.get("content", "")
             content_block = {"type": "input_text", "text": text}
             inputs.append({"role": role, "content": [content_block]})
 
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "model": model_id,
             "input": inputs,
             "max_output_tokens": request.max_tokens or 2048,
@@ -382,7 +383,7 @@ class XAIProvider(LLMProvider):
         # Convert functions to Responses API tools shape
         # 将 functions 转换为 Responses API 的 tools 形状
         if request.functions and self.models.get(model_alias, None) and self.models[model_alias].supports_functions:
-            tools: List[Dict[str, Any]] = []
+            tools: list[dict[str, Any]] = []
             for fn in request.functions:
                 if not isinstance(fn, dict):
                     continue
@@ -426,7 +427,7 @@ class XAIProvider(LLMProvider):
                 "model": getattr(response, "model", model_id),
             }
 
-        text_parts: List[str] = []
+        text_parts: list[str] = []
         out = raw.get("output") or []
         if isinstance(out, list):
             for item in out:
@@ -496,14 +497,14 @@ class XAIProvider(LLMProvider):
         if supports_reasoning or getattr(self, "prefer_responses", False):
             # Map sanitized messages to Responses input blocks
             # 将清理后的消息映射为 Responses 的 input block
-            inputs: List[Dict[str, Any]] = []
+            inputs: list[dict[str, Any]] = []
             for msg in self._sanitize_messages(request.messages):
                 role = msg.get("role", "user")
                 text = msg.get("content", "")
                 content_block = {"type": "input_text", "text": text}
                 inputs.append({"role": role, "content": [content_block]})
 
-            params: Dict[str, Any] = {
+            params: dict[str, Any] = {
                 "model": model_id,
                 "input": inputs,
                 "max_output_tokens": request.max_tokens or 2048,
@@ -514,7 +515,7 @@ class XAIProvider(LLMProvider):
             # Convert functions → tools for Responses
             # 为 Responses 将 functions 转换为 tools
             if request.functions and model_config.supports_functions:
-                tools: List[Dict[str, Any]] = []
+                tools: list[dict[str, Any]] = []
                 for fn in request.functions:
                     if not isinstance(fn, dict):
                         continue
@@ -555,7 +556,7 @@ class XAIProvider(LLMProvider):
         # 清理消息，移除 tool call 与非字符串 content
         clean_messages = self._sanitize_messages(request.messages)
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": model_id,
             "messages": clean_messages,
             "temperature": request.temperature,
@@ -574,7 +575,7 @@ class XAIProvider(LLMProvider):
         if request.functions and model_config.supports_functions:
             # Convert functions to tools format (idempotent if already tools)
             # 将 functions 转成 tools 格式（已经是 tools 时幂等）
-            tools: List[Dict[str, Any]] = []
+            tools: list[dict[str, Any]] = []
             for func in request.functions:
                 if isinstance(func, dict) and func.get("type") == "function" and isinstance(func.get("function"), dict):
                     tools.append(func)

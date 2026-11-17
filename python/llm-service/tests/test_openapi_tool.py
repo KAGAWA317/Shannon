@@ -3,9 +3,10 @@
 OpenAPI tool 执行与 vendor adapter 集成的测试。
 """
 
-import pytest
 import time
 from unittest.mock import AsyncMock, patch
+
+import pytest
 from llm_service.tools.openapi_tool import OpenAPILoader, _SimpleBreaker
 
 

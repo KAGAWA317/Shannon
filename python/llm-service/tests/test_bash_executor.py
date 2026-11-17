@@ -6,12 +6,10 @@ Tests command allowlist, metacharacter rejection, session isolation, and timeout
 覆盖命令 allowlist、元字符拒绝、session 隔离与 timeout 处理。
 """
 
-import asyncio
 import os
-import pytest
-from pathlib import Path
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch
 
+import pytest
 from llm_service.tools.builtin.bash_executor import BashExecutorTool
 
 

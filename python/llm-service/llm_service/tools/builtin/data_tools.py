@@ -10,13 +10,12 @@ reading entire files into LLM context.
 import difflib
 import json
 import logging
-import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolResult
-from .file_ops import _get_session_workspace, _get_allowed_dirs, _is_allowed
+from .file_ops import _get_allowed_dirs, _get_session_workspace, _is_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +28,8 @@ _MAX_JSON_RESULTS = 1000
 
 def _resolve_and_check(
     file_path: str,
-    session_context: Optional[Dict],
-) -> tuple[Optional[Path], Optional[ToolResult]]:
+    session_context: dict | None,
+) -> tuple[Path | None, ToolResult | None]:
     """Resolve a relative path within session workspace and check access.
     解析 session workspace 内的相对路径并检查访问权限。
 
@@ -106,7 +105,7 @@ class DiffFilesTool(Tool):
             cost_per_use=0.0,
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter(
                 name="path_a",
@@ -133,8 +132,8 @@ class DiffFilesTool(Tool):
 
     async def _execute_impl(
         self,
-        session_context: Optional[Dict] = None,
-        observer: Optional[Any] = None,
+        session_context: dict | None = None,
+        observer: Any | None = None,
         **kwargs,
     ) -> ToolResult:
         path_a = kwargs["path_a"]
@@ -190,8 +189,8 @@ class DiffFilesTool(Tool):
 
         # Count additions and deletions
         # 统计新增与删除行数
-        additions = sum(1 for l in diff if l.startswith("+") and not l.startswith("+++"))
-        deletions = sum(1 for l in diff if l.startswith("-") and not l.startswith("---"))
+        additions = sum(1 for ln in diff if ln.startswith("+") and not ln.startswith("+++"))
+        deletions = sum(1 for ln in diff if ln.startswith("-") and not ln.startswith("---"))
 
         output = "".join(diff)
         if truncated:
@@ -254,7 +253,6 @@ def _json_extract(data: Any, expression: str, max_results: int) -> list:
     # Tokenize
     # 分词
     tokens: list[tuple[str, str | int | None]] = []
-    pos = 0
     expr = expression
     # Allow leading dot or not
     # 允许或省略前导点
@@ -324,7 +322,7 @@ class JsonQueryTool(Tool):
             cost_per_use=0.0,
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter(
                 name="path",
@@ -354,8 +352,8 @@ class JsonQueryTool(Tool):
 
     async def _execute_impl(
         self,
-        session_context: Optional[Dict] = None,
-        observer: Optional[Any] = None,
+        session_context: dict | None = None,
+        observer: Any | None = None,
         **kwargs,
     ) -> ToolResult:
         file_path = kwargs["path"]

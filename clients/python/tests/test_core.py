@@ -4,12 +4,12 @@ import inspect
 from datetime import datetime
 
 import pytest
-import shannon
 
+import shannon
 from shannon import (
-    ShannonClient,
     AsyncShannonClient,
     EventType,
+    ShannonClient,
     TaskStatusEnum,
     errors,
 )

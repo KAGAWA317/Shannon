@@ -12,7 +12,6 @@ while web_search/web_fetch keep moderate truncation (3000).
 修复后 file_read/file_edit 保留约 15K 字符，web_search/web_fetch 仍截断到约 3000。
 """
 
-import pytest
 
 from llm_service.api.agent import (
     AgentLoopStepRequest,

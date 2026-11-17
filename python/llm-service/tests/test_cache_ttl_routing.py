@@ -20,10 +20,10 @@ import pytest
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-for-unit-tests")
 
 from llm_provider.anthropic_provider import (
-    _ttl_block,
-    resolve_prompt_cache_ttl_block,
     CACHE_TTL_LONG,
     CACHE_TTL_SHORT,
+    _ttl_block,
+    resolve_prompt_cache_ttl_block,
 )
 from llm_provider.base import CompletionRequest
 

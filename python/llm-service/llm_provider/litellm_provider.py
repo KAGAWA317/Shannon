@@ -5,7 +5,8 @@ LiteLLM AI Gateway 的 provider；使用内嵌 SDK，无需 proxy server。
 
 import logging
 import time
-from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
+from collections.abc import AsyncIterator
+from typing import Any
 
 from .anthropic_provider import _record_cache_metrics
 from .base import (
@@ -54,7 +55,7 @@ def _extract_text(message: Any) -> str:
     return ""
 
 
-def _cache_tokens(usage: Any) -> Tuple[int, int, int, int]:
+def _cache_tokens(usage: Any) -> tuple[int, int, int, int]:
     """Return ``(read, creation, 5m, 1h)`` from a litellm response.usage object.
 
     Anthropic-shape fields (``cache_read_input_tokens`` / ``cache_creation_input_tokens``
@@ -93,7 +94,7 @@ class LiteLLMProvider(LLMProvider):
     一个 Shannon provider，通过 ``litellm.acompletion`` 接入 100+ 上游后端。
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         try:
             import litellm  # noqa: F401
         except ImportError as exc:
@@ -102,12 +103,12 @@ class LiteLLMProvider(LLMProvider):
                 'Install via `pip install "litellm>=1.60,<1.85"`.'
             ) from exc
 
-        self.api_key: Optional[str] = config.get("api_key")
-        self.base_url: Optional[str] = config.get("base_url") or config.get("api_base")
+        self.api_key: str | None = config.get("api_key")
+        self.base_url: str | None = config.get("base_url") or config.get("api_base")
         self.timeout: int = int(config.get("timeout", 60) or 60)
-        merged: Dict[str, Any] = {"drop_params": True}
+        merged: dict[str, Any] = {"drop_params": True}
         merged.update(config.get("litellm_kwargs") or {})
-        self.default_kwargs: Dict[str, Any] = merged
+        self.default_kwargs: dict[str, Any] = merged
 
         super().__init__(config)
 
@@ -124,10 +125,10 @@ class LiteLLMProvider(LLMProvider):
                 return alias
         return model_id
 
-    def _request_kwargs(self, request: CompletionRequest, model: str) -> Dict[str, Any]:
+    def _request_kwargs(self, request: CompletionRequest, model: str) -> dict[str, Any]:
         messages = prepare_openai_messages(request.messages)
 
-        kwargs: Dict[str, Any] = dict(self.default_kwargs)
+        kwargs: dict[str, Any] = dict(self.default_kwargs)
         kwargs["model"] = model
         kwargs["messages"] = messages
         kwargs["timeout"] = self.timeout
@@ -152,7 +153,7 @@ class LiteLLMProvider(LLMProvider):
             kwargs["user"] = request.user
 
         if request.functions:
-            tools: List[Dict[str, Any]] = []
+            tools: list[dict[str, Any]] = []
             for fn in request.functions:
                 if isinstance(fn, dict) and fn.get("type") == "function":
                     tools.append(fn)
@@ -237,8 +238,8 @@ class LiteLLMProvider(LLMProvider):
             cache_1h,
         )
 
-        function_call: Optional[Dict[str, Any]] = None
-        tool_calls: Optional[List[Dict[str, Any]]] = None
+        function_call: dict[str, Any] | None = None
+        tool_calls: list[dict[str, Any]] | None = None
         raw_tool_calls = getattr(message, "tool_calls", None)
         if raw_tool_calls:
             tool_calls = []
@@ -298,8 +299,8 @@ class LiteLLMProvider(LLMProvider):
         try:
             stream = await litellm.acompletion(**kwargs)
 
-            tool_calls_by_index: Dict[int, Dict[str, Any]] = {}
-            last_finish_reason: Optional[str] = None
+            tool_calls_by_index: dict[int, dict[str, Any]] = {}
+            last_finish_reason: str | None = None
             yielded_final_meta = False
 
             def _accumulate(index: int, tc_id: Any, name: Any, args_part: Any) -> None:
@@ -384,7 +385,7 @@ class LiteLLMProvider(LLMProvider):
                         cache_1h,
                     )
 
-                    meta: Dict[str, Any] = {
+                    meta: dict[str, Any] = {
                         "usage": {
                             "total_tokens": total_tokens,
                             "input_tokens": prompt_tokens,
@@ -434,7 +435,7 @@ class LiteLLMProvider(LLMProvider):
         except Exception as e:
             raise Exception(f"LiteLLM streaming error (model={model}): {e}")
 
-    def count_tokens(self, messages: List[Dict[str, Any]], model: str) -> int:
+    def count_tokens(self, messages: list[dict[str, Any]], model: str) -> int:
         try:
             import litellm
 

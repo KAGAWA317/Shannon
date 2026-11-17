@@ -24,17 +24,24 @@ For exploratory crawling where structure is unknown, use web_crawl instead.
 若结构未知、需要探索式爬取，请改用 web_crawl。
 """
 
-import aiohttp
 import asyncio
-import os
 import logging
+import os
 import socket
-from typing import Dict, Optional, List, Any, Tuple
+from typing import Any
 from urllib.parse import urlparse
+
+import aiohttp
 
 from ..base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolResult
 from ..openapi_parser import _is_private_ip
-from .web_fetch import detect_blocked_reason, clean_markdown_noise, apply_extraction, apply_research_truncation, EXTRACTION_INTERNAL_MAX  # P0-A: Reuse blocked detection and noise cleaning logic 注：P0-A：复用拦截检测与噪声清理逻辑
+from .web_fetch import (  # P0-A: Reuse blocked detection and noise cleaning logic 注：P0-A：复用拦截检测与噪声清理逻辑
+    EXTRACTION_INTERNAL_MAX,
+    apply_extraction,
+    apply_research_truncation,
+    clean_markdown_noise,
+    detect_blocked_reason,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +172,7 @@ class WebSubpageFetchTool(Tool):
             cost_per_use=0.005,  # Multiple pages 注：多个页面
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter(
                 name="url",
@@ -225,7 +232,7 @@ class WebSubpageFetchTool(Tool):
         ]
 
     async def _execute_impl(
-        self, session_context: Optional[Dict] = None, **kwargs
+        self, session_context: dict | None = None, **kwargs
     ) -> ToolResult:
         """Execute multi-page fetch using Map + Scrape strategy.
         使用 Map + Scrape 策略执行多页获取。"""
@@ -400,13 +407,13 @@ class WebSubpageFetchTool(Tool):
 
         return expanded
 
-    def _normalize_target_paths(self, target_paths: List[str]) -> List[str]:
+    def _normalize_target_paths(self, target_paths: list[str]) -> list[str]:
         """Normalize target paths for matching.
         规范化用于匹配的目标路径。"""
         if not target_paths:
             return []
 
-        normalized: List[str] = []
+        normalized: list[str] = []
         seen: set = set()
 
         for raw in target_paths:
@@ -433,7 +440,7 @@ class WebSubpageFetchTool(Tool):
 
         return normalized
 
-    def _matches_target_paths(self, path: str, target_paths: List[str]) -> bool:
+    def _matches_target_paths(self, path: str, target_paths: list[str]) -> bool:
         if not target_paths:
             return False
         if not path:
@@ -452,7 +459,7 @@ class WebSubpageFetchTool(Tool):
         url: str,
         target_keywords: str,
         total_pages: int,
-        target_paths: Optional[List[str]] = None
+        target_paths: list[str] | None = None
     ) -> float:
         """
         Calculate relevance score for a URL (0.0-1.0).
@@ -478,7 +485,6 @@ class WebSubpageFetchTool(Tool):
         path = parsed.path.lower().rstrip("/")
         if not path:
             path = "/"
-        path_segments = path.split("/")
         target_paths = target_paths or []
 
         if target_paths and self._matches_target_paths(path, target_paths):
@@ -538,7 +544,7 @@ class WebSubpageFetchTool(Tool):
 
         return min(score, 1.0)
 
-    def _is_error_page(self, content: str) -> Tuple[bool, str]:
+    def _is_error_page(self, content: str) -> tuple[bool, str]:
         """Detect if page content indicates an error page.
         检测页面内容是否表明这是一个错误页。
 
@@ -594,9 +600,9 @@ class WebSubpageFetchTool(Tool):
         url: str,
         limit: int,
         target_keywords: str,
-        target_paths: List[str],
+        target_paths: list[str],
         max_length: int
-    ) -> Tuple[Dict[str, Any], Dict]:
+    ) -> tuple[dict[str, Any], dict]:
         """Map website URLs, score by relevance, and scrape top pages.
 
         Hybrid selection strategy:
@@ -799,7 +805,7 @@ class WebSubpageFetchTool(Tool):
 
         return merged, scrape_meta
 
-    async def _map(self, url: str) -> List[str]:
+    async def _map(self, url: str) -> list[str]:
         """Use Firecrawl Map API to get all URLs on a website.
         使用 Firecrawl Map API 获取网站上的所有 URL。"""
         timeout = aiohttp.ClientTimeout(total=MAP_TIMEOUT)
@@ -831,7 +837,7 @@ class WebSubpageFetchTool(Tool):
                     if link
                 ]
 
-    async def _batch_scrape(self, urls: List[str], max_length: int) -> Tuple[List[Dict], Dict]:
+    async def _batch_scrape(self, urls: list[str], max_length: int) -> tuple[list[dict], dict]:
         """
         Batch scrape multiple URLs with concurrency control and retry.
 
@@ -849,7 +855,7 @@ class WebSubpageFetchTool(Tool):
         """
         semaphore = asyncio.Semaphore(BATCH_CONCURRENCY)
 
-        async def limited_scrape(url: str) -> Optional[Dict]:
+        async def limited_scrape(url: str) -> dict | None:
             async with semaphore:
                 return await self._scrape_with_retry(url, max_length)
 
@@ -861,8 +867,8 @@ class WebSubpageFetchTool(Tool):
         # 过滤掉失败项，并按返回的 URL 去重
         # 这样可避免页面重定向到同一目标时产生重复内容
         valid_results = []
-        urls_succeeded: List[str] = []
-        urls_failed: List[Dict] = []
+        urls_succeeded: list[str] = []
+        urls_failed: list[dict] = []
         seen_returned_urls: set = set()  # Track returned URLs to deduplicate 注：记录返回的 URL 用于去重
 
         for url, r in zip(urls, results):
@@ -923,7 +929,7 @@ class WebSubpageFetchTool(Tool):
 
         return valid_results, meta
 
-    async def _scrape_with_retry(self, url: str, max_length: int) -> Optional[Dict]:
+    async def _scrape_with_retry(self, url: str, max_length: int) -> dict | None:
         """Scrape a single URL with retry logic.
         带 retry 逻辑 scrape 单个 URL。"""
         last_error = None
@@ -953,7 +959,7 @@ class WebSubpageFetchTool(Tool):
         logger.warning(f"Failed to scrape {url} after retries: {last_error}")
         return None
 
-    async def _scrape(self, url: str, max_length: int) -> Dict:
+    async def _scrape(self, url: str, max_length: int) -> dict:
         """Scrape a single URL using Firecrawl.
         使用 Firecrawl scrape 单个 URL。"""
         timeout = aiohttp.ClientTimeout(total=SCRAPE_TIMEOUT)
@@ -998,7 +1004,7 @@ class WebSubpageFetchTool(Tool):
                     "content": content,
                 }
 
-    def _merge_results(self, results: List[Dict], original_url: str) -> Dict:
+    def _merge_results(self, results: list[dict], original_url: str) -> dict:
         """Merge multiple page results into a single output.
         把多个页面结果合并为单一输出。"""
         if len(results) == 1:
@@ -1068,9 +1074,9 @@ class WebSubpageFetchTool(Tool):
         url: str,
         limit: int,
         target_keywords: str,
-        target_paths: List[str],
+        target_paths: list[str],
         max_length: int
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Fallback: Use Exa with subpages feature.
         回退：使用 Exa 的 subpages 特性。"""
         timeout = aiohttp.ClientTimeout(total=60)
@@ -1163,7 +1169,7 @@ class WebSubpageFetchTool(Tool):
 
                 return self._merge_exa_results(content_results, url)
 
-    def _merge_exa_results(self, results: List[Dict], original_url: str) -> Dict:
+    def _merge_exa_results(self, results: list[dict], original_url: str) -> dict:
         """Merge Exa results into single output.
         把 Exa 的结果合并为单一输出。"""
         merged_content = []

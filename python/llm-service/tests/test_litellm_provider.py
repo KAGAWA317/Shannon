@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import unittest
 from types import SimpleNamespace
-from typing import Any, Dict, List
+from typing import Any
 from unittest.mock import patch
 
 from llm_provider.base import (
@@ -23,20 +23,19 @@ from llm_provider.base import (
 )
 from llm_provider.litellm_provider import LiteLLMProvider
 
-
 # ===========================================================================
 # Helpers
 # 辅助函数
 # ===========================================================================
 
 
-def _make_provider(extra_config: Dict[str, Any] | None = None) -> LiteLLMProvider:
+def _make_provider(extra_config: dict[str, Any] | None = None) -> LiteLLMProvider:
     """Build a LiteLLMProvider with a minimal valid config.
 
     最小可用配置：两个模型分别覆盖 large / small 两个 tier，
     并带上价格字段以便校验成本估算。
     """
-    config: Dict[str, Any] = {
+    config: dict[str, Any] = {
         "name": "litellm",
         "models": {
             "anthropic/claude-3-5-sonnet-20241022": {
@@ -66,7 +65,7 @@ def _completion_response(
     content: str,
     prompt_tokens: int = 10,
     completion_tokens: int = 5,
-    tool_calls: List[Dict[str, str]] | None = None,
+    tool_calls: list[dict[str, str]] | None = None,
 ) -> SimpleNamespace:
     """Build a mock OpenAI-shaped response from ``litellm.acompletion``.
 
@@ -107,7 +106,7 @@ def _completion_response(
     )
 
 
-async def _async_iter(items: List[Any]):
+async def _async_iter(items: list[Any]):
     for item in items:
         yield item
 
@@ -116,10 +115,10 @@ def _stream_chunk(
     *,
     content: str | None = None,
     reasoning: str | None = None,
-    tool_calls: List[Any] | None = None,
+    tool_calls: list[Any] | None = None,
     function_call: Any = None,
     finish_reason: str | None = None,
-    usage: Dict[str, Any] | None = None,
+    usage: dict[str, Any] | None = None,
 ) -> SimpleNamespace:
     """Build one streaming chunk. ``usage`` may include cache fields nested as needed.
 
@@ -171,11 +170,11 @@ def _stream_chunk(
     return SimpleNamespace(choices=choices, usage=chunk_usage, model="m")
 
 
-def _content_chunk(text: str | None, usage: Dict[str, int] | None = None):
+def _content_chunk(text: str | None, usage: dict[str, int] | None = None):
     return _stream_chunk(content=text, usage=usage)
 
 
-def _usage_only_chunk(usage: Dict[str, int]):
+def _usage_only_chunk(usage: dict[str, int]):
     return _stream_chunk(usage=usage)
 
 

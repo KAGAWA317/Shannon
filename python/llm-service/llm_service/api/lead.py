@@ -7,13 +7,13 @@ import asyncio
 import json as json_module
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from .agent import strip_markdown_json_wrapper
 from ..providers.base import ModelTier
+from .agent import strip_markdown_json_wrapper
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +29,9 @@ class LeadEvent(BaseModel):
     agent_id: str = Field(default="", description="Agent that triggered the event")
     result_summary: str = Field(default="", description="Summary of agent's result")
     human_message: str = Field(default="", description="Message from human user (for human_input events)")
-    completion_report: Dict[str, Any] = Field(default_factory=dict, description="Structured agent output: summary, files_written, key_findings")
-    file_contents: List[Dict[str, Any]] = Field(default_factory=list, description="Lead file_read results")
-    tool_results: List[Dict[str, Any]] = Field(default_factory=list, description="Lead tool_call results")
+    completion_report: dict[str, Any] = Field(default_factory=dict, description="Structured agent output: summary, files_written, key_findings")
+    file_contents: list[dict[str, Any]] = Field(default_factory=list, description="Lead file_read results")
+    tool_results: list[dict[str, Any]] = Field(default_factory=list, description="Lead tool_call results")
 
 
 class AgentState(BaseModel):
@@ -40,7 +40,7 @@ class AgentState(BaseModel):
     current_task: str = ""
     iterations_used: int = 0
     role: str = ""  # Agent's assigned role (researcher, analyst, synthesis_writer, etc.) 注：Agent 被分配的角色（researcher、analyst、synthesis_writer 等）
-    files_written: List[str] = Field(default_factory=list)  # Files written by agent 注：agent 写入的文件
+    files_written: list[str] = Field(default_factory=list)  # Files written by agent 注：agent 写入的文件
 
 
 class LeadBudget(BaseModel):
@@ -55,15 +55,15 @@ class LeadBudget(BaseModel):
 class LeadDecisionRequest(BaseModel):
     workflow_id: str
     event: LeadEvent
-    task_list: List[Dict[str, Any]] = Field(default_factory=list)
-    agent_states: List[AgentState] = Field(default_factory=list)
+    task_list: list[dict[str, Any]] = Field(default_factory=list)
+    agent_states: list[AgentState] = Field(default_factory=list)
     budget: LeadBudget = Field(default_factory=LeadBudget)
-    history: List[Dict[str, Any]] = Field(default_factory=list)  # Recent 5 Lead decisions 注：最近 5 次 Lead 决策
-    messages: List[Dict[str, Any]] = Field(default_factory=list)  # Agent→Lead mailbox messages 注：Agent→Lead 邮箱消息
+    history: list[dict[str, Any]] = Field(default_factory=list)  # Recent 5 Lead decisions 注：最近 5 次 Lead 决策
+    messages: list[dict[str, Any]] = Field(default_factory=list)  # Agent→Lead mailbox messages 注：Agent→Lead 邮箱消息
     original_query: str = Field(default="", description="User's original query for language context")
-    conversation_history: List[Dict[str, Any]] = Field(default_factory=list)  # Session history for multi-turn context 注：session 历史，用于多轮 context
-    workspace_files: List[str] = Field(default_factory=list, description="File paths in workspace")
-    hitl_messages: List[str] = Field(default_factory=list, description="All HITL messages received during execution")
+    conversation_history: list[dict[str, Any]] = Field(default_factory=list)  # Session history for multi-turn context 注：session 历史，用于多轮 context
+    workspace_files: list[str] = Field(default_factory=list, description="File paths in workspace")
+    hitl_messages: list[str] = Field(default_factory=list, description="All HITL messages received during execution")
     lead_model_override: str = Field(default="", description="Explicit model for Lead (e.g. MiniMax-M3)")
     lead_provider_override: str = Field(default="", description="Explicit provider for Lead (e.g. minimax)")
 
@@ -77,12 +77,12 @@ class LeadAction(BaseModel):
     to: str = ""
     content: str = ""
     model_tier: str = ""  # small, medium, large — Lead can specify per agent 注：small、medium、large —— Lead 可为每个 agent 指定
-    create: List[Dict[str, Any]] = Field(default_factory=list)
-    cancel: List[str] = Field(default_factory=list)
-    update: List[Dict[str, Any]] = Field(default_factory=list)  # revise_plan: update existing task descriptions 注：revise_plan：更新现有 task 描述
+    create: list[dict[str, Any]] = Field(default_factory=list)
+    cancel: list[str] = Field(default_factory=list)
+    update: list[dict[str, Any]] = Field(default_factory=list)  # revise_plan: update existing task descriptions 注：revise_plan：更新现有 task 描述
     path: str = ""  # file_read target path 注：file_read 的目标路径
     tool: str = ""  # tool_call: web_search, web_fetch, calculator 注：tool_call：web_search、web_fetch、calculator
-    tool_params: Dict[str, Any] = Field(default_factory=dict)  # tool_call: tool arguments 注：tool_call：tool 参数
+    tool_params: dict[str, Any] = Field(default_factory=dict)  # tool_call: tool arguments 注：tool_call：tool 参数
 
 
 # JSON Schema for Anthropic structured output (output_config.format).
@@ -175,7 +175,7 @@ LEAD_DECISION_SCHEMA = {
 class LeadDecisionResponse(BaseModel):
     decision_summary: str = ""
     user_summary: str = ""
-    actions: List[LeadAction] = Field(default_factory=list)
+    actions: list[LeadAction] = Field(default_factory=list)
     tokens_used: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
@@ -188,8 +188,7 @@ class LeadDecisionResponse(BaseModel):
 # ── System Prompt (single source of truth: roles/swarm/lead_protocol.py) ──
 # ── System Prompt（唯一来源：roles/swarm/lead_protocol.py） ──
 
-from llm_service.roles.swarm.lead_protocol import LEAD_SYSTEM_PROMPT
-
+from llm_service.roles.swarm.lead_protocol import LEAD_SYSTEM_PROMPT  # noqa: E402
 
 # ── Auto-link: match spawn_agent to tasks by description ────────────────
 #
@@ -202,7 +201,7 @@ from llm_service.roles.swarm.lead_protocol import LEAD_SYSTEM_PROMPT
 # （task_id 需要引用 revise_plan 的 create 数组）。因此本函数改为按描述匹配。
 
 
-def _parse_tool_params(raw) -> Dict[str, Any]:
+def _parse_tool_params(raw) -> dict[str, Any]:
     """Parse tool_params from string (schema) or dict (fallback).
 
     解析 tool_params：来自 schema 的字符串，或回退的 dict。
@@ -220,8 +219,8 @@ def _parse_tool_params(raw) -> Dict[str, Any]:
 
 
 def _auto_link_task_ids(
-    actions: List["LeadAction"],
-    task_list_from_body: List[Dict[str, Any]],
+    actions: list["LeadAction"],
+    task_list_from_body: list[dict[str, Any]],
 ) -> None:
     """Inject task_id into spawn_agent actions missing it, by matching descriptions.
 
@@ -229,7 +228,7 @@ def _auto_link_task_ids(
     """
     # 1. Collect available tasks: from revise_plan in this response + pending in task_list
     # 1. 收集可用 task：本次 response 中 revise_plan 的 create，加上 task_list 中待处理的 task
-    available: Dict[str, str] = {}  # task_id → description 注：task_id → description
+    available: dict[str, str] = {}  # task_id → description 注：task_id → description
 
     for a in actions:
         if a.type == "revise_plan":
@@ -276,7 +275,7 @@ def _auto_link_task_ids(
 
 def _best_match(
     spawn_desc: str,
-    available: Dict[str, str],
+    available: dict[str, str],
     claimed: set,
 ) -> str:
     """Find the best matching task_id for a spawn_agent description.
@@ -327,7 +326,7 @@ def _build_lead_user_prompt(body: LeadDecisionRequest) -> str:
     """
     from datetime import datetime, timezone
 
-    user_parts: List[str] = []
+    user_parts: list[str] = []
 
     # Inject current date for temporal awareness (search quality + freshness judgment)
     # 注入当前日期以提供时间感知（影响搜索质量与时效性判断）
@@ -659,7 +658,7 @@ async def lead_decide(request: Request, body: LeadDecisionRequest) -> LeadDecisi
         decision_summary = str(data.get("decision_summary", ""))[:500]
         user_summary = str(data.get("user_summary", ""))[:500]
         raw_actions = data.get("actions", [])
-        actions: List[LeadAction] = []
+        actions: list[LeadAction] = []
         for ra in raw_actions:
             if isinstance(ra, dict):
                 actions.append(

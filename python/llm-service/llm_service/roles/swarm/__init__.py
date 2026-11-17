@@ -11,7 +11,11 @@ All swarm-related prompts live here, separated from API endpoint logic.
 - role_prompts.py：swarm agent 的角色专属 prompt 片段
 """
 
-from .agent_protocol import AGENT_LOOP_SYSTEM_PROMPT, COMMON_PROTOCOL_BASE, get_work_protocol
+from .agent_protocol import (
+    AGENT_LOOP_SYSTEM_PROMPT,
+    COMMON_PROTOCOL_BASE,
+    get_work_protocol,
+)
 from .lead_protocol import LEAD_SYSTEM_PROMPT
 from .role_prompts import SWARM_ROLE_PROMPTS, get_swarm_role_catalog
 

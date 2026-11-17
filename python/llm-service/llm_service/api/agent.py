@@ -3,15 +3,16 @@
 与 Agent-Core 进行 HTTP 通信的 Agent API 端点.
 """
 
+import html
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional, List, Tuple
-from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
-from fastapi.responses import JSONResponse, StreamingResponse
-import html
 from difflib import SequenceMatcher
+from typing import Any
+
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +78,7 @@ assert MAX_TEXT_TOTAL < MAX_PROMPT_CHARS, (
 )
 
 
-async def _resolve_attachments(context: Optional[Dict], redis_client, session_id: str = "") -> list:
+async def _resolve_attachments(context: dict | None, redis_client, session_id: str = "") -> list:
     """Resolve attachment references from Redis.
 
     Shared helper used by both /agent/query and /agent/loop handlers.
@@ -174,13 +175,13 @@ def strip_markdown_json_wrapper(text: str, *, expect_json: bool) -> str:
     return body
 
 
-def _parse_history_entries(raw_history: Any) -> List[Dict[str, str]]:
+def _parse_history_entries(raw_history: Any) -> list[dict[str, str]]:
     """Parse chat history from context.
 
     从 context 中解析聊天历史.
     """
 
-    messages: List[Dict[str, str]] = []
+    messages: list[dict[str, str]] = []
 
     def add_entry(role_value: Any, content_value: Any) -> None:
         role = str(role_value).strip().lower() if role_value is not None else ""
@@ -214,8 +215,8 @@ def _parse_history_entries(raw_history: Any) -> List[Dict[str, str]]:
     # Legacy format: multi-line "role: content" entries
     # 旧格式: 多行 "role: content" 条目
     lines = raw_history.strip().split("\n")
-    current_role: Optional[str] = None
-    current_content: List[str] = []
+    current_role: str | None = None
+    current_content: list[str] = []
 
     def flush_current() -> None:
         nonlocal current_role, current_content
@@ -250,7 +251,7 @@ def _response_format_expects_json(response_format: Any) -> bool:
     return isinstance(rf_type, str) and rf_type.startswith("json")
 
 
-def calculate_relevance_score(query: str, result: Dict[str, Any]) -> float:
+def calculate_relevance_score(query: str, result: dict[str, Any]) -> float:
     """Calculate relevance score for a search result based on query match.
 
     根据 query 匹配度为搜索结果计算相关性得分.
@@ -291,8 +292,8 @@ def calculate_relevance_score(query: str, result: Dict[str, Any]) -> float:
 
 
 def filter_relevant_results(
-    query: str, results: List[Dict[str, Any]], threshold: float = 0.3
-) -> List[Dict[str, Any]]:
+    query: str, results: list[dict[str, Any]], threshold: float = 0.3
+) -> list[dict[str, Any]]:
     """Filter and rank search results by relevance to the query.
 
     按与 query 的相关性过滤并排序搜索结果.
@@ -423,7 +424,7 @@ ONLY use information that was ALREADY retrieved."""
 SOURCE_FORMAT_ROLES = {"deep_research_agent", "research", "domain_prefetch"}
 
 
-def should_use_source_format(role: Optional[str]) -> bool:
+def should_use_source_format(role: str | None) -> bool:
     """Only research roles use Source format output.
 
     仅研究类 role 使用 Source 格式输出.
@@ -458,7 +459,7 @@ DATA_ONLY_TOOLS = frozenset({
 })
 
 
-def generate_tool_digest(tool_results: str, tool_records: List[Dict[str, Any]], max_chars: int = 3000) -> str:
+def generate_tool_digest(tool_results: str, tool_records: list[dict[str, Any]], max_chars: int = 3000) -> str:
     """
     Generate a human-readable digest from tool results.
     Used as fallback when interpretation pass fails.
@@ -470,10 +471,10 @@ def generate_tool_digest(tool_results: str, tool_records: List[Dict[str, Any]], 
 
     这不是原始 JSON —— 它以可读格式提取关键信息.
     """
-    lines: List[str] = []
-    failures: List[str] = []
+    lines: list[str] = []
+    failures: list[str] = []
 
-    def _summarize_failure(record: Dict[str, Any]) -> str:
+    def _summarize_failure(record: dict[str, Any]) -> str:
         tool_name = record.get("tool", "unknown")
         err = record.get("error") or ""
         tool_input = record.get("tool_input") or {}
@@ -608,8 +609,8 @@ def build_interpretation_messages(
     original_query: str,
     tool_results_summary: str,
     interpretation_prompt: str = INTERPRETATION_PROMPT_GENERAL,
-    interpretation_system_prompt: Optional[str] = None,
-) -> List[Dict[str, str]]:
+    interpretation_system_prompt: str | None = None,
+) -> list[dict[str, str]]:
     """
     Build clean messages for interpretation pass.
 
@@ -658,7 +659,7 @@ def build_interpretation_messages(
     ]
 
 
-def aggregate_tool_results(tool_records: List[Dict[str, Any]], max_chars: int = 50000) -> str:
+def aggregate_tool_results(tool_records: list[dict[str, Any]], max_chars: int = 50000) -> str:
     """
     Aggregate tool execution results into a readable summary.
 
@@ -780,7 +781,6 @@ def aggregate_tool_results(tool_records: List[Dict[str, Any]], max_chars: int = 
                 content = output.get("content", "")
                 url = output.get("url", "")
                 pages_fetched = output.get("pages_fetched", 1)
-                metadata_urls = output.get("metadata", {}).get("urls", [])
 
                 if content and not content.startswith("%PDF"):
                     import re
@@ -929,7 +929,7 @@ def validate_interpretation_output(
     total_tool_output_chars: int,
     *,
     expect_sources_format: bool
-) -> Tuple[bool, str]:
+) -> tuple[bool, str]:
     """
     Validate interpretation pass output quality.
 
@@ -1003,7 +1003,7 @@ def validate_interpretation_output(
     return True, "valid"
 
 
-def build_task_contract_instructions(context: Dict[str, Any]) -> str:
+def build_task_contract_instructions(context: dict[str, Any]) -> str:
     """
     Deep Research 2.0: Build task contract instructions for agent execution.
 
@@ -1080,7 +1080,7 @@ def build_task_contract_instructions(context: Dict[str, Any]) -> str:
 
 class ForcedToolCall(BaseModel):
     tool: str = Field(..., description="Tool name to execute")
-    parameters: Dict[str, Any] = Field(
+    parameters: dict[str, Any] = Field(
         default_factory=dict, description="Parameters for the tool"
     )
 
@@ -1092,39 +1092,39 @@ class AgentQuery(BaseModel):
     """
 
     query: str = Field(..., description="The query or task description")
-    context: Optional[Dict[str, Any]] = Field(
+    context: dict[str, Any] | None = Field(
         default_factory=dict, description="Context for the query"
     )
-    agent_id: Optional[str] = Field(default="default", description="Agent identifier")
-    mode: Optional[str] = Field(
+    agent_id: str | None = Field(default="default", description="Agent identifier")
+    mode: str | None = Field(
         default="standard", description="Execution mode: simple, standard, or complex"
     )
-    allowed_tools: Optional[List[str]] = Field(
+    allowed_tools: list[str] | None = Field(
         default=None,
         description="Allowlist of tools available for this query. None means use role preset, [] means no tools.",
     )
-    forced_tool_calls: Optional[List[ForcedToolCall]] = Field(
+    forced_tool_calls: list[ForcedToolCall] | None = Field(
         default=None,
         description="Explicit sequence of tool calls to execute before interpretation",
     )
-    max_tokens: Optional[int] = Field(
+    max_tokens: int | None = Field(
         default=None, description="Maximum tokens for response (None = use role/tier defaults, typically 4096 for GPT-5)"
     )
-    temperature: Optional[float] = Field(
+    temperature: float | None = Field(
         default=0.7, description="Temperature for generation"
     )
-    model_tier: Optional[str] = Field(
+    model_tier: str | None = Field(
         default=None, description="Model tier: small, medium, or large (None = use context or default to small)"
     )
-    model_override: Optional[str] = Field(
+    model_override: str | None = Field(
         default=None,
         description="Override the default model selection with a specific model ID",
     )
-    stream: Optional[bool] = Field(
+    stream: bool | None = Field(
         default=False,
         description="Enable streaming responses (returns SSE-style chunked deltas)",
     )
-    cache_source: Optional[str] = Field(
+    cache_source: str | None = Field(
         default=None,
         description="Prompt-cache routing source (e.g. shanclaw/tui/agent_execute). "
         "If unset, server falls back to context['cache_source'] or 'agent_execute'.",
@@ -1145,7 +1145,7 @@ class AgentResponse(BaseModel):
     model_used: str = Field(..., description="Model that was used")
     provider: str = Field(default="unknown", description="Provider that served the request")
     finish_reason: str = Field(default="stop", description="Reason the model stopped generating (stop, length, content_filter, etc.)")
-    metadata: Dict[str, Any] = Field(
+    metadata: dict[str, Any] = Field(
         default_factory=dict, description="Additional metadata"
     )
 
@@ -1164,7 +1164,7 @@ class MockProvider:
             "default": "I understand your request. Here's my mock response for testing purposes.",
         }
 
-    async def generate(self, query: str, **kwargs) -> Dict[str, Any]:
+    async def generate(self, query: str, **kwargs) -> dict[str, Any]:
         """Generate a mock response.
 
         生成一个 mock response.
@@ -1205,7 +1205,7 @@ async def agent_query(request: Request, query: AgentQuery):
         logger.info(f"Received agent query: {query.query[:100]}...")
         # Ensure allowed_tools metadata is always defined for responses
         # 确保 response 中的 allowed_tools metadata 始终已定义
-        effective_allowed_tools: List[str] = []
+        effective_allowed_tools: list[str] = []
 
         # Resolve cache_source once: explicit request field > context > default.
         # Used both for provider TTL routing (short/long) and for the
@@ -1521,7 +1521,7 @@ async def agent_query(request: Request, query: AgentQuery):
                         return _truncate_text(str(value), 20000)
                     ids = sorted(str(k) for k in value.keys())
                     max_items = 20
-                    parts: List[str] = []
+                    parts: list[str] = []
                     for idx, item_id in enumerate(ids):
                         if idx >= max_items:
                             parts.append(f"... ({len(ids) - max_items} more {noun} omitted)")
@@ -1700,7 +1700,7 @@ async def agent_query(request: Request, query: AgentQuery):
 
             # Resolve effective allowed tools: request.allowed_tools (intersect with preset when present)
             # 解析实际生效的可用 tool: request.allowed_tools (存在 preset 时与之取交集)
-            effective_allowed_tools: List[str] = []
+            effective_allowed_tools: list[str] = []
             try:
                 from ..tools import get_registry
 
@@ -1787,13 +1787,13 @@ async def agent_query(request: Request, query: AgentQuery):
 
             # Collect structured tool executions for upstream observability/persistence
             # 收集结构化 tool 执行记录, 供上游可观测性与持久化使用
-            tool_execution_records: List[Dict[str, Any]] = []
-            all_tool_cost_entries: List[Dict[str, Any]] = []
-            seed_raw_tool_results: List[Dict[str, Any]] = []
-            seed_search_urls: List[str] = []
+            tool_execution_records: list[dict[str, Any]] = []
+            all_tool_cost_entries: list[dict[str, Any]] = []
+            seed_raw_tool_results: list[dict[str, Any]] = []
+            seed_search_urls: list[str] = []
             seed_fetch_success = False
             seed_last_tool_results = ""
-            seed_loop_function_call: Optional[str] = None
+            seed_loop_function_call: str | None = None
 
             # Detect research mode early so forced_tool_calls can check it (issue #43)
             # 提前检测 research mode, 以便 forced_tool_calls 可以判断 (issue #43)
@@ -2041,7 +2041,7 @@ async def agent_query(request: Request, query: AgentQuery):
 
                     dumps = _json.dumps
 
-                    buffer: List[str] = []
+                    buffer: list[str] = []
                     total_tokens = None
                     input_tokens = None
                     output_tokens = None
@@ -2190,11 +2190,11 @@ async def agent_query(request: Request, query: AgentQuery):
             stop_reason = "unknown"
             did_forced_fetch = False
             response_text = ""
-            raw_tool_results: List[Dict[str, Any]] = list(seed_raw_tool_results)
-            search_urls: List[str] = list(seed_search_urls)
+            raw_tool_results: list[dict[str, Any]] = list(seed_raw_tool_results)
+            search_urls: list[str] = list(seed_search_urls)
             fetch_success = bool(seed_fetch_success)
             last_tool_results = seed_last_tool_results
-            last_result_data: Optional[Dict[str, Any]] = None
+            last_result_data: dict[str, Any] | None = None
 
             fetch_tools = {"web_fetch", "web_subpage_fetch", "web_crawl"}
             loop_function_call = seed_loop_function_call or function_call
@@ -2383,7 +2383,9 @@ async def agent_query(request: Request, query: AgentQuery):
                     # 解析出的 ttl_block 一致, 使外发 request 在
                     # tools/system/messages 上使用统一的 TTL (Anthropic 会拒绝
                     # 5m 之后再出现 1h 的组合).
-                    from llm_provider.anthropic_provider import resolve_prompt_cache_ttl_block
+                    from llm_provider.anthropic_provider import (
+                        resolve_prompt_cache_ttl_block,
+                    )
                     ttl_block = resolve_prompt_cache_ttl_block(cache_source)
                     if ttl_block is not None:
                         for i in range(len(messages) - 1, -1, -1):
@@ -2467,7 +2469,7 @@ async def agent_query(request: Request, query: AgentQuery):
                     # Short-circuit: if all unfetched URLs have failed, exit early (Codex suggestion)
                     # 短路: 若所有未抓取的 URL 都已失败, 则提前退出 (Codex 建议)
                     if not deduped_urls:
-                        logger.info(f"DR policy: no eligible URLs to fetch (all fetched or failed)")
+                        logger.info("DR policy: no eligible URLs to fetch (all fetched or failed)")
                     else:
                         urls_to_fetch = deduped_urls[:max_urls_to_fetch]
 
@@ -2896,12 +2898,12 @@ async def agent_query(request: Request, query: AgentQuery):
 
 
 async def _execute_and_format_tools(
-    tool_calls: List[Dict[str, Any]],
-    allowed_tools: List[str],
+    tool_calls: list[dict[str, Any]],
+    allowed_tools: list[str],
     query: str = "",
     request=None,
-    context: Optional[Dict[str, Any]] = None,
-) -> Tuple[str, List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+    context: dict[str, Any] | None = None,
+) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     """Execute tool calls and format results into natural language.
 
     执行 tool 调用并将结果格式化为自然语言.
@@ -2914,9 +2916,9 @@ async def _execute_and_format_tools(
     registry = get_registry()
 
     formatted_results = []
-    tool_execution_records: List[Dict[str, Any]] = []
-    raw_tool_results: List[Dict[str, Any]] = []
-    tool_cost_entries: List[Dict[str, Any]] = []
+    tool_execution_records: list[dict[str, Any]] = []
+    raw_tool_results: list[dict[str, Any]] = []
+    tool_cost_entries: list[dict[str, Any]] = []
 
     # Set up event emitter and workflow/agent IDs for tool events
     # 为 tool event 准备 event emitter 以及 workflow/agent ID
@@ -2945,7 +2947,7 @@ async def _execute_and_format_tools(
     if not agent_id and isinstance(context, dict):
         agent_id = context.get("agent_id")
 
-    def _audit(event: str, tool_name: str, *, success: Optional[bool] = None, error: Any = None, duration_ms: Any = None) -> None:
+    def _audit(event: str, tool_name: str, *, success: bool | None = None, error: Any = None, duration_ms: Any = None) -> None:
         payload = {
             "workflow_id": wf_id,
             "agent_id": agent_id,
@@ -3016,7 +3018,7 @@ async def _execute_and_format_tools(
         max_items: int = 50,
         depth: int = 0,
         max_depth: int = 4,
-        redact_keys: Optional[List[str]] = None,
+        redact_keys: list[str] | None = None,
     ) -> Any:
         """Recursively sanitize payloads to avoid secret leaks and stream floods.
 
@@ -3256,7 +3258,7 @@ async def _execute_and_format_tools(
                     if key in sanitized_context and sanitized_context[key] is not None:
                         val = sanitized_context[key]
                         if isinstance(val, dict):
-                            trimmed: Dict[str, Any] = {}
+                            trimmed: dict[str, Any] = {}
                             for idx, (k, v) in enumerate(val.items()):
                                 if idx >= 20:
                                     trimmed["..."] = "[TRUNCATED]"
@@ -3562,8 +3564,8 @@ async def _execute_and_format_tools(
     )
 
 
-def _extract_urls_from_search_output(output: Any) -> List[str]:
-    urls: List[str] = []
+def _extract_urls_from_search_output(output: Any) -> list[str]:
+    urls: list[str] = []
     try:
         candidates: Any = []
         if isinstance(output, list):
@@ -3585,7 +3587,7 @@ def _extract_urls_from_search_output(output: Any) -> List[str]:
                             urls.append(url)
     except Exception:
         return []
-    deduped: List[str] = []
+    deduped: list[str] = []
     seen = set()
     for u in urls:
         if u and u not in seen:
@@ -3600,8 +3602,8 @@ class OutputFormatSpec(BaseModel):
     Deep Research 2.0: subtask 的预期输出结构.
     """
     type: str = Field(default="narrative", description="'structured', 'narrative', or 'list'")
-    required_fields: List[str] = Field(default_factory=list, description="Fields that must be present")
-    optional_fields: List[str] = Field(default_factory=list, description="Nice-to-have fields")
+    required_fields: list[str] = Field(default_factory=list, description="Fields that must be present")
+    optional_fields: list[str] = Field(default_factory=list, description="Nice-to-have fields")
 
 
 class SourceGuidanceSpec(BaseModel):
@@ -3609,9 +3611,9 @@ class SourceGuidanceSpec(BaseModel):
 
     Deep Research 2.0: subtask 的来源类型建议.
     """
-    required: List[str] = Field(default_factory=list, description="Must use these source types")
-    optional: List[str] = Field(default_factory=list, description="May use these source types")
-    avoid: List[str] = Field(default_factory=list, description="Should not use these source types")
+    required: list[str] = Field(default_factory=list, description="Must use these source types")
+    optional: list[str] = Field(default_factory=list, description="May use these source types")
+    avoid: list[str] = Field(default_factory=list, description="Should not use these source types")
 
 
 class SearchBudgetSpec(BaseModel):
@@ -3628,51 +3630,51 @@ class BoundariesSpec(BaseModel):
 
     Deep Research 2.0: subtask 的范围边界.
     """
-    in_scope: List[str] = Field(default_factory=list, description="Topics explicitly within scope")
-    out_of_scope: List[str] = Field(default_factory=list, description="Topics to avoid")
+    in_scope: list[str] = Field(default_factory=list, description="Topics explicitly within scope")
+    out_of_scope: list[str] = Field(default_factory=list, description="Topics to avoid")
 
 
 class Subtask(BaseModel):
     id: str
     description: str
-    dependencies: List[str] = []
+    dependencies: list[str] = []
     estimated_tokens: int = 0
     task_type: str = Field(
         default="", description="Optional structured subtask type, e.g., 'synthesis'"
     )
     # Optional grouping for research-area-driven decomposition
     # 可选分组, 用于按研究领域驱动分解
-    parent_area: Optional[str] = Field(
+    parent_area: str | None = Field(
         default="", description="Top-level research area that this subtask belongs to"
     )
     # LLM-native tool selection
     # 由 LLM 自主选择 tool
-    suggested_tools: List[str] = Field(
+    suggested_tools: list[str] = Field(
         default_factory=list, description="Tools suggested by LLM for this subtask"
     )
-    tool_parameters: Dict[str, Any] = Field(
+    tool_parameters: dict[str, Any] = Field(
         default_factory=dict, description="Pre-structured parameters for tool execution"
     )
     # Deep Research 2.0: Task Contract fields
     # Deep Research 2.0: Task Contract 字段
-    output_format: Optional[OutputFormatSpec] = Field(
+    output_format: OutputFormatSpec | None = Field(
         default=None, description="Expected output structure"
     )
-    source_guidance: Optional[SourceGuidanceSpec] = Field(
+    source_guidance: SourceGuidanceSpec | None = Field(
         default=None, description="Source type recommendations"
     )
-    search_budget: Optional[SearchBudgetSpec] = Field(
+    search_budget: SearchBudgetSpec | None = Field(
         default=None, description="Search limits"
     )
-    boundaries: Optional[BoundariesSpec] = Field(
+    boundaries: BoundariesSpec | None = Field(
         default=None, description="Scope boundaries"
     )
     # P2P Coordination fields (populated when p2p_enabled=true)
     # P2P 协同字段 (p2p_enabled=true 时填充)
-    produces: List[str] = Field(
+    produces: list[str] = Field(
         default_factory=list, description="Topics this subtask produces"
     )
-    consumes: List[str] = Field(
+    consumes: list[str] = Field(
         default_factory=list, description="Topics this subtask consumes"
     )
 
@@ -3680,16 +3682,16 @@ class Subtask(BaseModel):
 class DecompositionResponse(BaseModel):
     mode: str
     complexity_score: float
-    subtasks: List[Subtask]
+    subtasks: list[Subtask]
     total_estimated_tokens: int
     # Extended planning schema (plan_schema_v2)
     # 扩展规划 schema (plan_schema_v2)
     execution_strategy: str = Field(
         default="parallel", description="parallel|sequential|hybrid"
     )
-    agent_types: List[str] = Field(default_factory=list)
+    agent_types: list[str] = Field(default_factory=list)
     concurrency_limit: int = Field(default=5)
-    token_estimates: Dict[str, int] = Field(default_factory=dict)
+    token_estimates: dict[str, int] = Field(default_factory=dict)
     # Cognitive routing fields for intelligent strategy selection
     # 用于智能策略选择的认知路由字段
     cognitive_strategy: str = Field(
@@ -3723,7 +3725,7 @@ class AgentLoopTurn(BaseModel):
     """
     iteration: int = 0
     action: str = ""
-    result: Optional[Any] = None
+    result: Any | None = None
     decision_summary: str = ""
     assistant_replay: str = ""      # Compact deterministic JSON of LLM action (for multi-turn cache) 注：LLM 动作的精简确定性 JSON (用于多轮 cache)
     observation_text: str = ""      # Frozen tool result digest (for multi-turn cache) 注：冻结的 tool 结果摘要 (用于多轮 cache)
@@ -3736,7 +3738,7 @@ class AgentMailboxMsg(BaseModel):
     """
     from_agent: str = Field(default="", alias="from")
     type: str = ""
-    payload: Dict[str, Any] = Field(default_factory=dict)
+    payload: dict[str, Any] = Field(default_factory=dict)
 
 
 class TeamMemberInfo(BaseModel):
@@ -3779,24 +3781,24 @@ class AgentLoopStepRequest(BaseModel):
     workflow_id: str = Field(default="", description="Parent workflow ID")
     task: str = Field(..., description="The task this agent is working on")
     iteration: int = Field(default=0, description="Current iteration number")
-    messages: List[AgentMailboxMsg] = Field(default_factory=list, description="Inbox messages from other agents")
-    history: List[AgentLoopTurn] = Field(default_factory=list, description="Previous turns in this loop")
-    context: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    messages: list[AgentMailboxMsg] = Field(default_factory=list, description="Inbox messages from other agents")
+    history: list[AgentLoopTurn] = Field(default_factory=list, description="Previous turns in this loop")
+    context: dict[str, Any] | None = Field(default_factory=dict)
     session_id: str = Field(default="")
-    team_roster: List[TeamMemberInfo] = Field(default_factory=list, description="Teammates and their tasks")
-    workspace_data: List[WorkspaceSnippet] = Field(default_factory=list, description="Recent shared workspace entries")
+    team_roster: list[TeamMemberInfo] = Field(default_factory=list, description="Teammates and their tasks")
+    workspace_data: list[WorkspaceSnippet] = Field(default_factory=list, description="Recent shared workspace entries")
     max_iterations: int = Field(default=25, description="Maximum iterations for this agent loop")
-    suggested_tools: List[str] = Field(default_factory=list, description="Tools available to this agent")
+    suggested_tools: list[str] = Field(default_factory=list, description="Tools available to this agent")
     role_description: str = Field(default="", description="Agent role description for system prompt")
     role: str = Field(default="", description="Persona role: researcher, coder, analyst, generalist")
-    task_list: List[Dict[str, Any]] = Field(default_factory=list, description="Current TaskList state for prompt")
-    model_tier: Optional[str] = Field(default=None, description="Model tier: small, medium, large")
-    previous_response_id: Optional[str] = Field(default=None, description="OpenAI Responses API: chain from previous response")
-    system_message: Optional[str] = Field(default=None, description="Urgent directive appended to user prompt end (recency bias)")
-    running_notes: Optional[str] = Field(default=None, description="Agent's cumulative notes from previous iterations")
+    task_list: list[dict[str, Any]] = Field(default_factory=list, description="Current TaskList state for prompt")
+    model_tier: str | None = Field(default=None, description="Model tier: small, medium, large")
+    previous_response_id: str | None = Field(default=None, description="OpenAI Responses API: chain from previous response")
+    system_message: str | None = Field(default=None, description="Urgent directive appended to user prompt end (recency bias)")
+    running_notes: str | None = Field(default=None, description="Agent's cumulative notes from previous iterations")
     is_swarm: bool = Field(default=False, description="True when running inside SwarmWorkflow (enables done→idle mapping)")
     cumulative_tool_calls: int = Field(default=0, description="Total tool_calls across all tasks (survives reassignment)")
-    team_knowledge: List[TeamKnowledgeEntry] = Field(default_factory=list, description="URLs already fetched by team agents (L2 dedup)")
+    team_knowledge: list[TeamKnowledgeEntry] = Field(default_factory=list, description="URLs already fetched by team agents (L2 dedup)")
     original_query: str = Field(default="", description="User's original question for broader context")
 
 
@@ -3810,12 +3812,12 @@ class AgentLoopStepResponse(BaseModel):
     # tool_call
     # tool 调用
     tool: str = ""
-    tool_params: Dict[str, Any] = Field(default_factory=dict)
+    tool_params: dict[str, Any] = Field(default_factory=dict)
     # send_message
     # 发送消息
     to: str = ""
     message_type: str = ""
-    payload: Dict[str, Any] = Field(default_factory=dict)
+    payload: dict[str, Any] = Field(default_factory=dict)
     # publish_data
     # 发布数据
     topic: str = ""
@@ -3823,7 +3825,7 @@ class AgentLoopStepResponse(BaseModel):
     # request_help
     # 请求协助
     help_description: str = ""
-    help_skills: List[str] = Field(default_factory=list)
+    help_skills: list[str] = Field(default_factory=list)
     # complete_task / claim_task
     # 完成任务 / 领取任务
     task_id: str = ""
@@ -3835,7 +3837,7 @@ class AgentLoopStepResponse(BaseModel):
     response: str = ""
     # done — structured completion report for Lead visibility
     # done —— 供 Lead 查看的结构化完成报告
-    completion_report: Dict[str, Any] = Field(default_factory=dict, description="Structured report: {summary, files_written, key_findings}")
+    completion_report: dict[str, Any] = Field(default_factory=dict, description="Structured report: {summary, files_written, key_findings}")
     # usage
     # 用量
     tokens_used: int = 0
@@ -4046,7 +4048,7 @@ def _build_multi_turn_messages(
     body: AgentLoopStepRequest,
     system_prompt: str,
     cache_source: str = "agent_loop",
-    raw_attachments: Optional[list] = None,
+    raw_attachments: list | None = None,
 ) -> list:
     """Build append-only multi-turn messages for Anthropic prompt cache.
 
@@ -4509,7 +4511,7 @@ async def agent_loop_step(request: Request, body: AgentLoopStepRequest) -> Agent
         model_override = body.context.get("model_override") if isinstance(body.context, dict) else None
         provider_override = body.context.get("provider_override") if isinstance(body.context, dict) else None
 
-        gen_kwargs: Dict[str, Any] = {
+        gen_kwargs: dict[str, Any] = {
             "temperature": 0.3,
             "max_tokens": 16384,
             "agent_id": body.agent_id,
@@ -4763,8 +4765,8 @@ class ResearchPlanRequest(BaseModel):
     生成人类可读研究计划的 request.
     """
     query: str = Field(..., description="The research query")
-    context: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Task context")
-    conversation: Optional[List[Dict[str, Any]]] = Field(
+    context: dict[str, Any] | None = Field(default_factory=dict, description="Task context")
+    conversation: list[dict[str, Any]] | None = Field(
         default_factory=list,
         description="Previous conversation rounds for multi-turn refinement"
     )
@@ -5263,7 +5265,10 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
         # Defined in roles/deep_research/research_supervisor.py
         # 研究主管身份 (用于深度研究 workflow)
         # 定义在 roles/deep_research/research_supervisor.py
-        from ..roles.deep_research import RESEARCH_SUPERVISOR_IDENTITY, DOMAIN_ANALYSIS_HINT
+        from ..roles.deep_research import (
+            DOMAIN_ANALYSIS_HINT,
+            RESEARCH_SUPERVISOR_IDENTITY,
+        )
 
         # ================================================================
         # PRIORITY-BASED PROMPT SELECTION (IDENTITY + COMMON_SUFFIX)
@@ -5728,7 +5733,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
 
                 # Deep Research 2.0: Parse task contract fields
                 # Deep Research 2.0: 解析 task contract 字段
-                parsed: Dict[str, Any] = {}
+                parsed: dict[str, Any] = {}
                 for field, spec in (
                     ("output_format", OutputFormatSpec),
                     ("source_guidance", SourceGuidanceSpec),

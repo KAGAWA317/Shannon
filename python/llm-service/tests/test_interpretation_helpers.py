@@ -1,7 +1,7 @@
 from llm_service.api.agent import (
+    build_interpretation_messages,
     should_use_source_format,
     validate_interpretation_output,
-    build_interpretation_messages,
 )
 
 
@@ -236,7 +236,9 @@ def test_deep_research_preset_has_interpretation_system_prompt():
 
     契约测试：字段一旦被删，OODA 污染 bug 就会复发，所以用测试锁住这次修复。
     """
-    from llm_service.roles.deep_research.deep_research_agent import DEEP_RESEARCH_AGENT_PRESET
+    from llm_service.roles.deep_research.deep_research_agent import (
+        DEEP_RESEARCH_AGENT_PRESET,
+    )
 
     assert "interpretation_system_prompt" in DEEP_RESEARCH_AGENT_PRESET
     interp_sys = DEEP_RESEARCH_AGENT_PRESET["interpretation_system_prompt"]
@@ -253,7 +255,9 @@ def test_deep_research_interpretation_system_prompt_has_no_ooda():
     这些内容只属于 tool-loop system_prompt；混进 interpretation 就会让 LLM 输出
     OODA 分析而不是综合报告。
     """
-    from llm_service.roles.deep_research.deep_research_agent import DEEP_RESEARCH_AGENT_PRESET
+    from llm_service.roles.deep_research.deep_research_agent import (
+        DEEP_RESEARCH_AGENT_PRESET,
+    )
 
     interp_sys = DEEP_RESEARCH_AGENT_PRESET["interpretation_system_prompt"]
     forbidden_patterns = [
@@ -279,7 +283,9 @@ def test_deep_research_interpretation_system_prompt_has_no_ooda():
 
 def test_deep_research_tool_loop_prompt_has_ooda():
     """The tool-loop system_prompt SHOULD still contain OODA for agent research behavior."""
-    from llm_service.roles.deep_research.deep_research_agent import DEEP_RESEARCH_AGENT_PRESET
+    from llm_service.roles.deep_research.deep_research_agent import (
+        DEEP_RESEARCH_AGENT_PRESET,
+    )
 
     sys_prompt = DEEP_RESEARCH_AGENT_PRESET["system_prompt"]
     assert "OODA" in sys_prompt

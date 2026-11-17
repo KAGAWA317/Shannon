@@ -4,7 +4,8 @@
 """
 
 import os
-from shannon import ShannonClient, EventType
+
+from shannon import EventType, ShannonClient
 
 # Initialize client
 # 初始化客户端

@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Request
 from datetime import datetime
+
+from fastapi import APIRouter, Request
 
 router = APIRouter()
 

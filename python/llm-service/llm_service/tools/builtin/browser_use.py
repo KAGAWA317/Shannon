@@ -18,7 +18,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import aiohttp
 
@@ -27,7 +27,7 @@ from ..base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolRes
 logger = logging.getLogger(__name__)
 
 
-def _persist_screenshot(session_id: str, b64_data: str, index: int = 0) -> Optional[str]:
+def _persist_screenshot(session_id: str, b64_data: str, index: int = 0) -> str | None:
     """Persist base64 PNG screenshot to session workspace.
     将 base64 的 PNG 截图持久化到 session workspace。
 
@@ -91,7 +91,7 @@ async def _call_playwright_action(
     session_id: str,
     action: str,
     **kwargs
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Call the playwright service browser action endpoint.
     调用 playwright service 的浏览器 action 端点。
@@ -139,7 +139,7 @@ async def _call_playwright_action(
         }
 
 
-async def _close_playwright_session(session_id: str) -> Dict[str, Any]:
+async def _close_playwright_session(session_id: str) -> dict[str, Any]:
     """Close a playwright browser session.
     关闭 playwright 浏览器 session。"""
     if not PLAYWRIGHT_SERVICE_URL:
@@ -157,7 +157,7 @@ async def _close_playwright_session(session_id: str) -> Dict[str, Any]:
         return {"success": False, "error": str(e)}
 
 
-def _get_session_id(session_context: Optional[Dict], kwargs: Dict) -> str:
+def _get_session_id(session_context: dict | None, kwargs: dict) -> str:
     """Extract session_id from session_context.
     从 session_context 中提取 session_id。"""
     if session_context and isinstance(session_context, dict):
@@ -173,7 +173,7 @@ def _get_session_id(session_context: Optional[Dict], kwargs: Dict) -> str:
 
 # Required parameters per action (runtime validation)
 # 每个 action 的必填参数（运行时校验）
-_ACTION_REQUIRED_PARAMS: Dict[str, List[str]] = {
+_ACTION_REQUIRED_PARAMS: dict[str, list[str]] = {
     "navigate": ["url"],
     "click": ["selector"],
     "type": ["selector", "text"],
@@ -207,7 +207,7 @@ class BrowserTool(Tool):
             session_aware=True,
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             # --- Core parameter ---
             # --- 核心参数 ---
@@ -333,7 +333,7 @@ class BrowserTool(Tool):
         ]
 
     async def _execute_impl(
-        self, session_context: Optional[Dict] = None, **kwargs
+        self, session_context: dict | None = None, **kwargs
     ) -> ToolResult:
         action = kwargs.get("action", "").lower().strip()
 
@@ -384,7 +384,7 @@ class BrowserTool(Tool):
 
         # Build action-specific kwargs for playwright
         # 为 playwright 构建 action 特定的 kwargs
-        action_kwargs: Dict[str, Any] = {}
+        action_kwargs: dict[str, Any] = {}
 
         if action == "navigate":
             action_kwargs["url"] = kwargs["url"]
@@ -433,7 +433,7 @@ class BrowserTool(Tool):
 
         # --- Format output per action ---
         # --- 按 action 格式化输出 ---
-        output: Dict[str, Any] = {"action": action}
+        output: dict[str, Any] = {"action": action}
 
         if action == "navigate":
             output["url"] = result.get("url")

@@ -6,11 +6,11 @@ Unit tests for OpenAPI parser with $ref resolution.
 import pytest
 from llm_service.tools.openapi_parser import (
     OpenAPIParseError,
+    extract_base_url,
+    extract_parameters,
     resolve_ref,
     resolve_refs_in_schema,
-    extract_parameters,
     validate_spec,
-    extract_base_url,
 )
 
 

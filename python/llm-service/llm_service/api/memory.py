@@ -1,5 +1,4 @@
 import logging
-from typing import Dict, List
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
@@ -22,8 +21,8 @@ class MemoryExtractResponse(BaseModel):
     summary: str = Field(default="")
     content: str = Field(default="")
     suggested_path: str = Field(default="")
-    tags: List[str] = Field(default_factory=list)
-    triples: List[Dict[str, str]] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    triples: list[dict[str, str]] = Field(default_factory=list)
 
 
 _SYSTEM_PROMPT = """You are a memory extraction specialist. Given a user query and its result, decide whether the result contains knowledge worth persisting to the user's long-term memory.

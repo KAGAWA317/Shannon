@@ -27,9 +27,9 @@ import os
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-for-unit-tests")
 
 from llm_provider.anthropic_provider import (
-    AnthropicProvider,
     CACHE_TTL_LONG,
     CACHE_TTL_SHORT,
+    AnthropicProvider,
 )
 from llm_provider.base import CompletionRequest
 

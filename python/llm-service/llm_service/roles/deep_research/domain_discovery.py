@@ -6,9 +6,8 @@ website domains from web search results with strict JSON output.
 公司官方域名识别专家。从 web 搜索结果中提取官方网站域名，输出严格 JSON。
 """
 
-from typing import Dict
 
-DOMAIN_DISCOVERY_PRESET: Dict[str, object] = {
+DOMAIN_DISCOVERY_PRESET: dict[str, object] = {
     "system_prompt": """You are a domain discovery specialist for company research.
 
 # Core Task:

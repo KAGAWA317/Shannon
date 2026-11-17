@@ -5,17 +5,17 @@ Shannon tool 系统的动态插件加载器
 支持热重载和外部 tool 插件
 """
 
-import os
-import sys
+import asyncio
+import hashlib
 import importlib
 import importlib.util
-from pathlib import Path
-from typing import Dict, List, Optional, Type
 import logging
-import hashlib
-from watchdog.observers import Observer
+import os
+import sys
+from pathlib import Path
+
 from watchdog.events import FileSystemEventHandler
-import asyncio
+from watchdog.observers import Observer
 
 from .base import Tool
 from .registry import get_registry
@@ -29,7 +29,7 @@ class ToolPluginLoader:
     支持热重载的动态 tool 插件加载器
     """
 
-    def __init__(self, plugin_dirs: Optional[List[str]] = None):
+    def __init__(self, plugin_dirs: list[str] | None = None):
         """
         Initialize plugin loader
         初始化插件加载器
@@ -39,7 +39,7 @@ class ToolPluginLoader:
                 用于搜索插件的目录列表
         """
         self.plugin_dirs = plugin_dirs or []
-        self.loaded_plugins: Dict[str, LoadedPlugin] = {}
+        self.loaded_plugins: dict[str, LoadedPlugin] = {}
         self.observer = None
         self.registry = get_registry()
 
@@ -207,7 +207,7 @@ class ToolPluginLoader:
         import json
 
         try:
-            with open(file_path, "r") as f:
+            with open(file_path) as f:
                 tool_def = json.load(f)
 
             # Create a dynamic Tool class from JSON definition
@@ -226,7 +226,7 @@ class ToolPluginLoader:
 
         return False
 
-    def _create_tool_from_json(self, tool_def: dict) -> Optional[Type[Tool]]:
+    def _create_tool_from_json(self, tool_def: dict) -> type[Tool] | None:
         """
         Create a Tool class from JSON definition
         根据 JSON 定义创建 Tool 类
@@ -264,7 +264,7 @@ class ToolPluginLoader:
                     cost_per_use=tool_def.get("cost_per_use", 0.0),
                 )
 
-            def _get_parameters(self) -> List[ToolParameter]:
+            def _get_parameters(self) -> list[ToolParameter]:
                 params = []
                 for param_def in tool_def.get("parameters", []):
                     params.append(
@@ -295,8 +295,8 @@ class ToolPluginLoader:
                     # 执行脚本
                     script_path = execution.get("script")
                     if script_path:
-                        import subprocess
                         import json
+                        import subprocess
 
                         try:
                             result = subprocess.run(
@@ -471,7 +471,7 @@ class LoadedPlugin:
     """Information about a loaded plugin
     已加载插件的信息"""
 
-    def __init__(self, file_path: str, file_hash: str, module, tools: List[Type[Tool]]):
+    def __init__(self, file_path: str, file_hash: str, module, tools: list[type[Tool]]):
         self.file_path = file_path
         self.file_hash = file_hash
         self.module = module

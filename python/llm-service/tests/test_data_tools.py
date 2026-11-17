@@ -6,8 +6,6 @@ Test suite for data processing tools: diff_files and json_query.
 import asyncio
 import json
 import os
-import pytest
-from pathlib import Path
 from unittest.mock import patch
 
 from llm_service.tools.builtin.data_tools import (
@@ -15,7 +13,6 @@ from llm_service.tools.builtin.data_tools import (
     JsonQueryTool,
     _json_extract,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -229,7 +226,7 @@ class TestDiffFilesTool:
             assert result.success
             # With 0 context lines, output should be minimal
             # context_lines 为 0 时，输出应尽量精简
-            lines = [l for l in result.output.split("\n") if l.startswith("@@")]
+            lines = [ln for ln in result.output.split("\n") if ln.startswith("@@")]
             assert len(lines) == 1
 
 

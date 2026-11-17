@@ -5,6 +5,7 @@
 
 import os
 from datetime import datetime
+
 from shannon import ShannonClient
 
 # Initialize client

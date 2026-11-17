@@ -8,25 +8,25 @@ Shannon 的 OpenAPI tool 加载器。
 from __future__ import annotations
 
 import asyncio
+import json as _json
+import logging
 import os
 import threading
 import time
-from typing import Any, Dict, List, Optional, Type
-from urllib.parse import urlparse, quote
-import logging
+from typing import Any
+from urllib.parse import quote, urlparse
 
 import httpx
-import json as _json
 
 from .base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolResult
 from .openapi_parser import (
     OpenAPIParseError,
-    validate_spec,
+    deduplicate_operation_ids,
     extract_base_url,
     extract_operations,
     extract_parameters,
     extract_request_body,
-    deduplicate_operation_ids,
+    validate_spec,
 )
 from .vendor_adapters import get_vendor_adapter
 
@@ -108,10 +108,10 @@ class _SimpleBreaker:
                 self.half_open = False
 
 
-_breakers: Dict[str, _SimpleBreaker] = {}
+_breakers: dict[str, _SimpleBreaker] = {}
 
 
-def _validate_domain(url: str, allowed_domains: List[str]) -> None:
+def _validate_domain(url: str, allowed_domains: list[str]) -> None:
     """
     Validate URL against allowed domains (mirrors MCP logic).
     校验 URL 是否在允许域名内（与 MCP 逻辑一致）。
@@ -150,20 +150,20 @@ class OpenAPILoader:
     def __init__(
         self,
         name: str,
-        spec: Dict[str, Any],
+        spec: dict[str, Any],
         auth_type: str = "none",
-        auth_config: Optional[Dict[str, str]] = None,
+        auth_config: dict[str, str] | None = None,
         category: str = "api",
         base_cost_per_use: float = 0.001,
-        operations_filter: Optional[List[str]] = None,
-        tags_filter: Optional[List[str]] = None,
-        base_url_override: Optional[str] = None,
+        operations_filter: list[str] | None = None,
+        tags_filter: list[str] | None = None,
+        base_url_override: str | None = None,
         rate_limit: int = 30,
         timeout_seconds: float = 30.0,
         max_response_bytes: int = 10 * 1024 * 1024,
         retries: int = 2,
-        spec_url: Optional[str] = None,
-        vendor_name: Optional[str] = None,
+        spec_url: str | None = None,
+        vendor_name: str | None = None,
     ):
         """
         Initialize OpenAPI loader.
@@ -255,7 +255,7 @@ class OpenAPILoader:
             f"OpenAPI loader '{name}': loaded {len(self.operations)} operations from {self.base_url}"
         )
 
-    def _build_auth_headers(self, session_context: Optional[Dict] = None) -> Dict[str, str]:
+    def _build_auth_headers(self, session_context: dict | None = None) -> dict[str, str]:
         """
         Build authentication headers based on auth_type and auth_config.
         根据 auth_type 和 auth_config 构建 authentication 头。
@@ -325,7 +325,7 @@ class OpenAPILoader:
 
         return headers
 
-    def generate_tools(self) -> List[Type[Tool]]:
+    def generate_tools(self) -> list[type[Tool]]:
         """
         Generate Tool classes for each operation.
         为每个操作生成 Tool 类。
@@ -342,7 +342,7 @@ class OpenAPILoader:
 
         return tool_classes
 
-    def _create_tool_class(self, op_data: Dict[str, Any]) -> Type[Tool]:
+    def _create_tool_class(self, op_data: dict[str, Any]) -> type[Tool]:
         """
         Create a Tool class for a single OpenAPI operation.
         为单个 OpenAPI 操作创建 Tool 类。
@@ -437,11 +437,11 @@ class OpenAPILoader:
                     rate_limit=rate_limit,
                 )
 
-            def _get_parameters(self) -> List[ToolParameter]:
+            def _get_parameters(self) -> list[ToolParameter]:
                 return tool_params
 
             async def _execute_impl(
-                self, session_context: Optional[Dict] = None, **kwargs
+                self, session_context: dict | None = None, **kwargs
             ) -> ToolResult:
                 now = time.time()
 
@@ -692,7 +692,7 @@ class OpenAPILoader:
         return _OpenAPITool
 
 
-def load_openapi_tools_from_config(config: Dict[str, Any]) -> List[Type[Tool]]:
+def load_openapi_tools_from_config(config: dict[str, Any]) -> list[type[Tool]]:
     """
     Load OpenAPI tools from shannon.yaml configuration.
     从 shannon.yaml 配置加载 OpenAPI tool。
@@ -778,7 +778,7 @@ def load_openapi_tools_from_config(config: Dict[str, Any]) -> List[Type[Tool]]:
     return tool_classes
 
 
-def _fetch_spec_from_url(url: str) -> Dict[str, Any]:
+def _fetch_spec_from_url(url: str) -> dict[str, Any]:
     """
     Fetch OpenAPI spec from URL with size limit and domain validation.
     从 URL 抓取 OpenAPI 规范，带大小限制与域名校验。
@@ -810,7 +810,7 @@ def _fetch_spec_from_url(url: str) -> Dict[str, Any]:
                     f"Spec size ({file_size} bytes) exceeds max ({max_size} bytes)"
                 )
 
-            with open(file_path, 'r') as f:
+            with open(file_path) as f:
                 content = f.read()
 
             # Try JSON first, fall back to YAML

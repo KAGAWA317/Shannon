@@ -4,9 +4,9 @@ session-aware 的文件操作 tool，跟踪 session 中创建/修改的文件
 """
 
 import os
-import aiofiles
-from typing import Dict, List, Optional
 from pathlib import Path
+
+import aiofiles
 
 from llm_service.tools.base import (
     Tool,
@@ -37,7 +37,7 @@ class SessionFileWriteTool(Tool):
             rate_limit=100,
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter(
                 name="path",
@@ -62,7 +62,7 @@ class SessionFileWriteTool(Tool):
         ]
 
     async def _execute_impl(
-        self, session_context: Optional[Dict] = None, **kwargs
+        self, session_context: dict | None = None, **kwargs
     ) -> ToolResult:
         """
         Write to a file and track it in session context.
@@ -136,7 +136,7 @@ class SessionFileListTool(Tool):
             rate_limit=100,
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter(
                 name="filter_pattern",
@@ -148,7 +148,7 @@ class SessionFileListTool(Tool):
         ]
 
     async def _execute_impl(
-        self, session_context: Optional[Dict] = None, **kwargs
+        self, session_context: dict | None = None, **kwargs
     ) -> ToolResult:
         """
         List files from session context.

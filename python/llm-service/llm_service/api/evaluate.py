@@ -1,6 +1,7 @@
+from typing import Any
+
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
 
 from ._json import extract_json_block as _extract_json_block
 
@@ -11,19 +12,19 @@ class EvalAgentResult(BaseModel):
     agent_id: str
     response: str = ""
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class EvaluationRequest(BaseModel):
     original_query: str
-    results: List[EvalAgentResult]
-    context: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    results: list[EvalAgentResult]
+    context: dict[str, Any] | None = Field(default_factory=dict)
 
 
 class EvaluationResponse(BaseModel):
     should_replan: bool
     reason: str = ""
-    issues: List[str] = Field(default_factory=list)
+    issues: list[str] = Field(default_factory=list)
     hint: str = ""
 
 

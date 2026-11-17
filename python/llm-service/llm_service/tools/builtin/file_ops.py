@@ -4,19 +4,20 @@ File Operation Tools - Safe file read/write/edit operations with session isolati
 """
 
 import fnmatch
+import json
 import logging
 import os
-import json
 import re
-import yaml
-import aiofiles
-
-logger = logging.getLogger(__name__)
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
+
+import aiofiles
+import yaml
 
 from ..base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolResult
-from .sandbox_client import is_sandbox_enabled, get_sandbox_client
+from .sandbox_client import get_sandbox_client, is_sandbox_enabled
+
+logger = logging.getLogger(__name__)
 
 
 def _validate_session_id(session_id: str) -> str:
@@ -93,7 +94,7 @@ def _validate_user_id(user_id: str) -> str:
     return user_id
 
 
-def _get_session_workspace(session_context: Optional[Dict] = None) -> Path:
+def _get_session_workspace(session_context: dict | None = None) -> Path:
     """Get or create session workspace directory.
     获取或创建 session workspace 目录。
 
@@ -121,13 +122,13 @@ def _get_session_workspace(session_context: Optional[Dict] = None) -> Path:
     # 再次确认解析后的路径位于 base_dir 之内（纵深防御）
     session_workspace_resolved = session_workspace.resolve()
     if not str(session_workspace_resolved).startswith(str(base_dir)):
-        raise ValueError(f"Invalid session_id: path escape attempt detected")
+        raise ValueError("Invalid session_id: path escape attempt detected")
 
     session_workspace.mkdir(parents=True, exist_ok=True)
     return session_workspace
 
 
-def _get_allowed_dirs(session_context: Optional[Dict] = None) -> List[Path]:
+def _get_allowed_dirs(session_context: dict | None = None) -> list[Path]:
     """Get list of allowed directories for file operations.
     获取文件操作允许的目录列表。
 
@@ -219,7 +220,7 @@ class FileReadTool(Tool):
             cost_per_use=0.0,
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter(
                 name="path",
@@ -262,8 +263,8 @@ class FileReadTool(Tool):
 
     async def _execute_impl(
         self,
-        session_context: Optional[Dict] = None,
-        observer: Optional[Any] = None,
+        session_context: dict | None = None,
+        observer: Any | None = None,
         **kwargs,
     ) -> ToolResult:
         """
@@ -390,7 +391,7 @@ class FileReadTool(Tool):
 
             # Read file
             # 读取文件
-            async with aiofiles.open(path, mode="r", encoding=encoding) as f:
+            async with aiofiles.open(path, encoding=encoding) as f:
                 content = await f.read()
 
             file_extension = path.suffix.lower()
@@ -487,7 +488,7 @@ class FileWriteTool(Tool):
             cost_per_use=0.001,
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter(
                 name="path",
@@ -528,8 +529,8 @@ class FileWriteTool(Tool):
 
     async def _execute_impl(
         self,
-        session_context: Optional[Dict] = None,
-        observer: Optional[Any] = None,
+        session_context: dict | None = None,
+        observer: Any | None = None,
         **kwargs,
     ) -> ToolResult:
         """
@@ -703,7 +704,7 @@ class FileListTool(Tool):
             cost_per_use=0.0,
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter(
                 name="path",
@@ -736,8 +737,8 @@ class FileListTool(Tool):
 
     async def _execute_impl(
         self,
-        session_context: Optional[Dict] = None,
-        observer: Optional[Any] = None,
+        session_context: dict | None = None,
+        observer: Any | None = None,
         **kwargs,
     ) -> ToolResult:
         """
@@ -950,7 +951,7 @@ class FileSearchTool(Tool):
             cost_per_use=0.0,
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter(
                 name="query",
@@ -997,8 +998,8 @@ class FileSearchTool(Tool):
 
     async def _execute_impl(
         self,
-        session_context: Optional[Dict] = None,
-        observer: Optional[Any] = None,
+        session_context: dict | None = None,
+        observer: Any | None = None,
         **kwargs,
     ) -> ToolResult:
         """
@@ -1066,10 +1067,13 @@ class FileSearchTool(Tool):
                     output=None,
                     error=f"Invalid regex pattern: {e}",
                 )
-            match_fn = lambda line: pattern.search(line) is not None
+            def match_fn(line: str) -> bool:
+                return pattern.search(line) is not None
         else:
             query_lower = query.lower()
-            match_fn = lambda line: query_lower in line.lower()
+
+            def match_fn(line: str) -> bool:
+                return query_lower in line.lower()
 
         try:
             # Resolve workspace directory
@@ -1163,13 +1167,13 @@ class FileSearchTool(Tool):
                 # 读取并搜索文件内容
                 try:
                     async with aiofiles.open(
-                        file_path, mode="r", encoding="utf-8", errors="ignore"
+                        file_path, encoding="utf-8", errors="ignore"
                     ) as f:
                         if context_lines > 0:
                             # Read all lines for context support
                             # 为支持 context 而读取全部行
                             all_lines = [
-                                l.rstrip("\n\r") async for l in f
+                                ln.rstrip("\n\r") async for ln in f
                             ]
                             for line_idx, line in enumerate(all_lines):
                                 if match_fn(line):
@@ -1289,7 +1293,7 @@ class FileEditTool(Tool):
             cost_per_use=0.001,
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter(
                 name="path",
@@ -1320,8 +1324,8 @@ class FileEditTool(Tool):
 
     async def _execute_impl(
         self,
-        session_context: Optional[Dict] = None,
-        observer: Optional[Any] = None,
+        session_context: dict | None = None,
+        observer: Any | None = None,
         **kwargs,
     ) -> ToolResult:
         file_path = kwargs["path"]
@@ -1393,7 +1397,7 @@ class FileEditTool(Tool):
 
             # Read current content
             # 读取当前内容
-            async with aiofiles.open(path_absolute, mode="r", encoding="utf-8") as f:
+            async with aiofiles.open(path_absolute, encoding="utf-8") as f:
                 content = await f.read()
 
             # Count occurrences
@@ -1499,7 +1503,7 @@ class FileDeleteTool(Tool):
             cost_per_use=0.001,
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter(
                 name="path",
@@ -1525,8 +1529,8 @@ class FileDeleteTool(Tool):
 
     async def _execute_impl(
         self,
-        session_context: Optional[Dict] = None,
-        observer: Optional[Any] = None,
+        session_context: dict | None = None,
+        observer: Any | None = None,
         **kwargs,
     ) -> ToolResult:
         target_path = kwargs["path"]

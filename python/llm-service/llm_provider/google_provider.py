@@ -11,17 +11,19 @@ Google Gemini provider 实现。
 import logging
 import os
 import time
-from typing import Dict, List, Any, AsyncIterator
-from tenacity import retry, stop_after_attempt, wait_exponential
+from collections.abc import AsyncIterator
+from typing import Any
+
 import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from google.generativeai.types import HarmBlockThreshold, HarmCategory
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from .base import (
-    LLMProvider,
     CompletionRequest,
     CompletionResponse,
-    TokenUsage,
+    LLMProvider,
     TokenCounter,
+    TokenUsage,
 )
 
 
@@ -31,7 +33,7 @@ class GoogleProvider(LLMProvider):
     Google Gemini 模型的 provider。
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         self.logger = logging.getLogger(__name__)
         
         # Get API key from config or environment
@@ -162,8 +164,8 @@ class GoogleProvider(LLMProvider):
         return parts
 
     def _convert_messages_to_gemini_format(
-        self, messages: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, messages: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Convert OpenAI-style messages to Gemini format with proper system message handling.
 
         Gemini API:
@@ -239,7 +241,7 @@ class GoogleProvider(LLMProvider):
 
         return gemini_messages
 
-    def _create_generation_config(self, request: CompletionRequest) -> Dict[str, Any]:
+    def _create_generation_config(self, request: CompletionRequest) -> dict[str, Any]:
         """Create Gemini generation configuration from request
 
         根据 request 创建 Gemini 生成配置。
@@ -511,7 +513,7 @@ class GoogleProvider(LLMProvider):
         # 粗略估算：每 4 个字符 1 个 token
         return len(text) // 4
 
-    def count_tokens(self, messages: List[Dict[str, Any]], model: str) -> int:
+    def count_tokens(self, messages: list[dict[str, Any]], model: str) -> int:
         """Count tokens for messages using Gemini's native counter or TokenCounter fallback.
 
         使用 Gemini 原生计数器或 TokenCounter 兜底来统计消息的 token 数。

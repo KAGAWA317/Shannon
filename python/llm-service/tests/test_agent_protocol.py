@@ -2,8 +2,7 @@
 角色感知 agent 协议生成的测试。
 """
 
-import pytest
-from llm_service.roles.swarm.agent_protocol import get_work_protocol, COMMON_PROTOCOL_BASE
+from llm_service.roles.swarm.agent_protocol import get_work_protocol
 
 
 class TestGetWorkProtocol:

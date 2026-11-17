@@ -50,12 +50,12 @@ Shannon 的 LangChain 集成桥
 （agent core tool 注册、personas 配置、tool routing、监控、安全、测试、文档）。
 """
 
-import logging
-import json
-from typing import Dict, Any, List, Optional
-from dataclasses import dataclass
 import asyncio
+import json
+import logging
+from dataclasses import dataclass
 from functools import lru_cache
+from typing import Any
 
 # TODO: Add langchain dependencies to requirements.txt when implementing
 # TODO：实现时需要把 langchain 依赖加入 requirements.txt
@@ -66,7 +66,7 @@ from functools import lru_cache
 try:
     # These imports will fail until langchain is added to requirements.txt
     # 在 langchain 加入 requirements.txt 之前，这些导入会失败
-    from langchain.tools import load_tools, Tool
+    from langchain.tools import Tool, load_tools
     # Note: Additional integrations (Notion, Slack, Gmail, Drive, Zapier) available
     # in langchain_community.tools but not imported until needed
     # 注意：更多集成（Notion、Slack、Gmail、Drive、Zapier）位于
@@ -89,11 +89,11 @@ class LangChainToolResult:
 
     success: bool
     result: Any
-    error_message: Optional[str] = None
-    tool_name: Optional[str] = None
-    execution_time_ms: Optional[int] = None
-    tokens_used: Optional[int] = None  # If applicable 注：适用时填写
-    metadata: Dict[str, Any] = None
+    error_message: str | None = None
+    tool_name: str | None = None
+    execution_time_ms: int | None = None
+    tokens_used: int | None = None  # If applicable 注：适用时填写
+    metadata: dict[str, Any] = None
 
 
 class LangChainBridge:
@@ -123,7 +123,7 @@ class LangChainBridge:
         # self.metrics = MetricsCollector("langchain_bridge")
 
     @lru_cache(maxsize=100)
-    def _load_tool(self, tool_name: str) -> Optional[Tool]:
+    def _load_tool(self, tool_name: str) -> Tool | None:
         """
         Load and cache LangChain tools for reuse.
 
@@ -170,7 +170,7 @@ class LangChainBridge:
             self.logger.error(f"Failed to load LangChain tool {tool_name}: {e}")
             return None
 
-    def _create_notion_tool(self) -> Optional[Tool]:
+    def _create_notion_tool(self) -> Tool | None:
         """Create Notion integration tool
 
         创建 Notion 集成 tool。
@@ -181,7 +181,7 @@ class LangChainBridge:
         # return NotionDBLoader(integration_token=notion_token)
         return None
 
-    def _create_slack_tool(self) -> Optional[Tool]:
+    def _create_slack_tool(self) -> Tool | None:
         """Create Slack integration tool
 
         创建 Slack 集成 tool。
@@ -192,7 +192,7 @@ class LangChainBridge:
         # return SlackSendMessage(slack_token=slack_token)
         return None
 
-    def _create_gmail_tool(self) -> Optional[Tool]:
+    def _create_gmail_tool(self) -> Tool | None:
         """Create Gmail integration tool
 
         创建 Gmail 集成 tool。
@@ -203,7 +203,7 @@ class LangChainBridge:
         # return GmailSendMessage(credentials=gmail_creds)
         return None
 
-    def _create_gdrive_tool(self) -> Optional[Tool]:
+    def _create_gdrive_tool(self) -> Tool | None:
         """Create Google Drive integration tool
 
         创建 Google Drive 集成 tool。
@@ -215,7 +215,7 @@ class LangChainBridge:
         return None
 
     async def execute_tool(
-        self, tool_name: str, params: Dict[str, Any]
+        self, tool_name: str, params: dict[str, Any]
     ) -> LangChainToolResult:
         """
         Execute a LangChain tool with Shannon's security and monitoring.
@@ -345,7 +345,7 @@ class LangChainBridge:
                 execution_time_ms=execution_time,
             )
 
-    def get_available_tools(self) -> List[Dict[str, Any]]:
+    def get_available_tools(self) -> list[dict[str, Any]]:
         """
         Return list of available LangChain integrations.
 
@@ -403,7 +403,7 @@ class LangChainBridge:
 
         return available_tools
 
-    def health_check(self) -> Dict[str, Any]:
+    def health_check(self) -> dict[str, Any]:
         """
         Check health of LangChain integration system.
 
@@ -443,8 +443,8 @@ langchain_bridge = LangChainBridge()
 
 
 async def execute_langchain_tool(
-    tool_name: str, parameters: Dict[str, Any]
-) -> Dict[str, Any]:
+    tool_name: str, parameters: dict[str, Any]
+) -> dict[str, Any]:
     """
     Main entry point for Shannon's tool executor to call LangChain tools.
 
@@ -483,7 +483,7 @@ async def execute_langchain_tool(
     }
 
 
-def get_langchain_tool_descriptions() -> List[Dict[str, Any]]:
+def get_langchain_tool_descriptions() -> list[dict[str, Any]]:
     """
     Return tool descriptions for Shannon's tool discovery system.
 

@@ -21,16 +21,17 @@ Security features:
 - 重定向循环防护（最多 10 次重定向）
 """
 
-import aiohttp
 import asyncio
+import logging
 import os
 import re
-import logging
-from typing import Dict, Optional, List, Any
-from urllib.parse import urlparse, urljoin, parse_qsl, urlencode
-from bs4 import BeautifulSoup
-import html2text
 from enum import Enum
+from typing import Any
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse
+
+import aiohttp
+import html2text
+from bs4 import BeautifulSoup
 
 from ..base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolResult
 from ..openapi_parser import _is_private_ip
@@ -48,10 +49,10 @@ EXTRACTION_TIMEOUT = 60           # Seconds before extraction call times out 注
 
 async def extract_with_llm(
     content: str,
-    extract_prompt: Optional[str] = None,
+    extract_prompt: str | None = None,
     max_output: int = 4000,
     timeout: int = EXTRACTION_TIMEOUT,
-) -> Optional[tuple]:
+) -> tuple | None:
     """
     Call a small model to extract/compress page content.
     调用小模型对页面内容进行提取/压缩。
@@ -68,8 +69,8 @@ async def extract_with_llm(
     优雅降级——任何 exception 都返回 None，调用方可改为截断处理。
     """
     try:
-        from llm_provider.manager import get_llm_manager
         from llm_provider.base import ModelTier
+        from llm_provider.manager import get_llm_manager
 
         # Cap input to avoid exceeding model context window
         # 限制输入长度，避免超出模型 context window
@@ -126,7 +127,7 @@ async def extract_with_llm(
 
 async def apply_extraction(
     result: ToolResult,
-    extract_prompt: Optional[str],
+    extract_prompt: str | None,
     original_max_length: int,
 ) -> ToolResult:
     """
@@ -207,11 +208,11 @@ _BATCH_RESULT_RE = re.compile(
 
 
 async def extract_batch_with_llm(
-    pages: List[Dict],
+    pages: list[dict],
     per_page_budget: int = 2000,
-    extract_prompt: Optional[str] = None,
+    extract_prompt: str | None = None,
     timeout: int = EXTRACTION_TIMEOUT,
-) -> Optional[tuple]:
+) -> tuple | None:
     """
     Combine N pages into a single LLM call for extraction.
     将 N 个页面合并为一次 LLM 调用进行提取。
@@ -240,8 +241,8 @@ async def extract_batch_with_llm(
         return None
 
     try:
-        from llm_provider.manager import get_llm_manager
         from llm_provider.base import ModelTier
+        from llm_provider.manager import get_llm_manager
 
         n = len(pages)
 
@@ -369,7 +370,7 @@ BLOCKED_PATTERNS = [
 ]
 
 
-def detect_blocked_reason(content: str, status_code: int = 200) -> Optional[str]:
+def detect_blocked_reason(content: str, status_code: int = 200) -> str | None:
     """
     Detect if fetched content indicates a blocked/failed fetch.
     检测抓取到的内容是否表示抓取被拦截或失败。
@@ -459,11 +460,10 @@ def clean_markdown_noise(content: str) -> str:
     if not content:
         return content
 
-    from typing import List, Tuple
 
     # Step 0: Protect code blocks (fenced and inline)
     # 步骤 0：保护代码块（围栏式与行内）
-    code_blocks: List[Tuple[str, str]] = []
+    code_blocks: list[tuple[str, str]] = []
 
     def save_code(m):
         placeholder = f'__CODE_BLOCK_{len(code_blocks)}__'
@@ -675,9 +675,9 @@ class WebFetchProvider:
         url: str,
         max_length: int = 10000,
         subpages: int = 0,
-        subpage_target: Optional[str] = None,
+        subpage_target: str | None = None,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Fetch content from a URL.
         从 URL 抓取内容。
@@ -727,7 +727,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
         self.scrape_url = "https://api.firecrawl.dev/v2/scrape"
         self.crawl_url = "https://api.firecrawl.dev/v2/crawl"
 
-    def _infer_paths_from_target(self, subpage_target: str) -> List[str]:
+    def _infer_paths_from_target(self, subpage_target: str) -> list[str]:
         """
         Infer URL paths from subpage_target keywords.
         根据 subpage_target 关键词推断 URL 路径。
@@ -785,11 +785,11 @@ class FirecrawlFetchProvider(WebFetchProvider):
         url: str,
         max_length: int = 10000,
         subpages: int = 0,
-        subpage_target: Optional[str] = None,
-        required_paths: Optional[List[str]] = None,
-        query_type: Optional[str] = None,
+        subpage_target: str | None = None,
+        required_paths: list[str] | None = None,
+        query_type: str | None = None,
         **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Fetch using Firecrawl API with unified intelligent strategy.
         使用 Firecrawl API 抓取，采用统一的智能策略。
@@ -882,7 +882,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
         raise Exception(f"Firecrawl: all methods failed for {url}")
 
 
-    async def _scrape(self, url: str, max_length: int) -> Dict[str, Any]:
+    async def _scrape(self, url: str, max_length: int) -> dict[str, Any]:
         """Scrape a single page using Firecrawl scrape API
         使用 Firecrawl scrape API 抓取单个页面"""
         headers = {
@@ -913,8 +913,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
                 elif response.status == 429:
                     raise Exception("Firecrawl rate limit exceeded (429)")
                 elif response.status != 200:
-                    error_text = await response.text()
-                    sanitized = self.sanitize_error_message(error_text)
+                    await response.text()
                     logger.error(f"Firecrawl scrape error: {response.status}")
                     raise Exception(f"Firecrawl error: {response.status}")
 
@@ -958,7 +957,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
                     "blocked_reason": blocked_reason,  # P0-A: Content-based detection 注：P0-A：基于内容检测
                 }
 
-    async def _crawl(self, url: str, max_length: int, limit: int) -> Dict[str, Any]:
+    async def _crawl(self, url: str, max_length: int, limit: int) -> dict[str, Any]:
         """
         Crawl multiple pages using Firecrawl crawl API.
         使用 Firecrawl crawl API 爬取多个页面。
@@ -1091,8 +1090,8 @@ class FirecrawlFetchProvider(WebFetchProvider):
         return url
     
     def _merge_crawl_results(
-        self, results: List[Dict], original_url: str, max_length: int
-    ) -> Dict[str, Any]:
+        self, results: list[dict], original_url: str, max_length: int
+    ) -> dict[str, Any]:
         """Merge multiple crawl results with improved filtering and deduplication
         合并多个爬取结果，并改进过滤与去重"""
         
@@ -1226,7 +1225,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
             # Add page with index (don't expose URLs in content to avoid citation extraction)
             # 带序号添加页面（不在正文中暴露 URL，避免被引用提取）
             if i == 0:
-                page_header = f"# Main Page\n"
+                page_header = "# Main Page\n"
                 if page_title:
                     page_header += f"**{page_title}**\n\n"
             else:
@@ -1263,7 +1262,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
             }
         }
 
-    async def _map(self, url: str, limit: int = 100) -> List[str]:
+    async def _map(self, url: str, limit: int = 100) -> list[str]:
         """
         Use Firecrawl Map API to quickly get all URLs on a website.
         使用 Firecrawl Map API 快速获取网站上的所有 URL。
@@ -1307,8 +1306,8 @@ class FirecrawlFetchProvider(WebFetchProvider):
                 return urls
 
     async def _batch_scrape(
-        self, urls: List[str], max_length: int
-    ) -> Dict[str, Any]:
+        self, urls: list[str], max_length: int
+    ) -> dict[str, Any]:
         """Batch scrape multiple URLs and merge results with retry for 408/429.
         批量抓取多个 URL 并合并结果，对 408/429 进行 retry。"""
         if not urls:
@@ -1383,7 +1382,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
     def _calculate_relevance_score(
         self,
         url: str,
-        required_paths: Optional[List[str]] = None,
+        required_paths: list[str] | None = None,
         total_pages: int = 0
     ) -> float:
         """
@@ -1476,8 +1475,8 @@ class FirecrawlFetchProvider(WebFetchProvider):
         url: str,
         max_length: int,
         limit: int,
-        required_paths: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
+        required_paths: list[str] | None = None
+    ) -> dict[str, Any]:
         """
         Map website URLs, score by relevance, and scrape top pages.
         映射网站 URL，按相关性打分，并抓取得分最高的页面。
@@ -1597,7 +1596,7 @@ class WebFetchTool(Tool):
 
         # Initialize Firecrawl provider if configured
         # 若已配置则初始化 Firecrawl provider
-        self.firecrawl_provider: Optional[FirecrawlFetchProvider] = None
+        self.firecrawl_provider: FirecrawlFetchProvider | None = None
         if self.firecrawl_api_key and WebFetchProvider.validate_api_key(self.firecrawl_api_key):
             try:
                 self.firecrawl_provider = FirecrawlFetchProvider(self.firecrawl_api_key)
@@ -1629,7 +1628,6 @@ class WebFetchTool(Tool):
         if self.firecrawl_provider:
             active_providers.append("Firecrawl")
         active_providers.append("Python")  # Always available 注：始终可用
-        provider_str = ", ".join(active_providers)
 
         return ToolMetadata(
             name="web_fetch",
@@ -1655,7 +1653,7 @@ class WebFetchTool(Tool):
             cost_per_use=0.001,
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter(
                 name="url",
@@ -1748,7 +1746,7 @@ class WebFetchTool(Tool):
         ]
 
     async def _execute_impl(
-        self, session_context: Optional[Dict] = None, **kwargs
+        self, session_context: dict | None = None, **kwargs
     ) -> ToolResult:
         """Execute web content fetch using selected provider.
         使用选定的 provider 执行 web 内容抓取。"""
@@ -1822,7 +1820,6 @@ class WebFetchTool(Tool):
         deprecated_subpages = kwargs.get("subpages", 0)
         deprecated_subpage_target = kwargs.get("subpage_target")
         deprecated_required_paths = kwargs.get("required_paths")
-        deprecated_query_type = kwargs.get("query_type")
 
         if deprecated_subpages > 0 or deprecated_subpage_target or deprecated_required_paths:
             logger.warning(
@@ -2045,8 +2042,8 @@ class WebFetchTool(Tool):
 
     async def _fetch_batch(
         self,
-        urls: List[str],
-        session_context: Optional[Dict] = None,
+        urls: list[str],
+        session_context: dict | None = None,
         **kwargs
     ) -> ToolResult:
         """
@@ -2139,7 +2136,7 @@ class WebFetchTool(Tool):
         # 并发控制
         semaphore = asyncio.Semaphore(concurrency)
 
-        async def fetch_one(url: str) -> Dict[str, Any]:
+        async def fetch_one(url: str) -> dict[str, Any]:
             """Fetch a single URL with semaphore control. Prefer Firecrawl > pure_python.
             在 semaphore 控制下抓取单个 URL。优先 Firecrawl > pure_python。"""
             async with semaphore:
@@ -2466,7 +2463,7 @@ class WebFetchTool(Tool):
         except Exception:
             return False
 
-    def _extract_same_domain_links(self, soup: BeautifulSoup, base_url: str, root_domain: str) -> List[str]:
+    def _extract_same_domain_links(self, soup: BeautifulSoup, base_url: str, root_domain: str) -> list[str]:
         """Extract all same-domain links from parsed HTML with SSRF protection.
         从已解析的 HTML 中提取所有同域链接，并做 SSRF 防护。"""
         links = []
@@ -2499,7 +2496,7 @@ class WebFetchTool(Tool):
 
     async def _fetch_single_page(
         self, session: aiohttp.ClientSession, url: str, max_length: int, root_domain: str
-    ) -> Optional[Dict]:
+    ) -> dict | None:
         """
         Fetch a single page and return structured data.
         Returns None on failure (silent fail for subpages).

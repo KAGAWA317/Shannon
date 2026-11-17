@@ -30,7 +30,6 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-for-unit-tests")
 from llm_provider.anthropic_provider import _block_to_dict
 from llm_provider.base import CompletionResponse, TokenUsage
 
-
 # ---------- CompletionResponse dataclass field ----------
 # ---------- CompletionResponse dataclass 字段 ----------
 
@@ -202,7 +201,7 @@ def test_redis_cache_roundtrip_preserves_content_blocks():
     都会悄悄退化成只剩 {output_text, tool_calls}，任何走 cache 的上游调用其 thinking
     轨迹都会断掉。
     """
-    from llm_provider.manager import _serialize_response, _deserialize_response
+    from llm_provider.manager import _deserialize_response, _serialize_response
 
     resp = CompletionResponse(
         content="visible",
@@ -274,6 +273,7 @@ async def test_stream_complete_yields_content_blocks():
     转发到 wire 上。
     """
     from unittest.mock import MagicMock
+
     from llm_provider.anthropic_provider import AnthropicProvider
 
     config = {

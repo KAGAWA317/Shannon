@@ -1,27 +1,27 @@
-from fastapi import APIRouter, Request, HTTPException
+
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
-from typing import List, Optional
 
 router = APIRouter()
 
 
 class EmbeddingRequest(BaseModel):
-    texts: List[str] = Field(..., description="Texts to embed")
-    model: Optional[str] = Field(
+    texts: list[str] = Field(..., description="Texts to embed")
+    model: str | None = Field(
         default="text-embedding-3-small", description="Embedding model to use"
     )
-    normalize: Optional[bool] = Field(
+    normalize: bool | None = Field(
         default=False, description="L2 normalize output vectors"
     )
 
 
 class EmbeddingResponse(BaseModel):
-    embeddings: List[List[float]]
+    embeddings: list[list[float]]
     dimensions: int
     model_used: str
 
 
-def _l2_normalize(vec: List[float]) -> List[float]:
+def _l2_normalize(vec: list[float]) -> list[float]:
     s = sum(v * v for v in vec) or 1.0
     norm = s**0.5
     return [v / norm for v in vec]

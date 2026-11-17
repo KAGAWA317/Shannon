@@ -1,9 +1,9 @@
 import json
 import re
-from typing import Any, Dict, Optional
+from typing import Any
 
 
-def extract_json_block(text: str) -> Optional[Dict[str, Any]]:
+def extract_json_block(text: str) -> dict[str, Any] | None:
     """Extract JSON from an LLM response.
 
     从模型 response 中提取 JSON.

@@ -6,9 +6,8 @@ key company information from official domains.
 公司研究中的网站内容预抓取专家。从官方域名中提取关键公司信息。
 """
 
-from typing import Dict
 
-DOMAIN_PREFETCH_PRESET: Dict[str, object] = {
+DOMAIN_PREFETCH_PRESET: dict[str, object] = {
     "system_prompt": """You are a website content extraction specialist for company research.
 
 # Core Task:

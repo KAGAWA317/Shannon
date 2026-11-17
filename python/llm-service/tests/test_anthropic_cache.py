@@ -4,14 +4,12 @@
 """
 
 import os
-import pytest
 
 # Set dummy key before import
 # 在 import 之前设置 dummy key
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-for-unit-tests")
 
-from llm_provider.anthropic_provider import AnthropicProvider, CACHE_TTL_LONG
-
+from llm_provider.anthropic_provider import CACHE_TTL_LONG, AnthropicProvider
 
 _MINIMAL_CONFIG = {
     "api_key": "test-key",
@@ -505,6 +503,7 @@ class TestCacheSourceObservability:
         被静默丢弃，所有指标都塌缩成 "unknown"。
         """
         import inspect
+
         import llm_service.providers as providers_init
 
         src = inspect.getsource(providers_init)
@@ -906,8 +905,8 @@ class TestUsageSplit:
 
     def test_serialize_usage_emits_both_split_fields(self):
         """The ProviderManager._serialize_usage output must include 5m and 1h keys."""
-        from llm_service.providers import ProviderManager
         from llm_provider.base import TokenUsage
+        from llm_service.providers import ProviderManager
         u = TokenUsage(
             input_tokens=100, output_tokens=50, total_tokens=150,
             estimated_cost=0.001,

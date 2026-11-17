@@ -21,7 +21,7 @@ web_search 的嵌套结果与相关性过滤）。
 import html
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +48,8 @@ _MAX_TEXT_LEN = 6000
 
 
 def format_tool_text(
-    tool_name: str, output: Any, metadata: Optional[Dict[str, Any]] = None
-) -> Optional[str]:
+    tool_name: str, output: Any, metadata: dict[str, Any] | None = None
+) -> str | None:
     """
     Generate an LLM-friendly text representation of tool output.
     生成便于 LLM 理解的 tool 输出文本表示。
@@ -76,7 +76,7 @@ def format_tool_text(
 # ---------------------------------------------------------------------------
 
 
-def _format_generic(output: Any, metadata: Optional[Dict[str, Any]]) -> Optional[str]:
+def _format_generic(output: Any, metadata: dict[str, Any] | None) -> str | None:
     """Format any tool output by stripping metadata keys and presenting content.
     格式化任意 tool 输出：剥离 metadata 键并呈现内容。"""
     if output is None:
@@ -92,7 +92,7 @@ def _format_generic(output: Any, metadata: Optional[Dict[str, Any]]) -> Optional
     if isinstance(output, list):
         if not output:
             return "No results."
-        parts: List[str] = []
+        parts: list[str] = []
         for i, item in enumerate(output[:20], 1):
             if isinstance(item, dict):
                 parts.append(f"{i}. {_format_dict_compact(item)}")
@@ -108,7 +108,7 @@ def _format_generic(output: Any, metadata: Optional[Dict[str, Any]]) -> Optional
     return str(output)
 
 
-def _format_items(items: List[Any], empty: str) -> str:
+def _format_items(items: list[Any], empty: str) -> str:
     """Format a list of items as numbered lines (max 20 items).
     把条目列表格式化为带序号的文本（最多 20 条）。"""
     if not items:
@@ -119,13 +119,13 @@ def _format_items(items: List[Any], empty: str) -> str:
     )
 
 
-def _format_dict_smart(d: Dict[str, Any]) -> str:
+def _format_dict_smart(d: dict[str, Any]) -> str:
     """Intelligently format a dict based on its shape.
     根据字典结构智能格式化。"""
     # If it has a 'content' key, it's likely a fetched page / document
     # 若含 'content' 键，很可能是抓取的页面/文档
     if "content" in d and isinstance(d["content"], str):
-        parts: List[str] = []
+        parts: list[str] = []
         if d.get("title"):
             parts.append(f"Title: {d['title']}")
         if d.get("url"):
@@ -153,7 +153,7 @@ def _format_dict_smart(d: Dict[str, Any]) -> str:
     return _format_dict_compact(d)
 
 
-def _format_dict_compact(d: Dict[str, Any]) -> str:
+def _format_dict_compact(d: dict[str, Any]) -> str:
     """Format a dict by stripping metadata keys and presenting key: value pairs.
     格式化字典：剥离 metadata 键并呈现 key: value 对。"""
     clean = {k: v for k, v in d.items() if k not in _STRIP_KEYS and v is not None}
@@ -166,7 +166,7 @@ def _format_dict_compact(d: Dict[str, Any]) -> str:
         return str(val) if not isinstance(val, dict) else json.dumps(val, ensure_ascii=False)
     # Format as key: value lines, truncating long values
     # 按 key: value 行格式化，截断过长的值
-    lines: List[str] = []
+    lines: list[str] = []
     for k, v in clean.items():
         if isinstance(v, str) and len(v) > 500:
             v = v[:500] + "..."
@@ -185,7 +185,7 @@ def _format_dict_compact(d: Dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _format_web_search(output: Any, metadata: Optional[Dict[str, Any]]) -> Optional[str]:
+def _format_web_search(output: Any, metadata: dict[str, Any] | None) -> str | None:
     """Format web_search output — needs custom handling for nested results + html unescape.
     格式化 web_search 输出——需自定义处理嵌套结果与 HTML 反转义。"""
     if not isinstance(output, dict):
@@ -203,7 +203,7 @@ def _format_web_search(output: Any, metadata: Optional[Dict[str, Any]]) -> Optio
         return "No search results found."
 
     query = output.get("query", "") if isinstance(output, dict) else ""
-    lines: List[str] = []
+    lines: list[str] = []
     if query:
         lines.append(f"Search results for: {query}\n")
 
@@ -233,7 +233,7 @@ def _format_web_search(output: Any, metadata: Optional[Dict[str, Any]]) -> Optio
     return "\n\n".join(lines)
 
 
-def _format_web_fetch(output: Any, metadata: Optional[Dict[str, Any]]) -> Optional[str]:
+def _format_web_fetch(output: Any, metadata: dict[str, Any] | None) -> str | None:
     """Format web_fetch — batch scaling + explicit single-URL handling.
     格式化 web_fetch——批量缩放与显式单 URL 处理。
 
@@ -254,7 +254,7 @@ def _format_web_fetch(output: Any, metadata: Optional[Dict[str, Any]]) -> Option
         # 缩放单页上限：页面越多，单页越少，以控制在总 budget 内
         per_page_cap = min(3000, _MAX_TEXT_LEN // max(num_pages, 1) - 200)
 
-        parts: List[str] = []
+        parts: list[str] = []
         for item in pages:
             if not isinstance(item, dict):
                 continue
@@ -285,7 +285,7 @@ def _format_web_fetch(output: Any, metadata: Optional[Dict[str, Any]]) -> Option
 # 注册表——仅按 tool 覆写；其他 tool 均使用 _format_generic
 # ---------------------------------------------------------------------------
 
-_FORMATTERS: Dict[str, Any] = {
+_FORMATTERS: dict[str, Any] = {
     "web_search": _format_web_search,
     "web_fetch": _format_web_fetch,
     "web_crawl": _format_web_fetch,

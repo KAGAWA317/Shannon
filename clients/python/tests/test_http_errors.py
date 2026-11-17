@@ -3,11 +3,11 @@
 HTTP 错误处理测试（不发起网络 request）。
 """
 
-import pytest
 import httpx
+import pytest
 
-from shannon.client import AsyncShannonClient
 from shannon import errors
+from shannon.client import AsyncShannonClient
 
 
 def make_response(status: int, body: str = "", url: str = "http://test") -> httpx.Response:

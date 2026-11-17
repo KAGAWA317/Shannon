@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Request, HTTPException
-from typing import Dict, Any, List, Optional
+from typing import Any
+
+from fastapi import APIRouter, HTTPException, Request
 
 from ..providers.base import ModelTier
 
 router = APIRouter(prefix="/providers", tags=["providers"])
 
 
-def _model_info_to_dict(mi) -> Dict[str, Any]:
+def _model_info_to_dict(mi) -> dict[str, Any]:
     return {
         "id": mi.id,
         "name": mi.name,
@@ -22,8 +23,8 @@ def _model_info_to_dict(mi) -> Dict[str, Any]:
 
 @router.get("/models")
 async def list_provider_models(
-    request: Request, tier: Optional[str] = None
-) -> Dict[str, List[Dict[str, Any]]]:
+    request: Request, tier: str | None = None
+) -> dict[str, list[dict[str, Any]]]:
     """Return live model registries per provider.
 
     返回各 provider 的实时 model registry。
@@ -39,7 +40,7 @@ async def list_provider_models(
 
     # Optional tier filter
     # 可选的 tier 过滤条件
-    tier_enum: Optional[ModelTier] = None
+    tier_enum: ModelTier | None = None
     if tier:
         v = tier.lower()
         if v == "small":
@@ -49,7 +50,7 @@ async def list_provider_models(
         elif v == "large":
             tier_enum = ModelTier.LARGE
 
-    out: Dict[str, List[Dict[str, Any]]] = {}
+    out: dict[str, list[dict[str, Any]]] = {}
     for ptype, provider in pm.providers.items():
         try:
             models = provider.list_models()

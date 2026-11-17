@@ -21,20 +21,19 @@ web_fetch 的 prompt 引导抽取功能测试（issue #38）。
 """
 
 import asyncio
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from dataclasses import dataclass
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from llm_service.tools.builtin.web_fetch import (
-    WebFetchTool,
-    extract_with_llm,
-    extract_batch_with_llm,
-    apply_extraction,
-    EXTRACTION_INTERNAL_MAX,
-    EXTRACTION_CONTENT_CAP,
-)
+import pytest
 from llm_service.tools.base import ToolResult
-
+from llm_service.tools.builtin.web_fetch import (
+    EXTRACTION_CONTENT_CAP,
+    EXTRACTION_INTERNAL_MAX,
+    WebFetchTool,
+    apply_extraction,
+    extract_batch_with_llm,
+    extract_with_llm,
+)
 
 # --- Helpers ---
 # --- 辅助函数 ---
@@ -1135,6 +1134,7 @@ class TestFirecrawlSparseFallback:
         确认两条代码路径都包含稀疏内容回退逻辑。
         """
         import inspect
+
         from llm_service.tools.builtin import web_fetch as wf_module
         source = inspect.getsource(wf_module)
         # Both single-URL and batch paths should have sparse fallback

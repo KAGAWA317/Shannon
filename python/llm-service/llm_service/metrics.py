@@ -4,7 +4,8 @@ Shannon LLM Service 的 Prometheus metrics。
 """
 
 import time
-from prometheus_client import Counter, Histogram, Gauge, Info
+
+from prometheus_client import Counter, Gauge, Histogram, Info
 
 # LLM completion metrics
 # LLM completion 指标

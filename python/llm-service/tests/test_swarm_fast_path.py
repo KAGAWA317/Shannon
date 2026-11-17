@@ -1,7 +1,6 @@
 """Test swarm fast path: forced_tool_calls with DATA_ONLY_TOOLS skip LLM call.
 swarm fast path 测试：带 DATA_ONLY_TOOLS 的 forced_tool_calls 会跳过 LLM 调用。
 """
-import pytest
 from llm_service.api.agent import DATA_ONLY_TOOLS, generate_tool_digest
 
 

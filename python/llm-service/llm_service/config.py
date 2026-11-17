@@ -1,6 +1,6 @@
-from typing import Optional
-from pydantic_settings import BaseSettings
+
 from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # Redis 配置
     redis_host: str = Field(default="redis", env="REDIS_HOST")
     redis_port: int = Field(default=6379, env="REDIS_PORT")
-    redis_password: Optional[str] = Field(default=None, env="REDIS_PASSWORD")
+    redis_password: str | None = Field(default=None, env="REDIS_PASSWORD")
     redis_ttl_seconds: int = Field(default=3600, env="REDIS_TTL_SECONDS")
 
     # PostgreSQL configuration
@@ -31,13 +31,13 @@ class Settings(BaseSettings):
 
     # LLM Provider API keys (optional, can be configured at runtime)
     # LLM provider 的 API key（可选，可在运行时配置）
-    openai_api_key: Optional[str] = Field(default=None, env="OPENAI_API_KEY")
-    anthropic_api_key: Optional[str] = Field(default=None, env="ANTHROPIC_API_KEY")
-    google_api_key: Optional[str] = Field(default=None, env="GOOGLE_API_KEY")
-    deepseek_api_key: Optional[str] = Field(default=None, env="DEEPSEEK_API_KEY")
-    qwen_api_key: Optional[str] = Field(default=None, env="QWEN_API_KEY")
-    aws_access_key: Optional[str] = Field(default=None, env="AWS_ACCESS_KEY_ID")
-    aws_secret_key: Optional[str] = Field(default=None, env="AWS_SECRET_ACCESS_KEY")
+    openai_api_key: str | None = Field(default=None, env="OPENAI_API_KEY")
+    anthropic_api_key: str | None = Field(default=None, env="ANTHROPIC_API_KEY")
+    google_api_key: str | None = Field(default=None, env="GOOGLE_API_KEY")
+    deepseek_api_key: str | None = Field(default=None, env="DEEPSEEK_API_KEY")
+    qwen_api_key: str | None = Field(default=None, env="QWEN_API_KEY")
+    aws_access_key: str | None = Field(default=None, env="AWS_ACCESS_KEY_ID")
+    aws_secret_key: str | None = Field(default=None, env="AWS_SECRET_ACCESS_KEY")
     aws_region: str = Field(default="us-east-1", env="AWS_REGION")
 
     # Model configuration
@@ -49,8 +49,8 @@ class Settings(BaseSettings):
     # If set, these take precedence over tier-based selection
     # 为 workflow 各阶段指定专用模型（可选覆盖）
     # 若设置，将优先于基于 tier 的选择
-    complexity_model_id: Optional[str] = Field(default=None, env="COMPLEXITY_MODEL_ID")
-    decomposition_model_id: Optional[str] = Field(
+    complexity_model_id: str | None = Field(default=None, env="COMPLEXITY_MODEL_ID")
+    decomposition_model_id: str | None = Field(
         default=None, env="DECOMPOSITION_MODEL_ID"
     )
 
@@ -87,7 +87,7 @@ class Settings(BaseSettings):
     events_ingest_url: str = Field(
         default="http://orchestrator:8081/events", env="EVENTS_INGEST_URL"
     )
-    events_auth_token: Optional[str] = Field(default=None, env="EVENTS_AUTH_TOKEN")
+    events_auth_token: str | None = Field(default=None, env="EVENTS_AUTH_TOKEN")
 
     class Config:
         env_file = ".env"

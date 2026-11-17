@@ -5,12 +5,11 @@ loader 会校验 OPENAPI_ALLOWED_DOMAINS，因此每个用例都先放开所有 
 """
 
 import os
-import pytest
-import yaml
 from unittest.mock import patch
 
+import pytest
+import yaml
 from llm_service.tools.openapi_tool import OpenAPILoader
-
 
 SPEC_PATH = os.path.join(
     os.path.dirname(__file__),

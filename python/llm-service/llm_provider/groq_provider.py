@@ -8,19 +8,21 @@ Groq provider 实现。
 与 OpenAI、xAI、Google 的 provider 模式保持一致。
 """
 
+import logging
 import os
 import time
-from typing import Dict, List, Any, AsyncIterator
-from tenacity import retry, stop_after_attempt, wait_exponential
-import logging
+from collections.abc import AsyncIterator
+from typing import Any
+
 from openai import AsyncOpenAI
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from .base import (
-    LLMProvider,
     CompletionRequest,
     CompletionResponse,
-    TokenUsage,
+    LLMProvider,
     TokenCounter,
+    TokenUsage,
 )
 
 
@@ -30,7 +32,7 @@ class GroqProvider(LLMProvider):
     Groq 高性能 LLM 推理的 provider。
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         self.logger = logging.getLogger(__name__)
         # Get API key from config or environment
         # 从 config 或环境变量获取 API key
@@ -62,14 +64,14 @@ class GroqProvider(LLMProvider):
         """
         self._load_models_from_config()
 
-    def count_tokens(self, messages: List[Dict[str, Any]], model: str) -> int:
+    def count_tokens(self, messages: list[dict[str, Any]], model: str) -> int:
         """Count tokens for messages using TokenCounter.
 
         使用 TokenCounter 统计消息的 token 数。
         """
         return TokenCounter.count_messages_tokens(messages, model)
 
-    def _sanitize_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _sanitize_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Flatten list content to text for Groq (no multimodal support).
 
         Degrades shannon_attachment blocks to text descriptions; extracts text
@@ -100,10 +102,10 @@ class GroqProvider(LLMProvider):
 
     def _build_params(
         self, request: CompletionRequest, model_config, *, stream: bool
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         # Prepare OpenAI-compatible request
         # 准备 OpenAI 兼容 request
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "model": model_config.model_id,
             "messages": self._sanitize_messages(request.messages),
             "temperature": request.temperature,

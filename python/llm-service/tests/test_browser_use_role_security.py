@@ -8,7 +8,7 @@ def test_browser_use_role_does_not_advertise_evaluate():
     """Verify 'evaluate' is not exposed via role preset or tool schema.
     验证 'evaluate' 未经由角色 preset 或 tool schema 暴露。
     """
-    from llm_service.tools.builtin.browser_use import BrowserTool, SAFE_ACTIONS
+    from llm_service.tools.builtin.browser_use import SAFE_ACTIONS
 
     preset = get_role_preset("browser_use")
     # Consolidated tool is in the allowlist

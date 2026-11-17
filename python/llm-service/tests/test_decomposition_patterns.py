@@ -1,6 +1,7 @@
 """Test the improved heuristic decomposition patterns."""
 
 import unittest.mock as mock
+
 from llm_service.grpc_gen.agent import agent_pb2
 
 

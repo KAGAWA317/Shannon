@@ -15,11 +15,10 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import httpx
 import yaml
-
 from llm_provider.base import compute_token_cost
 
 from ..base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolResult
@@ -45,10 +44,10 @@ _FALLBACK_INPUT_PER_1K = 0.0002   # $0.20 / 1M 注：每 100 万 input token 0.2
 _FALLBACK_OUTPUT_PER_1K = 0.0005  # $0.50 / 1M 注：每 100 万 output token 0.50 美元
 # $0.50 / 1M
 
-_XAI_PRICING_CACHE: Optional[Dict[str, Dict[str, float]]] = None
+_XAI_PRICING_CACHE: dict[str, dict[str, float]] | None = None
 
 
-def _load_xai_pricing() -> Dict[str, Dict[str, float]]:
+def _load_xai_pricing() -> dict[str, dict[str, float]]:
     """Load xAI model pricing from config/models.yaml. Cached after first call.
     从 config/models.yaml 加载 xAI 模型定价。首次调用后 cache。
 
@@ -69,10 +68,10 @@ def _load_xai_pricing() -> Dict[str, Dict[str, float]]:
         config_path = alt if os.path.exists(alt) else config_path
 
     try:
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             cfg = yaml.safe_load(f) or {}
         xai_models = (cfg.get("pricing") or {}).get("models", {}).get("xai") or {}
-        result: Dict[str, Dict[str, float]] = dict(xai_models)
+        result: dict[str, dict[str, float]] = dict(xai_models)
     except Exception as exc:  # noqa: BLE001
         logger.warning("x_search: failed to load pricing from %s (%s); using fallback", config_path, exc)
         result = {}
@@ -80,7 +79,7 @@ def _load_xai_pricing() -> Dict[str, Dict[str, float]]:
     return result
 
 
-_XAI_BASE_URL_CACHE: Optional[str] = None
+_XAI_BASE_URL_CACHE: str | None = None
 
 
 def _resolve_xai_base_url() -> str:
@@ -136,7 +135,7 @@ def _reload_caches() -> None:
     _XAI_BASE_URL_CACHE = None
 
 
-def _get_token_prices(model: str) -> Tuple[float, float]:
+def _get_token_prices(model: str) -> tuple[float, float]:
     """Return (input_per_1k, output_per_1k) for an xAI model, with safe fallback.
     返回 xAI 模型的 (input_per_1k, output_per_1k)，并带安全回退。"""
     pricing = _load_xai_pricing()
@@ -177,7 +176,7 @@ class XSearchTool(Tool):
             cost_per_use=0.0,
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter(
                 name="query",
@@ -229,7 +228,7 @@ class XSearchTool(Tool):
         ]
 
     async def _execute_impl(
-        self, session_context: Optional[Dict] = None, **kwargs: Any
+        self, session_context: dict | None = None, **kwargs: Any
     ) -> ToolResult:
         query: str = kwargs.get("query", "").strip()
         if not query:
@@ -251,7 +250,7 @@ class XSearchTool(Tool):
 
         # Build x_search tool parameters
         # 构建 x_search tool 参数
-        x_search_params: Dict[str, Any] = {}
+        x_search_params: dict[str, Any] = {}
 
         allowed = kwargs.get("allowed_handles", "")
         excluded = kwargs.get("excluded_handles", "")
@@ -288,7 +287,7 @@ class XSearchTool(Tool):
 
         # Build Responses API payload
         # 构建 Responses API payload
-        tool_def: Dict[str, Any] = {"type": "x_search"}
+        tool_def: dict[str, Any] = {"type": "x_search"}
         if x_search_params:
             tool_def.update(x_search_params)
 
@@ -310,7 +309,7 @@ class XSearchTool(Tool):
                 "engagement metrics, and citation link."
             )
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": model,
             "tools": [tool_def],
             "input": prompt,
@@ -411,10 +410,10 @@ class XSearchTool(Tool):
         )
 
     @staticmethod
-    def _extract_text(data: Dict[str, Any]) -> str:
+    def _extract_text(data: dict[str, Any]) -> str:
         """Extract text content from Responses API output.
         从 Responses API 输出中提取文本内容。"""
-        parts: List[str] = []
+        parts: list[str] = []
         output = data.get("output") or []
         if not isinstance(output, list):
             return str(output)
@@ -440,10 +439,10 @@ class XSearchTool(Tool):
         return "\n\n".join(parts)
 
     @staticmethod
-    def _extract_citations(data: Dict[str, Any]) -> List[str]:
+    def _extract_citations(data: dict[str, Any]) -> list[str]:
         """Extract citation URLs from Responses API output annotations.
         从 Responses API 输出的 annotations 中提取引用 URL。"""
-        urls: List[str] = []
+        urls: list[str] = []
         seen: set = set()
         output = data.get("output") or []
         if not isinstance(output, list):

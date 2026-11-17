@@ -8,11 +8,10 @@ and idempotent behavior.
 """
 
 import os
-import pytest
-from pathlib import Path
 from unittest.mock import patch
 
-from llm_service.tools.builtin.file_ops import FileDeleteTool, _get_session_workspace
+import pytest
+from llm_service.tools.builtin.file_ops import FileDeleteTool
 
 
 @pytest.fixture

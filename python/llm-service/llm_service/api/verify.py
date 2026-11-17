@@ -3,12 +3,13 @@
 对照 citations 交叉核对 synthesis 的 claim 验证 API。
 """
 
-import logging
 import json
+import logging
 import math
 import re
 from collections import Counter
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any
+
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 from pydantic.config import ConfigDict
@@ -32,8 +33,8 @@ class Citation(BaseModel):
     url: str = ""
     title: str = ""
     source: str = ""
-    content: Optional[str] = None
-    snippet: Optional[str] = None
+    content: str | None = None
+    snippet: str | None = None
     credibility_score: float = 0.5
     quality_score: float = 0.5
 
@@ -44,8 +45,8 @@ class ClaimVerification(BaseModel):
     单个 claim 的验证结果。
     """
     claim: str
-    supporting_citations: List[int] = Field(default_factory=list)
-    conflicting_citations: List[int] = Field(default_factory=list)
+    supporting_citations: list[int] = Field(default_factory=list)
+    conflicting_citations: list[int] = Field(default_factory=list)
     confidence: float = 0.0
 
 
@@ -69,9 +70,9 @@ class VerificationResult(BaseModel):
     overall_confidence: float
     total_claims: int
     supported_claims: int
-    unsupported_claims: List[str] = Field(default_factory=list)
-    conflicts: List[ConflictReport] = Field(default_factory=list)
-    claim_details: List[ClaimVerification] = Field(default_factory=list)
+    unsupported_claims: list[str] = Field(default_factory=list)
+    conflicts: list[ConflictReport] = Field(default_factory=list)
+    claim_details: list[ClaimVerification] = Field(default_factory=list)
 
 
 # ============================================================================
@@ -86,10 +87,10 @@ class ClaimVerificationV2(BaseModel):
     """
     claim: str
     verdict: str = "insufficient_evidence"  # "supported" | "unsupported" | "insufficient_evidence" 注：枚举取值 supported / unsupported / insufficient_evidence
-    supporting_citations: List[int] = Field(default_factory=list)
-    conflicting_citations: List[int] = Field(default_factory=list)
+    supporting_citations: list[int] = Field(default_factory=list)
+    conflicting_citations: list[int] = Field(default_factory=list)
     confidence: float = 0.0
-    retrieval_scores: Dict[int, float] = Field(default_factory=dict)  # citation_id → relevance 注：citation_id → 相关性
+    retrieval_scores: dict[int, float] = Field(default_factory=dict)  # citation_id → relevance 注：citation_id → 相关性
     reasoning: str = ""
 
 
@@ -109,14 +110,14 @@ class VerificationResultV2(BaseModel):
 
     # Lists for each category
     # 各类别的列表
-    supported_claim_texts: List[str] = Field(default_factory=list)
-    unsupported_claim_texts: List[str] = Field(default_factory=list)
-    insufficient_claim_texts: List[str] = Field(default_factory=list)
+    supported_claim_texts: list[str] = Field(default_factory=list)
+    unsupported_claim_texts: list[str] = Field(default_factory=list)
+    insufficient_claim_texts: list[str] = Field(default_factory=list)
 
     # Details
     # 明细
-    claim_details: List[ClaimVerificationV2] = Field(default_factory=list)
-    conflicts: List[ConflictReport] = Field(default_factory=list)
+    claim_details: list[ClaimVerificationV2] = Field(default_factory=list)
+    conflicts: list[ConflictReport] = Field(default_factory=list)
 
     # Quality metrics
     # 质量 metrics
@@ -164,7 +165,7 @@ def detect_language(text: str) -> str:
     return "en"
 
 
-def tokenize(text: str) -> List[str]:
+def tokenize(text: str) -> list[str]:
     """
     Tokenize text supporting both CJK (character-level) and Latin (word-level).
 
@@ -203,12 +204,12 @@ class CorpusStats:
     P1-5：用于 IDF 计算的语料统计。
     """
     def __init__(self):
-        self.doc_freq: Dict[str, int] = {}  # term → number of documents containing it 注：term → 包含该 term 的 document 数
+        self.doc_freq: dict[str, int] = {}  # term → number of documents containing it 注：term → 包含该 term 的 document 数
         self.total_docs: int = 0
         self.avg_doc_len: float = 200.0
 
     @classmethod
-    def from_citations(cls, citations: List["Citation"]) -> "CorpusStats":
+    def from_citations(cls, citations: list["Citation"]) -> "CorpusStats":
         """Compute corpus statistics from a list of citations.
 
         从 citation 列表计算语料统计。
@@ -240,12 +241,12 @@ class CorpusStats:
 
 
 def bm25_score(
-    query_tokens: List[str],
-    doc_tokens: List[str],
+    query_tokens: list[str],
+    doc_tokens: list[str],
     k1: float = 1.5,
     b: float = 0.75,
     avg_doc_len: float = 200.0,
-    corpus_stats: Optional[CorpusStats] = None
+    corpus_stats: CorpusStats | None = None
 ) -> float:
     """
     Compute BM25 score between query and document.
@@ -317,10 +318,10 @@ def bm25_score(
 
 def retrieve_relevant_citations(
     claim: str,
-    citations: List[Citation],
+    citations: list[Citation],
     top_k: int = 5,
-    corpus_stats: Optional[CorpusStats] = None
-) -> List[Tuple[int, Citation, float]]:
+    corpus_stats: CorpusStats | None = None
+) -> list[tuple[int, Citation, float]]:
     """
     Retrieve top-k most relevant citations for a claim using BM25 scoring.
 
@@ -360,7 +361,7 @@ def retrieve_relevant_citations(
 
     # Score each citation
     # 为每个 citation 打分
-    scored: List[Tuple[int, Citation, float]] = []
+    scored: list[tuple[int, Citation, float]] = []
     for idx, c in enumerate(citations):
         # Combine title + content/snippet for matching
         # 合并 title + content/snippet 用于匹配
@@ -422,11 +423,11 @@ def _extract_cited_numbers(text: str, max_citations: int, limit: int = 50) -> se
 
 
 def _build_relevant_citations(
-    citations: List["Citation"],
+    citations: list["Citation"],
     cited_numbers: set,
     min_count: int = 10,
     max_count: int = 25
-) -> List[Tuple[int, "Citation"]]:
+) -> list[tuple[int, "Citation"]]:
     """
     Build a list of relevant citations preserving original indices.
 
@@ -472,7 +473,7 @@ def _build_relevant_citations(
 
 async def verify_claims(
     answer: str,
-    citations: List[Dict[str, Any]],
+    citations: list[dict[str, Any]],
     llm_client: Any
 ) -> VerificationResult:
     """
@@ -495,7 +496,7 @@ async def verify_claims(
 
     # Parse citations (be tolerant of partial/mismatched fields)
     # 解析 citations（容忍字段缺失/不匹配）
-    citation_objs: List[Citation] = []
+    citation_objs: list[Citation] = []
     for idx, raw in enumerate(citations or []):
         try:
             citation_objs.append(Citation(**(raw or {})))
@@ -563,7 +564,7 @@ async def verify_claims(
     )
 
 
-async def _extract_claims(answer: str, providers: Any) -> List[str]:
+async def _extract_claims(answer: str, providers: Any) -> list[str]:
     """Extract factual claims from synthesis using LLM.
 
     使用 LLM 从 synthesis 中提取事实性 claims。
@@ -661,7 +662,7 @@ Output format:
 
 async def _verify_single_claim(
     claim: str,
-    indexed_citations: List[Tuple[int, Citation]],
+    indexed_citations: list[tuple[int, Citation]],
     providers: Any
 ) -> ClaimVerification:
     """
@@ -811,9 +812,9 @@ IMPORTANT:
 
 
 def _detect_conflicts(
-    verifications: List[ClaimVerification],
-    citations: List[Citation]
-) -> List[ConflictReport]:
+    verifications: list[ClaimVerification],
+    citations: list[Citation]
+) -> list[ConflictReport]:
     """Detect conflicting information across sources.
 
     检测 sources 之间冲突的信息。
@@ -846,9 +847,9 @@ def _detect_conflicts(
 
 async def _verify_single_claim_v2(
     claim: str,
-    all_citations: List[Citation],
+    all_citations: list[Citation],
     providers: Any,
-    corpus_stats: Optional[CorpusStats] = None
+    corpus_stats: CorpusStats | None = None
 ) -> ClaimVerificationV2:
     """
     Verify a single claim with evidence retrieval + three-category output.
@@ -1047,7 +1048,7 @@ Output JSON only.
 
 async def verify_claims_v2(
     answer: str,
-    citations: List[Dict[str, Any]],
+    citations: list[dict[str, Any]],
     llm_client: Any
 ) -> VerificationResultV2:
     """
@@ -1070,7 +1071,7 @@ async def verify_claims_v2(
 
     # Parse citations
     # 解析 citations
-    citation_objs: List[Citation] = []
+    citation_objs: list[Citation] = []
     for idx, raw in enumerate(citations or []):
         try:
             citation_objs.append(Citation(**(raw or {})))
@@ -1101,7 +1102,7 @@ async def verify_claims_v2(
 
     # Verify each claim with V2 logic
     # 用 V2 逻辑验证每个 claim
-    verifications: List[ClaimVerificationV2] = []
+    verifications: list[ClaimVerificationV2] = []
     for claim in claims:
         v = await _verify_single_claim_v2(claim, citation_objs, llm_client, corpus_stats=corpus_stats)
         verifications.append(v)
@@ -1183,7 +1184,7 @@ async def verify_claims_v2(
 class VerifyClaimsRequest(BaseModel):
     """Request body for claim verification endpoint."""
     answer: str
-    citations: List[Dict[str, Any]]
+    citations: list[dict[str, Any]]
     use_v2: bool = True  # Default to V2 注：默认使用 V2
 
 
@@ -1285,8 +1286,8 @@ class CitationWithIDInput(BaseModel):
     id: int  # Sequential ID (1, 2, 3...) 注：顺序 ID（1, 2, 3...）
     url: str = ""
     title: str = ""
-    content: Optional[str] = None
-    snippet: Optional[str] = None
+    content: str | None = None
+    snippet: str | None = None
     credibility_score: float = 0.5
     quality_score: float = 0.5  # P0-C: Added for ranking 注：P0-C：为排序而新增
 
@@ -1295,7 +1296,7 @@ class ClaimMapping(BaseModel):
     """Mapping of a claim to its supporting citations."""
     claim: str
     verdict: str = "insufficient_evidence"  # "supported" | "unsupported" | "insufficient_evidence" 注：枚举取值 supported / unsupported / insufficient_evidence
-    supporting_ids: List[int] = Field(default_factory=list)  # Citation IDs that support this claim 注：支持该 claim 的 citation ID
+    supporting_ids: list[int] = Field(default_factory=list)  # Citation IDs that support this claim 注：支持该 claim 的 citation ID
     confidence: float = 0.0
     reasoning: str = ""
 
@@ -1303,12 +1304,12 @@ class ClaimMapping(BaseModel):
 class VerifyBatchRequest(BaseModel):
     """Request body for batch verification endpoint."""
     answer: str  # Synthesis text containing claims 注：包含 claims 的 synthesis 文本
-    citations: List[CitationWithIDInput]  # Citations with IDs from Go 注：来自 Go 的带 ID citations
+    citations: list[CitationWithIDInput]  # Citations with IDs from Go 注：来自 Go 的带 ID citations
 
 
 class VerifyBatchResponse(BaseModel):
     """Response from batch verification."""
-    claims: List[ClaimMapping] = Field(default_factory=list)
+    claims: list[ClaimMapping] = Field(default_factory=list)
     total_claims: int = 0
     supported_count: int = 0
     unsupported_count: int = 0
@@ -1352,10 +1353,10 @@ def _get_adaptive_topk(total_sources: int, total_claims: int) -> int:
 
 
 def _batch_bm25_scores(
-    claims: List[str],
-    citations: List[CitationWithIDInput],
+    claims: list[str],
+    citations: list[CitationWithIDInput],
     top_k: int = 5
-) -> Dict[str, List[Tuple[int, float]]]:
+) -> dict[str, list[tuple[int, float]]]:
     """
     Pre-compute BM25 scores for all (claim, citation) pairs.
 
@@ -1376,14 +1377,14 @@ def _batch_bm25_scores(
     # Build corpus stats from citations
     # 从 citations 构建 corpus stats
     stats = CorpusStats.from_citations(citations)
-    citation_tokens_map: Dict[int, List[str]] = {
+    citation_tokens_map: dict[int, list[str]] = {
         c.id: tokenize(f"{c.title or ''} {c.content or c.snippet or ''}")
         for c in citations
     }
 
     # Score each (claim, citation) pair
     # 为每个 (claim, citation) 对打分
-    result: Dict[str, List[Tuple[int, float]]] = {}
+    result: dict[str, list[tuple[int, float]]] = {}
 
     for claim in claims:
         claim_tokens = tokenize(claim)
@@ -1391,7 +1392,7 @@ def _batch_bm25_scores(
             result[claim] = []
             continue
 
-        scores: List[Tuple[int, float]] = []
+        scores: list[tuple[int, float]] = []
         for c in citations:
             doc_tokens = citation_tokens_map.get(c.id, [])
             if not doc_tokens:
@@ -1426,11 +1427,11 @@ def _batch_bm25_scores(
 
 
 async def _batch_verify_all_claims(
-    claims: List[str],
-    citations: List[CitationWithIDInput],
-    bm25_scores: Dict[str, List[Tuple[int, float]]],
+    claims: list[str],
+    citations: list[CitationWithIDInput],
+    bm25_scores: dict[str, list[tuple[int, float]]],
     providers: Any
-) -> List[ClaimMapping]:
+) -> list[ClaimMapping]:
     """
     Batch verify all claims in a single LLM call.
 
@@ -1581,7 +1582,7 @@ Output only the JSON array, nothing else.
 
         # Build result mappings
         # 构建结果映射
-        mappings: List[ClaimMapping] = []
+        mappings: list[ClaimMapping] = []
         parsed_by_index = {item.get("claim_index", i+1): item for i, item in enumerate(parsed)}
 
         valid_ids = {c.id for c in citations}

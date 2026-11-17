@@ -1,13 +1,15 @@
-from typing import Dict, List, Optional, Any
 import logging
 from enum import Enum
+from typing import Any
 
-from llm_provider.manager import get_llm_manager, LLMManager
 from llm_provider.base import (
-    ModelTier,
     CompletionResponse,
+    ModelTier,
+)
+from llm_provider.base import (
     TokenUsage as CoreTokenUsage,
 )
+from llm_provider.manager import LLMManager, get_llm_manager
 
 from .base import ModelInfo
 
@@ -28,7 +30,7 @@ class ProviderType(Enum):
     MINIMAX = "minimax"
 
 
-_PROVIDER_NAME_MAP: Dict[str, ProviderType] = {
+_PROVIDER_NAME_MAP: dict[str, ProviderType] = {
     "openai": ProviderType.OPENAI,
     "anthropic": ProviderType.ANTHROPIC,
     "google": ProviderType.GOOGLE,
@@ -50,13 +52,13 @@ class _ProviderAdapter:
     """
 
     def __init__(
-        self, provider_type: ProviderType, provider: Any, models: List[ModelInfo]
+        self, provider_type: ProviderType, provider: Any, models: list[ModelInfo]
     ):
         self._provider_type = provider_type
         self._provider = provider
         self._models = models
 
-    def list_models(self) -> List[ModelInfo]:
+    def list_models(self) -> list[ModelInfo]:
         return list(self._models)
 
     def __getattr__(self, item: str) -> Any:
@@ -72,14 +74,14 @@ class ProviderManager:
     def __init__(self, settings):
         self.settings = settings
         self._manager: LLMManager = get_llm_manager()
-        self.providers: Dict[ProviderType, _ProviderAdapter] = {}
-        self.model_registry: Dict[str, ModelInfo] = {}
-        self.tier_models: Dict[ModelTier, List[str]] = {
+        self.providers: dict[ProviderType, _ProviderAdapter] = {}
+        self.model_registry: dict[str, ModelInfo] = {}
+        self.tier_models: dict[ModelTier, list[str]] = {
             ModelTier.SMALL: [],
             ModelTier.MEDIUM: [],
             ModelTier.LARGE: [],
         }
-        self.session_tokens: Dict[str, int] = {}
+        self.session_tokens: dict[str, int] = {}
         self.max_tokens_per_session = 100000
         self._emitter = None
 
@@ -114,9 +116,9 @@ class ProviderManager:
                 )
 
     def _collect_models(
-        self, provider_type: Optional[ProviderType], provider: Any
-    ) -> List[ModelInfo]:
-        models: List[ModelInfo] = []
+        self, provider_type: ProviderType | None, provider: Any
+    ) -> list[ModelInfo]:
+        models: list[ModelInfo] = []
 
         for alias, config in provider.models.items():
             info = self._build_model_info(provider_type, alias, config)
@@ -133,7 +135,7 @@ class ProviderManager:
 
     @staticmethod
     def _build_model_info(
-        provider_type: Optional[ProviderType], alias: str, config: Any
+        provider_type: ProviderType | None, alias: str, config: Any
     ) -> ModelInfo:
         # config.tier is already ModelTier from llm_provider.base (same enum now)
         # config.tier 已是 llm_provider.base 的 ModelTier（现在共用同一 enum）
@@ -169,7 +171,7 @@ class ProviderManager:
 
     def select_model(
         self, tier: ModelTier = None, specific_model: str = None
-    ) -> Optional[str]:
+    ) -> str | None:
         if specific_model and specific_model in self.model_registry:
             return specific_model
 
@@ -194,10 +196,10 @@ class ProviderManager:
 
     async def generate_completion(
         self,
-        messages: List[dict],
+        messages: list[dict],
         tier: ModelTier = None,
         specific_model: str = None,
-        provider_override: Optional[str] = None,
+        provider_override: str | None = None,
         **kwargs,
     ) -> dict:
         params = dict(kwargs)
@@ -218,7 +220,7 @@ class ProviderManager:
         # ModelTier 现已统一 —— 无需转换
         tier = tier or ModelTier.SMALL
 
-        manager_kwargs: Dict[str, Any] = {}
+        manager_kwargs: dict[str, Any] = {}
 
         # Recognized request fields passed through to CompletionRequest
         # 透传给 CompletionRequest 的已识别 request 字段
@@ -272,7 +274,7 @@ class ProviderManager:
             # that expect functions. Each tool is {"type":"function","function":{...}}
             # 将 OpenAI tools schema 归一化为旧式 functions schema，供期望 functions 的
             # provider 使用。每个 tool 形如 {"type":"function","function":{...}}
-            functions: List[Dict[str, Any]] = []
+            functions: list[dict[str, Any]] = []
             try:
                 for t in tools:
                     if isinstance(t, dict) and t.get("type") == "function" and isinstance(t.get("function"), dict):
@@ -325,10 +327,10 @@ class ProviderManager:
 
     async def stream_completion(
         self,
-        messages: List[dict],
+        messages: list[dict],
         tier: ModelTier = None,
         specific_model: str = None,
-        provider_override: Optional[str] = None,
+        provider_override: str | None = None,
         **kwargs,
     ):
         params = dict(kwargs)
@@ -337,7 +339,7 @@ class ProviderManager:
         # ModelTier 现已统一，无需转换
         tier = tier or ModelTier.SMALL
 
-        manager_kwargs: Dict[str, Any] = {}
+        manager_kwargs: dict[str, Any] = {}
 
         passthrough_fields = {
             "temperature",
@@ -381,7 +383,7 @@ class ProviderManager:
 
         tools = params.pop("tools", None)
         if tools:
-            functions: List[Dict[str, Any]] = []
+            functions: list[dict[str, Any]] = []
             try:
                 for t in tools:
                     if isinstance(t, dict) and t.get("type") == "function" and isinstance(t.get("function"), dict):
@@ -406,7 +408,7 @@ class ProviderManager:
             if chunk:
                 yield chunk
 
-    def _serialize_completion(self, response: CompletionResponse) -> Dict[str, Any]:
+    def _serialize_completion(self, response: CompletionResponse) -> dict[str, Any]:
         usage = self._serialize_usage(response.usage)
 
         # Normalize provider to a non-null string to avoid None → null propagation
@@ -452,7 +454,7 @@ class ProviderManager:
         return result
 
     @staticmethod
-    def _serialize_usage(usage: Optional[CoreTokenUsage]) -> Dict[str, Any]:
+    def _serialize_usage(usage: CoreTokenUsage | None) -> dict[str, Any]:
         if not usage:
             return {}
         return {
@@ -510,9 +512,9 @@ class ProviderManager:
     def _emit_events(
         self,
         workflow_id: str,
-        agent_id: Optional[str],
-        messages: List[dict],
-        response: Dict[str, Any],
+        agent_id: str | None,
+        messages: list[dict],
+        response: dict[str, Any],
     ) -> None:
         try:
             last_user = next(
@@ -584,7 +586,7 @@ class ProviderManager:
         except Exception:
             logger.debug("Failed to emit LLM_OUTPUT", exc_info=True)
 
-    async def generate_embedding(self, text: str, model: str = None) -> List[float]:
+    async def generate_embedding(self, text: str, model: str = None) -> list[float]:
         return await self._manager.generate_embedding(text, model)
 
     def is_configured(self) -> bool:
@@ -595,10 +597,10 @@ class ProviderManager:
             return next(iter(self.providers.values()))
         return None
 
-    def get_model_info(self, model_id: str) -> Optional[ModelInfo]:
+    def get_model_info(self, model_id: str) -> ModelInfo | None:
         return self.model_registry.get(model_id)
 
-    def list_available_models(self, tier: ModelTier = None) -> List[ModelInfo]:
+    def list_available_models(self, tier: ModelTier = None) -> list[ModelInfo]:
         if tier:
             ids = self.tier_models.get(tier, [])
             return [self.model_registry[mid] for mid in ids]

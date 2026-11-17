@@ -7,12 +7,12 @@ using the urls=[] parameter instead of making multiple single-URL calls.
 验证批量模式：用 urls=[] 参数并行抓取多个 URL，而不是发起多次单 URL 调用。
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 import asyncio
+from unittest.mock import MagicMock, patch
 
+import pytest
+from llm_service.tools.base import ToolParameterType, ToolResult
 from llm_service.tools.builtin.web_fetch import WebFetchTool
-from llm_service.tools.base import ToolResult, ToolParameterType
 
 
 class TestWebFetchParameterValidation:

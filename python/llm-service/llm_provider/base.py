@@ -7,17 +7,18 @@ LLM Provider 抽象基类层
 为多个 LLM provider 提供统一接口，支持 token 管理、cache 与 model tier 分层。
 """
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Any, Union, AsyncIterator
-from enum import Enum
 import asyncio
 import hashlib
 import json
 import re
 import time
 import uuid
+from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any, Union
 
 
 class ModelTier(Enum):
@@ -151,52 +152,52 @@ class CompletionRequest:
     统一的 completion request 格式。
     """
 
-    messages: List[Dict[str, Any]]
+    messages: list[dict[str, Any]]
     model_tier: ModelTier = ModelTier.SMALL
-    model: Optional[str] = None
+    model: str | None = None
     temperature: float = 0.7
-    max_tokens: Optional[int] = None
-    top_p: Optional[float] = None  # None means API default; explicit 1.0 if needed 注：None 表示使用 API 默认值；需要时显式设为 1.0
+    max_tokens: int | None = None
+    top_p: float | None = None  # None means API default; explicit 1.0 if needed 注：None 表示使用 API 默认值；需要时显式设为 1.0
     frequency_penalty: float = 0.0
     presence_penalty: float = 0.0
-    stop: Optional[List[str]] = None
-    functions: Optional[List[Dict]] = None
-    function_call: Optional[Union[str, Dict]] = None
+    stop: list[str] | None = None
+    functions: list[dict] | None = None
+    function_call: Union[str, dict] | None = None
     stream: bool = False
-    user: Optional[str] = None
-    seed: Optional[int] = None
-    response_format: Optional[Dict] = None
+    user: str | None = None
+    seed: int | None = None
+    response_format: dict | None = None
 
     # Shannon-specific parameters
     # Shannon 特有参数
-    session_id: Optional[str] = None
-    task_id: Optional[str] = None
-    agent_id: Optional[str] = None
-    cache_key: Optional[str] = None
+    session_id: str | None = None
+    task_id: str | None = None
+    agent_id: str | None = None
+    cache_key: str | None = None
     cache_ttl: int = 3600  # 1 hour default 注：默认 1 小时
-    max_tokens_budget: Optional[int] = None
-    complexity_score: Optional[float] = (
+    max_tokens_budget: int | None = None
+    complexity_score: float | None = (
         None  # Optional signal for dynamic API selection 注：可选信号，用于动态选择 API
     )
     # Provider override (e.g., "openai", "anthropic"). Optional.
     # provider 覆盖（如 "openai"、"anthropic"）。可选。
-    provider_override: Optional[str] = None
+    provider_override: str | None = None
     # OpenAI Responses API: chain from previous response for cache reuse
     # OpenAI Responses API：基于上一个 response 串联，以复用 cache
-    previous_response_id: Optional[str] = None
+    previous_response_id: str | None = None
     # Anthropic structured outputs: output_config for constrained JSON decoding
     # Anthropic 结构化输出：output_config 用于受限 JSON 解码
-    output_config: Optional[Dict] = None
+    output_config: dict | None = None
     # Anthropic extended thinking config (e.g. {"type": "enabled", "budget_tokens": 5000})
     # Anthropic 扩展思考配置（例如 {"type": "enabled", "budget_tokens": 5000}）
-    thinking: Optional[Dict] = None
+    thinking: dict | None = None
     # OpenAI reasoning effort for o-models (minimal/low/medium/high)
     # OpenAI o 系列模型的推理强度（minimal/low/medium/high）
-    reasoning_effort: Optional[str] = None
+    reasoning_effort: str | None = None
     # Prompt-cache observability label — distinguishes call sites (e.g.
     # "agent_loop", "decompose", "tool_select", "synthesis"). Unset → "unknown".
     # Prompt cache 观测标签 —— 区分不同调用点（如 "agent_loop"、"decompose"、"tool_select"、"synthesis"）。未设置时为 "unknown"。
-    cache_source: Optional[str] = None
+    cache_source: str | None = None
 
     def generate_cache_key(self) -> str:
         """Generate a cache key for this request
@@ -238,8 +239,8 @@ class CompletionResponse:
     provider: str
     usage: TokenUsage
     finish_reason: str
-    function_call: Optional[Dict] = None
-    tool_calls: Optional[List[Dict]] = None
+    function_call: dict | None = None
+    tool_calls: list[dict] | None = None
 
     # Verbatim ordered copy of the assistant message's content blocks. Each
     # entry is the raw dict shape Anthropic returned (or an Anthropic-shape
@@ -258,16 +259,16 @@ class CompletionResponse:
     # assistant 消息 content blocks 的逐字有序副本。每项为 Anthropic 返回的原始 dict 形状（或等价的 Anthropic 形状），保持原始 block 顺序。
     # 这是 Anthropic 契约的要求：thinking block 必须在 assistant 轨迹（assistant → tool_result → 下一条 assistant）中原样保留。交错思考可能在相邻 tool_use block 之间产生 thinking block，因此调用方不得重排或切分。
     # `content`、`function_call`、`tool_calls` 仍会填充，以兼容早于该线上字段的客户端。
-    content_blocks: Optional[List[Dict[str, Any]]] = None
+    content_blocks: list[dict[str, Any]] | None = None
 
     # Metadata
     # metadata
     # 元数据
-    request_id: Optional[str] = None  # Also used as response_id for OpenAI Responses API chaining 注：同时用作 OpenAI Responses API 串联的 response_id
+    request_id: str | None = None  # Also used as response_id for OpenAI Responses API chaining 注：同时用作 OpenAI Responses API 串联的 response_id
     created_at: datetime = None
-    latency_ms: Optional[int] = None
+    latency_ms: int | None = None
     cached: bool = False
-    effective_max_completion: Optional[int] = None  # Actual max completion after provider headroom clamp 注：按 provider 预留空间裁剪后的实际最大 completion
+    effective_max_completion: int | None = None  # Actual max completion after provider headroom clamp 注：按 provider 预留空间裁剪后的实际最大 completion
 
     def __post_init__(self):
         if self.created_at is None:
@@ -280,9 +281,9 @@ class LLMProvider(ABC):
     LLM provider 的抽象基类。
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         self.config = config
-        self.models: Dict[str, ModelConfig] = {}
+        self.models: dict[str, ModelConfig] = {}
         self._initialize_models()
 
     @abstractmethod
@@ -301,12 +302,12 @@ class LLMProvider(ABC):
         pass
 
     @abstractmethod
-    def count_tokens(self, messages: List[Dict[str, Any]], model: str) -> int:
+    def count_tokens(self, messages: list[dict[str, Any]], model: str) -> int:
         """Count tokens for the given messages"""
         pass
 
     def select_model_for_tier(
-        self, tier: ModelTier, max_tokens: Optional[int] = None
+        self, tier: ModelTier, max_tokens: int | None = None
     ) -> ModelConfig:
         """Select the best model for the given tier and constraints
 
@@ -391,7 +392,7 @@ class LLMProvider(ABC):
             self.models[alias] = self._make_model_config(provider_name, alias, meta)
 
     def _make_model_config(
-        self, provider_name: str, alias: str, meta: Dict[str, Any]
+        self, provider_name: str, alias: str, meta: dict[str, Any]
     ) -> ModelConfig:
         """Create a ModelConfig object from raw metadata.
 
@@ -491,9 +492,9 @@ class LLMProviderRegistry:
     """
 
     def __init__(self):
-        self.providers: Dict[str, LLMProvider] = {}
+        self.providers: dict[str, LLMProvider] = {}
         self.default_provider = None
-        self.tier_routing: Dict[ModelTier, List[str]] = {
+        self.tier_routing: dict[ModelTier, list[str]] = {
             ModelTier.SMALL: [],
             ModelTier.MEDIUM: [],
             ModelTier.LARGE: [],
@@ -558,12 +559,12 @@ class CacheManager:
     """
 
     def __init__(self, max_size: int = 1000):
-        self.cache: Dict[str, tuple[CompletionResponse, datetime]] = {}
+        self.cache: dict[str, tuple[CompletionResponse, datetime]] = {}
         self.max_size = max_size
         self.hits = 0
         self.misses = 0
 
-    def get(self, key: str) -> Optional[CompletionResponse]:
+    def get(self, key: str) -> CompletionResponse | None:
         """Get a cached response"""
         if key in self.cache:
             response, expiry = self.cache[key]
@@ -720,7 +721,6 @@ def sanitize_completion_messages(messages: list) -> list:
 
     cleaned = []
     for msg in messages:
-        role = msg.get("role", "")
         content = msg.get("content")
 
         # Skip messages with tool-call placeholder text
@@ -1068,7 +1068,7 @@ class TokenCounter:
     """
 
     @staticmethod
-    def count_messages_tokens(messages: List[Dict[str, Any]], model: str) -> int:
+    def count_messages_tokens(messages: list[dict[str, Any]], model: str) -> int:
         """
         Estimate token count for messages.
         This is a simplified version - real implementation would use
@@ -1112,7 +1112,7 @@ class TokenCounter:
         return base_tokens + message_overhead
 
     @staticmethod
-    def count_functions_tokens(functions: List[Dict]) -> int:
+    def count_functions_tokens(functions: list[dict]) -> int:
         """Estimate token count for function definitions"""
         if not functions:
             return 0

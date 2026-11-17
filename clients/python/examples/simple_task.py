@@ -4,7 +4,6 @@
 """
 
 import os
-import time
 
 from shannon import ShannonClient, TaskStatusEnum
 
@@ -23,7 +22,7 @@ handle = client.submit_task(
     session_id="example-session",
 )
 
-print(f"✓ Task submitted!")
+print("✓ Task submitted!")
 print(f"  Task ID: {handle.task_id}")
 print(f"  Workflow ID: {handle.workflow_id}")
 print()

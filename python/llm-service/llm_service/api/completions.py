@@ -1,14 +1,14 @@
 import json
 import logging
+from typing import Any
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
-from typing import Any, List, Optional, Dict
-
-from ..providers.base import ModelTier
 from llm_provider.base import extract_text_from_content, sanitize_completion_messages
-from ..metrics import metrics, TimedOperation
+from pydantic import BaseModel, Field
+
+from ..metrics import TimedOperation, metrics
+from ..providers.base import ModelTier
 
 logger = logging.getLogger(__name__)
 
@@ -16,22 +16,22 @@ router = APIRouter()
 
 
 class CompletionRequest(BaseModel):
-    messages: List[Dict[str, Any]]
-    model_tier: Optional[str] = Field(
+    messages: list[dict[str, Any]]
+    model_tier: str | None = Field(
         default="small", description="Model tier: small, medium, large"
     )
-    specific_model: Optional[str] = Field(
+    specific_model: str | None = Field(
         default=None, description="Specific model to use"
     )
-    temperature: Optional[float] = Field(default=0.7, ge=0.0, le=2.0)
-    max_tokens: Optional[int] = Field(default=8192, ge=1, le=32000)
-    tools: Optional[List[dict]] = None
-    cache_key: Optional[str] = None
-    stream: Optional[bool] = Field(default=False, description="Enable SSE streaming")
-    thinking: Optional[Dict[str, Any]] = Field(default=None, description="Anthropic extended thinking config")
-    reasoning_effort: Optional[str] = Field(default=None, description="OpenAI reasoning effort (minimal/low/medium/high)")
-    session_id: Optional[str] = Field(default=None, description="Session id; enables cross-turn rolling cache_control marker preservation")
-    cache_source: Optional[str] = Field(default=None, description="Call-site origin for prompt-cache TTL routing (e.g. tui, shanclaw, oneshot_cli)")
+    temperature: float | None = Field(default=0.7, ge=0.0, le=2.0)
+    max_tokens: int | None = Field(default=8192, ge=1, le=32000)
+    tools: list[dict] | None = None
+    cache_key: str | None = None
+    stream: bool | None = Field(default=False, description="Enable SSE streaming")
+    thinking: dict[str, Any] | None = Field(default=None, description="Anthropic extended thinking config")
+    reasoning_effort: str | None = Field(default=None, description="OpenAI reasoning effort (minimal/low/medium/high)")
+    session_id: str | None = Field(default=None, description="Session id; enables cross-turn rolling cache_control marker preservation")
+    cache_source: str | None = Field(default=None, description="Call-site origin for prompt-cache TTL routing (e.g. tui, shanclaw, oneshot_cli)")
 
 
 @router.post("/")

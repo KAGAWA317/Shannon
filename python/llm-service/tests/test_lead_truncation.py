@@ -12,12 +12,11 @@ mailbox 消息可被接收并格式化。
 import inspect
 import re
 
+import llm_service.api.lead as lead_module
 from llm_service.api.lead import (
     LeadDecisionRequest,
     LeadEvent,
-    LeadBudget,
 )
-import llm_service.api.lead as lead_module
 
 
 class TestTruncationLimitsInSource:

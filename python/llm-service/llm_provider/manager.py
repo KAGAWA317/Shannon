@@ -6,16 +6,17 @@ Orchestrates multiple providers with caching, routing, and token management
 编排多个 provider，负责 caching、routing 与 token 管理
 """
 
+import asyncio
+import json
+import logging
 import os
 import random
-import asyncio
 import time
-import json
-import yaml
 from dataclasses import replace
-from typing import Dict, List, Any, Optional
 from datetime import datetime
-import logging
+from typing import Any
+
+import yaml
 
 # Optional instrumentation (prometheus)
 # 可选埋点（prometheus）
@@ -77,15 +78,16 @@ except Exception:
     _REDIS_AVAILABLE = False
 
 from .base import (
-    LLMProvider,
-    LLMProviderRegistry,
+    CacheManager,
     CompletionRequest,
     CompletionResponse,
+    LLMProvider,
+    LLMProviderRegistry,
     ModelTier,
-    CacheManager,
     RateLimiter,
     TokenUsage,
 )
+
 # Provider implementations (optional at import time to ease testing without deps)
 # provider 实现（导入时可选，便于在缺少依赖时测试）
 try:
@@ -139,19 +141,19 @@ class LLMManager:
     - 用量跟踪与报表
     """
 
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: str | None = None):
         self.logger = logging.getLogger(__name__)
         self.registry = LLMProviderRegistry()
         self.cache = CacheManager(max_size=1000)
-        self.rate_limiters: Dict[str, RateLimiter] = {}
-        self._pricing_overrides: Optional[Dict[str, Any]] = None
-        self._config_path: Optional[str] = None
-        self._cache_cfg: Dict[str, Any] = {
+        self.rate_limiters: dict[str, RateLimiter] = {}
+        self._pricing_overrides: dict[str, Any] | None = None
+        self._config_path: str | None = None
+        self._cache_cfg: dict[str, Any] = {
             "enabled": True,
             "default_ttl": 3600,
             "max_size": 1000,
         }
-        self._resilience_cfg: Dict[str, Any] = {
+        self._resilience_cfg: dict[str, Any] = {
             "circuit_breakers": {
                 "enabled": False,
                 "failure_threshold": 5,
@@ -159,12 +161,12 @@ class LLMManager:
             },
             "hedged_requests": {"enabled": False, "delay_ms": 500},
         }
-        self._breakers: Dict[str, "_CircuitBreaker"] = {}
+        self._breakers: dict[str, _CircuitBreaker] = {}
 
         # Token budget tracking
         # token budget 跟踪
-        self.session_usage: Dict[str, TokenUsage] = {}
-        self.task_usage: Dict[str, TokenUsage] = {}
+        self.session_usage: dict[str, TokenUsage] = {}
+        self.task_usage: dict[str, TokenUsage] = {}
 
         # Load configuration
         # 加载配置
@@ -199,7 +201,7 @@ class LLMManager:
         从 YAML 文件加载配置。同时支持统一格式与旧格式。
         """
         self._config_path = config_path
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config = yaml.safe_load(f) or {}
 
         if "model_catalog" in config or "model_tiers" in config:
@@ -312,7 +314,7 @@ class LLMManager:
         self._configure_routing(config["routing"])
         self._configure_caching(config["caching"])
 
-    def _initialize_providers(self, providers_config: Dict):
+    def _initialize_providers(self, providers_config: dict):
         """Initialize all configured providers
 
         初始化所有已配置的 provider。
@@ -413,8 +415,8 @@ class LLMManager:
                 self.logger.error(f"Failed to initialize provider {name}: {e}")
 
     def _translate_unified_config(
-        self, cfg: Dict[str, Any]
-    ) -> tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+        self, cfg: dict[str, Any]
+    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         """Translate unified config (model_catalog/model_tiers/selection_strategy) to internal structures.
 
         将统一配置（model_catalog/model_tiers/selection_strategy）转换为内部结构。
@@ -447,14 +449,14 @@ class LLMManager:
             # 配置中还有其他项但此处尚未实现：meta/bedrock
         }
 
-        providers_cfg: Dict[str, Any] = {}
+        providers_cfg: dict[str, Any] = {}
         for prov_name, models in model_catalog.items():
             if prov_name not in type_map:
                 # Skip providers without a concrete implementation in this service
                 # 跳过本服务中没有具体实现的 provider
                 continue
             ptype, env_key = type_map[prov_name]
-            p_cfg: Dict[str, Any] = {"type": ptype, "models": {}}
+            p_cfg: dict[str, Any] = {"type": ptype, "models": {}}
 
             # API key from env if present
             # 若环境变量中存在 API key 则使用
@@ -513,7 +515,7 @@ class LLMManager:
 
         # Build routing preferences from model_tiers (ordered by priority)
         # 依据 model_tiers 构建 routing 偏好（按优先级排序）
-        tier_prefs: Dict[str, List[str]] = {}
+        tier_prefs: dict[str, list[str]] = {}
         for tier_name, tier_cfg in model_tiers.items():
             items = tier_cfg.get("providers", []) or []
             # Sort by 'priority' (lower is higher priority); if absent, keep order
@@ -552,7 +554,7 @@ class LLMManager:
 
         return providers_cfg, routing_cfg, caching_cfg
 
-    def _configure_routing(self, routing_config: Dict):
+    def _configure_routing(self, routing_config: dict):
         """Configure routing preferences
 
         配置 routing 偏好。
@@ -560,7 +562,7 @@ class LLMManager:
         self.routing_config = routing_config
         self.tier_preferences = routing_config.get("tier_preferences", {})
 
-    def _configure_caching(self, caching_config: Dict):
+    def _configure_caching(self, caching_config: dict):
         """Configure caching settings
 
         配置 caching 设置。
@@ -608,7 +610,7 @@ class LLMManager:
         config_path = os.getenv("MODELS_CONFIG_PATH", "/app/config/models.yaml")
         if not os.path.exists(config_path):
             return
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             cfg = yaml.safe_load(f) or {}
         pricing = cfg.get("pricing") or {}
         models = pricing.get("models") or {}
@@ -641,7 +643,7 @@ class LLMManager:
 
     async def complete(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         model_tier: ModelTier = ModelTier.SMALL,
         **kwargs,
     ) -> CompletionResponse:
@@ -814,7 +816,7 @@ class LLMManager:
 
     async def stream_complete(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         model_tier: ModelTier = ModelTier.SMALL,
         **kwargs,
     ):
@@ -982,7 +984,7 @@ class LLMManager:
 
     def _get_fallback_provider(
         self, failed_provider: str, tier: ModelTier
-    ) -> Optional[tuple[str, LLMProvider]]:
+    ) -> tuple[str, LLMProvider] | None:
         """Get a fallback provider if the primary fails
 
         主 provider 失败时获取一个 fallback provider。
@@ -1258,8 +1260,8 @@ class LLMManager:
             self.task_usage[request.task_id] += response.usage
 
     def get_usage_report(
-        self, session_id: Optional[str] = None, task_id: Optional[str] = None
-    ) -> Dict[str, Any]:
+        self, session_id: str | None = None, task_id: str | None = None
+    ) -> dict[str, Any]:
         """Get usage report for a session or task
 
         获取 session 或 task 的用量报表。
@@ -1294,7 +1296,7 @@ class LLMManager:
 
         return report
 
-    def get_provider_status(self) -> Dict[str, Any]:
+    def get_provider_status(self) -> dict[str, Any]:
         """Get status of all registered providers
 
         获取所有已注册 provider 的状态。
@@ -1348,8 +1350,8 @@ class LLMManager:
             self.logger.error(f"Reload failed: {e}")
 
     async def generate_embedding(
-        self, text: str, model: Optional[str] = None
-    ) -> List[float]:
+        self, text: str, model: str | None = None
+    ) -> list[float]:
         """Generate embeddings via the first capable provider (prefers OpenAI).
 
         通过第一个具备能力的 provider 生成 embedding（优先 OpenAI）。
@@ -1374,10 +1376,10 @@ class LLMManager:
 
 # Singleton instance
 # 单例实例
-_manager_instance: Optional[LLMManager] = None
+_manager_instance: LLMManager | None = None
 
 
-def get_llm_manager(config_path: Optional[str] = None) -> LLMManager:
+def get_llm_manager(config_path: str | None = None) -> LLMManager:
     """Get or create the singleton LLM manager instance
 
     获取或创建单例 LLM manager 实例。
@@ -1403,7 +1405,7 @@ class _RedisCacheManager:
         # 上方已做懒加载保护
         self._r = redis.Redis.from_url(url, decode_responses=True)
 
-    def get(self, key: str) -> Optional[CompletionResponse]:
+    def get(self, key: str) -> CompletionResponse | None:
         raw = self._r.get(self._mk(key))
         if not raw:
             return None
@@ -1434,7 +1436,7 @@ class _RedisCacheManager:
         return 0.0
 
 
-def _serialize_response(resp: CompletionResponse) -> Dict[str, Any]:
+def _serialize_response(resp: CompletionResponse) -> dict[str, Any]:
     data = {
         "content": resp.content,
         "model": resp.model,
@@ -1470,7 +1472,7 @@ def _serialize_response(resp: CompletionResponse) -> Dict[str, Any]:
     return data
 
 
-def _deserialize_response(data: Dict[str, Any]) -> CompletionResponse:
+def _deserialize_response(data: dict[str, Any]) -> CompletionResponse:
     usage = TokenUsage(
         input_tokens=int(data.get("usage", {}).get("input_tokens", 0)),
         output_tokens=int(data.get("usage", {}).get("output_tokens", 0)),

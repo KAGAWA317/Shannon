@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import os
 import time
-from typing import Any, Awaitable, Callable, Dict, Optional
+from collections.abc import Awaitable, Callable
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
@@ -43,7 +44,7 @@ class _SimpleBreaker:
             self.half_open = False
 
 
-_breakers: Dict[str, _SimpleBreaker] = {}
+_breakers: dict[str, _SimpleBreaker] = {}
 
 
 class HttpStatelessClient:
@@ -72,8 +73,8 @@ class HttpStatelessClient:
         self,
         name: str,
         url: str,
-        headers: Optional[Dict[str, str]] = None,
-        timeout: Optional[float] = None,
+        headers: dict[str, str] | None = None,
+        timeout: float | None = None,
     ) -> None:
         self.name = name
         self.url = url

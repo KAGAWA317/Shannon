@@ -5,11 +5,11 @@ Supports OpenAPI 3.0 and 3.1 with MVP feature set.
 支持 OpenAPI 3.0 与 3.1，具备 MVP 功能集。
 """
 
-from typing import Any, Dict, List, Optional
-import re
 import copy
 import ipaddress
+import re
 import socket
+from typing import Any
 
 
 class OpenAPIParseError(Exception):
@@ -79,7 +79,7 @@ def _is_private_ip(hostname: str) -> bool:
         return False
 
 
-def resolve_ref(spec: Dict[str, Any], ref_path: str) -> Any:
+def resolve_ref(spec: dict[str, Any], ref_path: str) -> Any:
     """
     Resolve a $ref pointer in the OpenAPI spec.
     解析 OpenAPI 规范中的 $ref 指针。
@@ -118,7 +118,7 @@ def resolve_ref(spec: Dict[str, Any], ref_path: str) -> Any:
 
 
 def resolve_refs_in_schema(
-    schema: Any, spec: Dict[str, Any], visited: Optional[set] = None
+    schema: Any, spec: dict[str, Any], visited: set | None = None
 ) -> Any:
     """
     Recursively resolve all $ref references in a schema.
@@ -204,7 +204,7 @@ def resolve_refs_in_schema(
     return result
 
 
-def validate_spec(spec: Dict[str, Any]) -> None:
+def validate_spec(spec: dict[str, Any]) -> None:
     """
     Validate minimal required fields for OpenAPI 3.x spec.
     校验 OpenAPI 3.x 规范的最小必需字段。
@@ -239,9 +239,9 @@ def validate_spec(spec: Dict[str, Any]) -> None:
 
 
 def extract_base_url(
-    spec: Dict[str, Any],
-    override_base_url: Optional[str] = None,
-    spec_url: Optional[str] = None,
+    spec: dict[str, Any],
+    override_base_url: str | None = None,
+    spec_url: str | None = None,
 ) -> str:
     """
     Extract base URL from OpenAPI spec.
@@ -343,10 +343,10 @@ def extract_base_url(
 
 
 def extract_operations(
-    spec: Dict[str, Any],
-    operations_filter: Optional[List[str]] = None,
-    tags_filter: Optional[List[str]] = None,
-) -> List[Dict[str, Any]]:
+    spec: dict[str, Any],
+    operations_filter: list[str] | None = None,
+    tags_filter: list[str] | None = None,
+) -> list[dict[str, Any]]:
     """
     Extract operations from OpenAPI spec.
     从 OpenAPI 规范中提取操作。
@@ -422,7 +422,7 @@ def extract_operations(
 
 
 def map_openapi_type_to_tool_type(
-    openapi_type: str, openapi_format: Optional[str] = None
+    openapi_type: str, openapi_format: str | None = None
 ) -> str:
     """
     Map OpenAPI primitive types to Shannon ToolParameterType.
@@ -449,8 +449,8 @@ def map_openapi_type_to_tool_type(
 
 
 def extract_parameters(
-    operation: Dict[str, Any], spec: Dict[str, Any]
-) -> List[Dict[str, Any]]:
+    operation: dict[str, Any], spec: dict[str, Any]
+) -> list[dict[str, Any]]:
     """
     Extract path and query parameters from operation.
     MVP: Only support primitive types (string, integer, number, boolean).
@@ -539,8 +539,8 @@ def extract_parameters(
 
 
 def extract_request_body(
-    operation: Dict[str, Any], spec: Dict[str, Any]
-) -> Optional[List[Dict[str, Any]]]:
+    operation: dict[str, Any], spec: dict[str, Any]
+) -> list[dict[str, Any]] | None:
     """
     Extract request body parameter from operation.
     MVP: Only support application/json content type.
@@ -587,7 +587,7 @@ def extract_request_body(
     }]
 
 
-def deduplicate_operation_ids(operations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def deduplicate_operation_ids(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Deduplicate operation IDs by appending numeric suffixes.
     通过追加数字后缀去重 operation ID。

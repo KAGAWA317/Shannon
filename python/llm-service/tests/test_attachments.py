@@ -1,9 +1,11 @@
-import pytest
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
-from llm_service.attachments import AttachmentResolver
-from llm_service.api.agent import _resolve_attachments
+from unittest.mock import AsyncMock, patch
+
+import pytest
 from llm_provider.base import translate_content_for_openai
+from llm_service.api.agent import _resolve_attachments
+from llm_service.attachments import AttachmentResolver
+
 
 @pytest.fixture
 def mock_redis():
@@ -356,7 +358,6 @@ class TestXAIAttachmentDegradation:
         """
         # Manually test the sanitization logic from _sanitize_messages
         # 手动测试 _sanitize_messages 中的清洗逻辑
-        from llm_provider.xai_provider import XAIProvider
         # Create a minimal instance for testing _sanitize_messages
         # 构造一个最小实例来测试 _sanitize_messages
         # We can't instantiate without API key, so test the logic directly

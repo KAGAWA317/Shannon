@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class EventType(str, Enum):
@@ -77,10 +77,10 @@ class Event:
     workflow_id: str
     message: str
     timestamp: datetime
-    agent_id: Optional[str] = None
+    agent_id: str | None = None
     seq: int = 0
-    stream_id: Optional[str] = None
-    _raw_payload: Optional[bytes] = None
+    stream_id: str | None = None
+    _raw_payload: bytes | None = None
 
     @property
     def id(self) -> str:
@@ -88,7 +88,7 @@ class Event:
         return self.stream_id if self.stream_id else str(self.seq)
 
     @property
-    def payload(self) -> Optional[Dict[str, Any]]:
+    def payload(self) -> dict[str, Any] | None:
         """Parse structured payload from message or raw data."""
         if self._raw_payload:
             try:
@@ -111,35 +111,35 @@ class TaskHandle:
 
     task_id: str
     workflow_id: str
-    run_id: Optional[str] = None
-    session_id: Optional[str] = None
+    run_id: str | None = None
+    session_id: str | None = None
 
     def __post_init__(self):
         """Store reference to client for convenience methods."""
-        self._client: Optional[Any] = None
+        self._client: Any | None = None
 
     def _set_client(self, client: Any) -> None:
         """Internal: set client reference for convenience methods."""
         self._client = client
 
-    def wait(self, timeout: Optional[float] = None) -> TaskStatus:
+    def wait(self, timeout: float | None = None) -> TaskStatus:
         """Wait for task completion (blocking)."""
         if not self._client:
             raise RuntimeError("TaskHandle not associated with a client")
         return self._client.wait(self.task_id, timeout=timeout)
 
-    def result(self, timeout: Optional[float] = None) -> Optional[str]:
+    def result(self, timeout: float | None = None) -> str | None:
         """Get task result (blocking)."""
         status = self.wait(timeout=timeout)
         return status.result
 
-    def stream(self, types: Optional[List[str]] = None):
+    def stream(self, types: list[str] | None = None):
         """Stream events from this task."""
         if not self._client:
             raise RuntimeError("TaskHandle not associated with a client")
         return self._client.stream(self.workflow_id, types=types)
 
-    def cancel(self, reason: Optional[str] = None) -> bool:
+    def cancel(self, reason: str | None = None) -> bool:
         """Cancel this task."""
         if not self._client:
             raise RuntimeError("TaskHandle not associated with a client")
@@ -165,8 +165,8 @@ class AgentTaskStatus:
     task_id: str
     status: str
     progress: float = 0.0
-    result: Optional[str] = None
-    error_message: Optional[str] = None
+    result: str | None = None
+    error_message: str | None = None
 
 
 @dataclass
@@ -178,7 +178,7 @@ class AgentInfo:
     description: str
     category: str
     tool: str
-    input_schema: Dict[str, Any] = field(default_factory=dict)
+    input_schema: dict[str, Any] = field(default_factory=dict)
     cost_per_call: float = 0.0
 
 
@@ -190,35 +190,35 @@ class AgentExecution:
     workflow_id: str
     agent_id: str
     status: str
-    created_at: Optional[datetime] = None
-    session_id: Optional[str] = None
+    created_at: datetime | None = None
+    session_id: str | None = None
 
     def __post_init__(self):
         """Store reference to client for convenience methods."""
-        self._client: Optional[Any] = None
+        self._client: Any | None = None
 
     def _set_client(self, client: Any) -> None:
         """Internal: set client reference for convenience methods."""
         self._client = client
 
-    def wait(self, timeout: Optional[float] = None) -> TaskStatus:
+    def wait(self, timeout: float | None = None) -> TaskStatus:
         """Wait for task completion (blocking)."""
         if not self._client:
             raise RuntimeError("AgentExecution not associated with a client")
         return self._client.wait(self.task_id, timeout=timeout)
 
-    def result(self, timeout: Optional[float] = None) -> Optional[str]:
+    def result(self, timeout: float | None = None) -> str | None:
         """Get task result (blocking)."""
         status = self.wait(timeout=timeout)
         return status.result
 
-    def stream(self, types: Optional[List[str]] = None):
+    def stream(self, types: list[str] | None = None):
         """Stream workflow events for the agent execution."""
         if not self._client:
             raise RuntimeError("AgentExecution not associated with a client")
         return self._client.stream(self.workflow_id, types=types)
 
-    def cancel(self, reason: Optional[str] = None) -> bool:
+    def cancel(self, reason: str | None = None) -> bool:
         """Cancel the underlying task."""
         if not self._client:
             raise RuntimeError("AgentExecution not associated with a client")
@@ -231,24 +231,24 @@ class TaskStatus:
 
     task_id: str
     status: TaskStatusEnum
-    workflow_id: Optional[str] = None
+    workflow_id: str | None = None
     progress: float = 0.0
-    result: Optional[str] = None
-    error_message: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    query: Optional[str] = None
-    session_id: Optional[str] = None
-    mode: Optional[str] = None
-    context: Optional[Dict[str, Any]] = None
-    model_used: Optional[str] = None
-    provider: Optional[str] = None
-    usage: Optional[Dict[str, Any]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    result: str | None = None
+    error_message: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    query: str | None = None
+    session_id: str | None = None
+    mode: str | None = None
+    context: dict[str, Any] | None = None
+    model_used: str | None = None
+    provider: str | None = None
+    usage: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
     # Deprecated: use 'usage' instead
     # 已弃用：请改用 'usage'
-    metrics: Optional[ExecutionMetrics] = None
-    agent_statuses: List[AgentTaskStatus] = field(default_factory=list)
+    metrics: ExecutionMetrics | None = None
+    agent_statuses: list[AgentTaskStatus] = field(default_factory=list)
 
 
 @dataclass
@@ -257,11 +257,11 @@ class ControlState:
 
     is_paused: bool
     is_cancelled: bool
-    paused_at: Optional[datetime] = None
-    pause_reason: Optional[str] = None
-    paused_by: Optional[str] = None
-    cancel_reason: Optional[str] = None
-    cancelled_by: Optional[str] = None
+    paused_at: datetime | None = None
+    pause_reason: str | None = None
+    paused_by: str | None = None
+    cancel_reason: str | None = None
+    cancelled_by: str | None = None
 
 
 @dataclass
@@ -270,10 +270,10 @@ class PendingApproval:
 
     approval_id: str
     workflow_id: str
-    run_id: Optional[str]
+    run_id: str | None
     message: str
     requested_at: datetime
-    context: Optional[Dict[str, Any]] = None
+    context: dict[str, Any] | None = None
 
 
 @dataclass
@@ -282,7 +282,7 @@ class ConversationMessage:
 
     role: str  # "user", "assistant", "system" 注："user"、"assistant"、"system"
     content: str
-    timestamp: Optional[datetime] = None
+    timestamp: datetime | None = None
     tokens_used: int = 0
 
 
@@ -294,19 +294,19 @@ class Session:
     user_id: str
     created_at: datetime
     updated_at: datetime
-    title: Optional[str] = None
-    history: List[ConversationMessage] = field(default_factory=list)
-    persistent_context: Dict[str, Any] = field(default_factory=dict)
-    context: Optional[Dict[str, Any]] = None
-    files_created: List[str] = field(default_factory=list)
-    tools_used: List[str] = field(default_factory=list)
+    title: str | None = None
+    history: list[ConversationMessage] = field(default_factory=list)
+    persistent_context: dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] | None = None
+    files_created: list[str] = field(default_factory=list)
+    tools_used: list[str] = field(default_factory=list)
     total_tokens_used: int = 0
     total_cost_usd: float = 0.0
-    token_budget: Optional[int] = None
+    token_budget: int | None = None
     task_count: int = 0
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
     is_research_session: bool = False
-    research_strategy: Optional[str] = None
+    research_strategy: str | None = None
     max_history: int = 50
     ttl_seconds: int = 3600
 
@@ -319,13 +319,13 @@ class SessionSummary:
     user_id: str
     created_at: datetime
     updated_at: datetime
-    title: Optional[str] = None
+    title: str | None = None
     message_count: int = 0
     total_tokens_used: int = 0
-    token_budget: Optional[int] = None
-    expires_at: Optional[datetime] = None
-    context: Optional[Dict[str, Any]] = None
-    last_activity_at: Optional[datetime] = None
+    token_budget: int | None = None
+    expires_at: datetime | None = None
+    context: dict[str, Any] | None = None
+    last_activity_at: datetime | None = None
     is_active: bool = False
     successful_tasks: int = 0
     failed_tasks: int = 0
@@ -333,12 +333,12 @@ class SessionSummary:
     total_cost_usd: float = 0.0
     average_cost_per_task: float = 0.0
     budget_utilization: float = 0.0
-    budget_remaining: Optional[int] = None
+    budget_remaining: int | None = None
     is_near_budget_limit: bool = False
-    latest_task_query: Optional[str] = None
-    latest_task_status: Optional[str] = None
+    latest_task_query: str | None = None
+    latest_task_status: str | None = None
     is_research_session: bool = False
-    first_task_mode: Optional[str] = None
+    first_task_mode: str | None = None
 
 
 @dataclass
@@ -360,8 +360,8 @@ class TaskSummary:
     status: str
     mode: str
     created_at: datetime
-    completed_at: Optional[datetime] = None
-    total_token_usage: Optional[TokenUsage] = None
+    completed_at: datetime | None = None
+    total_token_usage: TokenUsage | None = None
 
 
 @dataclass
@@ -370,10 +370,10 @@ class SessionHistoryItem:
 
     task_id: str
     query: str
-    result: Optional[str]
+    result: str | None
     status: str
     created_at: datetime
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
     tokens_used: int = 0
 
 
@@ -384,10 +384,10 @@ class SessionEventTurn:
     turn: int
     task_id: str
     user_query: str
-    final_output: Optional[str]
+    final_output: str | None
     timestamp: datetime
-    events: List[Event]
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    events: list[Event]
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -405,8 +405,8 @@ class DownloadedFile:
     """Downloaded workspace or memory file content."""
 
     content: str
-    content_type: Optional[str] = None
-    size_bytes: Optional[int] = None
+    content_type: str | None = None
+    size_bytes: int | None = None
 
 
 @dataclass
@@ -414,7 +414,7 @@ class SwarmMessageResult:
     """Result from sending a message to a running swarm workflow."""
 
     success: bool
-    status: Optional[str] = None
+    status: str | None = None
 
 
 @dataclass
@@ -423,15 +423,15 @@ class OpenAIChatMessage:
 
     role: str
     content: Any
-    name: Optional[str] = None
+    name: str | None = None
 
 
 @dataclass
 class OpenAIChatDelta:
     """Incremental delta payload from the OpenAI-compatible streaming API."""
 
-    role: Optional[str] = None
-    content: Optional[str] = None
+    role: str | None = None
+    content: str | None = None
 
 
 @dataclass
@@ -448,10 +448,10 @@ class OpenAIShannonEvent:
     """Shannon-specific event extension embedded in chat completion streams."""
 
     type: str
-    agent_id: Optional[str] = None
-    message: Optional[str] = None
-    timestamp: Optional[int] = None
-    payload: Dict[str, Any] = field(default_factory=dict)
+    agent_id: str | None = None
+    message: str | None = None
+    timestamp: int | None = None
+    payload: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -459,21 +459,21 @@ class OpenAIChatChoice:
     """Choice entry returned by OpenAI-compatible chat completions."""
 
     index: int
-    message: Optional[OpenAIChatMessage] = None
-    delta: Optional[OpenAIChatDelta] = None
-    finish_reason: Optional[str] = None
+    message: OpenAIChatMessage | None = None
+    delta: OpenAIChatDelta | None = None
+    finish_reason: str | None = None
 
 
 @dataclass
 class OpenAIShannonOptions:
     """Shannon-specific extensions accepted by the OpenAI-compatible API."""
 
-    context: Dict[str, Any] = field(default_factory=dict)
-    agent: Optional[str] = None
-    agent_input: Dict[str, Any] = field(default_factory=dict)
-    role: Optional[str] = None
-    research_strategy: Optional[str] = None
-    model_tier: Optional[str] = None
+    context: dict[str, Any] = field(default_factory=dict)
+    agent: str | None = None
+    agent_input: dict[str, Any] = field(default_factory=dict)
+    role: str | None = None
+    research_strategy: str | None = None
+    model_tier: str | None = None
 
 
 @dataclass
@@ -484,11 +484,11 @@ class OpenAIChatCompletion:
     object: str
     created: int
     model: str
-    choices: List[OpenAIChatChoice] = field(default_factory=list)
-    usage: Optional[OpenAIUsage] = None
-    system_fingerprint: Optional[str] = None
-    session_id: Optional[str] = None
-    shannon_session_id: Optional[str] = None
+    choices: list[OpenAIChatChoice] = field(default_factory=list)
+    usage: OpenAIUsage | None = None
+    system_fingerprint: str | None = None
+    session_id: str | None = None
+    shannon_session_id: str | None = None
 
 
 @dataclass
@@ -499,12 +499,12 @@ class OpenAIChatCompletionChunk:
     object: str
     created: int
     model: str
-    choices: List[OpenAIChatChoice] = field(default_factory=list)
-    usage: Optional[OpenAIUsage] = None
-    system_fingerprint: Optional[str] = None
-    shannon_events: List[OpenAIShannonEvent] = field(default_factory=list)
-    session_id: Optional[str] = None
-    shannon_session_id: Optional[str] = None
+    choices: list[OpenAIChatChoice] = field(default_factory=list)
+    usage: OpenAIUsage | None = None
+    system_fingerprint: str | None = None
+    shannon_events: list[OpenAIShannonEvent] = field(default_factory=list)
+    session_id: str | None = None
+    shannon_session_id: str | None = None
 
 
 @dataclass
@@ -515,7 +515,7 @@ class OpenAIModel:
     object: str = "model"
     created: int = 0
     owned_by: str = "shannon"
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class ScheduleStatus(str, Enum):
@@ -538,18 +538,18 @@ class Schedule:
     status: str
     created_at: datetime
     updated_at: datetime
-    description: Optional[str] = None
-    timezone: Optional[str] = None
-    task_context: Optional[Dict[str, str]] = None
-    max_budget_per_run_usd: Optional[float] = None
-    timeout_seconds: Optional[int] = None
-    next_run_at: Optional[datetime] = None
-    last_run_at: Optional[datetime] = None
+    description: str | None = None
+    timezone: str | None = None
+    task_context: dict[str, str] | None = None
+    max_budget_per_run_usd: float | None = None
+    timeout_seconds: int | None = None
+    next_run_at: datetime | None = None
+    last_run_at: datetime | None = None
     total_runs: int = 0
     successful_runs: int = 0
     failed_runs: int = 0
-    paused_at: Optional[datetime] = None
-    pause_reason: Optional[str] = None
+    paused_at: datetime | None = None
+    pause_reason: str | None = None
 
 
 @dataclass
@@ -562,8 +562,8 @@ class ScheduleSummary:
     cron_expression: str
     task_query: str
     created_at: datetime
-    next_run_at: Optional[datetime] = None
-    last_run_at: Optional[datetime] = None
+    next_run_at: datetime | None = None
+    last_run_at: datetime | None = None
     total_runs: int = 0
     successful_runs: int = 0
     failed_runs: int = 0
@@ -577,15 +577,15 @@ class ScheduleRun:
     query: str
     status: str
     triggered_at: datetime
-    result: Optional[str] = None
-    error_message: Optional[str] = None
-    model_used: Optional[str] = None
-    provider: Optional[str] = None
+    result: str | None = None
+    error_message: str | None = None
+    model_used: str | None = None
+    provider: str | None = None
     total_tokens: int = 0
     total_cost_usd: float = 0.0
-    duration_ms: Optional[int] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    duration_ms: int | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 @dataclass
@@ -594,7 +594,7 @@ class ReviewRound:
 
     role: str  # "user", "assistant" 注："user"、"assistant"
     message: str
-    timestamp: Optional[datetime] = None
+    timestamp: datetime | None = None
 
 
 @dataclass
@@ -604,9 +604,9 @@ class ReviewState:
     status: str  # "reviewing", "approved" 注："reviewing"、"approved"
     round: int
     version: int
-    current_plan: Optional[str] = None
-    rounds: List[ReviewRound] = field(default_factory=list)
-    query: Optional[str] = None
+    current_plan: str | None = None
+    rounds: list[ReviewRound] = field(default_factory=list)
+    query: str | None = None
 
 
 @dataclass
@@ -615,7 +615,7 @@ class ToolSchema:
 
     name: str
     description: str
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    parameters: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -624,11 +624,11 @@ class ToolDetail:
 
     name: str
     description: str
-    parameters: Dict[str, Any] = field(default_factory=dict)
-    category: Optional[str] = None
-    version: Optional[str] = None
-    timeout_seconds: Optional[int] = None
-    cost_per_use: Optional[float] = None
+    parameters: dict[str, Any] = field(default_factory=dict)
+    category: str | None = None
+    version: str | None = None
+    timeout_seconds: int | None = None
+    cost_per_use: float | None = None
 
 
 @dataclass
@@ -645,11 +645,11 @@ class ToolExecutionResult:
 
     success: bool
     output: Any = None
-    text: Optional[str] = None
-    error: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    execution_time_ms: Optional[int] = None
-    usage: Optional[ToolUsage] = None
+    text: str | None = None
+    error: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    execution_time_ms: int | None = None
+    usage: ToolUsage | None = None
 
 
 @dataclass
@@ -660,7 +660,7 @@ class Skill:
     version: str
     category: str
     description: str
-    requires_tools: List[str] = field(default_factory=list)
+    requires_tools: list[str] = field(default_factory=list)
     dangerous: bool = False
     enabled: bool = True
 
@@ -673,14 +673,14 @@ class SkillDetail:
     version: str
     category: str
     description: str
-    author: Optional[str] = None
-    requires_tools: List[str] = field(default_factory=list)
-    requires_role: Optional[str] = None
-    budget_max: Optional[int] = None
+    author: str | None = None
+    requires_tools: list[str] = field(default_factory=list)
+    requires_role: str | None = None
+    budget_max: int | None = None
     dangerous: bool = False
     enabled: bool = True
-    content: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    content: str | None = None
+    metadata: dict[str, Any] | None = None
 
 
 @dataclass
@@ -691,6 +691,6 @@ class SkillVersion:
     version: str
     category: str
     description: str
-    requires_tools: List[str] = field(default_factory=list)
+    requires_tools: list[str] = field(default_factory=list)
     dangerous: bool = False
     enabled: bool = True

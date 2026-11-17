@@ -14,12 +14,12 @@ gRPC 调用全部 mock，不依赖真实 sandbox。
 """
 
 import asyncio
-import pytest
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
+import pytest
 from llm_service.tools.builtin.python_wasi_executor import (
-    PythonWasiExecutorTool,
     ExecutionSession,
+    PythonWasiExecutorTool,
 )
 
 

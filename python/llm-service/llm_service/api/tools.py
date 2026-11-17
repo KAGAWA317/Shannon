@@ -3,35 +3,36 @@ Tools API endpoints for Shannon platform
 Shannon 平台的 tools API endpoints
 """
 
-from fastapi import APIRouter, HTTPException, Request
-import os
-import yaml
-from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional
 import logging
+import os
+from typing import Any
+
+import yaml
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, Field
 
 from ..tools import get_registry
-from ..tools.mcp import create_mcp_tool_class
-from ..tools.text_formatter import format_tool_text
-from ..tools.openapi_tool import load_openapi_tools_from_config
 from ..tools.builtin import (
-    WebSearchTool,
-    WebFetchTool,
-    WebSubpageFetchTool,
-    WebCrawlTool,
-    CalculatorTool,
-    FileReadTool,
-    FileWriteTool,
-    FileListTool,
-    FileSearchTool,
-    FileEditTool,
-    FileDeleteTool,
     BashExecutorTool,
-    PythonWasiExecutorTool,
+    CalculatorTool,
     DiffFilesTool,
+    FileDeleteTool,
+    FileEditTool,
+    FileListTool,
+    FileReadTool,
+    FileSearchTool,
+    FileWriteTool,
     JsonQueryTool,
+    PythonWasiExecutorTool,
+    WebCrawlTool,
+    WebFetchTool,
+    WebSearchTool,
+    WebSubpageFetchTool,
     XSearchTool,
 )
+from ..tools.mcp import create_mcp_tool_class
+from ..tools.openapi_tool import load_openapi_tools_from_config
+from ..tools.text_formatter import format_tool_text
 
 # Browser automation tool (requires playwright service)
 # 浏览器自动化 tool（需要 playwright 服务）
@@ -46,7 +47,7 @@ router = APIRouter(prefix="/tools", tags=["tools"])
 
 # Simple in-memory TTL cache for tool selection
 # 用于 tool 选择的简单内存 TTL cache
-_SELECT_CACHE: Dict[str, Dict[str, Any]] = {}
+_SELECT_CACHE: dict[str, dict[str, Any]] = {}
 _SELECT_TTL_SECONDS = 300  # 5 minutes 注：5 分钟
 
 
@@ -57,8 +58,8 @@ class ToolExecuteRequest(BaseModel):
     """
 
     tool_name: str = Field(..., description="Name of the tool to execute")
-    parameters: Dict[str, Any] = Field(..., description="Tool parameters")
-    session_context: Optional[Dict[str, Any]] = Field(
+    parameters: dict[str, Any] = Field(..., description="Tool parameters")
+    session_context: dict[str, Any] | None = Field(
         default=None, description="Session context for parameter injection"
     )
 
@@ -79,10 +80,10 @@ class ToolExecuteResponse(BaseModel):
 
     success: bool
     output: Any
-    text: Optional[str] = None
-    error: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    execution_time_ms: Optional[int] = None
+    text: str | None = None
+    error: str | None = None
+    metadata: dict[str, Any] | None = None
+    execution_time_ms: int | None = None
 
 
 class ToolSchemaResponse(BaseModel):
@@ -93,7 +94,7 @@ class ToolSchemaResponse(BaseModel):
 
     name: str
     description: str
-    parameters: Dict[str, Any]
+    parameters: dict[str, Any]
 
 
 class ToolSelectRequest(BaseModel):
@@ -103,7 +104,7 @@ class ToolSelectRequest(BaseModel):
     """
 
     task: str = Field(..., description="Natural language task")
-    context: Optional[Dict[str, Any]] = Field(
+    context: dict[str, Any] | None = Field(
         default=None, description="Optional context map"
     )
     exclude_dangerous: bool = Field(default=True)
@@ -112,69 +113,69 @@ class ToolSelectRequest(BaseModel):
 
 class ToolCall(BaseModel):
     tool_name: str
-    parameters: Dict[str, Any] = Field(default_factory=dict)
+    parameters: dict[str, Any] = Field(default_factory=dict)
 
 
 class ToolSelectResponse(BaseModel):
-    selected_tools: List[str] = Field(default_factory=list)
-    calls: List[ToolCall] = Field(default_factory=list)
-    provider_used: Optional[str] = None
+    selected_tools: list[str] = Field(default_factory=list)
+    calls: list[ToolCall] = Field(default_factory=list)
+    provider_used: str | None = None
 
 
 class MCPParamDef(BaseModel):
     name: str
     type: str = Field(default="object")
-    description: Optional[str] = None
-    required: Optional[bool] = False
-    default: Optional[Any] = None
+    description: str | None = None
+    required: bool | None = False
+    default: Any | None = None
 
 
 class MCPRegisterRequest(BaseModel):
     name: str = Field(..., description="Name to register the tool as")
     url: str = Field(..., description="MCP HTTP endpoint URL")
     func_name: str = Field(..., description="Remote function name")
-    description: Optional[str] = Field(default="MCP remote function")
-    category: Optional[str] = Field(default="mcp")
-    headers: Optional[Dict[str, str]] = Field(default=None)
-    parameters: Optional[List[MCPParamDef]] = Field(default=None)
+    description: str | None = Field(default="MCP remote function")
+    category: str | None = Field(default="mcp")
+    headers: dict[str, str] | None = Field(default=None)
+    parameters: list[MCPParamDef] | None = Field(default=None)
 
 
 class MCPRegisterResponse(BaseModel):
     success: bool
     tool_name: str
-    message: Optional[str] = None
+    message: str | None = None
 
 
 class OpenAPIRegisterRequest(BaseModel):
     name: str = Field(..., description="Name to register the tool collection as")
-    spec_url: Optional[str] = Field(
+    spec_url: str | None = Field(
         default=None, description="URL to OpenAPI spec (JSON or YAML)"
     )
-    spec_inline: Optional[str] = Field(
+    spec_inline: str | None = Field(
         default=None, description="Inline OpenAPI spec (JSON or YAML)"
     )
     auth_type: str = Field(
         default="none", description="Auth type: none|api_key|bearer|basic"
     )
-    auth_config: Optional[Dict[str, str]] = Field(
+    auth_config: dict[str, str] | None = Field(
         default=None, description="Auth configuration"
     )
-    category: Optional[str] = Field(default="api", description="Tool category")
-    base_cost_per_use: Optional[float] = Field(
+    category: str | None = Field(default="api", description="Tool category")
+    base_cost_per_use: float | None = Field(
         default=0.001, description="Cost per operation"
     )
-    operations: Optional[List[str]] = Field(
+    operations: list[str] | None = Field(
         default=None, description="Filter to specific operationIds"
     )
-    tags: Optional[List[str]] = Field(default=None, description="Filter by tags")
-    base_url: Optional[str] = Field(
+    tags: list[str] | None = Field(default=None, description="Filter by tags")
+    base_url: str | None = Field(
         default=None, description="Override base URL from spec"
     )
-    rate_limit: Optional[int] = Field(default=30, description="Requests per minute")
-    timeout_seconds: Optional[float] = Field(
+    rate_limit: int | None = Field(default=30, description="Requests per minute")
+    timeout_seconds: float | None = Field(
         default=30.0, description="Request timeout in seconds"
     )
-    max_response_bytes: Optional[int] = Field(
+    max_response_bytes: int | None = Field(
         default=10 * 1024 * 1024, description="Maximum response size in bytes"
     )
 
@@ -182,26 +183,26 @@ class OpenAPIRegisterRequest(BaseModel):
 class OpenAPIRegisterResponse(BaseModel):
     success: bool
     collection_name: str
-    operations_registered: List[str] = Field(default_factory=list)
-    message: Optional[str] = None
+    operations_registered: list[str] = Field(default_factory=list)
+    message: str | None = None
     # Echo back selected config values for verification
     # 回显选中的 config 值以便校验
-    rate_limit: Optional[int] = None
-    timeout_seconds: Optional[float] = None
-    max_response_bytes: Optional[int] = None
+    rate_limit: int | None = None
+    timeout_seconds: float | None = None
+    max_response_bytes: int | None = None
 
 
 class OpenAPIValidateRequest(BaseModel):
-    spec_url: Optional[str] = Field(default=None, description="URL to OpenAPI spec")
-    spec_inline: Optional[str] = Field(default=None, description="Inline OpenAPI spec")
+    spec_url: str | None = Field(default=None, description="URL to OpenAPI spec")
+    spec_inline: str | None = Field(default=None, description="Inline OpenAPI spec")
 
 
 class OpenAPIValidateResponse(BaseModel):
     valid: bool
     operations_count: int
-    operations: List[Dict[str, str]] = Field(default_factory=list)
-    base_url: Optional[str] = None
-    errors: List[str] = Field(default_factory=list)
+    operations: list[dict[str, str]] = Field(default_factory=list)
+    base_url: str | None = None
+    errors: list[str] = Field(default_factory=list)
 
 
 def _resolve_shannon_config_path() -> str:
@@ -232,7 +233,7 @@ def _resolve_shannon_config_path() -> str:
     return "/app/config/shannon.yaml"
 
 
-def _sanitize_session_context(ctx: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def _sanitize_session_context(ctx: dict[str, Any] | None) -> dict[str, Any] | None:
     """Pass through only safe, expected keys to tools.
 
     仅向 tools 透传安全且预期内的 key。
@@ -269,7 +270,7 @@ def _load_mcp_tools_from_config():
         return
 
     try:
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config = yaml.safe_load(f)
 
         mcp_tools = config.get("mcp_tools", {})
@@ -327,7 +328,7 @@ def _load_openapi_tools_from_config():
         return
 
     try:
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config = yaml.safe_load(f)
 
         logger.info("Calling load_openapi_tools_from_config()...")
@@ -412,11 +413,11 @@ async def startup_event():
     logger.info(f"Tool registry initialized with {len(registry.list_tools())} tools")
 
 
-@router.get("/list", response_model=List[str])
+@router.get("/list", response_model=list[str])
 async def list_tools(
-    category: Optional[str] = None,
+    category: str | None = None,
     exclude_dangerous: bool = True,
-) -> List[str]:
+) -> list[str]:
     """
     List available tools
 
@@ -450,8 +451,8 @@ async def list_tools(
     return tools
 
 
-@router.get("/categories", response_model=List[str])
-async def list_categories() -> List[str]:
+@router.get("/categories", response_model=list[str])
+async def list_categories() -> list[str]:
     """List all tool categories
 
     列出所有 tool categories。
@@ -484,11 +485,11 @@ async def get_tool_schema(tool_name: str) -> ToolSchemaResponse:
     )
 
 
-@router.get("/schemas", response_model=List[ToolSchemaResponse])
+@router.get("/schemas", response_model=list[ToolSchemaResponse])
 async def get_all_schemas(
-    category: Optional[str] = None,
+    category: str | None = None,
     exclude_dangerous: bool = True,
-) -> List[ToolSchemaResponse]:
+) -> list[ToolSchemaResponse]:
     """
     Get schemas for all available tools
 
@@ -600,8 +601,8 @@ async def validate_openapi_spec(req: OpenAPIValidateRequest) -> OpenAPIValidateR
         Validation response with operations list and errors
         包含 operations 列表与 errors 的校验 response
     """
-    from ..tools.openapi_tool import _fetch_spec_from_url, OpenAPILoader
     from ..tools.openapi_parser import OpenAPIParseError
+    from ..tools.openapi_tool import OpenAPILoader, _fetch_spec_from_url
 
     try:
         # Get spec
@@ -687,8 +688,8 @@ async def register_openapi_tools(
         Registration response with list of registered operations
         包含已注册 operations 列表的注册 response
     """
-    from ..tools.openapi_tool import _fetch_spec_from_url, OpenAPILoader
     from ..tools.openapi_parser import OpenAPIParseError
+    from ..tools.openapi_tool import OpenAPILoader, _fetch_spec_from_url
 
     # Admin token gate (reuse MCP_REGISTER_TOKEN)
     # Admin token 校验（复用 MCP_REGISTER_TOKEN）
@@ -849,10 +850,10 @@ async def execute_tool(request: ToolExecuteRequest) -> ToolExecuteResponse:
         )
 
 
-@router.post("/batch-execute", response_model=List[ToolExecuteResponse])
+@router.post("/batch-execute", response_model=list[ToolExecuteResponse])
 async def batch_execute_tools(
-    requests: List[ToolExecuteRequest],
-) -> List[ToolExecuteResponse]:
+    requests: list[ToolExecuteRequest],
+) -> list[ToolExecuteResponse]:
     """
     Execute multiple tools in batch (sequentially for now)
 
@@ -883,7 +884,7 @@ async def batch_execute_tools(
 
 
 @router.get("/{tool_name}/metadata")
-async def get_tool_metadata(tool_name: str) -> Dict[str, Any]:
+async def get_tool_metadata(tool_name: str) -> dict[str, Any]:
     """
     Get detailed metadata for a tool
 
@@ -945,7 +946,7 @@ async def select_tools(req: Request, body: ToolSelectRequest) -> ToolSelectRespo
     # Gather available tools (respect danger filter)
     # 收集可用 tools（遵循 danger 过滤）
     tool_names = registry.list_tools()
-    filtered_tools: List[str] = []
+    filtered_tools: list[str] = []
     for name in tool_names:
         tool = registry.get_tool(name)
         if not tool:
@@ -1041,7 +1042,7 @@ async def select_tools(req: Request, body: ToolSelectRequest) -> ToolSelectRespo
                     s for s in data.get("selected_tools", []) if s in filtered_tools
                 ][: body.max_tools]
                 calls_in = data.get("calls", []) or []
-                calls: List[ToolCall] = []
+                calls: list[ToolCall] = []
                 for c in calls_in:
                     try:
                         name = str(c.get("tool_name"))

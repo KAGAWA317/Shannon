@@ -3,7 +3,7 @@
 Shannon SDK 的 exception 层次结构。
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 
 class ShannonError(Exception):
@@ -16,7 +16,7 @@ class ShannonError(Exception):
         self,
         message: str,
         code: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
+        details: Optional[dict[str, Any]] = None,
     ):
         super().__init__(message)
         self.message = message

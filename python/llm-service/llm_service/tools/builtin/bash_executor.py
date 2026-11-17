@@ -12,7 +12,7 @@ import asyncio
 import os
 import shlex
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolResult
 from .file_ops import _validate_session_id
@@ -130,7 +130,7 @@ class BashExecutorTool(Tool):
             cost_per_use=0.002,
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter(
                 name="command",
@@ -151,8 +151,8 @@ class BashExecutorTool(Tool):
 
     async def _execute_impl(
         self,
-        session_context: Optional[Dict] = None,
-        observer: Optional[Any] = None,
+        session_context: dict | None = None,
+        observer: Any | None = None,
         **kwargs,
     ) -> ToolResult:
         """Execute command safely with session isolation.

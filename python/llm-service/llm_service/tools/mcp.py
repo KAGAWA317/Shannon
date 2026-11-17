@@ -3,11 +3,10 @@ from __future__ import annotations
 import os
 import time
 from collections import defaultdict, deque
-from typing import Any, Dict, List, Optional, Type
+from typing import Any
 
 from ..mcp_client import HttpStatelessClient
 from .base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolResult
-
 
 _TYPE_MAP = {
     "string": ToolParameterType.STRING,
@@ -19,7 +18,7 @@ _TYPE_MAP = {
 }
 
 
-def _to_param(defn: Dict[str, Any]) -> ToolParameter:
+def _to_param(defn: dict[str, Any]) -> ToolParameter:
     t = str(defn.get("type", "object")).lower()
     return ToolParameter(
         name=str(defn.get("name", "arg")),
@@ -35,11 +34,11 @@ def create_mcp_tool_class(
     name: str,
     func_name: str,
     url: str,
-    headers: Optional[Dict[str, str]] = None,
+    headers: dict[str, str] | None = None,
     description: str = "MCP remote function",
     category: str = "mcp",
-    parameters: Optional[List[Dict[str, Any]]] = None,
-) -> Type[Tool]:
+    parameters: list[dict[str, Any]] | None = None,
+) -> type[Tool]:
     """
     Create a Tool subclass that invokes an MCP HTTP endpoint.
     创建一个调用 MCP HTTP endpoint 的 Tool 子类。
@@ -55,7 +54,7 @@ def create_mcp_tool_class(
 
     # Simple per-tool rate limiter (process-local)
     # 简单的按 tool 的 rate limiter（进程内）
-    _tool_requests: Dict[str, deque] = defaultdict(deque)
+    _tool_requests: dict[str, deque] = defaultdict(deque)
     _rate_default = int(
         os.getenv("MCP_RATE_LIMIT_DEFAULT", "60")
     )  # requests per minute 注：每分钟请求数
@@ -86,7 +85,7 @@ def create_mcp_tool_class(
                 cost_per_use=cost_per_use,
             )
 
-        def _get_parameters(self) -> List[ToolParameter]:
+        def _get_parameters(self) -> list[ToolParameter]:
             # If no schema provided, accept a single OBJECT parameter named "args"
             # 未提供 schema 时，接受单个名为 "args" 的 OBJECT 参数
             return tool_params or [
@@ -120,7 +119,7 @@ def create_mcp_tool_class(
 
                 # If schema not provided, expect a single OBJECT parameter "args"
                 # 未提供 schema 时，期望单个 OBJECT 参数 "args"
-                call_args: Dict[str, Any]
+                call_args: dict[str, Any]
                 if tool_params:
                     call_args = kwargs
                 else:

@@ -2,14 +2,13 @@
 Lead user prompt 构造器（_build_lead_user_prompt）的测试。
 """
 
-import pytest
 
 from llm_service.api.lead import (
-    _build_lead_user_prompt,
+    AgentState,
+    LeadBudget,
     LeadDecisionRequest,
     LeadEvent,
-    LeadBudget,
-    AgentState,
+    _build_lead_user_prompt,
 )
 
 

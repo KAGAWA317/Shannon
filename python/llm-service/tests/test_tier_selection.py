@@ -8,7 +8,9 @@ LLM service 中 model tier 选择的单元测试。
 这些测试确保在回退到 context/model 维度的 tier 之前，优先尊重顶层 query.model_tier。
 """
 
-from __future__ import annotations  # PEP 604 `X | None` syntax on Python 3.9 注：PEP 604，Python 3.9 上的 `X | None` 语法
+from __future__ import (
+    annotations,  # PEP 604 `X | None` syntax on Python 3.9 注：PEP 604，Python 3.9 上的 `X | None` 语法
+)
 
 from enum import Enum
 

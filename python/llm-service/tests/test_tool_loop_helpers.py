@@ -1,4 +1,3 @@
-import pytest
 
 from llm_service.api.agent import _extract_urls_from_search_output
 

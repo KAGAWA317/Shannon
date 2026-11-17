@@ -5,10 +5,10 @@ tool registry——动态 tool 发现与管理
 
 import importlib
 import inspect
+import logging
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Type
-import logging
+
 from .base import Tool, ToolMetadata
 
 logger = logging.getLogger(__name__)
@@ -23,11 +23,11 @@ class ToolRegistry:
     """
 
     def __init__(self):
-        self._tools: Dict[str, Type[Tool]] = {}
-        self._instances: Dict[str, Tool] = {}
-        self._categories: Dict[str, List[str]] = {}
+        self._tools: dict[str, type[Tool]] = {}
+        self._instances: dict[str, Tool] = {}
+        self._categories: dict[str, list[str]] = {}
 
-    def register(self, tool_class: Type[Tool], override: bool = False) -> None:
+    def register(self, tool_class: type[Tool], override: bool = False) -> None:
         """
         Register a tool class
         注册 tool 类
@@ -81,7 +81,7 @@ class ToolRegistry:
 
             logger.info(f"Unregistered tool: {tool_name}")
 
-    def get_tool(self, name: str) -> Optional[Tool]:
+    def get_tool(self, name: str) -> Tool | None:
         """
         Get a tool instance by name.
         Uses singleton pattern - returns same instance for same tool.
@@ -96,29 +96,29 @@ class ToolRegistry:
 
         return self._instances[name]
 
-    def list_tools(self) -> List[str]:
+    def list_tools(self) -> list[str]:
         """List all registered tool names"""
         return list(self._tools.keys())
 
-    def list_categories(self) -> List[str]:
+    def list_categories(self) -> list[str]:
         """List all tool categories"""
         return list(self._categories.keys())
 
-    def list_tools_by_category(self, category: str) -> List[str]:
+    def list_tools_by_category(self, category: str) -> list[str]:
         """List tools in a specific category"""
         return self._categories.get(category, [])
 
-    def get_tool_metadata(self, name: str) -> Optional[ToolMetadata]:
+    def get_tool_metadata(self, name: str) -> ToolMetadata | None:
         """Get metadata for a tool"""
         tool = self.get_tool(name)
         return tool.metadata if tool else None
 
-    def get_tool_schema(self, name: str) -> Optional[Dict]:
+    def get_tool_schema(self, name: str) -> dict | None:
         """Get JSON schema for a tool"""
         tool = self.get_tool(name)
         return tool.get_schema() if tool else None
 
-    def get_all_schemas(self) -> List[Dict]:
+    def get_all_schemas(self) -> list[dict]:
         """Get schemas for all registered tools"""
         schemas = []
         for name in self._tools:
@@ -194,10 +194,10 @@ class ToolRegistry:
 
     def filter_tools_for_agent(
         self,
-        categories: Optional[List[str]] = None,
+        categories: list[str] | None = None,
         exclude_dangerous: bool = True,
-        max_cost: Optional[float] = None,
-    ) -> List[str]:
+        max_cost: float | None = None,
+    ) -> list[str]:
         """
         Filter tools based on agent requirements.
         按 agent 需求过滤 tool。
@@ -245,9 +245,9 @@ class ToolRegistry:
     def filter_tools_by_task_type(
         self,
         task_type: str,
-        allowed_tools: Optional[List[str]] = None,
+        allowed_tools: list[str] | None = None,
         max_tools: int = 5,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Filter and limit tools based on task type for better LLM tool selection.
         按 task 类型过滤并限制 tool 数量，以便 LLM 更好地选择 tool。

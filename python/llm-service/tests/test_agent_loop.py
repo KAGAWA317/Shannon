@@ -2,11 +2,17 @@
 agent loop 历史分层与 prompt 构造的测试。
 """
 
-import pytest
 import unittest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
-from llm_service.api.agent import AgentLoopStepRequest, AgentLoopTurn, TeamMemberInfo, agent_loop_step, build_agent_messages
+import pytest
+from llm_service.api.agent import (
+    AgentLoopStepRequest,
+    AgentLoopTurn,
+    TeamMemberInfo,
+    agent_loop_step,
+    build_agent_messages,
+)
 
 
 class TestTieredHistory:
@@ -438,6 +444,7 @@ class TestTruncationMarker(unittest.TestCase):
         被截断的文本必须告知 agent 不要为同一份数据重复检索。
         """
         import inspect
+
         from llm_service.api import agent as agent_module
         source = inspect.getsource(agent_module)
         self.assertIn("do NOT re-search", source,
@@ -696,7 +703,7 @@ class TestBuildAgentMessages:
         低于 Haiku 的 4096t 阈值 → 完全不命中 cache。带上 Knowledge 后总量可跨过
         4096t → cache 生效（锯齿形态，命中率 20-24%）。
         """
-        from llm_service.api.agent import TeamMemberInfo, TeamKnowledgeEntry
+        from llm_service.api.agent import TeamKnowledgeEntry, TeamMemberInfo
 
         body = self._build_body(history_turns=1)
         body.team_roster = [
@@ -900,7 +907,7 @@ class TestContextTrimming(unittest.TestCase):
         250 条 5000 字符的结果，裁剪前总量会超过 400K 阈值 → 触发裁剪。
         """
         large_history = [
-            AgentLoopTurn(iteration=i, action=f"tool_call:web_search", result="x" * 5000)
+            AgentLoopTurn(iteration=i, action="tool_call:web_search", result="x" * 5000)
             for i in range(250)
         ]
         body = AgentLoopStepRequest(

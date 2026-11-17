@@ -21,7 +21,8 @@ from __future__ import annotations
 import os
 import re
 import time
-from typing import Any, AsyncIterator, Dict, List, Optional
+from collections.abc import AsyncIterator
+from typing import Any
 
 from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -44,7 +45,7 @@ _TEMP_MIN = 0.01  # MiniMax requires temperature > 0 注：MiniMax 要求 temper
 # MiniMax 要求 temperature > 0
 
 
-def _clamp_temperature(temp: Optional[float]) -> float:
+def _clamp_temperature(temp: float | None) -> float:
     """Ensure temperature is in (0.0, 1.0] as required by MiniMax.
 
     确保 temperature 在 MiniMax 要求的 (0.0, 1.0] 范围内。
@@ -72,7 +73,7 @@ class MiniMaxProvider(LLMProvider):
     使用 OpenAI 兼容 chat completions API 的 MiniMax LLM provider。
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         api_key = config.get("api_key") or os.getenv("MINIMAX_API_KEY")
         if not api_key:
             raise ValueError("MiniMax API key not provided (set MINIMAX_API_KEY)")
@@ -103,7 +104,7 @@ class MiniMaxProvider(LLMProvider):
 
         models.yaml 未加载时的兜底 model 目录。
         """
-        defaults: Dict[str, Dict[str, Any]] = {
+        defaults: dict[str, dict[str, Any]] = {
             "MiniMax-M3": {
                 "model_id": "MiniMax-M3",
                 "tier": "medium",
@@ -138,7 +139,7 @@ class MiniMaxProvider(LLMProvider):
     # 辅助方法
     # ------------------------------------------------------------------
 
-    def count_tokens(self, messages: List[Dict[str, Any]], model: str) -> int:
+    def count_tokens(self, messages: list[dict[str, Any]], model: str) -> int:
         return TokenCounter.count_messages_tokens(messages, model)
 
     # ------------------------------------------------------------------
@@ -157,7 +158,7 @@ class MiniMaxProvider(LLMProvider):
 
         messages = prepare_openai_messages(request.messages)
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": model_id,
             "messages": messages,
             "temperature": _clamp_temperature(request.temperature),
@@ -219,7 +220,7 @@ class MiniMaxProvider(LLMProvider):
 
         cost = self.estimate_cost(prompt_tokens, completion_tokens, model_alias)
 
-        function_call: Optional[Dict[str, Any]] = None
+        function_call: dict[str, Any] | None = None
         if message and hasattr(message, "function_call") and message.function_call:
             function_call = message.function_call  # type: ignore[assignment]
 
@@ -250,7 +251,7 @@ class MiniMaxProvider(LLMProvider):
 
         messages = prepare_openai_messages(request.messages)
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": model_id,
             "messages": messages,
             "temperature": _clamp_temperature(request.temperature),

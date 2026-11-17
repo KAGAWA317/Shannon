@@ -20,12 +20,10 @@ Design decisions (from architecture review 2026-02-20):
 - get_swarm_role_catalog() 返回可供 Lead 分派的角色
 """
 
-from typing import Dict
-
 
 # Role-specific methodology prompts (Layer 2 of 3-layer prompt architecture)
 # 角色专属方法论 prompt（三层 prompt 架构的第 2 层）
-SWARM_ROLE_PROMPTS: Dict[str, str] = {
+SWARM_ROLE_PROMPTS: dict[str, str] = {
     "researcher": (
         "You are a RESEARCH specialist in a multi-agent team.\n\n"
         "# MANDATORY RESEARCH CYCLE\n\n"
@@ -319,7 +317,7 @@ SWARM_ROLE_PROMPTS: Dict[str, str] = {
 }
 
 
-def get_swarm_role_catalog() -> Dict[str, str]:
+def get_swarm_role_catalog() -> dict[str, str]:
     """Return roles available for Lead to assign when spawning agents.
     返回 Lead 派生 agent 时可分派的角色。
 
@@ -333,7 +331,7 @@ def get_swarm_role_catalog() -> Dict[str, str]:
     该目录是 SWARM_ROLE_PROMPTS 的超集 —— 包含 presets.py 中那些无需
     swarm 专属方法论 prompt 的专用角色。
     """
-    catalog: Dict[str, str] = {
+    catalog: dict[str, str] = {
         # Core roles (have swarm methodology prompts)
         # 核心角色（拥有 swarm 方法论 prompt）
         "researcher": "Information gathering, market analysis, fact-finding",

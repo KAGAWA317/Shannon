@@ -1,42 +1,44 @@
 import logging
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from prometheus_client import make_asgi_app
-import uvicorn
-
-from llm_service.api import (
-    health,
-    completions,
-    embeddings,
-    complexity,
-    agent,
-    lead,
-    tools,
-    evaluate,
-    verify,
-    context as context_api,
-    providers as providers_api,
-    memory,
-)
-from llm_service.api import mcp_mock
-from llm_service.config import Settings
-from llm_service.providers import ProviderManager
-from llm_service.events import EventEmitter, build_default_emitter_from_env
-import redis.asyncio as aioredis
 
 # OpenTelemetry (minimal) instrumentation
 # OpenTelemetry（最小化）埋点
 import os
+from contextlib import asynccontextmanager
+
+import redis.asyncio as aioredis
+import uvicorn
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from llm_service.api import (
+    agent,
+    completions,
+    complexity,
+    embeddings,
+    evaluate,
+    health,
+    lead,
+    mcp_mock,
+    memory,
+    tools,
+    verify,
+)
+from llm_service.api import (
+    context as context_api,
+)
+from llm_service.api import (
+    providers as providers_api,
+)
+from llm_service.config import Settings
+from llm_service.events import EventEmitter, build_default_emitter_from_env
+from llm_service.providers import ProviderManager
 from opentelemetry import trace
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.resources import SERVICE_NAME
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from prometheus_client import make_asgi_app
 
 # Configure logging
 # 配置日志

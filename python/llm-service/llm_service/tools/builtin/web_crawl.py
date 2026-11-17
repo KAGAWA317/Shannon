@@ -20,16 +20,23 @@ For targeted page extraction where you know the paths, use web_subpage_fetch ins
 若已知具体路径、需要定向提取页面，请改用 web_subpage_fetch。
 """
 
-import aiohttp
 import asyncio
-import os
 import logging
-from typing import Dict, Optional, List, Any
+import os
+from typing import Any
 from urllib.parse import urlparse
+
+import aiohttp
 
 from ..base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolResult
 from ..openapi_parser import _is_private_ip
-from .web_fetch import detect_blocked_reason, clean_markdown_noise, apply_extraction, apply_research_truncation, EXTRACTION_INTERNAL_MAX  # P0-A: Reuse blocked detection and noise cleaning logic 注：P0-A：复用拦截检测与噪声清理逻辑
+from .web_fetch import (  # P0-A: Reuse blocked detection and noise cleaning logic 注：P0-A：复用拦截检测与噪声清理逻辑
+    EXTRACTION_INTERNAL_MAX,
+    apply_extraction,
+    apply_research_truncation,
+    clean_markdown_noise,
+    detect_blocked_reason,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +126,7 @@ class WebCrawlTool(Tool):
             cost_per_use=0.01,  # Higher cost for crawl 注：crawl 成本更高
         )
 
-    def _get_parameters(self) -> List[ToolParameter]:
+    def _get_parameters(self) -> list[ToolParameter]:
         return [
             ToolParameter(
                 name="url",
@@ -158,7 +165,7 @@ class WebCrawlTool(Tool):
         ]
 
     async def _execute_impl(
-        self, session_context: Optional[Dict] = None, **kwargs
+        self, session_context: dict | None = None, **kwargs
     ) -> ToolResult:
         """Execute exploratory crawl using Firecrawl Crawl API.
         使用 Firecrawl Crawl API 执行探索式爬取。"""
@@ -258,7 +265,7 @@ class WebCrawlTool(Tool):
                 },
             )
 
-    async def _crawl(self, url: str, limit: int, max_length: int) -> Dict[str, Any]:
+    async def _crawl(self, url: str, limit: int, max_length: int) -> dict[str, Any]:
         """
         Execute async crawl using Firecrawl Crawl API.
         使用 Firecrawl Crawl API 执行异步爬取。
@@ -329,7 +336,7 @@ class WebCrawlTool(Tool):
 
             return crawl_id
 
-    async def _poll_crawl(self, session: aiohttp.ClientSession, crawl_id: str) -> List[Dict]:
+    async def _poll_crawl(self, session: aiohttp.ClientSession, crawl_id: str) -> list[dict]:
         """Poll crawl status until completion.
         轮询 crawl 状态直到完成。"""
         headers = {
@@ -369,7 +376,7 @@ class WebCrawlTool(Tool):
 
         return all_results
 
-    def _merge_results(self, results: List[Dict], original_url: str, max_length: int, limit: int) -> Dict:
+    def _merge_results(self, results: list[dict], original_url: str, max_length: int, limit: int) -> dict:
         """Merge crawl results into a single output.
         将 crawl 结果合并为单一输出。"""
         # Filter and deduplicate
