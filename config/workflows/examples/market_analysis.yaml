@@ -8,6 +8,7 @@ defaults:
 
 nodes:
   # Initial understanding
+  #初始理解
   - id: understand
     type: simple
     strategy: react
@@ -15,6 +16,7 @@ nodes:
     tools_allowlist: []
 
   # Parallel competitor DAG
+  #并行竞品 DAG
   - id: competitors_dag
     type: dag
     depends_on: [understand]
@@ -42,6 +44,7 @@ nodes:
     tools_allowlist: [web_search]
 
   # Supervisor synthesis
+  #supervisor 综合
   - id: synthesize
     type: supervisor
     strategy: reflection
@@ -52,6 +55,7 @@ nodes:
       sub_agents: ["aggregator", "analyzer", "reporter"]
 
   # Final report
+  #最终报告
   - id: report
     type: cognitive
     strategy: reflection

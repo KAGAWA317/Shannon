@@ -9,6 +9,7 @@ import (
 )
 
 // RedisWrapper wraps Redis client with circuit breaker
+// RedisWrapper 在 Redis client 外包装 circuit breaker
 type RedisWrapper struct {
 	client *redis.Client
 	cb     *CircuitBreaker
@@ -16,11 +17,13 @@ type RedisWrapper struct {
 }
 
 // NewRedisWrapper creates a Redis wrapper with circuit breaker
+// NewRedisWrapper 创建带 circuit breaker 的 Redis wrapper
 func NewRedisWrapper(client *redis.Client, logger *zap.Logger) *RedisWrapper {
 	config := GetRedisConfig().ToConfig()
 	cb := NewCircuitBreaker("redis", config, logger)
 
 	// Register with metrics collector
+	// 向 metrics 收集器注册
 	GlobalMetricsCollector.RegisterCircuitBreaker("redis", "session-manager", cb)
 
 	return &RedisWrapper{
@@ -31,6 +34,7 @@ func NewRedisWrapper(client *redis.Client, logger *zap.Logger) *RedisWrapper {
 }
 
 // Ping wraps Redis Ping with circuit breaker
+// Ping 为 Redis Ping 加上 circuit breaker
 func (rw *RedisWrapper) Ping(ctx context.Context) *redis.StatusCmd {
 	var result *redis.StatusCmd
 
@@ -40,12 +44,14 @@ func (rw *RedisWrapper) Ping(ctx context.Context) *redis.StatusCmd {
 	})
 
 	// Record metrics
+	// 记录 metrics
 	state := rw.cb.State()
 	success := err == nil && (result == nil || result.Err() == nil)
 	GlobalMetricsCollector.RecordRequest("redis", "session-manager", state, success)
 
 	if err != nil {
 		// Return a failed status cmd if circuit breaker is open
+		// circuit breaker 打开时返回失败的 status cmd
 		result = redis.NewStatusCmd(ctx)
 		result.SetErr(err)
 	}
@@ -54,6 +60,7 @@ func (rw *RedisWrapper) Ping(ctx context.Context) *redis.StatusCmd {
 }
 
 // Get wraps Redis Get with circuit breaker
+// Get 为 Redis Get 加上 circuit breaker
 func (rw *RedisWrapper) Get(ctx context.Context, key string) *redis.StringCmd {
 	var result *redis.StringCmd
 
@@ -68,6 +75,7 @@ func (rw *RedisWrapper) Get(ctx context.Context, key string) *redis.StringCmd {
 	})
 
 	// Record metrics
+	// 记录 metrics
 	state := rw.cb.State()
 	success := err == nil && (result == nil || result.Err() == nil || result.Err() == redis.Nil)
 	GlobalMetricsCollector.RecordRequest("redis", "session-manager", state, success)
@@ -81,6 +89,7 @@ func (rw *RedisWrapper) Get(ctx context.Context, key string) *redis.StringCmd {
 }
 
 // Set wraps Redis Set with circuit breaker
+// Set 为 Redis Set 加上 circuit breaker
 func (rw *RedisWrapper) Set(ctx context.Context, key string, value any, expiration time.Duration) *redis.StatusCmd {
 	var result *redis.StatusCmd
 
@@ -90,6 +99,7 @@ func (rw *RedisWrapper) Set(ctx context.Context, key string, value any, expirati
 	})
 
 	// Record metrics
+	// 记录 metrics
 	state := rw.cb.State()
 	success := err == nil && (result == nil || result.Err() == nil)
 	GlobalMetricsCollector.RecordRequest("redis", "session-manager", state, success)
@@ -103,6 +113,7 @@ func (rw *RedisWrapper) Set(ctx context.Context, key string, value any, expirati
 }
 
 // Del wraps Redis Del with circuit breaker
+// Del 为 Redis Del 加上 circuit breaker
 func (rw *RedisWrapper) Del(ctx context.Context, keys ...string) *redis.IntCmd {
 	var result *redis.IntCmd
 
@@ -112,6 +123,7 @@ func (rw *RedisWrapper) Del(ctx context.Context, keys ...string) *redis.IntCmd {
 	})
 
 	// Record metrics
+	// 记录 metrics
 	state := rw.cb.State()
 	success := err == nil && (result == nil || result.Err() == nil)
 	GlobalMetricsCollector.RecordRequest("redis", "session-manager", state, success)
@@ -125,6 +137,7 @@ func (rw *RedisWrapper) Del(ctx context.Context, keys ...string) *redis.IntCmd {
 }
 
 // Keys wraps Redis Keys with circuit breaker
+// Keys 为 Redis Keys 加上 circuit breaker
 func (rw *RedisWrapper) Keys(ctx context.Context, pattern string) *redis.StringSliceCmd {
 	var result *redis.StringSliceCmd
 
@@ -134,6 +147,7 @@ func (rw *RedisWrapper) Keys(ctx context.Context, pattern string) *redis.StringS
 	})
 
 	// Record metrics
+	// 记录 metrics
 	state := rw.cb.State()
 	success := err == nil && (result == nil || result.Err() == nil)
 	GlobalMetricsCollector.RecordRequest("redis", "session-manager", state, success)
@@ -147,16 +161,19 @@ func (rw *RedisWrapper) Keys(ctx context.Context, pattern string) *redis.StringS
 }
 
 // Close wraps Redis Close
+// Close 包装 Redis Close
 func (rw *RedisWrapper) Close() error {
 	return rw.client.Close()
 }
 
 // GetClient returns the underlying Redis client for operations not covered by wrapper
+// GetClient 返回底层 Redis client，供 wrapper 未覆盖的操作使用
 func (rw *RedisWrapper) GetClient() *redis.Client {
 	return rw.client
 }
 
 // IsCircuitBreakerOpen returns true if the circuit breaker is open
+// IsCircuitBreakerOpen 在 circuit breaker 打开时返回 true
 func (rw *RedisWrapper) IsCircuitBreakerOpen() bool {
 	return rw.cb.State() == StateOpen
 }

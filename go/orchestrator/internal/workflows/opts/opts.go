@@ -12,6 +12,7 @@ import (
 )
 
 // TokenRecordActivityOptions returns standardized activity options for token recording
+// TokenRecordActivityOptions 返回 token 记录的标准 activity options
 func TokenRecordActivityOptions() workflow.ActivityOptions {
 	return workflow.ActivityOptions{
 		StartToCloseTimeout: 10 * time.Second,
@@ -20,6 +21,7 @@ func TokenRecordActivityOptions() workflow.ActivityOptions {
 }
 
 // WithTokenRecordOptions applies standardized token record activity options to a context
+// WithTokenRecordOptions 把标准 token 记录 activity options 应用到 context
 func WithTokenRecordOptions(ctx workflow.Context) workflow.Context {
 	return workflow.WithActivityOptions(ctx, TokenRecordActivityOptions())
 }
@@ -74,6 +76,7 @@ func RecordToolCostEntries(
 			}
 		}
 		// Read upstream-reported cost (e.g. web_fetch LLM extraction cost)
+		// 读取上游上报的 cost（例如 web_fetch 的 LLM 抽取成本）
 		var costOverride float64
 		if c, ok := em["cost_usd"].(float64); ok && c > 0 {
 			costOverride = c

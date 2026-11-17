@@ -37,14 +37,17 @@ func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synt
 	modelCounts := make(map[string]int)
 
 	// Per-agent usage details for visibility
+	// 每个 agent 的用量明细，便于查看
 	agentUsages := make([]map[string]any, 0, len(agentResults))
 
 	// Track tool invocations across all agents
+	// 统计所有 agent 的 tool 调用
 	totalToolsInvoked := 0
 	toolNames := make(map[string]bool)
 
 	for _, result := range agentResults {
 		// Count tool executions
+		// 统计 tool 执行次数
 		totalToolsInvoked += len(result.ToolExecutions)
 		for _, te := range result.ToolExecutions {
 			toolNames[te.Tool] = true
@@ -56,6 +59,7 @@ func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synt
 			}
 		}
 		// Count provider if present
+		// 若存在则统计 provider
 		if result.Success {
 			if p := result.Provider; p != "" {
 				providerCounts[p]++
@@ -68,6 +72,7 @@ func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synt
 		totalCacheCreation += result.CacheCreationTokens
 
 		// Record per-agent usage
+		// 记录每个 agent 的用量
         if result.Success {
             agentUsage := map[string]any{
                 "agent_id": result.AgentID,
@@ -76,6 +81,7 @@ func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synt
                 agentUsage["model"] = result.ModelUsed
             }
             // Tokens and per-agent cost
+            // token 与每个 agent 的成本
             var cost float64
             if result.InputTokens > 0 || result.OutputTokens > 0 {
                 agentUsage["input_tokens"] = result.InputTokens
@@ -109,6 +115,7 @@ func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synt
 	}
 
 	// Populate metadata
+	// 填充 metadata
 	if primaryModel != "" {
 		meta["model"] = primaryModel
 		meta["model_used"] = primaryModel
@@ -130,6 +137,7 @@ func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synt
 	}
 
 	// Add cache stats
+	// 添加 cache 统计
 	if totalCacheRead > 0 {
 		meta["cache_read_tokens"] = totalCacheRead
 	}
@@ -177,6 +185,7 @@ func AggregateAgentMetadata(agentResults []activities.AgentExecutionResult, synt
 	}
 
 	// Include tool invocation count
+	// 附带 tool 调用次数
 	if totalToolsInvoked > 0 {
 		meta["tools_invoked"] = totalToolsInvoked
 		// Also include list of unique tools used (sorted for deterministic output)

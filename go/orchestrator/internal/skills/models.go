@@ -27,16 +27,16 @@ type Skill struct {
 	Dangerous     bool           `yaml:"dangerous"`
 	Enabled       bool           `yaml:"enabled"`
 	Metadata      map[string]any `yaml:"metadata"`
-	Content       string         `yaml:"-"` // Markdown content after frontmatter
+	Content       string         `yaml:"-"` // Markdown content after frontmatter 注：frontmatter 之后的 Markdown 内容
 }
 
 // SkillRegistry manages loaded skills with thread-safe access.
 // SkillRegistry 以线程安全方式管理已加载的 skill。
 type SkillRegistry struct {
 	mu         sync.RWMutex
-	skills     map[string]SkillEntry   // Key: "name@version" or "name" for latest
-	byCategory map[string][]string     // Category -> skill keys
-	byName     map[string][]SkillEntry // Name -> all versions (sorted by version desc)
+	skills     map[string]SkillEntry   // Key: "name@version" or "name" for latest 注：键为 "name@version"，或 "name" 表示最新版本
+	byCategory map[string][]string     // Category -> skill keys 注：类别 -> skill 键
+	byName     map[string][]SkillEntry // Name -> all versions (sorted by version desc) 注：名称 -> 所有版本（按版本降序）
 }
 
 // SkillEntry wraps a skill with loading metadata.
@@ -45,7 +45,7 @@ type SkillEntry struct {
 	Key         string
 	Skill       *Skill
 	SourcePath  string
-	ContentHash string // SHA256 of file content
+	ContentHash string // SHA256 of file content 注：文件内容的 SHA256
 	LoadedAt    time.Time
 }
 

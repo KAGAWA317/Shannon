@@ -7,6 +7,7 @@ import (
 )
 
 // Schedule status constants
+// 调度状态常量
 const (
 	ScheduleStatusActive  = "ACTIVE"
 	ScheduleStatusPaused  = "PAUSED"
@@ -14,6 +15,7 @@ const (
 )
 
 // Schedule represents a scheduled task
+// Schedule 表示一个定时任务
 type Schedule struct {
 	ID                  uuid.UUID              `json:"id"`
 	UserID              uuid.UUID              `json:"user_id"`
@@ -67,6 +69,7 @@ type UpdateScheduleInput struct {
 }
 
 // ScheduledTaskInput is passed to ScheduledTaskWorkflow
+// ScheduledTaskInput 传给 ScheduledTaskWorkflow
 type ScheduledTaskInput struct {
 	ScheduleID         string         `json:"schedule_id"`
 	TaskQuery          string         `json:"task_query"`

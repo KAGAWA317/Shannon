@@ -44,7 +44,7 @@ class GroqProvider(LLMProvider):
             raise ValueError("Invalid Groq API key format - too short")
         if not self.api_key.startswith(
             ("gsk_", "sk-", "test-")
-        ):  # gsk_ for Groq, sk-/test- for testing
+        ):  # gsk_ for Groq, sk-/test- for testing 注：gsk_ 为 Groq，sk-/test- 用于测试
             self.logger.warning("Groq API key does not match expected format")
 
         # Initialize OpenAI-compatible client with Groq's base URL

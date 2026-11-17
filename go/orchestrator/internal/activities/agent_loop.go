@@ -47,25 +47,25 @@ type AgentLoopStepInput struct {
 	WorkflowID      string                 `json:"workflow_id"`
 	Task            string                 `json:"task"`
 	Iteration       int                    `json:"iteration"`
-	MaxIterations   int                    `json:"max_iterations,omitempty"` // Total iterations for budget display
-	Messages        []AgentMailboxMsg      `json:"messages,omitempty"`       // Inbox messages from other agents
-	History         []AgentLoopTurn        `json:"history,omitempty"`        // Previous turns in this agent's loop
+	MaxIterations   int                    `json:"max_iterations,omitempty"` // Total iterations for budget display 注：用于预算展示的总迭代次数
+	Messages        []AgentMailboxMsg      `json:"messages,omitempty"`       // Inbox messages from other agents 注：来自其他 agent 的收件箱消息
+	History         []AgentLoopTurn        `json:"history,omitempty"`        // Previous turns in this agent's loop 注：该 agent 循环中的历史轮次
 	Context         map[string]any `json:"context,omitempty"`
 	SessionID       string                 `json:"session_id,omitempty"`
-	TeamRoster      []TeamMemberInfo       `json:"team_roster,omitempty"`    // Teammates and their tasks
-	WorkspaceData   []WorkspaceSnippet     `json:"workspace_data,omitempty"` // Recent KV workspace entries
-	SuggestedTools  []string               `json:"suggested_tools,omitempty"`  // Tools available to this agent
-	RoleDescription string                 `json:"role_description,omitempty"` // e.g. "financial research specialist"
-	Role            string                 `json:"role,omitempty"`             // Persona role: researcher, coder, analyst, generalist
-	TaskList        []SwarmTask            `json:"task_list,omitempty"`        // Current TaskList state for prompt injection
-	ModelTier          string                 `json:"model_tier,omitempty"`          // "small", "medium", "large" (empty = default)
-	PreviousResponseID string                 `json:"previous_response_id,omitempty"` // OpenAI Responses API: chain from previous response
-	SystemMessage      string                 `json:"system_message,omitempty"`       // Urgent directive appended to user prompt end (recency bias)
-	RunningNotes       string                 `json:"running_notes,omitempty"`        // Agent's cumulative notes — survives history truncation
-	IsSwarm            bool                   `json:"is_swarm,omitempty"`             // True when running inside SwarmWorkflow (enables done→idle mapping)
-	CumulativeToolCalls int                   `json:"cumulative_tool_calls,omitempty"` // Total tool_calls across all tasks (survives reassignment)
-	TeamKnowledge      []TeamKnowledgeEntry   `json:"team_knowledge,omitempty"`       // URLs already fetched by other agents (L1 dedup)
-	OriginalQuery      string                 `json:"original_query,omitempty"`       // User's original question for agent context
+	TeamRoster      []TeamMemberInfo       `json:"team_roster,omitempty"`    // Teammates and their tasks 注：队友及其任务
+	WorkspaceData   []WorkspaceSnippet     `json:"workspace_data,omitempty"` // Recent KV workspace entries 注：最近的 KV workspace 条目
+	SuggestedTools  []string               `json:"suggested_tools,omitempty"`  // Tools available to this agent 注：该 agent 可用的工具
+	RoleDescription string                 `json:"role_description,omitempty"` // e.g. "financial research specialist" 注：例如 "financial research specialist"
+	Role            string                 `json:"role,omitempty"`             // Persona role: researcher, coder, analyst, generalist 注：人格角色：researcher、coder、analyst、generalist
+	TaskList        []SwarmTask            `json:"task_list,omitempty"`        // Current TaskList state for prompt injection 注：当前 TaskList 状态，用于 prompt 注入
+	ModelTier          string                 `json:"model_tier,omitempty"`          // "small", "medium", "large" (empty = default) 注："small"、"medium"、"large"（空 = 默认）
+	PreviousResponseID string                 `json:"previous_response_id,omitempty"` // OpenAI Responses API: chain from previous response 注：OpenAI Responses API：从上一个 response 续接
+	SystemMessage      string                 `json:"system_message,omitempty"`       // Urgent directive appended to user prompt end (recency bias) 注：追加到用户 prompt 末尾的紧急指令（利用近因偏差）
+	RunningNotes       string                 `json:"running_notes,omitempty"`        // Agent's cumulative notes — survives history truncation 注：agent 的累积笔记 —— 历史截断后仍保留
+	IsSwarm            bool                   `json:"is_swarm,omitempty"`             // True when running inside SwarmWorkflow (enables done→idle mapping) 注：在 SwarmWorkflow 内运行时为 true（启用 done→idle 映射）
+	CumulativeToolCalls int                   `json:"cumulative_tool_calls,omitempty"` // Total tool_calls across all tasks (survives reassignment) 注：所有任务累计的 tool_calls 总数（重新分配后仍保留）
+	TeamKnowledge      []TeamKnowledgeEntry   `json:"team_knowledge,omitempty"`       // URLs already fetched by other agents (L1 dedup) 注：其他 agent 已抓取的 URL（L1 去重）
+	OriginalQuery      string                 `json:"original_query,omitempty"`       // User's original question for agent context 注：用户的原始问题，供 agent 作为 context
 }
 
 // AgentMailboxMsg is a message received from another agent's mailbox.
@@ -83,44 +83,52 @@ type AgentLoopTurn struct {
 	Action          string `json:"action"`
 	Result          any    `json:"result,omitempty"`
 	DecisionSummary string `json:"decision_summary,omitempty"`
-	AssistantReplay string `json:"assistant_replay,omitempty"` // Compact JSON for multi-turn cache replay
-	ObservationText string `json:"observation_text,omitempty"` // Frozen tool result digest
+	AssistantReplay string `json:"assistant_replay,omitempty"` // Compact JSON for multi-turn cache replay 注：用于多轮缓存回放的紧凑 JSON
+	ObservationText string `json:"observation_text,omitempty"` // Frozen tool result digest 注：冻结的工具结果摘要
 }
 
 // AgentLoopStepResult is the LLM's decision for one iteration.
 // AgentLoopStepResult 是 LLM 对单次迭代给出的决策。
 type AgentLoopStepResult struct {
-	Action          string `json:"action"`                     // "tool_call", "send_message", "publish_data", "request_help", "done"
-	DecisionSummary string `json:"decision_summary,omitempty"` // 1-3 sentence reasoning (D7: controlled, not unlimited chain-of-thought)
+	Action          string `json:"action"`                     // "tool_call", "send_message", "publish_data", "request_help", "done" 注："tool_call"、"send_message"、"publish_data"、"request_help"、"done"
+	DecisionSummary string `json:"decision_summary,omitempty"` // 1-3 sentence reasoning (D7: controlled, not unlimited chain-of-thought) 注：1-3 句推理（D7：受控，而非无限 chain-of-thought）
 
 	// tool_call fields
+	// tool_call 字段
 	Tool       string         `json:"tool,omitempty"`
 	ToolParams map[string]any `json:"tool_params,omitempty"`
-	ToolResult any            `json:"tool_result,omitempty"` // Populated after execution
+	ToolResult any            `json:"tool_result,omitempty"` // Populated after execution 注：执行完成后填充
 
 	// send_message fields
+	// send_message 字段
 	To          string         `json:"to,omitempty"`
 	MessageType string         `json:"message_type,omitempty"`
 	Payload     map[string]any `json:"payload,omitempty"`
 
 	// publish_data fields
+	// publish_data 字段
 	Topic string `json:"topic,omitempty"`
 	Data  string `json:"data,omitempty"`
 
 	// request_help fields
+	// request_help 字段
 	HelpDescription string   `json:"help_description,omitempty"`
 	HelpSkills      []string `json:"help_skills,omitempty"`
 
 	// complete_task / claim_task fields
-	TaskID string `json:"task_id,omitempty"` // TaskList entry to mark completed or claimed
+	// complete_task / claim_task 字段
+	TaskID string `json:"task_id,omitempty"` // TaskList entry to mark completed or claimed 注：要标记为已完成或已认领的 TaskList 条目
 
 	// create_task fields
+	// create_task 字段
 	TaskDescription string `json:"task_description,omitempty"`
 
 	// done fields
+	// done 字段
 	Response string `json:"response,omitempty"`
 
 	// LLM usage metadata
+	// LLM 用量元数据
 	TokensUsed          int    `json:"tokens_used,omitempty"`
 	InputTokens         int    `json:"input_tokens,omitempty"`
 	OutputTokens        int    `json:"output_tokens,omitempty"`
@@ -129,10 +137,10 @@ type AgentLoopStepResult struct {
 	CallSequence        int    `json:"call_sequence,omitempty"`
 	ModelUsed           string `json:"model_used,omitempty"`
 	Provider            string `json:"provider,omitempty"`
-	ResponseID          string                 `json:"response_id,omitempty"` // OpenAI Responses API ID for chaining
+	ResponseID          string                 `json:"response_id,omitempty"` // OpenAI Responses API ID for chaining 注：用于串联的 OpenAI Responses API ID
 	CompletionReport    map[string]any `json:"completion_report,omitempty"`
-	Notes               string         `json:"notes,omitempty"`            // Agent's updated running notes for next iteration
-	AssistantReplay     string         `json:"assistant_replay,omitempty"` // Compact JSON for multi-turn cache replay
+	Notes               string         `json:"notes,omitempty"`            // Agent's updated running notes for next iteration 注：agent 更新后的 running notes，供下一轮使用
+	AssistantReplay     string         `json:"assistant_replay,omitempty"` // Compact JSON for multi-turn cache replay 注：用于多轮缓存回放的紧凑 JSON
 }
 
 // AgentLoopStep calls the Python LLM service's /agent/loop endpoint
@@ -150,7 +158,7 @@ func AgentLoopStep(ctx context.Context, in AgentLoopStepInput) (AgentLoopStepRes
 		return AgentLoopStepResult{}, fmt.Errorf("failed to marshal agent loop input: %w", err)
 	}
 
-	timeoutSec := 180 // /agent/loop includes LLM call + tool execution + interpretation pass
+	timeoutSec := 180 // /agent/loop includes LLM call + tool execution + interpretation pass 注：/agent/loop 同时包含 LLM 调用、工具执行与结果解释环节
 	if v := os.Getenv("AGENT_LOOP_STEP_TIMEOUT_SECONDS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			timeoutSec = n

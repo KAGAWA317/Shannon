@@ -11,6 +11,8 @@ import (
 
 // CheckApprovalPolicy evaluates whether human approval is required based on
 // decomposition results and simple policy defaults.
+// CheckApprovalPolicy 依据分解结果与简单 policy 默认值，
+// 判断是否需要人工审批。
 func CheckApprovalPolicy(_ workflow.Context, input TaskInput, decomp activities.DecompositionResult) (bool, string) {
 	policy := activities.ApprovalPolicy{
 		ComplexityThreshold: 0.8,
@@ -21,6 +23,7 @@ func CheckApprovalPolicy(_ workflow.Context, input TaskInput, decomp activities.
 }
 
 // CheckApprovalPolicyWith evaluates approval against a provided policy
+// CheckApprovalPolicyWith 按传入的 policy 评估审批
 func CheckApprovalPolicyWith(policy activities.ApprovalPolicy, input TaskInput, decomp activities.DecompositionResult) (bool, string) {
 
 	ctx := map[string]any{
@@ -44,12 +47,15 @@ func CheckApprovalPolicyWith(policy activities.ApprovalPolicy, input TaskInput, 
 
 // RequestAndWaitApproval requests approval and waits on a signal until the
 // timeout is reached. Returns the final approval result.
+// RequestAndWaitApproval 请求审批并等待 signal，直到
+// 超时；返回最终审批结果。
 func RequestAndWaitApproval(ctx workflow.Context, input TaskInput, reason string) (*activities.HumanApprovalResult, error) {
 	logger := workflow.GetLogger(ctx)
 
 	// Request approval via activity with timeout
+	// 通过 activity 请求审批，带超时
 	activityOptions := workflow.ActivityOptions{
-		StartToCloseTimeout: 10 * time.Minute, // Activity timeout for request
+		StartToCloseTimeout: 10 * time.Minute, // Activity timeout for request 注：请求审批的 activity 超时
 	}
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
@@ -69,6 +75,7 @@ func RequestAndWaitApproval(ctx workflow.Context, input TaskInput, reason string
 	}
 
 	// Emit APPROVAL_REQUESTED event via activity
+	// 通过 activity 发出 APPROVAL_REQUESTED 事件
 	_ = workflow.ExecuteActivity(ctx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 		WorkflowID: workflow.GetInfo(ctx).WorkflowExecution.ID,
 		EventType:  activities.StreamEventApprovalRequested,
@@ -85,7 +92,7 @@ func RequestAndWaitApproval(ctx workflow.Context, input TaskInput, reason string
 	ch := workflow.GetSignalChannel(ctx, sigName)
 	sel := workflow.NewSelector(ctx)
 
-	timeout := 60 * time.Minute // Default to 1 hour
+	timeout := 60 * time.Minute // Default to 1 hour 注：默认 1 小时
 	if input.ApprovalTimeout > 0 {
 		timeout = time.Duration(input.ApprovalTimeout) * time.Second
 	}
@@ -107,6 +114,7 @@ func RequestAndWaitApproval(ctx workflow.Context, input TaskInput, reason string
 		logger.Warn("Approval timed out", "approval_id", approval.ApprovalID)
 	}
 	// Emit APPROVAL_DECISION event
+	// 发出 APPROVAL_DECISION 事件
 	decision := "denied"
 	if result.Approved {
 		decision = "approved"

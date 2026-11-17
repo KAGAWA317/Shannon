@@ -23,7 +23,7 @@ def main() -> None:
             # Choose by tier, or override explicitly below
             # 按 tier 选择，或在下方显式覆盖
             model_tier="small",
-            mode="simple",  # simple | standard | complex | supervisor
+            mode="simple",  # simple | standard | complex | supervisor 注：可选 simple | standard | complex | supervisor
             # model_override="gpt-5-nano-2025-08-07",
             # provider_override="openai",
         )

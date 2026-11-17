@@ -176,7 +176,7 @@ def multi_step_chain():
     print(f"Research complete ({len(research_result)} chars)\n")
 
     print("Step 2: Synthesizing...")
-    summary = synthesis_chain.invoke({"research": research_result[:2000]})  # Truncate for demo
+    summary = synthesis_chain.invoke({"research": research_result[:2000]})  # Truncate for demo 注：demo 中截断
     print(f"Summary: {summary}\n")
 
 

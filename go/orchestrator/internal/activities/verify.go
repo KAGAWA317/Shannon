@@ -27,8 +27,7 @@ func (a *Activities) VerifyClaimsActivity(ctx context.Context, input VerifyClaim
 	payload := map[string]any{
 		"answer":    input.Answer,
 		"citations": input.Citations,
-		"use_v2":    true, // Request V2 format with BM25 retrieval and three-category output
-		// request V2 格式，包含 BM25 检索与三分类输出
+		"use_v2":    true, // Request V2 format with BM25 retrieval and three-category output 注：request V2 格式，包含 BM25 检索与三分类输出
 	}
 
 	payloadBytes, err := json.Marshal(payload)
@@ -37,6 +36,7 @@ func (a *Activities) VerifyClaimsActivity(ctx context.Context, input VerifyClaim
 	}
 
 	// Call Python LLM service
+	//调用 Python LLM service
 	llmServiceURL := os.Getenv("LLM_SERVICE_URL")
 	if llmServiceURL == "" {
 		llmServiceURL = "http://llm-service:8000"
@@ -49,7 +49,7 @@ func (a *Activities) VerifyClaimsActivity(ctx context.Context, input VerifyClaim
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 120 * time.Second} // 2 minutes timeout
+	client := &http.Client{Timeout: 120 * time.Second} // 2 minutes timeout 注：2 分钟超时
 	resp, err := client.Do(req)
 	if err != nil {
 		return VerificationResult{}, fmt.Errorf("verification request failed: %w", err)
@@ -62,6 +62,7 @@ func (a *Activities) VerifyClaimsActivity(ctx context.Context, input VerifyClaim
 	}
 
 	// Parse response
+	//解析响应
 	var result VerificationResult
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return VerificationResult{}, fmt.Errorf("failed to decode response: %w", err)
@@ -92,10 +93,10 @@ type CitationWithIDInput struct {
 	ID               int     `json:"id"`
 	URL              string  `json:"url"`
 	Title            string  `json:"title"`
-	Content          string  `json:"content,omitempty"` // P0-E: Full page content for verification
+	Content          string  `json:"content,omitempty"` // P0-E: Full page content for verification 注：P0-E：用于校验的完整页面内容
 	Snippet          string  `json:"snippet"`
 	CredibilityScore float64 `json:"credibility_score"`
-	QualityScore     float64 `json:"quality_score"` // P0-C: Added for ranking
+	QualityScore     float64 `json:"quality_score"` // P0-C: Added for ranking 注：P0-C：为排序而新增
 }
 
 // VerifyBatchInput is the input for the VerifyBatch activity
@@ -128,6 +129,7 @@ func (a *Activities) VerifyBatch(ctx context.Context, input VerifyBatchInput) (V
 	logger.Info("Starting batch verification (Citation V2)")
 
 	// Prepare request payload
+	//构造请求 payload
 	payload := map[string]any{
 		"answer":    input.Answer,
 		"citations": input.Citations,
@@ -139,6 +141,7 @@ func (a *Activities) VerifyBatch(ctx context.Context, input VerifyBatchInput) (V
 	}
 
 	// Call Python LLM service
+	//调用 Python LLM service
 	llmServiceURL := os.Getenv("LLM_SERVICE_URL")
 	if llmServiceURL == "" {
 		llmServiceURL = "http://llm-service:8000"
@@ -154,7 +157,7 @@ func (a *Activities) VerifyBatch(ctx context.Context, input VerifyBatchInput) (V
 		req.Header.Set("X-Workflow-ID", input.ParentWorkflowID)
 	}
 
-	client := &http.Client{Timeout: 180 * time.Second} // 3 minutes for batch
+	client := &http.Client{Timeout: 180 * time.Second} // 3 minutes for batch 注：batch 场景 3 分钟
 	resp, err := client.Do(req)
 	if err != nil {
 		return VerifyBatchResult{}, fmt.Errorf("batch verification request failed: %w", err)
@@ -167,6 +170,7 @@ func (a *Activities) VerifyBatch(ctx context.Context, input VerifyBatchInput) (V
 	}
 
 	// Parse response
+	//解析响应
 	var result VerifyBatchResult
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return VerifyBatchResult{}, fmt.Errorf("failed to decode response: %w", err)

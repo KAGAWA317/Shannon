@@ -16,10 +16,10 @@ import (
 // LocalizedSearchInput 是按多语言做本地化检索的入参。
 type LocalizedSearchInput struct {
 	Query            string                 `json:"query"`
-	EntityName       string                 `json:"entity_name,omitempty"`       // Primary entity being researched
-	TargetLanguages  []string               `json:"target_languages"`            // e.g., ["zh", "ja", "ko"]
-	LocalizedNames   map[string][]string    `json:"localized_names,omitempty"`   // Language -> names
-	SourceTypes      []string               `json:"source_types,omitempty"`      // Source types to search
+	EntityName       string                 `json:"entity_name,omitempty"`       // Primary entity being researched 注：被调研的主要实体
+	TargetLanguages  []string               `json:"target_languages"`            // e.g., ["zh", "ja", "ko"] 注：例如 ["zh", "ja", "ko"]
+	LocalizedNames   map[string][]string    `json:"localized_names,omitempty"`   // Language -> names 注：语言 -> 名称
+	SourceTypes      []string               `json:"source_types,omitempty"`      // Source types to search 注：要检索的来源类型
 	MaxResultsPerLang int                   `json:"max_results_per_lang"`
 	Context          map[string]any `json:"context,omitempty"`
 	ParentWorkflowID string                 `json:"parent_workflow_id,omitempty"`
@@ -28,7 +28,7 @@ type LocalizedSearchInput struct {
 // LocalizedSearchResult contains results from localized searches
 // LocalizedSearchResult 汇总各语言本地化检索的结果。
 type LocalizedSearchResult struct {
-	Results          map[string][]LocalizedResult `json:"results"`           // Language -> results
+	Results          map[string][]LocalizedResult `json:"results"`           // Language -> results 注：语言 -> 结果
 	TotalResults     int                          `json:"total_results"`
 	LanguagesCovered []string                     `json:"languages_covered"`
 	TokensUsed       int                          `json:"tokens_used"`
@@ -52,8 +52,8 @@ type LocalizedResult struct {
 // EntityLocalizationInput 是推断实体名各语言写法的入参。
 type EntityLocalizationInput struct {
 	EntityName       string                 `json:"entity_name"`
-	TargetLanguages  []string               `json:"target_languages"` // e.g., ["zh", "ja", "ko"]
-	EntityType       string                 `json:"entity_type,omitempty"` // "company", "person", "product"
+	TargetLanguages  []string               `json:"target_languages"` // e.g., ["zh", "ja", "ko"] 注：例如 ["zh", "ja", "ko"]
+	EntityType       string                 `json:"entity_type,omitempty"` // "company", "person", "product" 注："company"、"person"、"product"
 	Context          map[string]any `json:"context,omitempty"`
 	ParentWorkflowID string         `json:"parent_workflow_id,omitempty"`
 }
@@ -62,8 +62,8 @@ type EntityLocalizationInput struct {
 // EntityLocalizationResult 保存推断出的各语言名称及其置信度。
 type EntityLocalizationResult struct {
 	EntityName       string              `json:"entity_name"`
-	LocalizedNames   map[string][]string `json:"localized_names"` // Language -> possible names
-	Confidence       map[string]float64  `json:"confidence"`      // Language -> confidence
+	LocalizedNames   map[string][]string `json:"localized_names"` // Language -> possible names 注：语言 -> 可能的名称
+	Confidence       map[string]float64  `json:"confidence"`      // Language -> confidence 注：语言 -> 置信度
 	TokensUsed       int                 `json:"tokens_used"`
 	ModelUsed        string              `json:"model_used"`
 	Provider         string              `json:"provider"`
@@ -87,12 +87,13 @@ func (a *Activities) DetectEntityLocalization(ctx context.Context, input EntityL
 	userContent := buildEntityLocalizationContent(input)
 
 	// Call LLM service
+	// 调用 LLM 服务
 	llmServiceURL := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
 	reqBody := map[string]any{
 		"query":       userContent,
-		"max_tokens":  4096, // Extended for entity localization output
+		"max_tokens":  4096, // Extended for entity localization output 注：为容纳实体本地化输出而加大
 		"temperature": 0.1,
 		"agent_id":    "entity_localization",
 		"model_tier":  "small",
@@ -108,7 +109,7 @@ func (a *Activities) DetectEntityLocalization(ctx context.Context, input EntityL
 	}
 
 	client := &http.Client{
-		Timeout:   120 * time.Second, // Extended for LLM processing time
+		Timeout:   120 * time.Second, // Extended for LLM processing time 注：为 LLM 处理耗时加长
 		Transport: interceptors.NewWorkflowHTTPRoundTripper(nil),
 	}
 
@@ -133,6 +134,7 @@ func (a *Activities) DetectEntityLocalization(ctx context.Context, input EntityL
 	}
 
 	// Parse response
+	// 解析 response
 	var llmResp struct {
 		Success  bool   `json:"success"`
 		Response string `json:"response"`
@@ -183,6 +185,7 @@ func (a *Activities) DetectEntityLocalization(ctx context.Context, input EntityL
 }
 
 // buildEntityLocalizationPrompt creates the system prompt
+// buildEntityLocalizationPrompt 构造 system prompt
 func buildEntityLocalizationPrompt(input EntityLocalizationInput) string {
 	var sb strings.Builder
 
@@ -224,6 +227,7 @@ Return a JSON object:
 }
 
 // buildEntityLocalizationContent builds user content
+// buildEntityLocalizationContent 构造 user content
 func buildEntityLocalizationContent(input EntityLocalizationInput) string {
 	var sb strings.Builder
 
@@ -246,6 +250,7 @@ func buildEntityLocalizationContent(input EntityLocalizationInput) string {
 }
 
 // parseEntityLocalizationResponse parses the LLM response
+// parseEntityLocalizationResponse 解析 LLM response
 func parseEntityLocalizationResponse(response string, result *EntityLocalizationResult) error {
 	// Find JSON in response
 	// 从 response 里截出 JSON。
@@ -285,35 +290,35 @@ func GetRegionalSourceSites(language string) []string {
 	// 常见语言的默认地区站点。
 	regionalSites := map[string][]string{
 		"zh": {
-			"36kr.com",        // Chinese tech news
-			"iyiou.com",       // Chinese industry analysis
-			"tianyancha.com",  // Chinese company data
-			"pedaily.cn",      // Chinese investment news
+			"36kr.com",        // Chinese tech news 注：中国科技新闻
+			"iyiou.com",       // Chinese industry analysis 注：中国行业分析
+			"tianyancha.com",  // Chinese company data 注：中国公司数据
+			"pedaily.cn",      // Chinese investment news 注：中国投资新闻
 			"chinaventure.com.cn",
-			"baike.baidu.com", // Chinese Wikipedia
+			"baike.baidu.com", // Chinese Wikipedia 注：中文百科
 		},
 		"ja": {
-			"nikkei.com",      // Japanese business news
-			"prtimes.jp",      // Japanese press releases
-			"startup-db.com",  // Japanese startup database
-			"initial.inc",     // Japanese startup platform
-			"bridgej.com",     // Japanese tech news
+			"nikkei.com",      // Japanese business news 注：日本商业新闻
+			"prtimes.jp",      // Japanese press releases 注：日本新闻稿
+			"startup-db.com",  // Japanese startup database 注：日本创业公司数据库
+			"initial.inc",     // Japanese startup platform 注：日本创业平台
+			"bridgej.com",     // Japanese tech news 注：日本科技新闻
 		},
 		"ko": {
-			"platum.kr",       // Korean startup news
-			"thevc.kr",        // Korean VC news
-			"venturesquare.net", // Korean startup community
-			"besuccess.com",   // Korean tech news
+			"platum.kr",       // Korean startup news 注：韩国创业新闻
+			"thevc.kr",        // Korean VC news 注：韩国 VC 新闻
+			"venturesquare.net", // Korean startup community 注：韩国创业社区
+			"besuccess.com",   // Korean tech news 注：韩国科技新闻
 		},
 		"de": {
-			"handelsblatt.com", // German business
-			"gruenderszene.de", // German startups
-			"t3n.de",          // German tech
+			"handelsblatt.com", // German business 注：德国商业
+			"gruenderszene.de", // German startups 注：德国创业公司
+			"t3n.de",          // German tech 注：德国科技
 		},
 		"fr": {
-			"lesechos.fr",     // French business
-			"maddyness.com",   // French startups
-			"journaldunet.com", // French tech
+			"lesechos.fr",     // French business 注：法国商业
+			"maddyness.com",   // French startups 注：法国创业公司
+			"journaldunet.com", // French tech 注：法国科技
 		},
 	}
 

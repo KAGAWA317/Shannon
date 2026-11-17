@@ -61,8 +61,7 @@ func (a *Activities) CheckCompressionNeeded(ctx context.Context, in CheckCompres
 				// 检查距上次 compression 的消息条数。
 				if lastCount, ok := compState["last_message_count"].(int); ok {
 					messagesSince := in.MessageCount - lastCount
-					if messagesSince < 20 { // Minimum 20 new messages
-						// 至少积累 20 条新消息，避免压缩过于频繁。
+					if messagesSince < 20 { // Minimum 20 new messages 注：至少积累 20 条新消息，避免压缩过于频繁。
 						metrics.CompressionEvents.WithLabelValues("skipped").Inc()
 						return CheckCompressionNeededResult{
 							ShouldCompress: false,
@@ -75,8 +74,7 @@ func (a *Activities) CheckCompressionNeeded(ctx context.Context, in CheckCompres
 				// 检查距上次 compression 的时间间隔。
 				if lastTime, ok := compState["last_compressed_at"].(int64); ok {
 					timeSince := time.Since(time.Unix(lastTime, 0))
-					if timeSince < 30*time.Minute { // Minimum 30 minutes
-						// 距上次压缩至少 30 分钟。
+					if timeSince < 30*time.Minute { // Minimum 30 minutes 注：距上次压缩至少 30 分钟。
 						metrics.CompressionEvents.WithLabelValues("skipped").Inc()
 						return CheckCompressionNeededResult{
 							ShouldCompress: false,

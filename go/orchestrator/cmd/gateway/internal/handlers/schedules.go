@@ -29,6 +29,7 @@ func NewScheduleHandler(client orchpb.OrchestratorServiceClient, db *sqlx.DB, lo
 }
 
 // CreateSchedule handles POST /api/v1/schedules
+// CreateSchedule 处理 POST /api/v1/schedules
 func (h *ScheduleHandler) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -99,6 +100,7 @@ func (h *ScheduleHandler) CreateSchedule(w http.ResponseWriter, r *http.Request)
 }
 
 // GetSchedule handles GET /api/v1/schedules/{id}
+// GetSchedule 处理 GET /api/v1/schedules/{id}
 func (h *ScheduleHandler) GetSchedule(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -137,6 +139,7 @@ func (h *ScheduleHandler) GetSchedule(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListSchedules handles GET /api/v1/schedules
+// ListSchedules 处理 GET /api/v1/schedules
 func (h *ScheduleHandler) ListSchedules(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -175,6 +178,7 @@ func (h *ScheduleHandler) ListSchedules(w http.ResponseWriter, r *http.Request) 
 }
 
 // UpdateSchedule handles PUT /api/v1/schedules/{id}
+// UpdateSchedule 处理 PUT /api/v1/schedules/{id}
 func (h *ScheduleHandler) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -249,6 +253,7 @@ func (h *ScheduleHandler) UpdateSchedule(w http.ResponseWriter, r *http.Request)
 }
 
 // PauseSchedule handles POST /api/v1/schedules/{id}/pause
+// PauseSchedule 处理 POST /api/v1/schedules/{id}/pause
 func (h *ScheduleHandler) PauseSchedule(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -300,6 +305,7 @@ func (h *ScheduleHandler) PauseSchedule(w http.ResponseWriter, r *http.Request) 
 }
 
 // ResumeSchedule handles POST /api/v1/schedules/{id}/resume
+// ResumeSchedule 处理 POST /api/v1/schedules/{id}/resume
 func (h *ScheduleHandler) ResumeSchedule(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -351,6 +357,7 @@ func (h *ScheduleHandler) ResumeSchedule(w http.ResponseWriter, r *http.Request)
 }
 
 // DeleteSchedule handles DELETE /api/v1/schedules/{id}
+// DeleteSchedule 处理 DELETE /api/v1/schedules/{id}
 func (h *ScheduleHandler) DeleteSchedule(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -394,6 +401,7 @@ func (h *ScheduleHandler) DeleteSchedule(w http.ResponseWriter, r *http.Request)
 }
 
 // ScheduleRunResponse represents a single schedule run in the API response
+// ScheduleRunResponse 表示 API response 中的单次定时任务执行记录
 type ScheduleRunResponse struct {
 	WorkflowID       string     `json:"workflow_id"`
 	Query            string     `json:"query"`
@@ -411,6 +419,7 @@ type ScheduleRunResponse struct {
 }
 
 // ListScheduleRunsResponse represents the response for listing schedule runs
+// ListScheduleRunsResponse 表示定时任务执行记录列表的 response
 type ListScheduleRunsResponse struct {
 	Runs       []ScheduleRunResponse `json:"runs"`
 	TotalCount int                   `json:"total_count"`
@@ -419,6 +428,7 @@ type ListScheduleRunsResponse struct {
 }
 
 // GetScheduleRuns handles GET /api/v1/schedules/{id}/runs
+// GetScheduleRuns 处理 GET /api/v1/schedules/{id}/runs
 func (h *ScheduleHandler) GetScheduleRuns(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -435,6 +445,7 @@ func (h *ScheduleHandler) GetScheduleRuns(w http.ResponseWriter, r *http.Request
 	}
 
 	// Parse pagination params
+	// 解析分页参数
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 1 {
 		page = 1
@@ -446,6 +457,7 @@ func (h *ScheduleHandler) GetScheduleRuns(w http.ResponseWriter, r *http.Request
 	offset := (page - 1) * pageSize
 
 	// Verify user owns this schedule
+	// 校验该定时任务属于当前用户
 	var ownerUserID string
 	err := h.db.GetContext(ctx, &ownerUserID, `
 		SELECT user_id::text FROM scheduled_tasks
@@ -461,6 +473,7 @@ func (h *ScheduleHandler) GetScheduleRuns(w http.ResponseWriter, r *http.Request
 	}
 
 	// Get total count
+	// 取总数
 	var totalCount int
 	err = h.db.GetContext(ctx, &totalCount, `
 		SELECT COUNT(*) FROM v_schedule_execution_history
@@ -473,6 +486,7 @@ func (h *ScheduleHandler) GetScheduleRuns(w http.ResponseWriter, r *http.Request
 	}
 
 	// Query runs using the view
+	// 通过视图查询执行记录
 	type runRow struct {
 		WorkflowID   *string    `db:"workflow_id"`
 		Query        *string    `db:"query"`
@@ -507,6 +521,7 @@ func (h *ScheduleHandler) GetScheduleRuns(w http.ResponseWriter, r *http.Request
 	}
 
 	// Convert to response format
+	// 转换为 response 格式
 	runs := make([]ScheduleRunResponse, 0, len(rows))
 	for _, row := range rows {
 		run := ScheduleRunResponse{

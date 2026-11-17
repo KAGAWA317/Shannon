@@ -85,11 +85,11 @@ class ClaimVerificationV2(BaseModel):
     带 three-category 分类的 V2 验证结果。
     """
     claim: str
-    verdict: str = "insufficient_evidence"  # "supported" | "unsupported" | "insufficient_evidence"
+    verdict: str = "insufficient_evidence"  # "supported" | "unsupported" | "insufficient_evidence" 注：枚举取值 supported / unsupported / insufficient_evidence
     supporting_citations: List[int] = Field(default_factory=list)
     conflicting_citations: List[int] = Field(default_factory=list)
     confidence: float = 0.0
-    retrieval_scores: Dict[int, float] = Field(default_factory=dict)  # citation_id → relevance
+    retrieval_scores: Dict[int, float] = Field(default_factory=dict)  # citation_id → relevance 注：citation_id → 相关性
     reasoning: str = ""
 
 
@@ -120,8 +120,8 @@ class VerificationResultV2(BaseModel):
 
     # Quality metrics
     # 质量 metrics
-    evidence_coverage: float = 0.0  # % of claims with relevant citations found
-    avg_retrieval_score: float = 0.0  # Average top-1 retrieval relevance
+    evidence_coverage: float = 0.0  # % of claims with relevant citations found 注：找到相关 citations 的 claim 占比
+    avg_retrieval_score: float = 0.0  # Average top-1 retrieval relevance 注：top-1 检索相关性均值
 
 
 # ============================================================================
@@ -203,7 +203,7 @@ class CorpusStats:
     P1-5：用于 IDF 计算的语料统计。
     """
     def __init__(self):
-        self.doc_freq: Dict[str, int] = {}  # term → number of documents containing it
+        self.doc_freq: Dict[str, int] = {}  # term → number of documents containing it 注：term → 包含该 term 的 document 数
         self.total_docs: int = 0
         self.avg_doc_len: float = 200.0
 
@@ -286,7 +286,7 @@ def bm25_score(
         avg_doc_len = corpus_stats.avg_doc_len
         N = corpus_stats.total_docs
     else:
-        N = 0  # No IDF if no corpus stats
+        N = 0  # No IDF if no corpus stats 注：无 corpus stats 时不做 IDF 加权
     if avg_doc_len <= 0:
         avg_doc_len = 200.0
 
@@ -308,7 +308,7 @@ def bm25_score(
                 # log 内的 +1 可避免常见 term 得到负分
                 idf = math.log((N - n + 0.5) / (n + 0.5) + 1)
             else:
-                idf = 1.0  # No IDF weighting without corpus stats
+                idf = 1.0  # No IDF weighting without corpus stats 注：无 corpus stats 时不做 IDF 加权
 
             score += idf * tf_component
 
@@ -460,7 +460,7 @@ def _build_relevant_citations(
     # 若少于 min_count，则用 top-K fallback 补齐
     if len(relevant) < min_count:
         existing_nums = {num for num, _ in relevant}
-        for i, c in enumerate(citations[:20]):  # Check first 20
+        for i, c in enumerate(citations[:20]):  # Check first 20 注：只检查前 20 个
             idx = i + 1
             if idx not in existing_nums:
                 relevant.append((idx, c))
@@ -519,7 +519,7 @@ async def verify_claims(
 
     if not claims:
         return VerificationResult(
-            overall_confidence=1.0,  # No claims = nothing to verify
+            overall_confidence=1.0,  # No claims = nothing to verify 注：无 claims 即无需验证
             total_claims=0,
             supported_claims=0
         )
@@ -627,7 +627,7 @@ Output format:
             messages=[{"role": "user", "content": prompt}],
             tier=ModelTier.SMALL,
             max_tokens=8000,
-            temperature=0.0,  # Deterministic extraction
+            temperature=0.0,  # Deterministic extraction 注：确定性提取
             cache_source="verify_extract_claims",
         )
 
@@ -652,7 +652,7 @@ Output format:
                             break
 
         logger.debug(f"[verification] Extracted {len(claims)} claims")
-        return claims[:10]  # Limit to top 10
+        return claims[:10]  # Limit to top 10 注：限制为前 10 个
 
     except Exception as e:
         logger.error(f"[verification] Failed to extract claims: {e}")
@@ -768,7 +768,7 @@ IMPORTANT:
             # Diminishing returns for multiple sources
             # 多个 sources 时收益递减
             num_sources = len(valid_supporting)
-            bonus = min(0.25, 0.2 * math.log2(max(1, num_sources)))  # cap 25%
+            bonus = min(0.25, 0.2 * math.log2(max(1, num_sources)))  # cap 25% 注：上限 25%
             confidence = base_confidence * avg_cred * (1.0 + bonus if num_sources > 1 else 1.0)
         else:
             confidence = 0.0
@@ -781,7 +781,7 @@ IMPORTANT:
             denom = conflict_weight + support_weight
             if denom > 0:
                 conflict_ratio = conflict_weight / denom
-                penalty = 0.3 * conflict_ratio  # up to -30%
+                penalty = 0.3 * conflict_ratio  # up to -30% 注：最高 -30%
             else:
                 penalty = 0.2
             confidence *= (1.0 - penalty)
@@ -972,6 +972,7 @@ Output JSON only.
         response = result.get("output_text", "").strip()
 
         # Parse JSON
+        # 解析 JSON
         json_start = response.find('{')
         json_end = response.rfind('}') + 1
         if json_start != -1 and json_end > json_start:
@@ -981,6 +982,7 @@ Output JSON only.
 
         verdict = parsed.get("verdict", "insufficient_evidence")
         # Normalize verdict
+        # 归一化 verdict
         if verdict not in ("supported", "unsupported", "insufficient_evidence"):
             verdict = "insufficient_evidence"
 
@@ -990,22 +992,29 @@ Output JSON only.
         reasoning = parsed.get("reasoning", "")
 
         # Adjust confidence based on verdict and retrieval quality
+        # 根据 verdict 与检索质量调整 confidence
         if verdict == "supported" and supporting:
             # Boost by retrieval score of best supporting citation
+            # 按最佳 supporting citation 的检索得分加权
             max_retrieval = max(retrieval_scores.get(n, 0) for n in supporting)
             # Weighted: 60% LLM confidence + 40% retrieval quality (normalized)
+            # 加权：60% LLM confidence + 40% 检索质量（归一化）
             confidence = 0.6 * base_confidence + 0.4 * min(1.0, max_retrieval / 5.0)
             # Ensure minimum confidence for supported claims
+            # 保证 supported claims 的最低 confidence
             confidence = max(confidence, 0.5)
         elif verdict == "unsupported" and conflicting:
             # High confidence in contradiction
+            # 明确矛盾时给予较高 confidence
             confidence = base_confidence * 0.9
             confidence = max(confidence, 0.6)
         else:
             # insufficient_evidence - moderate confidence
+            # insufficient_evidence - 中等 confidence
             confidence = 0.3 + 0.2 * base_confidence
 
         # Clamp to [0, 1]
+        # 限制到 [0, 1] 区间
         confidence = max(0.0, min(1.0, confidence))
 
         return ClaimVerificationV2(
@@ -1060,6 +1069,7 @@ async def verify_claims_v2(
     """
 
     # Parse citations
+    # 解析 citations
     citation_objs: List[Citation] = []
     for idx, raw in enumerate(citations or []):
         try:
@@ -1068,6 +1078,7 @@ async def verify_claims_v2(
             logger.warning(f"[verification_v2] Failed to parse citation[{idx}]: {e}")
 
     # Extract claims (reuse existing function)
+    # 提取 claims（复用已有函数）
     claims = await _extract_claims(answer, llm_client)
     logger.info(f"[verification_v2] Extracted {len(claims)} claims from synthesis")
 
@@ -1083,31 +1094,38 @@ async def verify_claims_v2(
         )
 
     # P1-5: Pre-compute corpus stats once for all claims (IDF efficiency)
+    # P1-5：为所有 claims 一次性预计算 corpus stats（提升 IDF 效率）
     corpus_stats = CorpusStats.from_citations(citation_objs)
     logger.debug(f"[verification_v2] Corpus stats: {corpus_stats.total_docs} docs, "
                  f"{len(corpus_stats.doc_freq)} unique terms, avg_len={corpus_stats.avg_doc_len:.1f}")
 
     # Verify each claim with V2 logic
+    # 用 V2 逻辑验证每个 claim
     verifications: List[ClaimVerificationV2] = []
     for claim in claims:
         v = await _verify_single_claim_v2(claim, citation_objs, llm_client, corpus_stats=corpus_stats)
         verifications.append(v)
 
     # Aggregate by verdict
+    # 按 verdict 汇总
     supported = sum(1 for v in verifications if v.verdict == "supported")
     unsupported = sum(1 for v in verifications if v.verdict == "unsupported")
     insufficient = sum(1 for v in verifications if v.verdict == "insufficient_evidence")
 
     # Collect claim texts by category
+    # 按类别收集 claim 文本
     supported_texts = [v.claim for v in verifications if v.verdict == "supported"]
     unsupported_texts = [v.claim for v in verifications if v.verdict == "unsupported"]
     insufficient_texts = [v.claim for v in verifications if v.verdict == "insufficient_evidence"]
 
     # Calculate quality metrics
     # Evidence coverage: % of claims that got a definitive verdict (not insufficient)
+    # 计算质量 metrics
+    # 证据覆盖：得到确定性 verdict（非 insufficient）的 claim 占比
     evidence_coverage = (supported + unsupported) / len(verifications) if verifications else 0.0
 
     # Average top-1 retrieval score
+    # top-1 检索得分均值
     retrieval_scores = []
     for v in verifications:
         if v.retrieval_scores:
@@ -1115,6 +1133,7 @@ async def verify_claims_v2(
     avg_retrieval = sum(retrieval_scores) / len(retrieval_scores) if retrieval_scores else 0.0
 
     # Overall confidence (weighted by verdict type)
+    # 整体 confidence（按 verdict 类型加权）
     if verifications:
         conf_scores = []
         for v in verifications:
@@ -1122,15 +1141,18 @@ async def verify_claims_v2(
                 conf_scores.append(v.confidence)
             elif v.verdict == "unsupported":
                 # Unsupported claims reduce overall confidence
+                # unsupported claims 会降低整体 confidence
                 conf_scores.append(1.0 - v.confidence)
             else:
                 # Insufficient evidence is neutral
+                # 证据不足视为中性
                 conf_scores.append(0.5)
         overall_conf = sum(conf_scores) / len(conf_scores)
     else:
         overall_conf = 1.0
 
     # Detect conflicts
+    # 检测冲突
     conflicts = _detect_conflicts(verifications, citation_objs)
 
     logger.info(f"[verification_v2] Results: supported={supported}, unsupported={unsupported}, "
@@ -1155,13 +1177,14 @@ async def verify_claims_v2(
 
 # ======================================================================
 # FastAPI Endpoint
+# FastAPI 端点
 # ======================================================================
 
 class VerifyClaimsRequest(BaseModel):
     """Request body for claim verification endpoint."""
     answer: str
     citations: List[Dict[str, Any]]
-    use_v2: bool = True  # Default to V2
+    use_v2: bool = True  # Default to V2 注：默认使用 V2
 
 
 @router.post("/api/verify_claims")
@@ -1204,10 +1227,12 @@ async def verify_claims_endpoint(request: Request, body: VerifyClaimsRequest):
     """
     try:
         # Get LLM providers from app state
+        # 从 app state 获取 LLM providers
         providers = request.app.state.providers
 
         if body.use_v2:
             # V2: BM25 retrieval + three-category output
+            # V2：BM25 检索 + 三类判定输出
             result = await verify_claims_v2(
                 answer=body.answer,
                 citations=body.citations,
@@ -1216,6 +1241,7 @@ async def verify_claims_endpoint(request: Request, body: VerifyClaimsRequest):
             return result.model_dump()
         else:
             # V1: Legacy verification
+            # V1：旧版验证
             result = await verify_claims(
                 answer=body.answer,
                 citations=body.citations,
@@ -1226,6 +1252,7 @@ async def verify_claims_endpoint(request: Request, body: VerifyClaimsRequest):
     except Exception as e:
         logger.error(f"[verify_claims_endpoint] Error: {e}", exc_info=True)
         # Return a safe default response on error
+        # 出错时返回安全的默认响应
         if body.use_v2:
             return VerificationResultV2(
                 overall_confidence=0.5,
@@ -1248,34 +1275,35 @@ async def verify_claims_endpoint(request: Request, body: VerifyClaimsRequest):
 
 # ============================================================================
 # Citation V2: Batch Verification Endpoint (2 LLM calls total)
+# Citation V2：批量验证端点（共 2 次 LLM 调用）
 # ============================================================================
 
 class CitationWithIDInput(BaseModel):
     """Citation input with sequential ID from Go FilterFetchOnlyAndAssignIDs."""
     model_config = ConfigDict(extra="ignore")
 
-    id: int  # Sequential ID (1, 2, 3...)
+    id: int  # Sequential ID (1, 2, 3...) 注：顺序 ID（1, 2, 3...）
     url: str = ""
     title: str = ""
     content: Optional[str] = None
     snippet: Optional[str] = None
     credibility_score: float = 0.5
-    quality_score: float = 0.5  # P0-C: Added for ranking
+    quality_score: float = 0.5  # P0-C: Added for ranking 注：P0-C：为排序而新增
 
 
 class ClaimMapping(BaseModel):
     """Mapping of a claim to its supporting citations."""
     claim: str
-    verdict: str = "insufficient_evidence"  # "supported" | "unsupported" | "insufficient_evidence"
-    supporting_ids: List[int] = Field(default_factory=list)  # Citation IDs that support this claim
+    verdict: str = "insufficient_evidence"  # "supported" | "unsupported" | "insufficient_evidence" 注：枚举取值 supported / unsupported / insufficient_evidence
+    supporting_ids: List[int] = Field(default_factory=list)  # Citation IDs that support this claim 注：支持该 claim 的 citation ID
     confidence: float = 0.0
     reasoning: str = ""
 
 
 class VerifyBatchRequest(BaseModel):
     """Request body for batch verification endpoint."""
-    answer: str  # Synthesis text containing claims
-    citations: List[CitationWithIDInput]  # Citations with IDs from Go
+    answer: str  # Synthesis text containing claims 注：包含 claims 的 synthesis 文本
+    citations: List[CitationWithIDInput]  # Citations with IDs from Go 注：来自 Go 的带 ID citations
 
 
 class VerifyBatchResponse(BaseModel):
@@ -1304,6 +1332,7 @@ def _get_adaptive_topk(total_sources: int, total_claims: int) -> int:
         Optimal K value (3-10)
     """
     # Base K depends on source count
+    # 基础 K 取决于 source 数量
     if total_sources >= 50:
         base_k = 10
     elif total_sources >= 20:
@@ -1312,11 +1341,13 @@ def _get_adaptive_topk(total_sources: int, total_claims: int) -> int:
         base_k = 5
 
     # Cost control: total evaluations should not exceed 100
+    # 成本控制：总评估次数不应超过 100
     max_evaluations = 100
     if total_claims > 0 and total_claims * base_k > max_evaluations:
         base_k = max(3, max_evaluations // total_claims)
 
     # Ensure K doesn't exceed available sources
+    # 确保 K 不超过可用 sources 数量
     return min(base_k, total_sources) if total_sources > 0 else 3
 
 
@@ -1343,6 +1374,7 @@ def _batch_bm25_scores(
         return {}
 
     # Build corpus stats from citations
+    # 从 citations 构建 corpus stats
     stats = CorpusStats.from_citations(citations)
     citation_tokens_map: Dict[int, List[str]] = {
         c.id: tokenize(f"{c.title or ''} {c.content or c.snippet or ''}")
@@ -1350,6 +1382,7 @@ def _batch_bm25_scores(
     }
 
     # Score each (claim, citation) pair
+    # 为每个 (claim, citation) 对打分
     result: Dict[str, List[Tuple[int, float]]] = {}
 
     for claim in claims:
@@ -1365,11 +1398,14 @@ def _batch_bm25_scores(
                 continue
 
             # BM25 with IDF
+            # 带 IDF 的 BM25
             relevance = bm25_score(claim_tokens, doc_tokens, corpus_stats=stats)
 
             # P0-C: Enhanced ranking formula
             # score = 0.5 * relevance(BM25) + 0.3 * quality + 0.2 * credibility
             # Normalize BM25 to 0-1 range (assume max ~10)
+            # P0-C：增强排序公式
+            # 将 BM25 归一化到 0-1 区间（假设最大值约 10）
             final_score = (
                 0.5 * min(1.0, relevance / 10.0) +
                 0.3 * (c.quality_score * c.credibility_score) +
@@ -1380,8 +1416,10 @@ def _batch_bm25_scores(
                 scores.append((c.id, final_score))
 
         # Sort by score descending and take top_k
+        # 按得分降序排序并取 top_k
         scores.sort(key=lambda x: x[1], reverse=True)
         # P0-C: Return only top_k (handles < K case automatically)
+        # P0-C：只返回 top_k（自动处理少于 K 的情况）
         result[claim] = scores[:top_k]
 
     return result
@@ -1412,9 +1450,11 @@ async def _batch_verify_all_claims(
         return [ClaimMapping(claim=c, verdict="insufficient_evidence") for c in claims]
 
     # Build citation lookup
+    # 构建 citation 查找表
     cid_to_citation = {c.id: c for c in citations}
 
     # P0-C: Build per-claim evidence context (each claim sees only its top-5)
+    # P0-C：为每个 claim 构建证据上下文（每个 claim 只看自己的 top-5）
     claim_contexts = []
     for i, claim in enumerate(claims):
         top5 = bm25_scores.get(claim, [])[:5]
@@ -1436,9 +1476,11 @@ async def _batch_verify_all_claims(
         })
 
     # Language detection
+    # 语言检测
     lang = detect_language(claims[0] if claims else "")
 
     # P0-C: Build structured prompt with per-claim evidence
+    # P0-C：构建含每个 claim 证据的结构化 prompt
     if lang == "zh":
         prompt_parts = ["判断以下每个陈述是否被其对应的证据支持。\n\n每个陈述只需要看它自己的证据片段（已按相关性排序）。\n"]
 
@@ -1521,7 +1563,7 @@ Output only the JSON array, nothing else.
         result = await providers.generate_completion(
             messages=[{"role": "user", "content": prompt}],
             tier=ModelTier.SMALL,
-            max_tokens=4000,  # Need space for all claim judgments
+            max_tokens=4000,  # Need space for all claim judgments 注：需为所有 claim 判定留出空间
             temperature=0.0,
             cache_source="verify_batch",
         )
@@ -1529,6 +1571,7 @@ Output only the JSON array, nothing else.
         response = result.get("output_text", "").strip()
 
         # Parse JSON array
+        # 解析 JSON 数组
         json_start = response.find('[')
         json_end = response.rfind(']') + 1
         if json_start != -1 and json_end > json_start:
@@ -1537,6 +1580,7 @@ Output only the JSON array, nothing else.
             parsed = json.loads(response)
 
         # Build result mappings
+        # 构建结果映射
         mappings: List[ClaimMapping] = []
         parsed_by_index = {item.get("claim_index", i+1): item for i, item in enumerate(parsed)}
 
@@ -1549,12 +1593,15 @@ Output only the JSON array, nothing else.
                 verdict = "insufficient_evidence"
 
             # Filter supporting_ids to valid citation IDs
+            # 将 supporting_ids 过滤为有效 citation IDs
             supporting_ids = [sid for sid in item.get("supporting_ids", []) if sid in valid_ids]
             reasoning = item.get("reasoning", "")
 
             # Calculate confidence based on verdict and BM25 scores
+            # 按 verdict 与 BM25 得分计算 confidence
             if verdict == "supported" and supporting_ids:
                 # Use BM25 score of best supporting citation
+                # 使用最佳 supporting citation 的 BM25 得分
                 top_bm25 = bm25_scores.get(claim, [])
                 bm25_map = {cid: score for cid, score in top_bm25}
                 max_score = max((bm25_map.get(sid, 0) for sid in supporting_ids), default=0)
@@ -1619,6 +1666,7 @@ async def verify_batch_endpoint(request: Request, body: VerifyBatchRequest):
         providers = request.app.state.providers
 
         # Step 1: Extract claims (1 LLM call)
+        # 步骤 1：提取 claims（1 次 LLM 调用）
         claims = await _extract_claims(body.answer, providers)
         logger.info(f"[verify_batch] Extracted {len(claims)} claims")
 
@@ -1632,18 +1680,22 @@ async def verify_batch_endpoint(request: Request, body: VerifyBatchRequest):
             ).model_dump()
 
         # P0-C: Calculate adaptive top_k based on sources and claims count
+        # P0-C：按 sources 与 claims 数量计算自适应 top_k
         top_k = _get_adaptive_topk(len(body.citations), len(claims))
         logger.info(f"[verify_batch] Using adaptive top_k={top_k} "
                     f"(sources={len(body.citations)}, claims={len(claims)})")
 
         # Step 2: Pre-compute BM25 scores (no LLM)
+        # 步骤 2：预计算 BM25 得分（不调用 LLM）
         bm25_scores = _batch_bm25_scores(claims, body.citations, top_k=top_k)
         logger.debug(f"[verify_batch] Computed BM25 scores for {len(claims)} claims × {len(body.citations)} citations")
 
         # Step 3: Batch verify all claims (1 LLM call)
+        # 步骤 3：批量验证所有 claims（1 次 LLM 调用）
         mappings = await _batch_verify_all_claims(claims, body.citations, bm25_scores, providers)
 
         # Count verdicts
+        # 统计 verdict
         supported_count = sum(1 for m in mappings if m.verdict == "supported")
         unsupported_count = sum(1 for m in mappings if m.verdict == "unsupported")
         insufficient_count = sum(1 for m in mappings if m.verdict == "insufficient_evidence")

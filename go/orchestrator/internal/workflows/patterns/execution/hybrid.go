@@ -12,18 +12,20 @@ import (
 )
 
 // HybridConfig controls hybrid parallel/sequential execution with dependencies
+// HybridConfig 控制带依赖的 hybrid 并行/串行执行
 type HybridConfig struct {
-	MaxConcurrency           int                                        // Maximum concurrent agents
-	EmitEvents               bool                                       // Whether to emit streaming events
-	Context                  map[string]any                             // Base context for all agents
-	DependencyWaitTimeout    time.Duration                              // Max time to wait for dependencies
-	DependencyCheckInterval  time.Duration                              // Interval between dependency checks (default 30s)
-	PassDependencyResults    bool                                       // Pass dependency results to dependent tasks
-	ClearDependentToolParams bool                                       // Clear tool params for dependent tasks
-	PrefilledResults         map[string]activities.AgentExecutionResult // Pre-populated results from external sources (child workflows, previous phases)
+	MaxConcurrency           int                                        // Maximum concurrent agents 注：最大并发 agent 数
+	EmitEvents               bool                                       // Whether to emit streaming events 注：是否发送 streaming 事件
+	Context                  map[string]any                             // Base context for all agents 注：所有 agent 共用的基础 context
+	DependencyWaitTimeout    time.Duration                              // Max time to wait for dependencies 注：等待依赖完成的最长时间
+	DependencyCheckInterval  time.Duration                              // Interval between dependency checks (default 30s) 注：依赖检查间隔（默认 30s）
+	PassDependencyResults    bool                                       // Pass dependency results to dependent tasks 注：把依赖结果传给依赖它的 task
+	ClearDependentToolParams bool                                       // Clear tool params for dependent tasks 注：清空下游 task 的 tool 参数
+	PrefilledResults         map[string]activities.AgentExecutionResult // Pre-populated results from external sources (child workflows, previous phases) 注：来自外部来源的预填结果（子 workflow、之前的阶段）
 }
 
 // HybridTask represents a task with dependencies
+// HybridTask 表示一个带依赖的 task
 type HybridTask struct {
 	ID             string
 	Description    string
@@ -32,14 +34,16 @@ type HybridTask struct {
 	PersonaID      string
 	Role           string
 	ParentArea     string
-	Dependencies   []string // IDs of tasks this depends on
+	Dependencies   []string // IDs of tasks this depends on 注：该 task 依赖的 task ID
 	// Optional per-task context overrides (e.g., task contracts)
+	// 可选的单 task context 覆盖（例如 task contract）
 	ContextOverrides map[string]any
 }
 
 // HybridResult contains results from hybrid execution
+// HybridResult 包含 hybrid 执行的结果
 type HybridResult struct {
-	Results     map[string]activities.AgentExecutionResult // Keyed by task ID
+	Results     map[string]activities.AgentExecutionResult // Keyed by task ID 注：以 task ID 为 key
 	TotalTokens int
 	Metadata    map[string]any
 }
@@ -87,6 +91,7 @@ func ExecuteHybrid(
 	)
 
 	// Create channels for coordination
+	// 创建用于协调的 channel
 	semaphore := workflow.NewSemaphore(ctx, int64(config.MaxConcurrency))
 	resultsChan := workflow.NewChannel(ctx)
 
@@ -110,15 +115,17 @@ func ExecuteHybrid(
 	}
 
 	// Build task index for quick lookup
+	// 构建 task 索引以便快速查找
 	taskIndex := make(map[string]*HybridTask)
 	for i := range tasks {
 		taskIndex[tasks[i].ID] = &tasks[i]
 	}
 
 	// Launch task executor for each task
+	// 为每个 task 启动执行协程
 	for i := range tasks {
 		task := tasks[i]
-		idx := i // Capture index for closure
+		idx := i // Capture index for closure 注：捕获索引供闭包使用
 		workflow.Go(ctx, func(ctx workflow.Context) {
 			executeHybridTask(
 				ctx,
@@ -140,6 +147,7 @@ func ExecuteHybrid(
 	}
 
 	// Collect results
+	// 收集结果
 	successCount := 0
 	errorCount := 0
 
@@ -152,7 +160,7 @@ func ExecuteHybrid(
 				"task_id", result.TaskID,
 				"error", result.Error,
 			)
-			completedTasks[result.TaskID] = true // Mark failed task as completed to unblock dependents
+			completedTasks[result.TaskID] = true // Mark failed task as completed to unblock dependents 注：把失败的 task 也标记为完成，以解除对下游的阻塞
 			errorCount++
 		} else {
 			completedTasks[result.TaskID] = true
@@ -181,6 +189,7 @@ func ExecuteHybrid(
 }
 
 // taskExecutionResult is sent through the results channel
+// taskExecutionResult 通过结果 channel 传递
 type taskExecutionResult struct {
 	TaskID string
 	Result activities.AgentExecutionResult
@@ -188,6 +197,7 @@ type taskExecutionResult struct {
 }
 
 // executeHybridTask handles execution of a single task with dependency management
+// executeHybridTask 处理单个 task 的执行并管理其依赖
 func executeHybridTask(
 	ctx workflow.Context,
 	task HybridTask,
@@ -207,6 +217,7 @@ func executeHybridTask(
 	logger := workflow.GetLogger(ctx)
 
 	// Wait for dependencies if any
+	// 有依赖时先等待依赖完成
 	if len(task.Dependencies) > 0 {
 		logger.Info("Waiting for dependencies",
 			"task_id", task.ID,
@@ -227,6 +238,7 @@ func executeHybridTask(
 	}
 
 	// Acquire semaphore for execution
+	// 获取信号量后再执行
 	if err := semaphore.Acquire(ctx, 1); err != nil {
 		resultsChan.Send(ctx, taskExecutionResult{
 			TaskID: task.ID,
@@ -237,6 +249,7 @@ func executeHybridTask(
 	defer semaphore.Release(1)
 
 	// Prepare task context
+	// 准备 task context
 	taskContext := make(map[string]any)
 	maps.Copy(taskContext, config.Context)
 	if task.ContextOverrides != nil {
@@ -249,6 +262,7 @@ func executeHybridTask(
 	}
 
 	// Add dependency results if configured
+	// 按配置注入依赖结果
 	if config.PassDependencyResults && len(task.Dependencies) > 0 {
 		depResults := make(map[string]any)
 		for _, depID := range task.Dependencies {
@@ -270,11 +284,13 @@ func executeHybridTask(
 	}
 
 	// Clear tool parameters for dependent tasks if configured
+	// 按配置清空下游 task 的 tool 参数
 	if config.ClearDependentToolParams && len(task.Dependencies) > 0 && task.ToolParameters != nil {
 		task.ToolParameters = nil
 	}
 
 	// Compute agent name using station names for deterministic, human-readable IDs
+	// 用站点名计算 agent 名称，得到确定且可读的 ID
 	wid := workflow.GetInfo(ctx).WorkflowExecution.ID
 	if config.Context != nil {
 		if p, ok := config.Context["parent_workflow_id"].(string); ok && p != "" {
@@ -284,6 +300,7 @@ func executeHybridTask(
 	agentName := agents.GetAgentName(wid, originalIndex)
 
 	// Emit agent started event (parent workflow when available)
+	// 发出 agent started 事件（有 parent workflow 时发给它）
 	if config.EmitEvents {
 		_ = workflow.ExecuteActivity(ctx, "EmitTaskUpdate",
 			activities.EmitTaskUpdateInput{
@@ -295,6 +312,7 @@ func executeHybridTask(
 	}
 
 	// Execute the task using parallel or sequential execution patterns
+	// 用并行或串行执行模式执行该 task
 	parallelTask := ParallelTask{
 		ID:               task.ID,
 		Description:      task.Description,
@@ -306,10 +324,10 @@ func executeHybridTask(
 	}
 
 	parallelConfig := ParallelConfig{
-		MaxConcurrency:   1, // Single task execution
+		MaxConcurrency:   1, // Single task execution 注：单 task 执行
 		Context:          taskContext,
-		EmitEvents:       false,         // Already handled
-		AgentIndexOffset: originalIndex, // Align inner agent name with hybrid's naming
+		EmitEvents:       false,         // Already handled 注：已在外部处理
+		AgentIndexOffset: originalIndex, // Align inner agent name with hybrid's naming 注：让内层 agent 名与 hybrid 的命名对齐
 	}
 
 	result, err := ExecuteParallel(
@@ -325,6 +343,7 @@ func executeHybridTask(
 
 	if err != nil {
 		// Emit error event (parent workflow when available)
+		// 发出 error 事件（有 parent workflow 时发给它）
 		if config.EmitEvents {
 			_ = workflow.ExecuteActivity(ctx, "EmitTaskUpdate",
 				activities.EmitTaskUpdateInput{
@@ -344,6 +363,7 @@ func executeHybridTask(
 	}
 
 	// Emit completion event (parent workflow when available)
+	// 发出完成事件（有 parent workflow 时发给它）
 	if config.EmitEvents && len(result.Results) > 0 {
 		_ = workflow.ExecuteActivity(ctx, "EmitTaskUpdate",
 			activities.EmitTaskUpdateInput{
@@ -355,6 +375,7 @@ func executeHybridTask(
 	}
 
 	// Send result
+	// 发送结果
 	if len(result.Results) > 0 {
 		resultsChan.Send(ctx, taskExecutionResult{
 			TaskID: task.ID,
@@ -369,6 +390,7 @@ func executeHybridTask(
 }
 
 // waitForDependencies waits for all dependencies to complete
+// waitForDependencies 等待所有依赖完成
 func waitForDependencies(
 	ctx workflow.Context,
 	dependencies []string,

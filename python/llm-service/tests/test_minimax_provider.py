@@ -8,8 +8,7 @@ Integration tests are skipped unless MINIMAX_API_KEY is set in the environment.
 MINIMAX_API_KEY 时运行，否则整个用例类被跳过。
 """
 
-from __future__ import annotations  # PEP 604 `X | None` syntax on Python 3.9
-# 让 Python 3.9 也能写 `X | None` 这类注解
+from __future__ import annotations  # PEP 604 `X | None` syntax on Python 3.9 注：让 Python 3.9 也能写 `X | None` 这类注解
 
 import asyncio
 import os
@@ -31,6 +30,7 @@ from llm_provider.base import (  # noqa: E402
 
 # ===========================================================================
 # Helpers
+# 辅助函数
 # ===========================================================================
 
 def _make_provider(extra_config: dict | None = None) -> MiniMaxProvider:
@@ -71,6 +71,7 @@ def _make_fake_response(content: str, model: str = "MiniMax-M2.7") -> MagicMock:
 
 # ===========================================================================
 # Unit tests — temperature clamping
+# 单元测试 — temperature 截断
 # ===========================================================================
 
 class TestClampTemperature(unittest.TestCase):
@@ -95,6 +96,7 @@ class TestClampTemperature(unittest.TestCase):
 
 # ===========================================================================
 # Unit tests — think-tag stripping
+# 单元测试 — think 标签剥离
 # ===========================================================================
 
 class TestStripThinkTags(unittest.TestCase):
@@ -120,6 +122,7 @@ class TestStripThinkTags(unittest.TestCase):
 
 # ===========================================================================
 # Unit tests — model initialisation
+# 单元测试 — 模型初始化
 # ===========================================================================
 
 class TestMiniMaxProviderModels(unittest.TestCase):
@@ -172,6 +175,7 @@ class TestMiniMaxProviderModels(unittest.TestCase):
 
 # ===========================================================================
 # Unit tests — complete() with mocked client
+# 单元测试 — complete()（client 已 mock）
 # ===========================================================================
 
 class TestMiniMaxProviderComplete(unittest.IsolatedAsyncioTestCase):
@@ -216,8 +220,7 @@ class TestMiniMaxProviderComplete(unittest.IsolatedAsyncioTestCase):
         request = CompletionRequest(
             messages=[{"role": "user", "content": "hi"}],
             model="MiniMax-M2.7",
-            temperature=0.0,  # should be clamped
-            # 0.0 会被 clamp 到下限 0.01
+            temperature=0.0,  # should be clamped 注：0.0 会被 clamp 到下限 0.01
         )
         await self.provider.complete(request)
 
@@ -274,6 +277,7 @@ class TestMiniMaxProviderComplete(unittest.IsolatedAsyncioTestCase):
 
 # ===========================================================================
 # Unit tests — manager integration (no real providers)
+# 单元测试 — manager 集成（不接真实 provider）
 # ===========================================================================
 
 class TestManagerMiniMaxRegistration(unittest.TestCase):
@@ -329,6 +333,7 @@ class TestManagerMiniMaxRegistration(unittest.TestCase):
 
 # ===========================================================================
 # Integration tests — require real MINIMAX_API_KEY
+# 集成测试 — 需要真实的 MINIMAX_API_KEY
 # ===========================================================================
 
 INTEGRATION = os.getenv("MINIMAX_API_KEY") is not None

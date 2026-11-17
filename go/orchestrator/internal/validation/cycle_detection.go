@@ -18,8 +18,8 @@ type SubtaskInfo struct {
 // CycleDetectionResult 包含循环检测的结果
 type CycleDetectionResult struct {
 	HasCycle     bool
-	CyclePath    []string // IDs involved in the cycle (if found)
-	SortedOrder  []string // Topological order (if no cycle)
+	CyclePath    []string // IDs involved in the cycle (if found) 注：循环涉及的 ID（若检测到）
+	SortedOrder  []string // Topological order (if no cycle) 注：拓扑序（无循环时）
 	ErrorMessage string
 }
 
@@ -40,10 +40,11 @@ func DetectCyclicDependencies(subtasks []SubtaskInfo) CycleDetectionResult {
 	// Build adjacency list and in-degree map
 	// 构建邻接表与入度 map
 	inDegree := make(map[string]int)
-	graph := make(map[string][]string) // task -> tasks that depend on it
+	graph := make(map[string][]string) // task -> tasks that depend on it 注：task -> 依赖它的 task
 	allNodes := make(map[string]bool)
 
 	// Initialize all nodes
+	// 初始化所有节点
 	for _, st := range subtasks {
 		allNodes[st.ID] = true
 		if _, exists := inDegree[st.ID]; !exists {
@@ -87,6 +88,7 @@ func DetectCyclicDependencies(subtasks []SubtaskInfo) CycleDetectionResult {
 
 	for len(queue) > 0 {
 		// Dequeue
+		// 出队
 		current := queue[0]
 		queue = queue[1:]
 
@@ -94,6 +96,7 @@ func DetectCyclicDependencies(subtasks []SubtaskInfo) CycleDetectionResult {
 		processedCount++
 
 		// Reduce in-degree for all dependents
+		// 减少所有依赖方的入度
 		for _, dependent := range graph[current] {
 			inDegree[dependent]--
 			if inDegree[dependent] == 0 {
@@ -112,6 +115,7 @@ func DetectCyclicDependencies(subtasks []SubtaskInfo) CycleDetectionResult {
 	}
 
 	// Cycle detected - find the nodes involved
+	// 检测到循环——找出涉及的节点
 	cycleNodes := []string{}
 	for node, degree := range inDegree {
 		if degree > 0 {
@@ -138,6 +142,7 @@ func findCyclePath(graph map[string][]string, cycleNodes []string) []string {
 	}
 
 	// Convert to set for quick lookup
+	// 转成 set 以便快速查询
 	cycleSet := make(map[string]bool)
 	for _, n := range cycleNodes {
 		cycleSet[n] = true
@@ -152,6 +157,7 @@ func findCyclePath(graph map[string][]string, cycleNodes []string) []string {
 	dfs = func(node string, currentPath []string) []string {
 		if visited[node] {
 			// Found cycle - extract the cycle portion
+			// 找到循环——截取循环片段
 			for i, n := range currentPath {
 				if n == node {
 					cycle := append(currentPath[i:], node)
@@ -181,6 +187,7 @@ func findCyclePath(graph map[string][]string, cycleNodes []string) []string {
 	}
 
 	// Start DFS from each cycle node
+	// 从每个循环节点启动 DFS
 	for _, start := range cycleNodes {
 		visited = make(map[string]bool)
 		result := dfs(start, path)
@@ -190,6 +197,7 @@ func findCyclePath(graph map[string][]string, cycleNodes []string) []string {
 	}
 
 	// Fallback: just return the cycle nodes
+	// 兜底：直接返回循环节点
 	return cycleNodes
 }
 

@@ -12,8 +12,9 @@ version: "1.0"
 agents: {}
 
 # Global settings
+# 全局设置
 settings:
   default_timeout_seconds: 120
   max_concurrent_agents: 5
   enable_caching: true
-  cache_ttl_seconds: 900  # 15 minutes
+  cache_ttl_seconds: 900  # 15 minutes 注：15 分钟

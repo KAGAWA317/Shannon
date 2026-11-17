@@ -149,7 +149,7 @@ class TestOpenAPIToolExecution:
         )
 
         tools = loader.generate_tools()
-        get_user_tool = tools[0]()  # Instantiate
+        get_user_tool = tools[0]()  # Instantiate 注：实例化
 
         with patch("httpx.AsyncClient.request") as mock_request:
             mock_response = AsyncMock()
@@ -365,7 +365,7 @@ class TestRateLimiting:
         loader = OpenAPILoader(
             name="test_api",
             spec=simple_spec,
-            rate_limit=2,  # 2 requests per minute
+            rate_limit=2,  # 2 requests per minute 注：每分钟 2 次请求
             # 每分钟 2 个 request
         )
 

@@ -32,16 +32,16 @@ func randIntn(n int) int {
 // AgentPerformanceInput requests performance metrics for agent selection
 // AgentPerformanceInput 请求 agent 选择所需的性能指标。
 type AgentPerformanceInput struct {
-	Mode           string        `json:"mode"`            // Task mode to filter by (e.g., "simple", "research")
-	LookbackPeriod time.Duration `json:"lookback_period"` // How far back to look (e.g., 7 days)
-	MinSamples     int           `json:"min_samples"`     // Minimum executions required for consideration
+	Mode           string        `json:"mode"`            // Task mode to filter by (e.g., "simple", "research") 注：用于过滤的任务 mode（例如 "simple"、"research"）
+	LookbackPeriod time.Duration `json:"lookback_period"` // How far back to look (e.g., 7 days) 注：回看时长（例如 7 天）
+	MinSamples     int           `json:"min_samples"`     // Minimum executions required for consideration 注：参与评估所需的最少执行次数
 }
 
 // AgentPerformance represents an agent's historical performance
 // AgentPerformance 表示某个 agent 的历史表现。
 type AgentPerformance struct {
 	AgentID     string  `json:"agent_id"`
-	SuccessRate float64 `json:"success_rate"` // 0.0 to 1.0
+	SuccessRate float64 `json:"success_rate"` // 0.0 to 1.0 注：0.0 到 1.0
 	TotalRuns   int     `json:"total_runs"`
 	AvgTokens   int     `json:"avg_tokens"`
 	AvgDuration int64   `json:"avg_duration_ms"`
@@ -51,7 +51,7 @@ type AgentPerformance struct {
 // FetchAgentPerformancesInput 请求指定 agent 的性能数据。
 type FetchAgentPerformancesInput struct {
 	AgentIDs  []string `json:"agent_ids"`
-	SessionID string   `json:"session_id,omitempty"` // Optional: scope to session
+	SessionID string   `json:"session_id,omitempty"` // Optional: scope to session 注：可选，限定到某个会话
 }
 
 // FetchAgentPerformances retrieves historical performance for a list of agent IDs.
@@ -64,6 +64,7 @@ func FetchAgentPerformances(ctx context.Context, in FetchAgentPerformancesInput)
 	}
 
 	// Use global DB client if available
+	// 若可用则使用全局 DB client。
 	dbClient := GetGlobalDBClient()
 	if dbClient == nil {
 		return []AgentPerformance{}, nil
@@ -83,6 +84,7 @@ func FetchAgentPerformances(ctx context.Context, in FetchAgentPerformancesInput)
 	}
 
 	// Optional session scope parameter index
+	// 可选的会话范围参数下标。
 	nextIdx := len(args) + 1
 
 	query := fmt.Sprintf(`
@@ -124,6 +126,7 @@ func FetchAgentPerformances(ctx context.Context, in FetchAgentPerformancesInput)
 		var avgTokens, avgDuration sql.NullFloat64
 		if err := rows.Scan(&perf.AgentID, &perf.SuccessRate, &perf.TotalRuns, &avgTokens, &avgDuration); err != nil {
 			// Skip any malformed row
+			// 跳过格式异常的行。
 			continue
 		}
 		if avgTokens.Valid {
@@ -151,12 +154,14 @@ type AgentPerformanceResult struct {
 func GetAgentPerformanceMetrics(ctx context.Context, db *sql.DB, in AgentPerformanceInput) (AgentPerformanceResult, error) {
 	if db == nil {
 		// Return default if no database
+		// 没有数据库时返回默认值。
 		return AgentPerformanceResult{}, nil
 	}
 
 	const defaultAgentLimit = 50
 
 	// Join with task_executions to filter by mode and time window
+	// 与 task_executions 关联，按 mode 和时间窗口过滤。
 	query := `
         SELECT
             ae.agent_id,
@@ -177,7 +182,7 @@ func GetAgentPerformanceMetrics(ctx context.Context, db *sql.DB, in AgentPerform
 	lookbackTime := time.Now().Add(-in.LookbackPeriod)
 	minSamples := in.MinSamples
 	if minSamples <= 0 {
-		minSamples = 5 // Default minimum samples
+		minSamples = 5 // Default minimum samples 注：默认最少样本数
 	}
 
 	rows, err := db.QueryContext(ctx, query, lookbackTime, in.Mode, minSamples, defaultAgentLimit)
@@ -199,7 +204,7 @@ func GetAgentPerformanceMetrics(ctx context.Context, db *sql.DB, in AgentPerform
 			&avgDuration,
 		)
 		if err != nil {
-			continue // Skip malformed rows
+			continue // Skip malformed rows 注：跳过格式异常的行
 		}
 
 		if avgTokens.Valid {
@@ -216,7 +221,7 @@ func GetAgentPerformanceMetrics(ctx context.Context, db *sql.DB, in AgentPerform
 	// 找出表现最好的 agent。
 	bestAgentID := ""
 	if len(performances) > 0 {
-		bestAgentID = performances[0].AgentID // Already sorted by success_rate DESC
+		bestAgentID = performances[0].AgentID // Already sorted by success_rate DESC 注：已按 success_rate 降序排好
 	}
 
 	return AgentPerformanceResult{
@@ -231,9 +236,9 @@ func GetAgentPerformanceMetrics(ctx context.Context, db *sql.DB, in AgentPerform
 // SelectAgentEpsilonGreedy 实现 epsilon-greedy 选择：以 epsilon 概率探索（随机选），以 1-epsilon 概率利用（选最佳）。
 type SelectAgentEpsilonGreedyInput struct {
 	Performances      []AgentPerformance `json:"performances"`
-	Epsilon           float64            `json:"epsilon"`             // Exploration rate (0.0 to 1.0)
-	DefaultAgentID    string             `json:"default_agent_id"`    // Fallback if no performance data
-	AvailableAgentIDs []string           `json:"available_agent_ids"` // Pool of available agents
+	Epsilon           float64            `json:"epsilon"`             // Exploration rate (0.0 to 1.0) 注：探索率（0.0 到 1.0）
+	DefaultAgentID    string             `json:"default_agent_id"`    // Fallback if no performance data 注：没有性能数据时的兜底 agent
+	AvailableAgentIDs []string           `json:"available_agent_ids"` // Pool of available agents 注：可用 agent 池
 }
 
 type SelectAgentEpsilonGreedyResult struct {
@@ -242,8 +247,10 @@ type SelectAgentEpsilonGreedyResult struct {
 }
 
 // SelectAgentEpsilonGreedy selects an agent using epsilon-greedy strategy
+// SelectAgentEpsilonGreedy 使用 epsilon-greedy 策略选择一个 agent。
 func SelectAgentEpsilonGreedy(ctx context.Context, in SelectAgentEpsilonGreedyInput) (SelectAgentEpsilonGreedyResult, error) {
 	// If no performance data, use default
+	// 没有性能数据时使用默认 agent。
 	if len(in.Performances) == 0 {
 		return SelectAgentEpsilonGreedyResult{
 			SelectedAgentID: in.DefaultAgentID,
@@ -266,6 +273,7 @@ func SelectAgentEpsilonGreedy(ctx context.Context, in SelectAgentEpsilonGreedyIn
 			}, nil
 		}
 		// Fallback to random from performances
+		// 退化为从 performances 中随机选择。
 		idx := randIntn(len(in.Performances))
 		return SelectAgentEpsilonGreedyResult{
 			SelectedAgentID: in.Performances[idx].AgentID,
@@ -276,7 +284,7 @@ func SelectAgentEpsilonGreedy(ctx context.Context, in SelectAgentEpsilonGreedyIn
 	// Exploitation: select best performer
 	// 利用：选择表现最好的 agent。
 	return SelectAgentEpsilonGreedyResult{
-		SelectedAgentID: in.Performances[0].AgentID, // Already sorted by performance
+		SelectedAgentID: in.Performances[0].AgentID, // Already sorted by performance 注：已按表现排好
 		IsExploration:   false,
 	}, nil
 }
@@ -285,7 +293,7 @@ func SelectAgentEpsilonGreedy(ctx context.Context, in SelectAgentEpsilonGreedyIn
 // 备选方案：UCB1（Upper Confidence Bound）选择，探索效果更好。
 type SelectAgentUCB1Input struct {
 	Performances    []AgentPerformance `json:"performances"`
-	TotalSelections int                `json:"total_selections"` // Total times any agent has been selected
+	TotalSelections int                `json:"total_selections"` // Total times any agent has been selected 注：任意 agent 被选中的总次数
 	DefaultAgentID  string             `json:"default_agent_id"`
 }
 
@@ -316,7 +324,7 @@ func SelectAgentUCB1(ctx context.Context, in SelectAgentUCB1Input) (SelectAgentU
 		// 被选中次数越多，探索加分越小。
 		explorationBonus := 0.0
 		if perf.TotalRuns > 0 && in.TotalSelections > 0 {
-			explorationBonus = 1.41421356 * // sqrt(2)
+			explorationBonus = 1.41421356 * // sqrt(2) 注：2 的平方根
 				(float64(in.TotalSelections) / float64(perf.TotalRuns))
 		}
 
@@ -342,7 +350,7 @@ type RecordAgentPerformanceInput struct {
 	Success    bool   `json:"success"`
 	TokensUsed int    `json:"tokens_used"`
 	DurationMs int64  `json:"duration_ms"`
-	Mode       string `json:"mode"` // Task mode (e.g., "simple", "research")
+	Mode       string `json:"mode"` // Task mode (e.g., "simple", "research") 注：任务 mode（例如 "simple"、"research"）
 }
 
 type RecordAgentPerformanceResult struct {
@@ -354,8 +362,10 @@ type RecordAgentPerformanceResult struct {
 // RecordAgentPerformance 把 agent 执行结果持久化到 agent_executions 表，为 epsilon-greedy、UCB1 等选择算法提供数据。
 func RecordAgentPerformance(ctx context.Context, in RecordAgentPerformanceInput) (RecordAgentPerformanceResult, error) {
 	// TODO: Insert into agent_executions table
+	// TODO: 插入到 agent_executions 表。
 	// INSERT INTO agent_executions (agent_id, session_id, success, tokens_used, duration_ms, mode, created_at)
 	// VALUES ($1, $2, $3, $4, $5, $6, NOW())
 	// For now, this is a stub until agent_executions schema is ready
+	// 目前是桩实现，待 agent_executions schema 就绪。
 	return RecordAgentPerformanceResult{Recorded: false}, nil
 }

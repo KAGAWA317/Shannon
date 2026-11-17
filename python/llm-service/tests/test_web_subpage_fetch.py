@@ -32,9 +32,11 @@ class TestKeywordExpansion:
         """Multiple keywords should all expand."""
         expanded = tool._expand_keywords("team funding")
         # team synonyms
+        # team 的同义词
         assert "team" in expanded
         assert "leadership" in expanded
         # funding synonyms
+        # funding 的同义词
         assert "funding" in expanded
         assert "investment" in expanded
         assert "investors" in expanded
@@ -75,15 +77,17 @@ class TestRelevanceScoring:
         )
 
         assert blog_score > generic_score
-        assert blog_score >= 0.25  # HIGH_VALUE_PATHS boost
+        assert blog_score >= 0.25  # HIGH_VALUE_PATHS boost 注：HIGH_VALUE_PATHS 加权
 
     def test_target_keyword_matching(self, tool):
         """URLs matching target keywords should score higher."""
         # With funding keyword
+        # 带 funding 关键词
         with_keyword = tool._calculate_relevance_score(
             "https://example.com/investors", "funding", 50
         )
         # Without keyword
+        # 不带关键词
         without_keyword = tool._calculate_relevance_score(
             "https://example.com/investors", "", 50
         )
@@ -142,7 +146,7 @@ class TestRelevanceScoring:
         )
 
         assert best > worst
-        assert best >= 0.5  # Should be reasonably high
+        assert best >= 0.5  # Should be reasonably high 注：应足够高
 
 
 class TestScoringForCompanyResearch:
@@ -177,23 +181,29 @@ class TestScoringForCompanyResearch:
             scores.append((url, score))
 
         # Sort by score descending
+        # 按分数降序排序
         scores.sort(key=lambda x: x[1], reverse=True)
 
         # Print for debugging
+        # 为调试打印输出
         print("\nScoring results:")
         for url, score in scores:
             print(f"  {score:.3f} - {url}")
 
         # High-value content should be in top half
+        # 高价值内容应位于前半部分
         top_half_urls = [url for url, _ in scores[:len(scores)//2]]
 
         # blog/news should be boosted
+        # blog/news 应被加权
         assert any("blog" in url or "news" in url for url in top_half_urls)
 
         # about/company/leadership should be high
+        # about/company/leadership 应排在前列
         assert any("about" in url for url in top_half_urls)
 
         # legal pages should be low
+        # 法律类页面应排在后面
         bottom_half_urls = [url for url, _ in scores[len(scores)//2:]]
         assert any("legal" in url for url in bottom_half_urls)
 
@@ -218,6 +228,7 @@ class TestScoringForCompanyResearch:
         scores.sort(key=lambda x: x[1], reverse=True)
 
         # funding/investor related should be top 3
+        # funding/investor 相关应进入前 3
         top_3_urls = [url for url, _ in scores[:3]]
         funding_related = sum(1 for url in top_3_urls
                             if any(k in url for k in ["funding", "investor", "ir", "blog"]))
@@ -239,7 +250,7 @@ class TestEdgeCases:
         score = tool._calculate_relevance_score(
             "https://example.com/", "about team", 50
         )
-        assert score >= 0.1  # Should have some base score
+        assert score >= 0.1  # Should have some base score 注：应有一些基础分
 
     def test_very_long_url(self, tool):
         """Very long URLs should not crash."""
@@ -277,6 +288,7 @@ class TestEdgeCases:
         )
 
         # Both should match
+        # 两者都应命中
         assert lower_score > 0.1
         assert upper_score > 0.1
 
@@ -294,10 +306,10 @@ class TestHybridSelection:
         """Test that hybrid selection prioritizes keyword matches."""
         urls = [
             "https://example.com/",
-            "https://example.com/about",        # keyword match
-            "https://example.com/team",         # keyword match
-            "https://example.com/blog/update",  # high-value path
-            "https://example.com/news/press",   # high-value path
+            "https://example.com/about",        # keyword match 注：关键词命中
+            "https://example.com/team",         # keyword match 注：关键词命中
+            "https://example.com/blog/update",  # high-value path 注：高价值路径
+            "https://example.com/news/press",   # high-value path 注：高价值路径
             "https://example.com/contact",
             "https://example.com/careers",
             "https://example.com/random-page",
@@ -309,6 +321,7 @@ class TestHybridSelection:
         expanded = tool._expand_keywords(keywords)
 
         # Classify URLs as keyword-matched or not
+        # 按是否命中关键词对 URL 分类
         keyword_matched = []
         others = []
 
@@ -324,6 +337,7 @@ class TestHybridSelection:
                 others.append((u, score))
 
         # Verify classification
+        # 验证分类结果
         keyword_urls = [u for u, _ in keyword_matched]
         assert "https://example.com/about" in keyword_urls
         assert "https://example.com/team" in keyword_urls
@@ -337,16 +351,17 @@ class TestHybridSelection:
     def test_hybrid_quota_allocation(self, tool):
         """Test 60/40 quota split between keyword and others."""
         limit = 10
-        keyword_quota = int(limit * 0.6)  # 6
-        other_quota = limit - keyword_quota  # 4
+        keyword_quota = int(limit * 0.6)  # 6 注：即 6 个
+        other_quota = limit - keyword_quota  # 4 注：即 4 个
 
         assert keyword_quota == 6
         assert other_quota == 4
 
         # With limit=12 (like example case)
+        # limit=12（与示例用例一致）
         limit = 12
-        keyword_quota = int(limit * 0.6)  # 7
-        other_quota = limit - keyword_quota  # 5
+        keyword_quota = int(limit * 0.6)  # 7 注：即 7 个
+        other_quota = limit - keyword_quota  # 5 注：即 5 个
 
         assert keyword_quota == 7
         assert other_quota == 5

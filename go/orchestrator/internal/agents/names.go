@@ -49,7 +49,7 @@ const (
 	IdxEntityLocalization    = 214
 	IdxFallbackSearch        = 215
 	IdxAdsKeywordExtraction  = 220
-	IdxAdsLPAnalysisBase     = 221 // Use 221+i for LP analysis
+	IdxAdsLPAnalysisBase     = 221 // Use 221+i for LP analysis 注：LP 分析用 221+i
 	IdxAdsSynthesis          = 230
 	IdxAdsYahooJPDiscover    = 231
 	IdxAdsMetaDiscover       = 232
@@ -58,8 +58,8 @@ const (
 	IdxDAGSynthesis          = 250
 	IdxSupervisorSynthesis   = 251
 	IdxStreamingSynthesis    = 252
-	IdxDomainPrefetchBase    = 100 // Use 100+i for domain prefetch
-	IdxSwarmDynamicBase = 300 // Use 300+i for dynamically spawned swarm agents
+	IdxDomainPrefetchBase    = 100 // Use 100+i for domain prefetch 注：domain prefetch 用 100+i
+	IdxSwarmDynamicBase = 300 // Use 300+i for dynamically spawned swarm agents 注：动态 spawn 的 swarm agent 用 300+i
 )
 
 // stationNames is the pool of Japanese station-inspired agent names.
@@ -68,24 +68,29 @@ const (
 // 列表固定不变，以保证 workflow 重放时的确定性。
 var stationNames = []string{
 	// Classics with proper romanization
+	// 带规范罗马字的经典站名
 	"Ōme", "Gora", "Maji", "Ebisu", "Ōsaki",
 	"Otaru", "Namba", "Tenma", "Mejiro", "Kōenji",
 	"Gotanda", "Ryōgoku", "Yūtenji", "Nippori", "Asagaya",
 	"Mojikō", "Kottoi", "Taishō", "Yumoto", "Odawara",
 	"Enoshima", "Ogikubo", "Ichigaya", "Komazawa", "Todoroki",
 	// Quirky names
+	// 古怪站名
 	"Obama", "Usa", "Gero", "Ōboke", "Koboke",
 	"Naruto", "Zushi", "Fussa", "Oppama", "Pippu",
 	"Mashike", "Zōshiki",
 	// Remote & scenic gems
+	// 偏远风景站名
 	"Nikkō", "Hakone", "Beppu", "Atami", "Wakkanai",
 	"Koboro", "Shimonada", "Tadami", "Tsuwano", "Okutama",
 	"Nagatoro", "Kazamatsuri", "Chōshi", "Kururi", "Biei",
 	"Minobu", "Shimonita",
 	// Saitama & West Tokyo deep cuts
+	// 埼玉与西东京的冷门站名
 	"Tama", "Musashi", "Urawa", "Kawagoe", "Hannō",
 	"Chichibu", "Takao", "Mitaka", "Kichijōji",
 	// Bonus obscure finds
+	// 额外冷门发现
 	"Karasuyama", "Ashikaga", "Sasago", "Shimokita", "Kuragano",
 }
 

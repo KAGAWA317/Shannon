@@ -6,9 +6,9 @@
 # WASI Sandbox Configuration
 # WASI sandbox 配置
 wasi:
-  memory_limit_bytes: 268435456  # 256MB
+  memory_limit_bytes: 268435456  # 256MB 注：256MB
   execution_timeout_secs: 30
-  max_fuel: 1000000000  # 1 billion
+  max_fuel: 1000000000  # 1 billion 注：10 亿
   enable_filesystem: true
   # NOTE: /tmp removed from defaults to prevent cross-session data leaks.
   # 注意：已从默认值中移除 /tmp，以防止跨 session 数据泄露。
@@ -19,11 +19,11 @@ wasi:
 # Memory Pool Configuration
 # 内存池配置
 memory:
-  pool_size_bytes: 1073741824  # 1GB
-  max_allocation_bytes: 104857600  # 100MB
-  cache_ttl_secs: 3600  # 1 hour
+  pool_size_bytes: 1073741824  # 1GB 注：1GB
+  max_allocation_bytes: 104857600  # 100MB 注：100MB
+  cache_ttl_secs: 3600  # 1 hour 注：1 小时
   enable_pressure_monitoring: true
-  pressure_threshold: 0.9  # 90%
+  pressure_threshold: 0.9  # 90% 注：90%
 
 # Tool Execution Configuration
 # tool 执行配置
@@ -31,7 +31,7 @@ tools:
   default_timeout_secs: 60
   max_concurrent_executions: 5
   enable_caching: true
-  cache_ttl_secs: 300  # 5 minutes
+  cache_ttl_secs: 300  # 5 minutes 注：5 分钟
 
 # LLM Service Configuration
 # LLM 服务配置
@@ -45,7 +45,7 @@ llm:
 # FSM 配置
 fsm:
   max_iterations: 10
-  time_budget_ms: 30000  # 30 seconds
+  time_budget_ms: 30000  # 30 seconds 注：30 秒
   persist_belief_state: false
   transition_timeout_secs: 5
 
@@ -86,6 +86,7 @@ python_executor:
   # Firecracker 专属限制
   firecracker:
     # Executor URL (set via FIRECRACKER_EXECUTOR_URL env var in production)
+    # Executor URL（生产环境通过 FIRECRACKER_EXECUTOR_URL 环境变量设置）
     # executor_url: "http://firecracker-executor:9001"
     memory_mb: 1024
     vcpu_count: 2

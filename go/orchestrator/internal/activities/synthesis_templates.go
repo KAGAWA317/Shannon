@@ -26,9 +26,9 @@ type SynthesisTemplateData struct {
 	TargetWords          int
 	IsResearch           bool
 	SynthesisStyle       string
-	CitationAgentEnabled bool   // Whether Citation Agent post-processing is active
-	CurrentDate          string // Current date for temporal reference (e.g., "January 7, 2026")
-	NewsCount            int    // Number of news items for morning brief (0 = use template default)
+	CitationAgentEnabled bool   // Whether Citation Agent post-processing is active 注：是否启用 Citation Agent 后处理
+	CurrentDate          string // Current date for temporal reference (e.g., "January 7, 2026") 注：用于时间参考的当前日期（例如 "January 7, 2026"）
+	NewsCount            int    // Number of news items for morning brief (0 = use template default) 注：morning brief 的新闻条数（0 表示使用 template 默认值）
 }
 
 // synthesisTemplateCache caches loaded templates for performance.
@@ -101,6 +101,7 @@ type SynthesisLogger interface {
 // cache 可减少重复的磁盘读取。
 func LoadSynthesisTemplate(name string, logger *zap.Logger) *template.Template {
 	// Check cache first
+	// 先查 cache。
 	synthesisTemplateMutex.RLock()
 	if tmpl, ok := synthesisTemplateCache[name]; ok {
 		synthesisTemplateMutex.RUnlock()
@@ -109,13 +110,16 @@ func LoadSynthesisTemplate(name string, logger *zap.Logger) *template.Template {
 	synthesisTemplateMutex.RUnlock()
 
 	// Load from disk
+	// 从磁盘加载。
 	dir := getSynthesisTemplatesDir()
 
 	// Load base template first
+	// 先加载 base template。
 	basePath := filepath.Join(dir, "_base.tmpl")
 	namedPath := filepath.Join(dir, name+".tmpl")
 
 	// Check if files exist
+	// 检查文件是否存在。
 	if _, err := os.Stat(namedPath); os.IsNotExist(err) {
 		if logger != nil {
 			logger.Debug("Synthesis template not found", zap.String("name", name), zap.String("path", namedPath))
@@ -124,9 +128,11 @@ func LoadSynthesisTemplate(name string, logger *zap.Logger) *template.Template {
 	}
 
 	// Create template with base + named
+	// 创建由 base 与 named 组合的 template。
 	tmpl := template.New(name).Funcs(templateFuncs)
 
 	// Parse base template if it exists
+	// base template 存在则解析。
 	if _, err := os.Stat(basePath); err == nil {
 		baseContent, err := os.ReadFile(basePath)
 		if err != nil {
@@ -143,6 +149,7 @@ func LoadSynthesisTemplate(name string, logger *zap.Logger) *template.Template {
 	}
 
 	// Parse named template
+	// 解析 named template。
 	namedContent, err := os.ReadFile(namedPath)
 	if err != nil {
 		if logger != nil {
@@ -159,6 +166,7 @@ func LoadSynthesisTemplate(name string, logger *zap.Logger) *template.Template {
 	}
 
 	// Cache for future use
+	// 缓存起来供后续使用。
 	synthesisTemplateMutex.Lock()
 	synthesisTemplateCache[name] = tmpl
 	synthesisTemplateMutex.Unlock()
@@ -211,26 +219,31 @@ func SelectSynthesisTemplate(context map[string]any) (templateName string, expli
 	}
 
 	// 1. Explicit template specification
+	// 1. 显式指定 template。
 	if name, ok := context["synthesis_template"].(string); ok && name != "" {
 		return name, true
 	}
 
 	// 2. Workflow type
+	// 2. 按 workflow type。
 	if wfType, ok := context["workflow_type"].(string); ok && wfType == "research" {
 		return "research_comprehensive", false
 	}
 
 	// 3. Force research flag (handles both bool and string "true" from proto)
+	// 3. force research 标志（兼容 proto 传来的 bool 与字符串 "true"）。
 	if util.GetContextBool(context, "force_research") {
 		return "research_comprehensive", false
 	}
 
 	// 4. Swarm workflow
+	// 4. swarm workflow 标志。
 	if util.GetContextBool(context, "force_swarm") {
 		return "swarm_default", false
 	}
 
 	// 5-6. Synthesis style
+	// 5-6. synthesis style 选择。
 	if style, ok := context["synthesis_style"].(string); ok {
 		switch style {
 		case "comprehensive":
@@ -241,6 +254,7 @@ func SelectSynthesisTemplate(context map[string]any) (templateName string, expli
 	}
 
 	// 7. Research areas presence
+	// 7. 是否存在 research areas。
 	if rawAreas, ok := context["research_areas"]; ok && rawAreas != nil {
 		switch t := rawAreas.(type) {
 		case []string:
@@ -255,6 +269,7 @@ func SelectSynthesisTemplate(context map[string]any) (templateName string, expli
 	}
 
 	// 8. Default
+	// 8. 默认。
 	return "normal_default", false
 }
 

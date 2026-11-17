@@ -28,7 +28,7 @@ type Features struct {
 	Workflows     WorkflowsConfig     `mapstructure:"workflows"`
 	Enforcement   EnforcementConfig   `mapstructure:"enforcement"`
 	Gateway       GatewayConfig       `mapstructure:"gateway"`
-	Citation      CitationConfig      `mapstructure:"citation"` // P1: Citation V2 feature flags
+	Citation      CitationConfig      `mapstructure:"citation"` // P1: Citation V2 feature flags 注：P1：Citation V2 功能开关
 	Daemon        DaemonConfig        `mapstructure:"daemon"`
 }
 
@@ -154,11 +154,13 @@ type EnforcementConfig struct {
 }
 
 // GatewayConfig represents gateway-specific toggles
+// GatewayConfig 表示 gateway 专属开关
 type GatewayConfig struct {
 	SkipAuth *bool `mapstructure:"skip_auth"`
 }
 
 // DaemonConfig captures daemon command channel settings
+// DaemonConfig 保存 daemon 命令通道设置
 type DaemonConfig struct {
 	Enabled                 bool `mapstructure:"enabled"`
 	ClaimTimeoutSeconds     int  `mapstructure:"claim_timeout_seconds"`
@@ -187,6 +189,7 @@ type WorkspaceTierConfig struct {
 }
 
 // WorkspaceConfig captures workspace tier configuration
+// WorkspaceConfig 保存 workspace 层级（tier）配置
 type WorkspaceConfig struct {
 	Tiers struct {
 		Free       WorkspaceTierConfig `mapstructure:"free"`
@@ -227,6 +230,7 @@ func envInt(key string, dst *int) {
 // BudgetFromEnvOrDefaults 合并 budget 配置：优先环境变量，其次配置文件，最后使用合理默认值。
 func BudgetFromEnvOrDefaults(f *Features) BudgetConfig {
 	// defaults
+	// 默认值
 	bc := BudgetConfig{}
 	bc.Backpressure.Threshold = 0.8
 	bc.Backpressure.MaxDelayMs = 5000
@@ -234,8 +238,10 @@ func BudgetFromEnvOrDefaults(f *Features) BudgetConfig {
 	bc.CircuitBreaker.ResetTimeoutMs = 60000
 	bc.CircuitBreaker.HalfOpenRequests = 1
 	// rate-limit defaults disabled (0)
+	// rate-limit 默认关闭（0）
 
 	// merge from config file if provided
+	// 若提供了配置文件则合并
 	if f != nil {
 		if f.Budget.Backpressure.Threshold > 0 {
 			bc.Backpressure.Threshold = f.Budget.Backpressure.Threshold
@@ -261,6 +267,7 @@ func BudgetFromEnvOrDefaults(f *Features) BudgetConfig {
 	}
 
 	// env overrides
+	// 环境变量覆盖
 	if v := os.Getenv("BACKPRESSURE_THRESHOLD"); v != "" {
 		var x float64
 		_, _ = fmt.Sscanf(v, "%f", &x)
@@ -424,6 +431,7 @@ func ResolveCitationRuntime(f *Features) CitationRuntime {
 	}
 
 	// Environment overrides
+	// 环境变量覆盖
 	if v := os.Getenv("CITATION_V2_ENABLED"); v != "" {
 		cfg.V2Enabled = ParseBool(v)
 	}

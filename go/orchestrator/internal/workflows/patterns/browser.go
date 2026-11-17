@@ -19,15 +19,18 @@ import (
 )
 
 // BrowserConfig controls the browser automation loop behavior
+// BrowserConfig 控制浏览器自动化循环的行为
 type BrowserConfig struct {
-	MaxIterations int // Maximum number of browser action loops
-	ActionTimeout int // Timeout for each action in milliseconds
+	MaxIterations int // Maximum number of browser action loops 注：浏览器动作循环的最大次数
+	ActionTimeout int // Timeout for each action in milliseconds 注：每个动作的超时时间，单位毫秒
 }
 
 // CheckPauseFunc is a callback for checking pause/cancel signals during iteration
+// CheckPauseFunc 是迭代过程中检查暂停/取消信号的回调
 type CheckPauseFunc func(ctx workflow.Context, checkpoint string) error
 
 // BrowserLoopResult contains the results of browser automation
+// BrowserLoopResult 包含浏览器自动化的结果
 type BrowserLoopResult struct {
 	Actions      []string
 	Observations []string
@@ -38,14 +41,22 @@ type BrowserLoopResult struct {
 }
 
 // BrowserLoop executes a unified agent loop for browser automation.
+// BrowserLoop 为浏览器自动化执行统一的 agent 循环。
 // Unlike ReactLoop which splits REASON and ACT into separate agent calls,
+// 与把 REASON 和 ACT 拆成两次独立 agent 调用的 ReactLoop 不同，
 // BrowserLoop uses a single agent that reasons and acts together.
+// BrowserLoop 使用单个 agent，边推理边执行动作。
 //
 // This matches modern browser automation approaches (Claude Code, Manus):
+// 这与现代浏览器自动化方案（Claude Code、Manus）一致：
 // 1. Agent receives: task + current page state + action history
+// 1. Agent 收到：task + 当前页面状态 + 动作历史
 // 2. Agent reasons about what to do AND executes tools in one call
+// 2. Agent 在一次调用中推理该做什么，并执行 tool
 // 3. Tool results become observations for next iteration
+// 3. tool 的结果成为下一轮的观测
 // 4. Repeat until task complete or max iterations
+// 4. 重复直到 task 完成或达到最大迭代次数
 // 与把 REASON/ACT 拆成两次调用的 ReactLoop 不同，这里用单个 agent 边推理边行动：
 // 一次调用里既决定又执行 tool，tool 结果作为下一轮观测，直到 task 完成或达到迭代上限。
 func BrowserLoop(
@@ -61,6 +72,7 @@ func BrowserLoop(
 	logger := workflow.GetLogger(ctx)
 
 	// Set activity options with longer timeout for browser actions
+	// 设置 activity options，为浏览器动作留出更长超时
 	activityTimeout := 3 * time.Minute
 	if config.ActionTimeout > 0 {
 		activityTimeout = time.Duration(config.ActionTimeout) * time.Millisecond
@@ -75,6 +87,7 @@ func BrowserLoop(
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
 	// Initialize state
+	// 初始化状态
 	var observations []string
 	var actions []string
 	totalTokens := 0
@@ -84,6 +97,7 @@ func BrowserLoop(
 	promptVersion := workflow.GetVersion(ctx, "browser_agent_prompt_v2", workflow.DefaultVersion, 1)
 
 	// Get workflow ID for SSE events
+	// 获取 workflow ID，用于 SSE 事件
 	wfID := workflow.GetInfo(ctx).WorkflowExecution.ID
 	if baseContext != nil {
 		if p, ok := baseContext["parent_workflow_id"].(string); ok && p != "" {
@@ -92,6 +106,7 @@ func BrowserLoop(
 	}
 
 	// Emit browser automation started
+	// 发出浏览器自动化开始事件
 	streaming.Get().Publish(wfID, streaming.Event{
 		WorkflowID: wfID,
 		Type:       "PROGRESS",
@@ -101,8 +116,10 @@ func BrowserLoop(
 	})
 
 	// Main unified agent loop
+	// 主循环：统一的 agent 循环
 	for iteration < config.MaxIterations {
 		// Check for pause/cancel at start of each iteration
+		// 每轮迭代开始时检查暂停/取消
 		if checkPause != nil {
 			if err := checkPause(ctx, fmt.Sprintf("pre_iteration_%d", iteration)); err != nil {
 				return &BrowserLoopResult{
@@ -124,6 +141,7 @@ func BrowserLoop(
 		agentID := agents.GetAgentName(wfID, iteration)
 
 		// Emit iteration progress
+		// 发出迭代进度事件
 		streaming.Get().Publish(wfID, streaming.Event{
 			WorkflowID: wfID,
 			Type:       "PROGRESS",
@@ -133,6 +151,7 @@ func BrowserLoop(
 		})
 
 		// Emit agent started
+		// 发出 agent 开始事件
 		streaming.Get().Publish(wfID, streaming.Event{
 			WorkflowID: wfID,
 			Type:       "AGENT_STARTED",
@@ -142,6 +161,7 @@ func BrowserLoop(
 		})
 
 		// Build unified context for single agent call
+		// 为单次 agent 调用构建统一上下文
 		agentContext := make(map[string]any)
 		maps.Copy(agentContext, baseContext)
 		agentContext["query"] = query
@@ -149,6 +169,7 @@ func BrowserLoop(
 		agentContext["previous_actions"] = actions
 
 		// Include recent observations (truncated to prevent context overflow)
+		// 带上最近的观测（已截断，避免上下文溢出）
 		recentObs := observations
 		if len(recentObs) > 5 {
 			recentObs = recentObs[len(recentObs)-5:]
@@ -156,6 +177,7 @@ func BrowserLoop(
 		agentContext["observations"] = recentObs
 
 		// Build the unified prompt that combines reasoning and action
+		// 构建把推理与动作合并到一起的统一 prompt
 		var agentQuery string
 		if promptVersion < 1 {
 			agentQuery = buildBrowserAgentPromptV1(query, actions, recentObs, iteration)
@@ -167,11 +189,13 @@ func BrowserLoop(
 		var err error
 
 		// Browser tools that should be available for this agent
+		// 该 agent 可用的浏览器工具
 		browserTools := []string{
 			"browser",
 		}
 
 		// Execute unified agent (reason + act together)
+		// 执行统一 agent（推理 + 动作一体）
 		if opts.BudgetAgentMax > 0 {
 			err = workflow.ExecuteActivity(ctx,
 				constants.ExecuteAgentWithBudgetActivity,
@@ -216,6 +240,7 @@ func BrowserLoop(
 		}
 
 		// Emit agent completed
+		// 发出 agent 完成事件
 		streaming.Get().Publish(wfID, streaming.Event{
 			WorkflowID: wfID,
 			Type:       "AGENT_COMPLETED",
@@ -228,11 +253,13 @@ func BrowserLoop(
 		agentResults = append(agentResults, agentResult)
 
 		// Process response - remove base64 screenshot data to prevent context overflow
+		// 处理响应 —— 去掉 base64 截图数据，避免上下文溢出
 		if strings.TrimSpace(agentResult.Response) != "" {
 			truncatedAction := truncateBase64Images(agentResult.Response)
 			actions = append(actions, truncatedAction)
 
 			// Build observation from tool executions (screenshots already emitted via TOOL_OBSERVATION)
+			// 从 tool 执行结果构建观测（截图已通过 TOOL_OBSERVATION 发出）
 			observation := buildObservationFromTools(agentResult.ToolExecutions)
 			if observation != "" {
 				observations = append(observations, observation)
@@ -240,6 +267,7 @@ func BrowserLoop(
 		}
 
 		// Limit action/observation history to prevent memory growth
+		// 限制动作/观测历史长度，避免内存持续增长
 		if len(actions) > 20 {
 			actions = actions[len(actions)-20:]
 		}
@@ -248,6 +276,7 @@ func BrowserLoop(
 		}
 
 		// Record token usage
+		// 记录 token 用量
 		if opts.BudgetAgentMax <= 0 {
 			recordBrowserTokenUsage(ctx, wfID, sessionID, opts, agentID, agentResult)
 		}
@@ -255,6 +284,7 @@ func BrowserLoop(
 		iteration++
 
 		// Check for task completion
+		// 检查 task 是否完成
 		if isBrowserTaskComplete(agentResult) {
 			logger.Info("Browser task completed",
 				"iteration", iteration,
@@ -264,13 +294,16 @@ func BrowserLoop(
 		}
 
 		// Check for no-progress (agent didn't take any action)
+		// 检查是否无进展（agent 没有执行任何动作）
 		// Use response pattern detection since tools execute in Python
+		// tool 在 Python 侧执行，因此用 response 文本 pattern 判断
 		// tool 在 Python 侧执行，因此用 response 文本 pattern 判断"是否毫无动作"。
 		if !responseIndicatesToolUse(agentResult.Response) {
 			logger.Warn("No tool execution detected in response, may be stuck",
 				"iteration", iteration,
 			)
 			// Give agent 2 more chances before breaking
+			// 跳出前再给 agent 两次机会
 			if iteration > 2 && !hasRecentToolExecutions(agentResults, 2) {
 				logger.Info("No recent tool executions, stopping loop")
 				break
@@ -279,6 +312,7 @@ func BrowserLoop(
 	}
 
 	// Emit loop completed
+	// 发出循环完成事件
 	streaming.Get().Publish(wfID, streaming.Event{
 		WorkflowID: wfID,
 		Type:       "PROGRESS",
@@ -288,6 +322,7 @@ func BrowserLoop(
 	})
 
 	// Build final result from last agent response
+	// 从最后一次 agent 响应构建最终结果
 	finalResult := ""
 	if len(agentResults) > 0 {
 		lastResult := agentResults[len(agentResults)-1]
@@ -295,6 +330,7 @@ func BrowserLoop(
 	}
 
 	// If no useful final result, synthesize from observations
+	// 若没有可用的最终结果，则由观测合成
 	if strings.TrimSpace(finalResult) == "" && len(observations) > 0 {
 		finalResult = fmt.Sprintf("Browser automation completed after %d iterations. Final observations:\n%s",
 			iteration, strings.Join(observations[max(0, len(observations)-3):], "\n"))
@@ -320,6 +356,7 @@ func buildBrowserAgentPromptV1(query string, actions []string, observations []st
 		sb.WriteString("PREVIOUS ACTIONS:\n")
 		for i, a := range actions {
 			// Only show last 5 actions to save context
+			// 只展示最近 5 个动作，节省上下文
 			if i >= len(actions)-5 {
 				fmt.Fprintf(&sb, "- %s\n", truncateString(a, 200))
 			}
@@ -355,6 +392,7 @@ func buildBrowserAgentPromptV2(query string, actions []string, observations []st
 		sb.WriteString("PREVIOUS ACTIONS:\n")
 		for i, a := range actions {
 			// Only show last 5 actions to save context
+			// 只展示最近 5 个动作，节省上下文
 			if i >= len(actions)-5 {
 				fmt.Fprintf(&sb, "- %s\n", truncateString(a, 200))
 			}
@@ -387,6 +425,7 @@ func buildBrowserAgentPromptV2(query string, actions []string, observations []st
 }
 
 // buildObservationFromTools creates a compact observation string from tool executions
+// buildObservationFromTools 从 tool 执行结果构建紧凑的观测字符串
 func buildObservationFromTools(toolExecs []activities.ToolExecution) string {
 	if len(toolExecs) == 0 {
 		return ""
@@ -444,10 +483,12 @@ func buildObservationFromTools(toolExecs []activities.ToolExecution) string {
 }
 
 // isBrowserTaskComplete checks if the browser task should be considered complete
+// isBrowserTaskComplete 判断浏览器 task 是否应视为已完成
 func isBrowserTaskComplete(result activities.AgentExecutionResult) bool {
 	response := strings.ToLower(result.Response)
 
 	// Check for completion phrases - agent explicitly stating task is done
+	// 检查完成短语 —— agent 明确表示 task 已完成
 	completionPhrases := []string{
 		"task complete",
 		"task completed",
@@ -464,24 +505,32 @@ func isBrowserTaskComplete(result activities.AgentExecutionResult) bool {
 	}
 
 	// NOTE: We do NOT check for hasToolExecution here because:
+	// 注意：这里刻意不检查 hasToolExecution，原因：
 	// 1. Tools are executed in Python LLM service, not always tracked in Go struct
+	// 1. tool 在 Python LLM 服务中执行，未必记入 Go 结构体
 	// 2. The agent might just be reporting tool results, not signaling completion
+	// 2. agent 可能只是在汇报 tool 结果，并非宣告完成
 	// 这里刻意不检查 hasToolExecution：① tool 在 Python LLM 服务中执行，未必记入 Go 结构体；
 	// ② agent 可能只是在汇报 tool 结果，并非宣告完成。
 	// 3. Stuck detection is handled separately via hasRecentToolExecutions
+	// 3. 卡死检测由 hasRecentToolExecutions 单独处理
 
 	return false
 }
 
 // hasToolExecution checks if any tools were executed
+// hasToolExecution 检查是否有 tool 被执行
 // Note: This checks the Go struct, but tools executed in Python may not be tracked here.
+// 注意：这里只检查 Go 结构体，Python 侧执行的 tool 可能未被记录。
 // Use responseIndicatesToolUse for more reliable detection.
+// 更可靠的判断请用 responseIndicatesToolUse。
 // 只检查 Go 结构体，Python 侧执行的 tool 可能未被记录；更可靠的判断请用 responseIndicatesToolUse。
 func hasToolExecution(toolExecs []activities.ToolExecution) bool {
 	return len(toolExecs) > 0
 }
 
 // responseIndicatesToolUse checks if the response contains patterns indicating a browser tool was used
+// responseIndicatesToolUse 检查 response 中是否包含表示使用了浏览器 tool 的 pattern
 func responseIndicatesToolUse(response string) bool {
 	toolPatterns := []string{
 		"browser result",
@@ -506,14 +555,17 @@ func responseIndicatesToolUse(response string) bool {
 }
 
 // hasRecentToolExecutions checks if tools were executed in recent iterations
+// hasRecentToolExecutions 检查最近几轮迭代中是否有 tool 被执行
 func hasRecentToolExecutions(results []activities.AgentExecutionResult, lookback int) bool {
 	start := max(len(results)-lookback, 0)
 	for i := start; i < len(results); i++ {
 		// Check Go struct first
+		// 先检查 Go 结构体
 		if hasToolExecution(results[i].ToolExecutions) {
 			return true
 		}
 		// Also check response for tool execution patterns (for Python-executed tools)
+		// 再检查 response 中的 tool 执行 pattern（针对 Python 侧执行的 tool）
 		if responseIndicatesToolUse(results[i].Response) {
 			return true
 		}
@@ -522,6 +574,7 @@ func hasRecentToolExecutions(results []activities.AgentExecutionResult, lookback
 }
 
 // truncateString truncates a string to maxLen chars with ellipsis
+// truncateString 把字符串截断到 maxLen 个字符并加省略号
 func truncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
@@ -530,6 +583,7 @@ func truncateString(s string, maxLen int) string {
 }
 
 // recordBrowserTokenUsage records token usage for browser automation
+// recordBrowserTokenUsage 记录浏览器自动化的 token 用量
 func recordBrowserTokenUsage(ctx workflow.Context, wfID, sessionID string, opts Options, agentID string, result activities.AgentExecutionResult) {
 	inTok := result.InputTokens
 	outTok := result.OutputTokens

@@ -142,8 +142,8 @@ class HttpStatelessClient:
                         br.on_success()
                         status = "success"
                         return resp.json()
-                    except Exception as e:  # network or HTTP errors
-                        _ = e  # Reserved for logging
+                    except Exception as e:  # network or HTTP errors 注：网络或 HTTP 错误
+                        _ = e  # Reserved for logging 注：预留给日志记录
                         br.on_failure(time.time())
                         if attempt >= self.retries:
                             raise

@@ -10,21 +10,24 @@ import (
 )
 
 // RawAttachment holds extracted binary data from a content block.
+// RawAttachment 保存从 content block 中提取出的二进制数据。
 type RawAttachment struct {
-	MediaType  string // e.g. "image/png", "application/pdf"
-	Data       []byte // decoded binary (for base64 sources)
-	URL        string // original URL (for URL sources)
-	SourceType string // "base64" or "url"
-	Filename   string // optional original filename
+	MediaType  string // e.g. "image/png", "application/pdf" 注：例如 "image/png"、"application/pdf"
+	Data       []byte // decoded binary (for base64 sources) 注：解码后的二进制（针对 base64 来源）
+	URL        string // original URL (for URL sources) 注：原始 URL（针对 URL 来源）
+	SourceType string // "base64" or "url" 注：取值为 "base64" 或 "url"
+	Filename   string // optional original filename 注：可选的原始文件名
 }
 
 // ParsedContent is the result of parsing a content field.
+// ParsedContent 是解析 content 字段后的结果。
 type ParsedContent struct {
 	Text        string
 	Attachments []RawAttachment
 }
 
 // ContentBlock represents one element of an OpenAI-compatible content array.
+// ContentBlock 表示 OpenAI 兼容 content 数组中的一个元素。
 type ContentBlock struct {
 	Type     string    `json:"type"`
 	Text     string    `json:"text,omitempty"`
@@ -33,30 +36,35 @@ type ContentBlock struct {
 }
 
 // ImageURL represents an image_url content block.
+// ImageURL 表示一个 image_url content block。
 type ImageURL struct {
 	URL    string `json:"url"`
 	Detail string `json:"detail,omitempty"`
 }
 
 // FileData represents a file content block.
+// FileData 表示一个 file content block。
 type FileData struct {
 	FileData string `json:"file_data"`
 	Filename string `json:"filename,omitempty"`
 }
 
 // ParseContent handles both string and []ContentBlock formats for the OpenAI content field.
+// ParseContent 处理 OpenAI content 字段的 string 与 []ContentBlock 两种格式。
 func ParseContent(raw json.RawMessage) (*ParsedContent, error) {
 	if len(raw) == 0 {
 		return &ParsedContent{}, nil
 	}
 
 	// Try string first
+	// 先尝试按 string 解析。
 	var s string
 	if err := json.Unmarshal(raw, &s); err == nil {
 		return &ParsedContent{Text: s}, nil
 	}
 
 	// Try array of content blocks
+	// 再尝试按 content block 数组解析。
 	var blocks []ContentBlock
 	if err := json.Unmarshal(raw, &blocks); err != nil {
 		return nil, fmt.Errorf("content must be string or array of content blocks: %w", err)
@@ -109,6 +117,7 @@ func ParseContent(raw json.RawMessage) (*ParsedContent, error) {
 }
 
 // parseImageURL parses an image_url value, which can be a data URI or an external URL.
+// parseImageURL 解析 image_url 取值，它可以是 data URI 或外部 URL。
 func parseImageURL(url string) (*RawAttachment, int, error) {
 	if strings.HasPrefix(url, "data:") {
 		return parseDataURI(url)
@@ -141,6 +150,7 @@ func parseDataURI(uri string) (*RawAttachment, int, error) {
 	b64Data := parts[1]
 
 	// Extract media type from header like "data:image/png;base64"
+	// 从形如 "data:image/png;base64" 的 header 中提取 media type。
 	mediaType := ""
 	if after, ok := strings.CutPrefix(header, "data:"); ok {
 		mediaType = after
@@ -164,6 +174,7 @@ func parseDataURI(uri string) (*RawAttachment, int, error) {
 	}
 
 	// Try standard base64 first, then raw (no padding) variant
+	// 先尝试标准 base64，再尝试无 padding 的 raw 变体。
 	data, err := base64.StdEncoding.DecodeString(b64Data)
 	if err != nil {
 		data, err = base64.RawStdEncoding.DecodeString(b64Data)
@@ -180,9 +191,11 @@ func parseDataURI(uri string) (*RawAttachment, int, error) {
 }
 
 // guessMediaType infers a media type from a URL's file extension.
+// guessMediaType 由 URL 的文件扩展名推断 media type。
 func guessMediaType(url string) string {
 	lower := strings.ToLower(url)
 	// Strip query string and fragment for suffix matching
+	// 去掉 query string 与 fragment，以便做后缀匹配。
 	if idx := strings.IndexAny(lower, "?#"); idx != -1 {
 		lower = lower[:idx]
 	}
@@ -198,6 +211,6 @@ func guessMediaType(url string) string {
 	case strings.HasSuffix(lower, ".pdf"):
 		return "application/pdf"
 	default:
-		return "" // Unknown extension; caller should reject or require explicit media_type
+		return "" // Unknown extension; caller should reject or require explicit media_type 注：未知扩展名；调用方应拒绝或要求显式传入 media_type
 	}
 }

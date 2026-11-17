@@ -211,7 +211,7 @@ You have ONE tool: `browser` with an `action` parameter.
 - Describe the current page state in your final response""",
         "allowed_tools": [
             "browser",
-            "web_search",  # For finding URLs to navigate to
+            "web_search",  # For finding URLs to navigate to 注：用于查找要访问的 URL
         ],
         "caps": {"max_tokens": 8000, "temperature": 0.2},
     },
@@ -282,10 +282,10 @@ def get_role_preset(name: str) -> Dict[str, object]:
     # Alias mapping for backward compatibility
     # 向后兼容的别名映射
     alias_map = {
-        "researcher": "research",  # Lightweight preset as safety net
-        "research_supervisor": "deep_research_agent",  # Decomposition role uses supervisor prompt
-        "coder": "developer",  # Swarm uses "coder", presets use "developer"
-        "analyst": "analysis",  # Swarm uses "analyst", presets use "analysis"
+        "researcher": "research",  # Lightweight preset as safety net 注：轻量 preset，作为兜底
+        "research_supervisor": "deep_research_agent",  # Decomposition role uses supervisor prompt 注：分解角色使用 supervisor prompt
+        "coder": "developer",  # Swarm uses "coder", presets use "developer" 注：Swarm 用 "coder"，presets 用 "developer"
+        "analyst": "analysis",  # Swarm uses "analyst", presets use "analysis" 注：Swarm 用 "analyst"，presets 用 "analysis"
     }
     key = alias_map.get(key, key)
     return _PRESETS.get(key, _PRESETS["generalist"]).copy()
@@ -325,6 +325,6 @@ def render_system_prompt(prompt: str, context: Dict[str, object]) -> str:
     # 替换 ${variable} 模式
     def substitute(match: Any) -> str:
         var_name = match.group(1)
-        return variables.get(var_name, "")  # Missing variables -> empty string
+        return variables.get(var_name, "")  # Missing variables -> empty string 注：缺失的变量替换为空字符串
 
     return re.sub(r"\$\{(\w+)\}", substitute, prompt)

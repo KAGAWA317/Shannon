@@ -21,6 +21,7 @@ router = APIRouter()
 
 
 # ── Models ──────────────────────────────────────────────────────────────
+# ── 模型 ──────────────────────────────────────────────────────────────
 
 
 class LeadEvent(BaseModel):
@@ -35,12 +36,11 @@ class LeadEvent(BaseModel):
 
 class AgentState(BaseModel):
     agent_id: str
-    status: str  # "running", "idle", "completed"
+    status: str  # "running", "idle", "completed" 注："running"、"idle"、"completed"
     current_task: str = ""
     iterations_used: int = 0
-    role: str = ""  # Agent's assigned role (researcher, analyst, synthesis_writer, etc.)
-    # Agent 被分配的角色（researcher、analyst、synthesis_writer 等）
-    files_written: List[str] = Field(default_factory=list)  # Files written by agent
+    role: str = ""  # Agent's assigned role (researcher, analyst, synthesis_writer, etc.) 注：Agent 被分配的角色（researcher、analyst、synthesis_writer 等）
+    files_written: List[str] = Field(default_factory=list)  # Files written by agent 注：agent 写入的文件
 
 
 class LeadBudget(BaseModel):
@@ -58,12 +58,10 @@ class LeadDecisionRequest(BaseModel):
     task_list: List[Dict[str, Any]] = Field(default_factory=list)
     agent_states: List[AgentState] = Field(default_factory=list)
     budget: LeadBudget = Field(default_factory=LeadBudget)
-    history: List[Dict[str, Any]] = Field(default_factory=list)  # Recent 5 Lead decisions
-    # 最近 5 次 Lead 决策
-    messages: List[Dict[str, Any]] = Field(default_factory=list)  # Agent→Lead mailbox messages
+    history: List[Dict[str, Any]] = Field(default_factory=list)  # Recent 5 Lead decisions 注：最近 5 次 Lead 决策
+    messages: List[Dict[str, Any]] = Field(default_factory=list)  # Agent→Lead mailbox messages 注：Agent→Lead 邮箱消息
     original_query: str = Field(default="", description="User's original query for language context")
-    conversation_history: List[Dict[str, Any]] = Field(default_factory=list)  # Session history for multi-turn context
-    # session 历史，用于多轮 context
+    conversation_history: List[Dict[str, Any]] = Field(default_factory=list)  # Session history for multi-turn context 注：session 历史，用于多轮 context
     workspace_files: List[str] = Field(default_factory=list, description="File paths in workspace")
     hitl_messages: List[str] = Field(default_factory=list, description="All HITL messages received during execution")
     lead_model_override: str = Field(default="", description="Explicit model for Lead (e.g. MiniMax-M3)")
@@ -71,22 +69,20 @@ class LeadDecisionRequest(BaseModel):
 
 
 class LeadAction(BaseModel):
-    type: str  # interim_reply, spawn_agent, assign_task, send_message, broadcast, revise_plan, file_read, shutdown_agent, noop, done, reply, synthesize
+    type: str  # interim_reply, spawn_agent, assign_task, send_message, broadcast, revise_plan, file_read, shutdown_agent, noop, done, reply, synthesize 注：动作类型取值
     task_id: str = ""
     agent_id: str = ""
     role: str = ""
     task_description: str = ""
     to: str = ""
     content: str = ""
-    model_tier: str = ""  # small, medium, large — Lead can specify per agent
-    # small、medium、large —— Lead 可为每个 agent 指定
+    model_tier: str = ""  # small, medium, large — Lead can specify per agent 注：small、medium、large —— Lead 可为每个 agent 指定
     create: List[Dict[str, Any]] = Field(default_factory=list)
     cancel: List[str] = Field(default_factory=list)
-    update: List[Dict[str, Any]] = Field(default_factory=list)  # revise_plan: update existing task descriptions
-    # revise_plan：更新现有 task 描述
-    path: str = ""  # file_read target path
-    tool: str = ""  # tool_call: web_search, web_fetch, calculator
-    tool_params: Dict[str, Any] = Field(default_factory=dict)  # tool_call: tool arguments
+    update: List[Dict[str, Any]] = Field(default_factory=list)  # revise_plan: update existing task descriptions 注：revise_plan：更新现有 task 描述
+    path: str = ""  # file_read target path 注：file_read 的目标路径
+    tool: str = ""  # tool_call: web_search, web_fetch, calculator 注：tool_call：web_search、web_fetch、calculator
+    tool_params: Dict[str, Any] = Field(default_factory=dict)  # tool_call: tool arguments 注：tool_call：tool 参数
 
 
 # JSON Schema for Anthropic structured output (output_config.format).
@@ -190,6 +186,7 @@ class LeadDecisionResponse(BaseModel):
 
 
 # ── System Prompt (single source of truth: roles/swarm/lead_protocol.py) ──
+# ── System Prompt（唯一来源：roles/swarm/lead_protocol.py） ──
 
 from llm_service.roles.swarm.lead_protocol import LEAD_SYSTEM_PROMPT
 
@@ -232,7 +229,7 @@ def _auto_link_task_ids(
     """
     # 1. Collect available tasks: from revise_plan in this response + pending in task_list
     # 1. 收集可用 task：本次 response 中 revise_plan 的 create，加上 task_list 中待处理的 task
-    available: Dict[str, str] = {}  # task_id → description
+    available: Dict[str, str] = {}  # task_id → description 注：task_id → description
 
     for a in actions:
         if a.type == "revise_plan":
@@ -268,6 +265,7 @@ def _auto_link_task_ids(
                 )
 
     # 3. Warn on any remaining unlinked spawn_agent
+    # 3. 对仍未关联到 task 的 spawn_agent 给出 warning
     for a in actions:
         if a.type == "spawn_agent" and not a.task_id:
             logger.warning(
@@ -319,6 +317,7 @@ def _best_match(
 
 
 # ── Prompt Builder (extracted for testability) ─────────────────────────
+# ── Prompt Builder（为便于测试而抽出） ─────────────────────────
 
 
 def _build_lead_user_prompt(body: LeadDecisionRequest) -> str:
@@ -422,6 +421,7 @@ def _build_lead_user_prompt(body: LeadDecisionRequest) -> str:
         user_parts.append("## Tool Results (from your direct execution)\n" + "\n\n".join(tr_lines))
 
     # Task Board
+    # 任务板（Task Board）
     if body.task_list:
         tl_lines = []
         for t in body.task_list:
@@ -453,13 +453,14 @@ def _build_lead_user_prompt(body: LeadDecisionRequest) -> str:
     # 工作区文件清单（帮助 Lead 规划文件级操作）
     if body.workspace_files:
         ws_lines = [f"## Workspace Files ({len(body.workspace_files)} files)"]
-        for fp in body.workspace_files[:30]:  # Cap display at 30 files
+        for fp in body.workspace_files[:30]:  # Cap display at 30 files 注：最多展示 30 个文件
             ws_lines.append(f"- {fp}")
         if len(body.workspace_files) > 30:
             ws_lines.append(f"... and {len(body.workspace_files) - 30} more")
         user_parts.append("\n".join(ws_lines))
 
     # Budget with time phase awareness
+    # 预算，含时间阶段感知
     budget = body.budget
     total_calls = budget.total_llm_calls + budget.remaining_llm_calls
     budget_pct = (budget.total_llm_calls / max(total_calls, 1)) * 100
@@ -492,7 +493,7 @@ def _build_lead_user_prompt(body: LeadDecisionRequest) -> str:
     # Agent 发给 Lead 的消息（升级 request、来自 agent 的 request）
     if body.messages:
         msg_lines = []
-        for msg in body.messages[:10]:  # Cap at 10 messages
+        for msg in body.messages[:10]:  # Cap at 10 messages 注：最多 10 条消息
             from_agent = msg.get("from", "unknown")
             msg_type = msg.get("type", "info")
             payload = msg.get("payload", {})
@@ -501,6 +502,7 @@ def _build_lead_user_prompt(body: LeadDecisionRequest) -> str:
         user_parts.append("## Agent Messages (agents sent these to you)\n" + "\n".join(msg_lines))
 
     # Decision History
+    # 决策历史
     if body.history:
         hist_lines = []
         for h in body.history[-5:]:
@@ -512,6 +514,7 @@ def _build_lead_user_prompt(body: LeadDecisionRequest) -> str:
 
 
 # ── Endpoint ────────────────────────────────────────────────────────────
+# ── Endpoint（接口） ────────────────────────────────────────────
 
 
 @router.post("/lead/decide", response_model=LeadDecisionResponse)
@@ -610,6 +613,7 @@ async def lead_decide(request: Request, body: LeadDecisionRequest) -> LeadDecisi
         provider_name = result.get("provider", "") or ""
 
         # Parse response
+        # 解析 response
         cleaned = strip_markdown_json_wrapper(raw_text, expect_json=True).strip()
         try:
             data = json_module.loads(cleaned)

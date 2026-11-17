@@ -3,6 +3,7 @@ package daemon
 import "encoding/json"
 
 // Server -> Daemon message types
+// Server -> Daemon 消息类型
 const (
 	MsgTypeConnected = "connected"
 	MsgTypeMessage   = "message"
@@ -11,6 +12,7 @@ const (
 )
 
 // Daemon -> Server message types
+// Daemon -> Server 消息类型
 const (
 	MsgTypeClaim      = "claim"
 	MsgTypeReply      = "reply"
@@ -18,10 +20,12 @@ const (
 	MsgTypeDisconnect = "disconnect"
 
 	// Unified messaging: daemon -> server
+	// 统一消息：daemon -> server
 	MsgTypeDaemonApprovalRequest  = "approval_request"
 	MsgTypeDaemonApprovalResolved = "approval_resolved"
 
 	// Agent loop event forwarding: daemon -> server
+	// agent 循环 event 转发：daemon -> server
 	MsgTypeEvent = "event"
 
 	// Proactive messaging: daemon -> server (unsolicited, no prior claim)
@@ -30,6 +34,7 @@ const (
 )
 
 // Server -> Daemon message types (unified messaging)
+// Server -> Daemon 消息类型（统一消息）
 const (
 	MsgTypeApprovalResponse = "approval_response"
 )
@@ -48,6 +53,7 @@ const (
 )
 
 // Reply format types
+// 回复格式类型
 const (
 	FormatText     = "text"
 	FormatMarkdown = "markdown"
@@ -88,8 +94,8 @@ type DaemonApprovalRequest struct {
 	Agent     string `json:"agent"`
 	Tool      string `json:"tool"`
 	Args      string `json:"args"`
-	ThreadID  string `json:"thread_id,omitempty"`  // populated by Cloud from active claim
-	ChannelID string `json:"channel_id,omitempty"` // populated by Cloud from active claim
+	ThreadID  string `json:"thread_id,omitempty"`  // populated by Cloud from active claim 注：由 Cloud 依据当前 claim 填充
+	ChannelID string `json:"channel_id,omitempty"` // populated by Cloud from active claim 注：由 Cloud 依据当前 claim 填充
 }
 
 // DaemonApprovalResolved is sent by daemon when ShanClaw resolves an approval first.
@@ -136,7 +142,7 @@ type ProgressPayload struct {
 // DaemonEventPayload 携带 daemon 到 server 的单条 agent 循环 event。
 // 发布到 streaming.Manager 以更新渠道卡片。
 type DaemonEventPayload struct {
-	EventType string         `json:"event_type"` // TOOL_INVOKED, TOOL_COMPLETED, LLM_OUTPUT, LLM_PARTIAL
+	EventType string         `json:"event_type"` // TOOL_INVOKED, TOOL_COMPLETED, LLM_OUTPUT, LLM_PARTIAL 注：event 类型取值
 	Message   string         `json:"message"`
 	Data      map[string]any `json:"data,omitempty"`
 	Seq       int64          `json:"seq"`

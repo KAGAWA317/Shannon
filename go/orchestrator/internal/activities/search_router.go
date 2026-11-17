@@ -13,19 +13,19 @@ import (
 // SearchRouteInput 是把一次 search 路由到合适来源的入参。
 type SearchRouteInput struct {
 	Query           string               `json:"query"`
-	Dimension       string               `json:"dimension,omitempty"`        // Research dimension (e.g., "funding", "technology")
-	SourceTypes     []string             `json:"source_types,omitempty"`     // Explicit source types to use
-	Priority        string               `json:"priority,omitempty"`         // "high", "medium", "low"
-	Context         map[string]any       `json:"context,omitempty"`          // Additional context
-	LocalizationCtx *LocalizationContext `json:"localization_ctx,omitempty"` // For multi-language queries
+	Dimension       string               `json:"dimension,omitempty"`        // Research dimension (e.g., "funding", "technology") 注：research dimension（例如 "funding"、"technology"）
+	SourceTypes     []string             `json:"source_types,omitempty"`     // Explicit source types to use 注：显式指定要使用的 source types
+	Priority        string               `json:"priority,omitempty"`         // "high", "medium", "low" 注：取值 "high"、"medium"、"low"
+	Context         map[string]any       `json:"context,omitempty"`          // Additional context 注：附加 context
+	LocalizationCtx *LocalizationContext `json:"localization_ctx,omitempty"` // For multi-language queries 注：用于多语言查询
 }
 
 // LocalizationContext provides localization info for searches
 // LocalizationContext 提供检索所需的本地化信息。
 type LocalizationContext struct {
-	Languages      []string            `json:"languages,omitempty"`       // Target languages (e.g., ["zh", "ja"])
-	LocalizedNames map[string][]string `json:"localized_names,omitempty"` // Entity name translations
-	Region         string              `json:"region,omitempty"`          // Primary region focus
+	Languages      []string            `json:"languages,omitempty"`       // Target languages (e.g., ["zh", "ja"]) 注：目标语言（例如 ["zh", "ja"]）
+	LocalizedNames map[string][]string `json:"localized_names,omitempty"` // Entity name translations 注：实体名称的译名
+	Region         string              `json:"region,omitempty"`          // Primary region focus 注：主要关注的地区
 }
 
 // SearchRoute defines a single search to execute
@@ -39,15 +39,16 @@ type SearchRoute struct {
 	MaxResults    int      `json:"max_results"`
 	PriorityBoost float64  `json:"priority_boost"`
 	QuerySuffix   string   `json:"query_suffix,omitempty"`
-	Language      string   `json:"language,omitempty"` // For localized searches
+	Language      string   `json:"language,omitempty"` // For localized searches 注：用于本地化检索
 	IsLocalized   bool     `json:"is_localized,omitempty"`
 }
 
 // SearchRouteResult contains the routing plan for a search
+// SearchRouteResult 包含一次 search 的路由方案。
 type SearchRouteResult struct {
 	Routes          []SearchRoute `json:"routes"`
 	TotalMaxResults int           `json:"total_max_results"`
-	Strategy        string        `json:"strategy"` // "parallel", "sequential", "priority"
+	Strategy        string        `json:"strategy"` // "parallel", "sequential", "priority" 注：取值 "parallel"、"sequential"、"priority"
 }
 
 // RouteSearch generates a search routing plan based on dimension and source type config
@@ -93,6 +94,7 @@ func (a *Activities) RouteSearch(ctx context.Context, input SearchRouteInput) (*
 	}
 
 	// Generate routes for each source type
+	// 为每种 source 类型生成路由
 	for _, sourceType := range sourceTypes {
 		route := a.buildRouteForSourceType(cfg, sourceType, input.Query, input.Priority)
 		if route != nil {
@@ -115,8 +117,7 @@ func (a *Activities) RouteSearch(ctx context.Context, input SearchRouteInput) (*
 	// 按 priority 与路由数量决定执行策略。
 	strategy := "parallel"
 	if input.Priority == "high" && len(routes) > 3 {
-		strategy = "priority" // Execute high-priority routes first
-		// 高优先级路由先执行。
+		strategy = "priority" // Execute high-priority routes first 注：高优先级路由先执行。
 	}
 
 	result := &SearchRouteResult{
@@ -140,7 +141,7 @@ func (a *Activities) buildRouteForSourceType(cfg *config.SourceTypesConfig, sour
 	route := &SearchRoute{
 		Query:         query,
 		SourceType:    sourceType,
-		MaxResults:    10, // Default
+		MaxResults:    10, // Default 注：默认值
 		PriorityBoost: 1.0,
 	}
 
@@ -266,9 +267,9 @@ func (a *Activities) buildLocalizedRoutes(cfg *config.SourceTypesConfig, input S
 		// 取该语言下实体的本地化名称；没有就回退到原始 query。
 		var localizedQuery string
 		if names, ok := input.LocalizationCtx.LocalizedNames[lang]; ok && len(names) > 0 {
-			localizedQuery = names[0] // Use first localized name
+			localizedQuery = names[0] // Use first localized name 注：取第一个本地化名称
 		} else {
-			localizedQuery = input.Query // Fallback to original query
+			localizedQuery = input.Query // Fallback to original query 注：回退到原始 query
 		}
 
 		route := &SearchRoute{
@@ -276,7 +277,7 @@ func (a *Activities) buildLocalizedRoutes(cfg *config.SourceTypesConfig, input S
 			SourceType:    regionalSource,
 			Language:      lang,
 			IsLocalized:   true,
-			MaxResults:    5, // Default for localized
+			MaxResults:    5, // Default for localized 注：本地化检索的默认值
 			PriorityBoost: 1.1,
 		}
 
@@ -323,6 +324,7 @@ type SearchRouteResults struct {
 }
 
 // SearchItem represents a single search result
+// SearchItem 表示一条 search 结果。
 type SearchItem struct {
 	URL           string  `json:"url"`
 	Title         string  `json:"title"`
@@ -342,6 +344,7 @@ type MergeSearchResult struct {
 }
 
 // MergeSearchResults merges and deduplicates results from multiple search routes
+// MergeSearchResults 合并多条 search 路由的结果并去重。
 func (a *Activities) MergeSearchResults(ctx context.Context, input MergeSearchInput) (*MergeSearchResult, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("MergeSearchResults: merging results", "route_count", len(input.Results))
@@ -378,6 +381,7 @@ func (a *Activities) MergeSearchResults(ctx context.Context, input MergeSearchIn
 			totalResults++
 
 			// Normalize URL for deduplication
+			// 归一化 URL 以便去重
 			normalizedURL := normalizeURL(item.URL)
 			if seenURLs[normalizedURL] {
 				duplicates++
@@ -404,6 +408,7 @@ func (a *Activities) MergeSearchResults(ctx context.Context, input MergeSearchIn
 	}
 
 	// Sort by score (descending)
+	// 按分数降序排序
 	sortSearchItemsByScore(mergedItems)
 
 	result := &MergeSearchResult{
@@ -423,6 +428,7 @@ func (a *Activities) MergeSearchResults(ctx context.Context, input MergeSearchIn
 }
 
 // normalizeURL normalizes a URL for deduplication
+// normalizeURL 归一化 URL 以便去重。
 func normalizeURL(url string) string {
 	// Simple normalization: remove trailing slashes and common tracking params
 	// In production, use a proper URL parsing library
@@ -435,6 +441,7 @@ func normalizeURL(url string) string {
 }
 
 // extractDomain extracts the domain from a URL
+// extractDomain 从 URL 中截取 domain。
 func extractDomain(url string) string {
 	// Simple extraction - in production, use net/url
 	// 简单截取；生产环境应改用 net/url。
@@ -454,6 +461,7 @@ func extractDomain(url string) string {
 }
 
 // sortSearchItemsByScore sorts search items by score in descending order
+// sortSearchItemsByScore 按 score 降序排序 search items。
 func sortSearchItemsByScore(items []SearchItem) {
 	// Simple bubble sort for now - replace with sort.Slice in production
 	// 目前是简单冒泡排序；生产环境应换成 sort.Slice。

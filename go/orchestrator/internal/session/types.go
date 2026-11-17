@@ -34,9 +34,11 @@ type Session struct {
 	History   []Message      `json:"history"`
 
 	// Agent-specific context
+	// agent 专属 context
 	AgentStates map[string]*AgentState `json:"agent_states,omitempty"`
 
 	// Token tracking
+	// token 统计
 	TotalTokensUsed int     `json:"total_tokens_used"`
 	TotalCostUSD    float64 `json:"total_cost_usd"`
 }
@@ -45,12 +47,13 @@ type Session struct {
 // Message 表示 session 历史中的一条消息
 type Message struct {
 	ID        string         `json:"id"`
-	Role      string         `json:"role"` // "user", "assistant", "system"
+	Role      string         `json:"role"` // "user", "assistant", "system" 注："user"、"assistant"、"system"
 	Content   string         `json:"content"`
 	Timestamp time.Time      `json:"timestamp"`
 	Metadata  map[string]any `json:"metadata,omitempty"`
 
 	// Token tracking for this message
+	// 本条 message 的 token 统计
 	TokensUsed int     `json:"tokens_used,omitempty"`
 	CostUSD    float64 `json:"cost_usd,omitempty"`
 }
@@ -130,6 +133,7 @@ func (s *Session) GetHistorySummary(maxTokens int) string {
 	currentTokens := 0
 
 	// Start from most recent messages
+	// 从最近的消息开始
 	for _, msg := range slices.Backward(s.History) {
 
 		// Rough token estimate: 1 token per 4 characters
@@ -141,6 +145,7 @@ func (s *Session) GetHistorySummary(maxTokens int) string {
 		}
 
 		// Prepend to maintain chronological order
+		// 前插以保持时间顺序
 		summary = formatMessage(msg) + "\n" + summary
 		currentTokens += msgTokens
 	}

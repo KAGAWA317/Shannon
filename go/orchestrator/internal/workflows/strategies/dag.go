@@ -25,6 +25,8 @@ import (
 
 // DAGWorkflow uses extracted patterns for cleaner multi-agent orchestration.
 // It composes parallel/sequential/hybrid execution patterns with optional reflection.
+// DAGWorkflow 使用抽取出的 pattern 实现更清晰的多 agent 编排。
+// 组合 parallel/sequential/hybrid 三种执行模式，并可选启用 reflection。
 func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting DAGWorkflow with composed patterns",
@@ -34,12 +36,14 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	)
 
 	// Determine workflow ID for event streaming
+	// 确定用于 event streaming 的 workflow ID
 	workflowID := input.ParentWorkflowID
 	if workflowID == "" {
 		workflowID = workflow.GetInfo(ctx).WorkflowExecution.ID
 	}
 
 	// Configure activity options
+	// 配置 activity options
 	activityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -49,11 +53,13 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
 	// Initialize control signal handler for pause/resume/cancel
+	// 初始化 pause/resume/cancel 的控制信号处理逻辑
 	emitCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Second,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
 	})
 	// Skip SSE emissions when running as child workflow (parent already emits)
+	// 作为子 workflow 运行时跳过 SSE 发送（父 workflow 已发送）
 	controlHandler := &control.SignalHandler{
 		WorkflowID:  workflowID,
 		AgentID:     "dag",
@@ -64,11 +70,13 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	controlHandler.Setup(ctx)
 
 	// Load workflow configuration
+	// 加载 workflow 配置
 	var config activities.WorkflowConfig
 	configActivity := workflow.ExecuteActivity(ctx, activities.GetWorkflowConfig)
 	if err := configActivity.Get(ctx, &config); err != nil {
 		logger.Warn("Failed to load config, using defaults", "error", err)
 		// Use defaults if config load fails
+		// 配置加载失败时使用默认值
 		config = activities.WorkflowConfig{
 			SimpleThreshold:               0.3,
 			MaxParallelAgents:             5,
@@ -83,20 +91,24 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Prepare base context
+	// 准备 base context
 	baseContext := make(map[string]any)
 	maps.Copy(baseContext, input.Context)
 	maps.Copy(baseContext, input.SessionCtx)
 	// Propagate parent workflow ID to downstream activities (pattern helpers)
+	// 把 parent workflow ID 传递到下游 activity（pattern helper）
 	if input.ParentWorkflowID != "" {
 		baseContext["parent_workflow_id"] = input.ParentWorkflowID
 	}
 
 	// Check pause/cancel before decomposition
+	// 分解前检查暂停/取消
 	if err := controlHandler.CheckPausePoint(ctx, "pre_decomposition"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
 
 	// Step 1: Decompose the task (use preplanned plan if provided)
+	// Step 1：分解 task（已有预设计划时直接复用）
 	var decomp activities.DecompositionResult
 	var err error
 	if input.PreplannedDecomposition != nil {
@@ -139,6 +151,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Check for budget configuration
+	// 检查 budget 配置
 	agentMaxTokens := getBudgetMax(baseContext)
 
 	modelTier := determineModelTier(baseContext, "medium")
@@ -146,12 +159,14 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	var agentResults []activities.AgentExecutionResult
 	var collectedCitations []metadata.Citation
 	// Option trigger: allow disabling citation collection via context flag (default on)
+	// 可选开关：允许通过 context flag 关闭引用收集（默认开启）
 	enableCitations := true
 	if v, ok := baseContext["enable_citations"].(bool); ok {
 		enableCitations = v
 	}
 
 	// Step 2: Check if task needs tools or has dependencies
+	// Step 2：判断 task 是否需要 tool 或存在依赖
 	needsTools := false
 	for _, subtask := range decomp.Subtasks {
 		if len(subtask.SuggestedTools) > 0 || len(subtask.Dependencies) > 0 || len(subtask.Produces) > 0 || len(subtask.Consumes) > 0 {
@@ -174,6 +189,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	isSimple := len(decomp.Subtasks) == 0 || (decomp.ComplexityScore < config.SimpleThreshold && simpleByShape)
 
 	// Step 3: Handle simple tasks directly (no tools, trivial plan)
+	// Step 3：直接处理 simple task（无 tool、计划琐碎）
 	if isSimple {
 		logger.Info("Executing simple task",
 			"complexity", decomp.ComplexityScore,
@@ -183,6 +199,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		simpleAgentName := agents.GetAgentName(workflowID, 0)
 
 		// Execute single agent
+		// 执行单个 agent
 		var simpleResult activities.ExecuteSimpleTaskResult
 		err = workflow.ExecuteActivity(ctx,
 			activities.ExecuteSimpleTask,
@@ -211,12 +228,14 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		totalTokens = simpleResult.TokensUsed
 
 		// Update session
+		// 更新 session
 		if input.SessionID != "" {
 			_ = updateSessionWithAgentUsage(ctx, input.SessionID, simpleResult.Response, totalTokens, 1, []activities.AgentExecutionResult{{AgentID: simpleAgentName, TokensUsed: simpleResult.TokensUsed, ModelUsed: simpleResult.ModelUsed, Success: true, Response: simpleResult.Response}})
 			_ = recordToVectorStore(ctx, input, simpleResult.Response, "simple", decomp.ComplexityScore)
 		}
 
 		// Build metadata aligned with other workflows (model/provider/tokens/cost)
+		// 构建与其他 workflow 对齐的 metadata（model/provider/tokens/cost）
 		meta := map[string]any{
 			"complexity_score": decomp.ComplexityScore,
 			"mode":             "simple",
@@ -224,6 +243,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		}
 
 		// Aggregate agent metadata from the single result to populate model/provider/tokens
+		// 从单个结果聚合 agent metadata，补齐 model/provider/tokens
 		ar := []activities.AgentExecutionResult{
 			{
 				AgentID:    simpleAgentName,
@@ -237,6 +257,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		maps.Copy(meta, agMeta)
 
 		// Compute cost with centralized pricing when tokens are available
+		// token 可用时用统一 pricing 计算 cost
 		if totalTokens > 0 {
 			modelForCost := ""
 			if m, ok := meta["model"].(string); ok && m != "" {
@@ -256,11 +277,13 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Check pause/cancel before complex execution
+	// 复杂执行前检查暂停/取消
 	if err := controlHandler.CheckPausePoint(ctx, "pre_execution"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
 
 	// Step 3: Complex multi-agent execution
+	// Step 3：复杂多 agent 执行
 	logger.Info("Executing complex task with patterns",
 		"complexity", decomp.ComplexityScore,
 		"subtasks", len(decomp.Subtasks),
@@ -268,9 +291,11 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	)
 
 	// Emit workflow started event
+	// 发送 workflow started event
 	emitTaskUpdate(ctx, input, activities.StreamEventWorkflowStarted, "", "")
 
 	// Determine execution strategy
+	// 确定执行策略
 	hasDependencies := false
 	for _, subtask := range decomp.Subtasks {
 		if len(subtask.Dependencies) > 0 {
@@ -280,6 +305,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Choose execution pattern based on strategy and dependencies
+	// 按策略与依赖选择执行 pattern
 	execStrategy := decomp.ExecutionStrategy
 	if execStrategy == "" {
 		execStrategy = "parallel"
@@ -287,18 +313,21 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 
 	if hasDependencies {
 		// Use hybrid execution for dependency management
+		// 有依赖时使用 hybrid 执行
 		logger.Info("Using hybrid execution pattern for dependencies")
 		agentResults, totalTokens = executeHybridPattern(
 			ctx, decomp, input, baseContext, agentMaxTokens, modelTier, config,
 		)
 	} else if execStrategy == "sequential" {
 		// Use sequential execution
+		// 使用 sequential 执行
 		logger.Info("Using sequential execution pattern")
 		agentResults, totalTokens = executeSequentialPattern(
 			ctx, decomp, input, baseContext, agentMaxTokens, modelTier, config,
 		)
 	} else {
 		// Default to parallel execution
+		// 默认使用 parallel 执行
 		logger.Info("Using parallel execution pattern")
 		agentResults, totalTokens = executeParallelPattern(
 			ctx, decomp, input, baseContext, agentMaxTokens, modelTier, config,
@@ -306,11 +335,13 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Check pause/cancel before synthesis
+	// 合成前检查暂停/取消
 	if err := controlHandler.CheckPausePoint(ctx, "pre_synthesis"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
 
 	// Step 4: Synthesize results
+	// Step 4：合成结果
 	logger.Info("Synthesizing agent results",
 		"agent_count", len(agentResults),
 	)
@@ -319,6 +350,8 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 
 	// Check if decomposition included a synthesis/summarization subtask
 	// Prefer structured subtask type over brittle description matching
+	// 检查分解结果中是否包含 synthesis/summarization subtask
+	// 优先使用结构化的 subtask 类型，而不是易碎的描述匹配
 	hasSynthesisSubtask := false
 	var synthesisTaskIdx int
 
@@ -343,6 +376,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	// ③ 默认标准合成。
 
 	// Count successful results for bypass logic
+	// 统计成功结果数，供 bypass 逻辑使用
 	successfulCount := 0
 	var singleSuccessResult activities.AgentExecutionResult
 	for _, result := range agentResults {
@@ -358,6 +392,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		// 启发式保护：若唯一结果很可能需要合成（例如 web_search 的 JSON），则不跳过，走标准 LLM 合成。
 		shouldBypass := true
 		// 1) If tools used include web_search, prefer synthesis for natural language output
+		// 1) 若使用的 tool 含 web_search，为得到自然语言输出优先走合成
 		if len(singleSuccessResult.ToolsUsed) > 0 {
 			for _, t := range singleSuccessResult.ToolsUsed {
 				if strings.EqualFold(t, "web_search") {
@@ -367,12 +402,14 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			}
 		}
 		// 2) If response looks like raw JSON, avoid bypass
+		// 2) 若响应形如原始 JSON，则不做 bypass
 		if shouldBypass {
 			trimmed := strings.TrimSpace(singleSuccessResult.Response)
 			if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
 				shouldBypass = false
 			} else if strings.HasPrefix(trimmed, "\"") && strings.HasSuffix(trimmed, "\"") {
 				// Handle JSON encoded as a quoted string
+				// 处理被包成带引号字符串的 JSON
 				var inner string
 				if err := json.Unmarshal([]byte(trimmed), &inner); err == nil {
 					innerTrim := strings.TrimSpace(inner)
@@ -384,6 +421,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		}
 
 		// 3) If citations exist across agent results, avoid bypass so we can inject inline citations
+		// 3) 若 agent 结果中存在引用，则不做 bypass，以便注入行内引用
 		if shouldBypass && enableCitations {
 			citations, formatted := collectAndFormatCitations(ctx, agentResults)
 			if len(citations) > 0 {
@@ -397,9 +435,11 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		if shouldBypass {
 			// Single success bypass - skip synthesis entirely for efficiency
 			// Works for both sequential (1 result) and parallel (1 success among N) modes
+			// 单条成功时 bypass——为效率完全跳过合成
+			// 适用于 sequential（1 条结果）与 parallel（N 条中 1 条成功）两种模式
 			synthesis = activities.SynthesisResult{
 				FinalResult: singleSuccessResult.Response,
-				TokensUsed:  0, // No synthesis performed here
+				TokensUsed:  0, // No synthesis performed here 注：此处未执行合成
 			}
 			logger.Info("Bypassing synthesis for single successful result",
 				"agent_id", singleSuccessResult.AgentID,
@@ -408,8 +448,10 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			)
 		} else {
 			// Fall through to standard synthesis below
+			// 继续走下面的标准合成
 			logger.Info("Single result requires synthesis (web_search/JSON detected)")
 			// Collect citations for synthesis and inject into context (when enabled)
+			// 为合成收集引用并注入 context（开启时）
 			if enableCitations {
 				citations, formatted := collectAndFormatCitations(ctx, agentResults)
 				if len(citations) > 0 {
@@ -443,6 +485,8 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	} else if hasSynthesisSubtask && synthesisTaskIdx >= 0 && synthesisTaskIdx < len(agentResults) && agentResults[synthesisTaskIdx].Success {
 		// If citations exist, re-run synthesis to inject inline citation numbers.
 		// Otherwise, use the synthesis subtask's result directly.
+		// 若存在引用，重新执行合成以注入行内引用编号。
+		// 否则直接使用 synthesis subtask 的结果。
 		if enableCitations {
 			citations, formatted := collectAndFormatCitations(ctx, agentResults)
 			if len(citations) > 0 {
@@ -455,12 +499,13 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 
 		if len(collectedCitations) == 0 {
 			// No citations: use the synthesis subtask's result as-is
+			// 无引用：直接使用 synthesis subtask 的原样结果
 			synthesisResult := agentResults[synthesisTaskIdx]
 			const minSynthesisResponseLen = 100
 			if len(strings.TrimSpace(synthesisResult.Response)) >= minSynthesisResponseLen && synthesisResult.TokensUsed > 0 {
 				synthesis = activities.SynthesisResult{
 					FinalResult: synthesisResult.Response,
-					TokensUsed:  0, // Already counted in agent execution
+					TokensUsed:  0, // Already counted in agent execution 注：已在 agent 执行时计入
 				}
 				logger.Info("Using synthesis subtask result as final output",
 					"agent_id", synthesisResult.AgentID,
@@ -498,6 +543,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			}
 		} else {
 			// Citations present: re-run synthesis to inject inline citations and sources
+			// 有引用：重新执行合成，注入行内引用与来源
 			logger.Info("Re-running synthesis to inject inline citations",
 				"citation_count", len(collectedCitations),
 			)
@@ -524,13 +570,16 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		}
 	} else {
 		// No bypass or synthesis subtask, perform standard synthesis
+		// 既无 bypass 也无 synthesis subtask，执行标准合成
 		logger.Info("Performing standard synthesis of agent results")
 		// Collect citations and inject into context for synthesis
+		// 收集引用并注入 context 供合成使用
 		if enableCitations {
 			citations, formatted := collectAndFormatCitations(ctx, agentResults)
 			if len(citations) > 0 {
 				collectedCitations = citations
 				// formatted citations prepared by helper
+				// 格式化后的引用已由 helper 准备好
 				baseContext["available_citations"] = formatted
 				baseContext["citation_count"] = len(citations)
 				baseContext["citations"] = citationsToStructuredMap(citations)
@@ -559,9 +608,11 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Step 5: Citation Agent - add citations to synthesis result
+	// Step 5：Citation Agent——为合成结果添加引用
 	finalResult := synthesis.FinalResult
 	if len(collectedCitations) > 0 && synthesis.FinalResult != "" {
 		// Step 5.1: Remove ## Sources section before passing to Citation Agent
+		// Step 5.1：传给 Citation Agent 前移除 ## Sources 段落
 		reportForCitation := synthesis.FinalResult
 		var extractedSources string
 		if idx := strings.LastIndex(strings.ToLower(reportForCitation), "## sources"); idx != -1 {
@@ -574,6 +625,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		}
 
 		// Convert metadata.Citation to CitationForAgent
+		// 把 metadata.Citation 转换为 CitationForAgent
 		citationsForAgent := make([]activities.CitationForAgent, 0, len(collectedCitations))
 		for _, c := range collectedCitations {
 			citationsForAgent = append(citationsForAgent, activities.CitationForAgent{
@@ -602,13 +654,14 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		}
 
 		// Dynamic model tier: use medium for longer reports (better instruction following)
+		// 动态 model tier：较长报告使用 medium（指令遵循更好）
 		citationModelTier := "small"
 		if len(reportForCitation) > 8000 {
 			citationModelTier = "medium"
 		}
 
 		cerr := workflow.ExecuteActivity(citationCtx, "AddCitations", activities.CitationAgentInput{
-			Report:           reportForCitation, // Clean report without Sources
+			Report:           reportForCitation, // Clean report without Sources 注：不含 Sources 的干净报告
 			Citations:        citationsForAgent,
 			ParentWorkflowID: wid,
 			ModelTier:        citationModelTier,
@@ -636,6 +689,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 				finalResult = formatting.FormatReportWithCitations(citationResult.CitedReport, citationsList)
 			} else {
 				// Fallback: just append the extracted sources
+				// 兜底：直接拼接抽取出的 sources
 				finalResult = citationResult.CitedReport
 				if extractedSources != "" {
 					finalResult = strings.TrimSpace(finalResult) + "\n\n" + extractedSources
@@ -657,16 +711,20 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 				Timestamp:  workflow.Now(ctx),
 			}).Get(ctx, nil)
 			// Keep original finalResult (which already has Sources)
+			// 保留原始 finalResult（其中已包含 Sources）
 		}
 	}
 
 	// Step 6: Optional reflection for quality improvement
+	// Step 6：可选的 reflection，用于提升质量
 	qualityScore := 0.5
 	reflectionTokens := 0
 
 	if config.ReflectionEnabled && shouldReflect(decomp.ComplexityScore, &config) && !hasSynthesisSubtask {
 		// Only reflect if we didn't detect a synthesis subtask
 		// This preserves user-specified output formats (e.g., Chinese text)
+		// 仅在未检测到 synthesis subtask 时才做 reflection
+		// 以保留用户指定的输出格式（例如中文文本）
 		reflectionConfig := patterns.ReflectionConfig{
 			Enabled:             true,
 			MaxRetries:          config.ReflectionMaxRetries,
@@ -706,14 +764,17 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Step 6: Update session and persist
+	// Step 6：更新 session 并持久化
 	if input.SessionID != "" {
 		_ = updateSessionWithAgentUsage(ctx, input.SessionID, finalResult, totalTokens, len(agentResults), agentResults)
 		_ = recordToVectorStore(ctx, input, finalResult, decomp.Mode, decomp.ComplexityScore)
 	}
 
 	// Note: Workflow completion is handled by the orchestrator
+	// 注意：workflow 完成由 orchestrator 负责
 
 	// Optional: verify claims if enabled and we have citations
+	// 可选：开启且有引用时校验结论
 	var verification activities.VerificationResult
 	verifyEnabled := false
 	if v, ok := baseContext["enable_verification"].(bool); ok {
@@ -748,6 +809,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	)
 
 	// Record pattern metrics (fire-and-forget)
+	// 记录 pattern metrics（fire-and-forget）
 	metricsCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Second,
 	})
@@ -769,6 +831,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Aggregate tool errors across agent results
+	// 汇总各 agent 结果中的 tool 错误
 	var toolErrors []map[string]string
 	for _, ar := range agentResults {
 		if len(ar.ToolExecutions) == 0 {
@@ -804,10 +867,12 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Aggregate agent metadata (model, provider, tokens, cost)
+	// 聚合 agent metadata（model、provider、tokens、cost）
 	agentMeta := metadata.AggregateAgentMetadata(agentResults, reflectionTokens+synthesis.TokensUsed)
 	maps.Copy(meta, agentMeta)
 
 	// Ensure total_tokens present in metadata (fallback to workflow total if missing/zero)
+	// 确保 metadata 中有 total_tokens（缺失或为 0 时回退到 workflow 总量）
 	if tv, ok := meta["total_tokens"]; !ok || (ok && ((func() int {
 		switch x := tv.(type) {
 		case int:
@@ -825,6 +890,8 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 
 	// Fallback: if model/provider missing, prefer provider override from context, then derive from model/tier
 	// Provider override from context/session
+	// 兜底：model/provider 缺失时优先用 context 中的 provider override，再由 model/tier 推导
+	// 从 context/session 取 provider override
 	providerOverride := ""
 	if v, ok := baseContext["provider_override"].(string); ok && strings.TrimSpace(v) != "" {
 		providerOverride = strings.ToLower(strings.TrimSpace(v))
@@ -835,6 +902,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Model fallback
+	// model 兜底
 	_, hasModel := meta["model"]
 	_, hasModelUsed := meta["model_used"]
 	if !hasModel && !hasModelUsed {
@@ -852,6 +920,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Provider fallback (prefer override, then detect from model, then tier default)
+	// provider 兜底（优先 override，其次从 model 推导，最后取 tier 默认值）
 	if _, ok := meta["provider"]; !ok || meta["provider"] == "" {
 		prov := providerOverride
 		if prov == "" {
@@ -868,6 +937,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// If cost is missing or zero but we now have model and tokens, compute cost using pricing
+	// 若 cost 缺失或为 0，但已有 model 与 token 数，则用 pricing 计算 cost
 	if cv, ok := meta["cost_usd"]; !ok || (ok && (func() bool {
 		switch x := cv.(type) {
 		case int:
@@ -880,6 +950,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	})()) {
 		if m, okm := meta["model"].(string); okm && m != "" {
 			// Try to get total tokens as int
+			// 尝试按 int 读取 total tokens
 			tokens := 0
 			if tv, ok := meta["total_tokens"]; ok {
 				switch x := tv.(type) {
@@ -899,12 +970,15 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Check pause/cancel before completion
+	// 完成前检查暂停/取消
 	if err := controlHandler.CheckPausePoint(ctx, "pre_completion"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
 
 	// Emit final clean LLM_OUTPUT for OpenAI-compatible streaming.
 	// Agent ID "final_output" signals the streamer to always show this content.
+	// 发送最终干净的 LLM_OUTPUT，用于 OpenAI 兼容的流式输出。
+	// Agent ID "final_output" 用于告知 streamer 始终展示该内容。
 	if finalResult != "" {
 		payload := map[string]any{
 			"tokens_used": totalTokens,
@@ -926,6 +1000,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Emit WORKFLOW_COMPLETED before returning
+	// 返回前发送 WORKFLOW_COMPLETED
 	_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 		WorkflowID: workflowID,
 		EventType:  activities.StreamEventWorkflowCompleted,
@@ -943,6 +1018,7 @@ func DAGWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 }
 
 // recordSynthesisTokenUsage records DAG synthesis token usage via RecordTokenUsageActivity.
+// recordSynthesisTokenUsage 通过 RecordTokenUsageActivity 记录 DAG 合成的 token 用量。
 func recordSynthesisTokenUsage(ctx workflow.Context, input TaskInput, synthesis activities.SynthesisResult) {
 	if synthesis.TokensUsed <= 0 {
 		return
@@ -978,6 +1054,8 @@ func recordSynthesisTokenUsage(ctx workflow.Context, input TaskInput, synthesis 
 
 // collectAndFormatCitations extracts citations from agentResults and returns the
 // citations along with a formatted list suitable for synthesis prompts.
+// collectAndFormatCitations 从 agentResults 抽取引用，并返回
+// 引用列表以及适合放入合成 prompt 的格式化文本。
 func collectAndFormatCitations(ctx workflow.Context, agentResults []activities.AgentExecutionResult) ([]metadata.Citation, string) {
 	var resultsForCitations []any
 	for _, ar := range agentResults {
@@ -1020,6 +1098,7 @@ func collectAndFormatCitations(ctx workflow.Context, agentResults []activities.A
 }
 
 // citationsToStructuredMap converts citations to a structured map format for SSE emission
+// citationsToStructuredMap 把引用转换为结构化 map 格式，供 SSE 发送使用
 func citationsToStructuredMap(citations []metadata.Citation) []map[string]any {
 	out := make([]map[string]any, 0, len(citations))
 	for _, c := range citations {
@@ -1035,6 +1114,7 @@ func citationsToStructuredMap(citations []metadata.Citation) []map[string]any {
 }
 
 // executeParallelPattern uses the parallel execution pattern
+// executeParallelPattern 使用 parallel 执行 pattern
 func executeParallelPattern(
 	ctx workflow.Context,
 	decomp activities.DecompositionResult,
@@ -1048,6 +1128,7 @@ func executeParallelPattern(
 	parallelTasks := make([]execution.ParallelTask, len(decomp.Subtasks))
 	for i, subtask := range decomp.Subtasks {
 		// Preserve incoming role from base context by default; allow LLM to override via agent_types
+		// 默认沿用 base context 传入的 role，允许 LLM 通过 agent_types 覆盖
 		baseRole := "agent"
 		if v, ok := baseContext["role"].(string); ok && v != "" {
 			baseRole = v
@@ -1068,6 +1149,7 @@ func executeParallelPattern(
 	}
 
 	// Honor plan_schema_v2 concurrency_limit if specified
+	// 若指定了 plan_schema_v2 的 concurrency_limit，则按其限制并发
 	maxConcurrency := config.ParallelMaxConcurrency
 	if decomp.ConcurrencyLimit > 0 {
 		maxConcurrency = decomp.ConcurrencyLimit
@@ -1099,6 +1181,7 @@ func executeParallelPattern(
 }
 
 // executeSequentialPattern uses the sequential execution pattern
+// executeSequentialPattern 使用 sequential 执行 pattern
 func executeSequentialPattern(
 	ctx workflow.Context,
 	decomp activities.DecompositionResult,
@@ -1112,6 +1195,7 @@ func executeSequentialPattern(
 	sequentialTasks := make([]execution.SequentialTask, len(decomp.Subtasks))
 	for i, subtask := range decomp.Subtasks {
 		// Preserve incoming role from base context by default; allow LLM to override via agent_types
+		// 默认沿用 base context 传入的 role，允许 LLM 通过 agent_types 覆盖
 		baseRole := "agent"
 		if v, ok := baseContext["role"].(string); ok && v != "" {
 			baseRole = v
@@ -1160,6 +1244,7 @@ func executeSequentialPattern(
 }
 
 // executeHybridPattern uses the hybrid execution pattern for dependencies
+// executeHybridPattern 使用 hybrid 执行 pattern 处理依赖
 func executeHybridPattern(
 	ctx workflow.Context,
 	decomp activities.DecompositionResult,
@@ -1173,6 +1258,7 @@ func executeHybridPattern(
 	hybridTasks := make([]execution.HybridTask, len(decomp.Subtasks))
 	for i, subtask := range decomp.Subtasks {
 		// Preserve incoming role from base context by default; allow LLM to override via agent_types
+		// 默认沿用 base context 传入的 role，允许 LLM 通过 agent_types 覆盖
 		baseRole := "agent"
 		if v, ok := baseContext["role"].(string); ok && v != "" {
 			baseRole = v
@@ -1194,6 +1280,7 @@ func executeHybridPattern(
 	}
 
 	// Honor plan_schema_v2 concurrency_limit if specified
+	// 若指定了 plan_schema_v2 的 concurrency_limit，则按其限制并发
 	maxConcurrency := config.ParallelMaxConcurrency
 	if decomp.ConcurrencyLimit > 0 {
 		maxConcurrency = decomp.ConcurrencyLimit
@@ -1238,6 +1325,7 @@ func executeHybridPattern(
 }
 
 // Helper functions
+// Helper 函数
 
 func updateSession(ctx workflow.Context, sessionID, result string, tokens, agents int) error {
 	var updRes activities.SessionUpdateResult
@@ -1252,6 +1340,7 @@ func updateSession(ctx workflow.Context, sessionID, result string, tokens, agent
 }
 
 // updateSessionWithAgentUsage passes per-agent model/token usage for accurate cost
+// updateSessionWithAgentUsage 传入逐 agent 的 model/token 用量，以获得准确的 cost
 func updateSessionWithAgentUsage(ctx workflow.Context, sessionID, result string, tokens, agents int, results []activities.AgentExecutionResult) error {
 	var usages []activities.AgentUsage
 	for _, r := range results {
@@ -1271,6 +1360,7 @@ func updateSessionWithAgentUsage(ctx workflow.Context, sessionID, result string,
 
 func recordToVectorStore(ctx workflow.Context, input TaskInput, answer, mode string, complexity float64) error {
 	// Await result to prevent race condition where workflow closes before persistence
+	// 等待结果返回，避免 workflow 在持久化前关闭导致的竞态
 	return workflow.ExecuteActivity(ctx,
 		activities.RecordQuery,
 		activities.RecordQueryInput{

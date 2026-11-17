@@ -24,12 +24,15 @@ services:
       - GATEWAY_SKIP_AUTH=1
 
       # Debug logging
+      # 调试日志
       - LOG_LEVEL=debug
 
       # Use local JWT secret for testing
+      # 测试用本地 JWT secret
       - JWT_SECRET=local-dev-secret-key
 
     # Expose gateway port for local access
+    # 暴露 gateway 端口便于本地访问
     ports:
       - "8080:8080"
 

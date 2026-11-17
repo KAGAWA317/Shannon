@@ -22,6 +22,7 @@ type CheckerState struct {
 }
 
 // Manager implements the HealthManager interface
+// Manager 实现 HealthManager 接口
 type Manager struct {
 	checkers      map[string]*CheckerState
 	lastResults   map[string]CheckResult
@@ -34,6 +35,7 @@ type Manager struct {
 }
 
 // HealthConfiguration contains health check configuration
+// HealthConfiguration 包含健康检查配置
 type HealthConfiguration struct {
 	Enabled       bool
 	CheckInterval time.Duration
@@ -42,6 +44,7 @@ type HealthConfiguration struct {
 }
 
 // CheckConfig represents individual check configuration
+// CheckConfig 表示单个检查的配置
 type CheckConfig struct {
 	Enabled  bool
 	Critical bool
@@ -50,6 +53,7 @@ type CheckConfig struct {
 }
 
 // NewManager creates a new health manager
+// NewManager 创建新的健康管理器
 func NewManager(logger *zap.Logger) *Manager {
 	return &Manager{
 		checkers:    make(map[string]*CheckerState),
@@ -84,6 +88,7 @@ func NewManagerWithConfig(config *HealthConfiguration, logger *zap.Logger) *Mana
 }
 
 // RegisterChecker registers a health check
+// RegisterChecker 注册健康检查
 func (m *Manager) RegisterChecker(checker Checker) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -98,6 +103,7 @@ func (m *Manager) RegisterChecker(checker Checker) error {
 	}
 
 	// Get configuration for this checker
+	// 获取该检查器的配置
 	checkConfig, hasConfig := m.config.Checks[name]
 
 	// Create checker state with config or defaults
@@ -111,6 +117,7 @@ func (m *Manager) RegisterChecker(checker Checker) error {
 	}
 
 	// Apply configuration overrides if available
+	// 若存在配置覆盖则应用
 	if hasConfig {
 		state.enabled = checkConfig.Enabled
 		if checkConfig.Interval > 0 {
@@ -135,6 +142,7 @@ func (m *Manager) RegisterChecker(checker Checker) error {
 }
 
 // UnregisterChecker removes a health check
+// UnregisterChecker 移除健康检查
 func (m *Manager) UnregisterChecker(name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -151,6 +159,7 @@ func (m *Manager) UnregisterChecker(name string) error {
 }
 
 // GetCheckers returns all registered checkers
+// GetCheckers 返回所有已注册的检查器
 func (m *Manager) GetCheckers() map[string]Checker {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -163,6 +172,7 @@ func (m *Manager) GetCheckers() map[string]Checker {
 }
 
 // GetOverallHealth returns the overall health status
+// GetOverallHealth 返回整体健康状况
 func (m *Manager) GetOverallHealth(ctx context.Context) OverallHealth {
 	startTime := time.Now()
 	detailed := m.GetDetailedHealth(ctx)
@@ -181,6 +191,7 @@ func (m *Manager) GetOverallHealth(ctx context.Context) OverallHealth {
 }
 
 // GetDetailedHealth returns detailed health information
+// GetDetailedHealth 返回详细健康信息
 func (m *Manager) GetDetailedHealth(ctx context.Context) DetailedHealth {
 	m.mu.RLock()
 	checkerStates := make(map[string]*CheckerState)
@@ -192,6 +203,7 @@ func (m *Manager) GetDetailedHealth(ctx context.Context) DetailedHealth {
 	enabledCount := 0
 
 	// Count enabled checkers
+	// 统计已启用的检查器数量
 	for _, state := range checkerStates {
 		if state.enabled {
 			enabledCount++
@@ -199,7 +211,7 @@ func (m *Manager) GetDetailedHealth(ctx context.Context) DetailedHealth {
 	}
 
 	summary := HealthSummary{
-		Total: enabledCount, // Only count enabled checkers
+		Total: enabledCount, // Only count enabled checkers 注：仅统计已启用的检查器
 	}
 
 	// Run health checks only for enabled checkers
@@ -207,6 +219,7 @@ func (m *Manager) GetDetailedHealth(ctx context.Context) DetailedHealth {
 	for name, state := range checkerStates {
 		if !state.enabled {
 			// Skip disabled checkers
+			// 跳过已禁用的检查器
 			continue
 		}
 
@@ -214,6 +227,7 @@ func (m *Manager) GetDetailedHealth(ctx context.Context) DetailedHealth {
 		components[name] = result
 
 		// Update summary
+		// 更新汇总
 		switch result.Status {
 		case StatusHealthy:
 			summary.Healthy++
@@ -231,11 +245,13 @@ func (m *Manager) GetDetailedHealth(ctx context.Context) DetailedHealth {
 	}
 
 	// Store results for future queries
+	// 存储结果供后续查询
 	m.mu.Lock()
 	maps.Copy(m.lastResults, components)
 	m.mu.Unlock()
 
 	// Determine overall status
+	// 判定整体状态
 	overall := m.calculateOverallStatus(components, summary)
 
 	return DetailedHealth{
@@ -256,6 +272,7 @@ func (m *Manager) runSingleCheck(ctx context.Context, checker Checker) CheckResu
 	result := checker.Check(checkCtx)
 
 	// Ensure result has required fields
+	// 确保结果带有必需字段
 	result.Component = checker.Name()
 	result.Critical = checker.IsCritical()
 	result.Duration = time.Since(startTime)
@@ -281,6 +298,7 @@ func (m *Manager) runSingleCheckWithState(ctx context.Context, state *CheckerSta
 	result.Timestamp = startTime
 
 	// Update last check time
+	// 更新最后检查时间
 	state.lastCheck = startTime
 
 	return result
@@ -299,6 +317,7 @@ func (m *Manager) calculateOverallStatus(components map[string]CheckResult, summ
 	}
 
 	// Critical check failures make system unhealthy
+	// 关键检查失败会使系统不健康
 	criticalFailures := 0
 	nonCriticalFailures := 0
 	degradedComponents := 0
@@ -318,6 +337,7 @@ func (m *Manager) calculateOverallStatus(components map[string]CheckResult, summ
 	}
 
 	// Determine overall status
+	// 判定整体状态
 	var status CheckStatus
 	var message string
 	var ready, live bool
@@ -326,11 +346,11 @@ func (m *Manager) calculateOverallStatus(components map[string]CheckResult, summ
 		status = StatusUnhealthy
 		message = fmt.Sprintf("%d critical component(s) failing", criticalFailures)
 		ready = false
-		live = true // Still alive but not ready
+		live = true // Still alive but not ready 注：仍然存活但未就绪
 	} else if degradedComponents > 0 {
 		status = StatusDegraded
 		message = fmt.Sprintf("%d component(s) degraded", degradedComponents)
-		ready = true // Still ready but degraded
+		ready = true // Still ready but degraded 注：仍然就绪但处于降级
 		live = true
 	} else if nonCriticalFailures > 0 {
 		status = StatusDegraded
@@ -368,6 +388,7 @@ func (m *Manager) IsLive(ctx context.Context) bool {
 }
 
 // Start begins background health checking
+// Start 启动后台健康检查
 func (m *Manager) Start(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -388,6 +409,7 @@ func (m *Manager) Start(ctx context.Context) error {
 }
 
 // Stop stops background health checking
+// Stop 停止后台健康检查
 func (m *Manager) Stop() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -404,6 +426,7 @@ func (m *Manager) Stop() error {
 }
 
 // backgroundChecker runs periodic health checks
+// backgroundChecker 周期性执行健康检查
 func (m *Manager) backgroundChecker() {
 	ticker := time.NewTicker(m.checkInterval)
 	defer ticker.Stop()
@@ -433,9 +456,10 @@ func (m *Manager) runBackgroundChecks() {
 	var checkResults = make(map[string]CheckResult)
 
 	// Run checks based on individual intervals
+	// 按各自的间隔执行检查
 	for name, state := range checkerStates {
 		if !state.enabled {
-			continue // Skip disabled checkers
+			continue // Skip disabled checkers 注：跳过已禁用的检查器
 		}
 
 		// Check if it's time to run this check
@@ -460,6 +484,7 @@ func (m *Manager) runBackgroundChecks() {
 }
 
 // SetCheckInterval updates the background check interval
+// SetCheckInterval 更新后台检查间隔
 func (m *Manager) SetCheckInterval(interval time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -480,6 +505,7 @@ func (m *Manager) GetLastResults() map[string]CheckResult {
 }
 
 // UpdateConfiguration updates the health manager configuration
+// UpdateConfiguration 更新健康管理器配置
 func (m *Manager) UpdateConfiguration(config *HealthConfiguration) error {
 	if config == nil {
 		return fmt.Errorf("configuration cannot be nil")
@@ -515,6 +541,7 @@ func (m *Manager) UpdateConfiguration(config *HealthConfiguration) error {
 	}
 
 	// Log overall configuration changes
+	// 记录整体配置变更
 	m.logger.Info("Health manager configuration updated",
 		zap.Bool("enabled", config.Enabled),
 		zap.Duration("global_check_interval", config.CheckInterval),
@@ -526,6 +553,7 @@ func (m *Manager) UpdateConfiguration(config *HealthConfiguration) error {
 }
 
 // GetConfiguration returns the current health configuration
+// GetConfiguration 返回当前健康配置
 func (m *Manager) GetConfiguration() *HealthConfiguration {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -552,6 +580,7 @@ func (m *Manager) GetConfiguration() *HealthConfiguration {
 }
 
 // EnableChecker enables a specific health checker
+// EnableChecker 启用指定健康检查器
 func (m *Manager) EnableChecker(name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -562,7 +591,7 @@ func (m *Manager) EnableChecker(name string) error {
 	}
 
 	if state.enabled {
-		return nil // Already enabled
+		return nil // Already enabled 注：已启用
 	}
 
 	state.enabled = true
@@ -571,6 +600,7 @@ func (m *Manager) EnableChecker(name string) error {
 }
 
 // DisableChecker disables a specific health checker
+// DisableChecker 禁用指定健康检查器
 func (m *Manager) DisableChecker(name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -581,7 +611,7 @@ func (m *Manager) DisableChecker(name string) error {
 	}
 
 	if !state.enabled {
-		return nil // Already disabled
+		return nil // Already disabled 注：已禁用
 	}
 
 	state.enabled = false

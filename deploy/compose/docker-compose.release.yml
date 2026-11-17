@@ -232,6 +232,7 @@ services:
       - LLM_CONFIG_PATH=/app/config
       - MODELS_CONFIG_PATH=${MODELS_CONFIG_PATH:-/app/config/models.yaml}
       # LLM API keys - set these in your environment
+      # LLM API key —— 请在环境变量中设置
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
@@ -240,6 +241,7 @@ services:
       - MINIMAX_API_KEY=${MINIMAX_API_KEY:-}
       - MINIMAX_BASE_URL=${MINIMAX_BASE_URL:-https://api.minimax.io/v1}
       # Model routing and budgets
+      # model 路由与预算
       - DEFAULT_MODEL_TIER=${DEFAULT_MODEL_TIER:-small}
       - COMPLEXITY_MODEL_ID=${COMPLEXITY_MODEL_ID:-}
       - DECOMPOSITION_MODEL_ID=${DECOMPOSITION_MODEL_ID:-}
@@ -251,15 +253,18 @@ services:
       - HISTORY_WINDOW_MESSAGES=${HISTORY_WINDOW_MESSAGES:-50}
       - HISTORY_WINDOW_DEBUG_MESSAGES=${HISTORY_WINDOW_DEBUG_MESSAGES:-75}
       # Cache configuration
+      # cache 配置
       - ENABLE_CACHE=${ENABLE_CACHE:-true}
       - CACHE_SIMILARITY_THRESHOLD=${CACHE_SIMILARITY_THRESHOLD:-0.95}
       # Rate limiting
+      # rate limit 限流
       - RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS:-100}
       - RATE_LIMIT_WINDOW=${RATE_LIMIT_WINDOW:-60}
       - WEB_SEARCH_RATE_LIMIT=${WEB_SEARCH_RATE_LIMIT:-120}
       - CALCULATOR_RATE_LIMIT=${CALCULATOR_RATE_LIMIT:-2000}
       - PYTHON_EXECUTOR_RATE_LIMIT=${PYTHON_EXECUTOR_RATE_LIMIT:-60}
       # Web Search Configuration
+      # Web 搜索配置
       - WEB_SEARCH_PROVIDER=${WEB_SEARCH_PROVIDER:-google}
       - GOOGLE_SEARCH_API_KEY=${GOOGLE_SEARCH_API_KEY:-}
       - GOOGLE_SEARCH_ENGINE_ID=${GOOGLE_SEARCH_ENGINE_ID:-}
@@ -270,6 +275,7 @@ services:
       - EXA_API_KEY=${EXA_API_KEY:-}
       - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-}
       # Exa auto-fetch configuration
+      # Exa 自动抓取配置
       - WEB_SEARCH_EXA_AUTO_FETCH_ENABLED=${WEB_SEARCH_EXA_AUTO_FETCH_ENABLED:-1}
       - WEB_SEARCH_EXA_AUTO_FETCH_TOP_K=${WEB_SEARCH_EXA_AUTO_FETCH_TOP_K:-0}
       - WEB_SEARCH_EXA_AUTO_FETCH_MAX_LENGTH=${WEB_SEARCH_EXA_AUTO_FETCH_MAX_LENGTH:-8000}
@@ -277,12 +283,14 @@ services:
       - WEB_SEARCH_EXA_OFFICIAL_SUBPAGES=${WEB_SEARCH_EXA_OFFICIAL_SUBPAGES:-5}
       - WEB_SEARCH_EXA_AUTO_FETCH_TOTAL_CHARS_CAP=${WEB_SEARCH_EXA_AUTO_FETCH_TOTAL_CHARS_CAP:-30000}
       # OpenAPI hardening
+      # OpenAPI 加固
       - OPENAPI_ALLOWED_DOMAINS=${OPENAPI_ALLOWED_DOMAINS:-*}
       - OPENAPI_MAX_SPEC_SIZE=${OPENAPI_MAX_SPEC_SIZE:-5242880}
       - OPENAPI_FETCH_TIMEOUT=${OPENAPI_FETCH_TIMEOUT:-30}
       - OPENAPI_RETRIES=${OPENAPI_RETRIES:-3}
       - OPENAPI_LOG_REQUESTS=${OPENAPI_LOG_REQUESTS:-1}
       # MCP hardening
+      # MCP 加固
       - MCP_ALLOWED_DOMAINS=${MCP_ALLOWED_DOMAINS:-*}
       - MCP_MAX_RESPONSE_BYTES=${MCP_MAX_RESPONSE_BYTES:-10485760}
       - MCP_RETRIES=${MCP_RETRIES:-3}
@@ -292,23 +300,28 @@ services:
       - MCP_CB_FAILURES=${MCP_CB_FAILURES:-5}
       - MCP_CB_RECOVERY_SECONDS=${MCP_CB_RECOVERY_SECONDS:-60}
       # Python WASI interpreter
+      # Python WASI 解释器
       - PYTHON_WASI_WASM_PATH=/opt/wasm-interpreters/python-3.11.4.wasm
       - PYTHON_WASI_SESSION_TIMEOUT=${PYTHON_WASI_SESSION_TIMEOUT:-3600}
       - WASI_MEMORY_LIMIT_MB=${WASI_MEMORY_LIMIT_MB:-512}
       - WASI_TIMEOUT_SECONDS=${WASI_TIMEOUT_SECONDS:-60}
       - AGENT_CORE_ADDR=agent-core:50051
       # Session workspace isolation
+      # session 工作区隔离
       - SHANNON_USE_WASI_SANDBOX=${SHANNON_USE_WASI_SANDBOX:-1}
       - SHANNON_SESSION_WORKSPACES_DIR=${SHANNON_SESSION_WORKSPACES_DIR:-/tmp/shannon-sessions}
       - SHANNON_USER_MEMORY_DIR=${SHANNON_USER_MEMORY_DIR:-/tmp/shannon-users}
       # Observability
+      # 可观测性
       - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-shannon-llm-service}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-localhost:4317}
       - OTEL_ENABLED=${OTEL_ENABLED:-false}
       # Events ingestion
+      # event 摄取
       - EVENTS_INGEST_URL=${EVENTS_INGEST_URL:-http://orchestrator:8081/events}
       - EVENTS_AUTH_TOKEN=${EVENTS_AUTH_TOKEN:-}
       # Playwright screenshot service
+      # Playwright 截图服务
       - PLAYWRIGHT_SERVICE_URL=${PLAYWRIGHT_SERVICE_URL:-http://playwright-service:8002}
     depends_on:
       redis:

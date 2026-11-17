@@ -103,7 +103,7 @@ def test_session_continuity():
         model_tier="small",
         mode="simple",
     )
-    time.sleep(10)  # Wait longer for result
+    time.sleep(10)  # Wait longer for result 注：延长等待结果的时间
     s2 = client.get_status(h2.task_id)
     print(f"  Result: {s2.result[:80] if s2.result else 'EMPTY'}...")
 

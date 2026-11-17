@@ -5,6 +5,7 @@ import sys
 import os
 
 # Add Shannon SDK to path (relative to this test file)
+# 把 Shannon SDK 加入 path（相对于本测试文件）
 sdk_path = os.path.join(os.path.dirname(__file__), '../../clients/python/src')
 sys.path.insert(0, os.path.abspath(sdk_path))
 
@@ -21,6 +22,7 @@ def test_tool_usage():
     print("=" * 70)
 
     # Test with Python code execution tool
+    # 测试 Python 代码执行工具
     handle = client.submit_task(
         "Calculate the fibonacci number for n=10 using Python code",
         model_tier="small",
@@ -65,16 +67,17 @@ def test_streaming_mode():
             chunks_received += 1
             if event.message:
                 final_content.append(event.message[:50])
-            if chunks_received <= 5:  # Show first few events
+            if chunks_received <= 5:  # Show first few events 注：只打印前几个 event
                 print(f"  Event {chunks_received}: {event.type} - {event.message[:80] if event.message else 'N/A'}...")
             if event.type == "WORKFLOW_COMPLETED":
                 break
-            if chunks_received > 50:  # Safety limit
+            if chunks_received > 50:  # Safety limit 注：安全上限
                 break
     except Exception as e:
         print(f"⚠️  Stream error (may be ok if task completed): {e}")
 
     # Verify final result
+    # 校验最终结果
     time.sleep(5)
     status = client.get_status(handle.task_id)
 
@@ -103,10 +106,11 @@ def test_openai_compatible_provider():
     print("Testing with OpenAI provider (default)")
 
     # Test with explicit provider specification
+    # 测试显式指定 provider
     handle = client.submit_task(
         "What is the capital of France?",
         model_tier="small",
-        provider_override="openai",  # Explicitly test provider selection
+        provider_override="openai",  # Explicitly test provider selection 注：显式测试 provider 选择
         mode="simple",
     )
     print(f"Task ID: {handle.task_id}")
@@ -119,13 +123,14 @@ def test_openai_compatible_provider():
     print(f"✅ Result: {status.result[:100]}" if provider_ok else f"❌ Result: {status.result}")
 
     # Test with model override
+    # 测试 model_override
     print("\n  Testing with model_override...")
     handle2 = client.submit_task(
         "What is 7 * 8?",
         model_override="gpt-5-nano-2025-08-07",
         mode="simple",
     )
-    time.sleep(8)  # Wait longer for model override
+    time.sleep(8)  # Wait longer for model override 注：为 model override 多等一会儿
     status2 = client.get_status(handle2.task_id)
 
     model_ok = status2.result and "56" in status2.result
@@ -161,6 +166,7 @@ def test_provider_content_normalization():
     return content_ok
 
 # Run all tests
+# 运行全部测试
 print("\n" + "=" * 70)
 print("ADVANCED FEATURES TEST SUITE")
 print("=" * 70)
@@ -173,6 +179,7 @@ results = {
 }
 
 # Summary
+# 汇总
 print("\n" + "=" * 70)
 print("TEST SUMMARY")
 print("=" * 70)
@@ -182,7 +189,7 @@ for test_name, passed in results.items():
     print(f"{status}: {test_name}")
 
 total = len(results)
-passed = sum(1 for v in results.values() if v)  # Count True values only
+passed = sum(1 for v in results.values() if v)  # Count True values only 注：只统计 True 的个数
 print(f"\nTotal: {passed}/{total} tests passed")
 
 if passed == total:

@@ -23,10 +23,12 @@ import (
 
 const (
 	// SessionContextKeyTitle is the key for session title in the context JSONB field
+	// SessionContextKeyTitle 是 context JSONB 字段中 session 标题的 key
 	SessionContextKeyTitle = "title"
 )
 
 // SessionHandler handles session-related HTTP requests
+// SessionHandler 处理 session 相关 HTTP 请求
 type SessionHandler struct {
 	db               *sqlx.DB
 	redis            *redis.Client
@@ -37,6 +39,7 @@ type SessionHandler struct {
 }
 
 // NewSessionHandler creates a new session handler
+// NewSessionHandler 创建一个新的 session handler
 func NewSessionHandler(
 	db *sqlx.DB,
 	redis *redis.Client,
@@ -68,6 +71,7 @@ func NewSessionHandler(
 }
 
 // SessionResponse represents a session metadata response
+// SessionResponse 表示 session metadata 响应
 type SessionResponse struct {
 	SessionID         string         `json:"session_id"`
 	UserID            string         `json:"user_id"`
@@ -83,6 +87,7 @@ type SessionResponse struct {
 }
 
 // SessionHistoryResponse represents session task history
+// SessionHistoryResponse 表示 session 的 task 历史
 type SessionHistoryResponse struct {
 	SessionID string        `json:"session_id"`
 	Tasks     []TaskHistory `json:"tasks"`
@@ -90,12 +95,14 @@ type SessionHistoryResponse struct {
 }
 
 // ListSessionsResponse represents the list sessions response
+// ListSessionsResponse 表示 session 列表响应
 type ListSessionsResponse struct {
 	Sessions   []SessionSummary `json:"sessions"`
 	TotalCount int              `json:"total_count"`
 }
 
 // SessionSummary represents a single session in listing
+// SessionSummary 表示列表中的单个 session
 type SessionSummary struct {
 	SessionID   string         `json:"session_id"`
 	UserID      string         `json:"user_id"`
@@ -109,24 +116,29 @@ type SessionSummary struct {
 	Context     map[string]any `json:"context,omitempty"`
 
 	// Activity tracking
+	// activity 追踪
 	LastActivityAt *time.Time `json:"last_activity_at,omitempty"`
 	IsActive       bool       `json:"is_active"`
 
 	// Task success metrics
+	// task 成功指标
 	SuccessfulTasks int     `json:"successful_tasks"`
 	FailedTasks     int     `json:"failed_tasks"`
 	SuccessRate     float64 `json:"success_rate,omitempty"`
 
 	// Cost tracking
+	// cost 追踪
 	TotalCostUSD       float64 `json:"total_cost_usd"`
 	AverageCostPerTask float64 `json:"average_cost_per_task,omitempty"`
 
 	// Budget utilization (computed)
+	// 预算使用率（计算得出）
 	BudgetUtilization float64 `json:"budget_utilization,omitempty"`
 	BudgetRemaining   int     `json:"budget_remaining,omitempty"`
 	IsNearBudgetLimit bool    `json:"is_near_budget_limit"`
 
 	// Latest task preview
+	// 最近一次 task 预览
 	LatestTaskQuery  string `json:"latest_task_query,omitempty"`
 	LatestTaskStatus string `json:"latest_task_status,omitempty"`
 
@@ -137,6 +149,7 @@ type SessionSummary struct {
 }
 
 // TaskHistory represents a task in session history
+// TaskHistory 表示 session 历史中的一个 task
 type TaskHistory struct {
 	TaskID       string         `json:"task_id"`
 	WorkflowID   string         `json:"workflow_id"`
@@ -156,10 +169,12 @@ type TaskHistory struct {
 }
 
 // GetSession handles GET /api/v1/sessions/{sessionId}
+// GetSession 处理 GET /api/v1/sessions/{sessionId}
 func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user context from auth middleware
+	// 从 auth 中间件取出用户 context
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -167,6 +182,7 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract session ID from path
+	// 从路径中取出 session ID
 	sessionID := r.PathValue("sessionId")
 	if sessionID == "" {
 		h.sendError(w, "Session ID is required", http.StatusBadRequest)
@@ -174,6 +190,7 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get session metadata from database
+	// 从数据库读取 session metadata
 	var session struct {
 		ID          string        `db:"id"`
 		UserID      string        `db:"user_id"`
@@ -208,6 +225,7 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 	// 注意：访问控制已写入查询条件（user_id 与 tenant_id 的 WHERE 子句）。
 
 	// Parse context JSON first to get external_id if present
+	// 先解析 context JSON，以便拿到可能存在的 external_id
 	var contextData map[string]any
 	if len(session.Context) > 0 {
 		json.Unmarshal(session.Context, &contextData)
@@ -225,6 +243,7 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 		`, session.ID, extID, userCtx.UserID.String(), userCtx.TenantID)
 	} else {
 		// No external_id, just check by UUID
+		// 无 external_id，仅按 UUID 查询
 		err = h.db.GetContext(ctx, &taskCount, `
 			SELECT COUNT(*) FROM task_executions
 			WHERE session_id = $1 AND user_id = $2 AND tenant_id = $3
@@ -329,6 +348,7 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 			if err := json.Unmarshal([]byte(firstTaskMetadata.String), &metadata); err == nil {
 				if taskContext, ok := metadata["task_context"].(map[string]any); ok {
 					// Only set values that weren't found in session context
+					// 只设置 session context 中未找到的字段
 					if !foundResearchInContext {
 						if fr, ok := taskContext["force_research"].(bool); ok && fr {
 							isResearchSession = true
@@ -345,6 +365,7 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build response
+	// 构建响应
 	resp := SessionResponse{
 		SessionID:         session.ID,
 		UserID:            session.UserID,
@@ -373,16 +394,19 @@ func (h *SessionHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Send response
+	// 发送响应
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(resp)
 }
 
 // GetSessionHistory handles GET /api/v1/sessions/{sessionId}/history
+// GetSessionHistory 处理 GET /api/v1/sessions/{sessionId}/history
 func (h *SessionHandler) GetSessionHistory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user context from auth middleware
+	// 从 auth 中间件取出用户 context
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -390,6 +414,7 @@ func (h *SessionHandler) GetSessionHistory(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Extract session ID from path
+	// 从路径中取出 session ID
 	sessionID := r.PathValue("sessionId")
 	if sessionID == "" {
 		h.sendError(w, "Session ID is required", http.StatusBadRequest)
@@ -427,6 +452,7 @@ func (h *SessionHandler) GetSessionHistory(w http.ResponseWriter, r *http.Reques
 	var rows *sqlx.Rows
 	if sessionData.ExternalID != nil && *sessionData.ExternalID != "" {
 		// Session has external_id, check both session.ID and external_id
+		// session 有 external_id 时，同时按 session.ID 和 external_id 查询
 		rows, err = h.db.QueryxContext(ctx, `
 			SELECT
 				id,
@@ -450,6 +476,7 @@ func (h *SessionHandler) GetSessionHistory(w http.ResponseWriter, r *http.Reques
 		`, sessionData.ID, *sessionData.ExternalID, sessionData.UserID, userCtx.TenantID)
 	} else {
 		// No external_id, just check by UUID
+		// 无 external_id，仅按 UUID 查询
 		rows, err = h.db.QueryxContext(ctx, `
 			SELECT
 				id,
@@ -481,6 +508,7 @@ func (h *SessionHandler) GetSessionHistory(w http.ResponseWriter, r *http.Reques
 	defer rows.Close()
 
 	// Parse results
+	// 解析结果
 	tasks := make([]TaskHistory, 0)
 	for rows.Next() {
 		var task struct {
@@ -507,6 +535,7 @@ func (h *SessionHandler) GetSessionHistory(w http.ResponseWriter, r *http.Reques
 		}
 
 		// Parse metadata JSON
+		// 解析 metadata JSON
 		var metadata map[string]any
 		if len(task.Metadata) > 0 {
 			json.Unmarshal(task.Metadata, &metadata)
@@ -549,6 +578,7 @@ func (h *SessionHandler) GetSessionHistory(w http.ResponseWriter, r *http.Reques
 	)
 
 	// Build response
+	// 构建响应
 	resp := SessionHistoryResponse{
 		SessionID: sessionID,
 		Tasks:     tasks,
@@ -556,6 +586,7 @@ func (h *SessionHandler) GetSessionHistory(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Send response
+	// 发送响应
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(resp)
@@ -568,6 +599,7 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 
 	// Get user context from auth middleware
+	// 从 auth 中间件取出用户 context
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -575,6 +607,7 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 	}
 
 	// Extract session ID from path
+	// 从路径中取出 session ID
 	sessionID := r.PathValue("sessionId")
 	if sessionID == "" {
 		h.sendError(w, "Session ID is required", http.StatusBadRequest)
@@ -582,6 +615,7 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 	}
 
 	// Verify session exists and user has access (also get id and external_id)
+	// 校验 session 存在且用户有访问权（同时取出 id 和 external_id）
 	var sessionData struct {
 		ID         string  `db:"id"`
 		UserID     string  `db:"user_id"`
@@ -606,6 +640,7 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 	}
 
 	// Pagination params (turns)
+	// 分页参数（以 turn 为单位）
 	q := r.URL.Query()
 	limit := 10
 	if v := q.Get("limit"); v != "" {
@@ -622,6 +657,7 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 	includePayload := q.Get("include_payload") == "true"
 
 	// Shapes
+	// 响应结构定义
 	type Event struct {
 		WorkflowID string    `json:"workflow_id"`
 		Type       string    `json:"type"`
@@ -648,6 +684,7 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 	}
 
 	// Count total turns (tasks)
+	// 统计 turn（task）总数
 	var total int
 	if sessionData.ExternalID != nil && *sessionData.ExternalID != "" {
 		err = h.db.GetContext(ctx, &total, `
@@ -667,6 +704,7 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 	}
 
 	// Fetch turns ordered by started_at
+	// 按 started_at 顺序取出 turn
 	type turnRow struct {
 		TaskID      string         `db:"id"`
 		WorkflowID  string         `db:"workflow_id"`
@@ -710,12 +748,14 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 	}
 
 	// Build IN clause for workflows
+	// 为 workflow 构建 IN 条件
 	wfIDs := make([]string, 0, len(turnRows))
 	for _, t := range turnRows {
 		wfIDs = append(wfIDs, t.WorkflowID)
 	}
 
 	// Map of workflow_id -> []Event
+	// workflow_id -> []Event 的映射
 	eventsByWF := make(map[string][]Event, len(wfIDs))
 	if len(wfIDs) > 0 {
 		// Safe IN expansion using sqlx.In and rebind for Postgres
@@ -783,6 +823,7 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 	}
 
 	// Build turns with metadata and fallback logic
+	// 构建带 metadata 的 turn，并处理兜底逻辑
 	turns := make([]Turn, 0, len(turnRows))
 	globalStart := offset + 1
 	for i, t := range turnRows {
@@ -800,6 +841,7 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 			}
 		}
 		// Execution time
+		// 执行耗时
 		execMs := 0
 		if t.DurationMs.Valid && t.DurationMs.Int32 > 0 {
 			execMs = int(t.DurationMs.Int32)
@@ -810,12 +852,14 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 			}
 		} else {
 			// Still running: compute duration up to now
+			// 仍在运行：计算到当前时刻的耗时
 			ms := int(time.Since(t.StartedAt).Milliseconds())
 			if ms > 0 {
 				execMs = ms
 			}
 		}
 		// Agents involved (distinct agent_id from events)
+		// 参与的 agent（从 event 中去重的 agent_id）
 		agentSet := map[string]struct{}{}
 		for _, e := range evs {
 			if e.AgentID != "" {
@@ -826,7 +870,7 @@ func (h *SessionHandler) GetSessionEvents(w http.ResponseWriter, r *http.Request
 		for a := range agentSet {
 			agents = append(agents, a)
 		}
-		sort.Strings(agents) // Sort for deterministic output
+		sort.Strings(agents) // Sort for deterministic output 注：排序以保证输出稳定
 
 		var turn Turn
 		turn.Turn = globalStart + i
@@ -912,10 +956,12 @@ func extractTurnAttachmentsFromTaskMetadata(raw sql.NullString) []map[string]any
 }
 
 // ListSessions handles GET /api/v1/sessions
+// ListSessions 处理 GET /api/v1/sessions
 func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user context from auth middleware
+	// 从 auth 中间件取出用户 context
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -923,6 +969,7 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse pagination params
+	// 解析分页参数
 	q := r.URL.Query()
 	limit := 20
 	if v := q.Get("limit"); v != "" {
@@ -1007,6 +1054,7 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	// Parse results
+	// 解析结果
 	sessions := make([]SessionSummary, 0)
 	for rows.Next() {
 		var sess struct {
@@ -1048,6 +1096,7 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Parse context JSON
+		// 解析 context JSON
 		if sess.Context.Valid && sess.Context.String != "" {
 			var ctxMap map[string]any
 			if err := json.Unmarshal([]byte(sess.Context.String), &ctxMap); err == nil {
@@ -1056,6 +1105,7 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Activity tracking
+		// activity 追踪
 		if sess.LastActivityAt.Valid {
 			summary.LastActivityAt = &sess.LastActivityAt.Time
 			// Consider active if last activity within 24 hours
@@ -1064,16 +1114,19 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Task success rate
+		// task 成功率
 		if sess.TaskCount > 0 {
 			summary.SuccessRate = float64(sess.SuccessfulTasks) / float64(sess.TaskCount)
 		}
 
 		// Average cost per task
+		// 每个 task 的平均 cost
 		if sess.TaskCount > 0 && sess.TotalCostUSD > 0 {
 			summary.AverageCostPerTask = sess.TotalCostUSD / float64(sess.TaskCount)
 		}
 
 		// Budget utilization (computed fields)
+		// 预算使用率（计算字段）
 		if sess.TokenBudget > 0 {
 			summary.TokenBudget = sess.TokenBudget
 			summary.BudgetUtilization = float64(sess.TokensUsed) / float64(sess.TokenBudget)
@@ -1082,6 +1135,7 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Latest task preview
+		// 最近一次 task 预览
 		if sess.LatestTaskQuery.Valid {
 			summary.LatestTaskQuery = sess.LatestTaskQuery.String
 		}
@@ -1099,11 +1153,13 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 				summary.FirstTaskMode = ftm
 			} else if role, ok := summary.Context["role"].(string); ok && role != "" {
 				// Fall back to role field (also set by backend for role-based tasks)
+				// 回退到 role 字段（后端在按 role 处理 task 时也会写入）
 				summary.FirstTaskMode = role
 			}
 		}
 
 		// If still not set, fall back to database query result
+		// 若仍未设置，回退到数据库查询结果
 		if summary.FirstTaskMode == "" && sess.FirstTaskMode.Valid {
 			summary.FirstTaskMode = sess.FirstTaskMode.String
 		}
@@ -1118,10 +1174,12 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Fall back to first task's metadata.task_context.force_research
+		// 回退到首个 task 的 metadata.task_context.force_research
 		if !isResearch && sess.FirstTaskMetadata.Valid && sess.FirstTaskMetadata.String != "" {
 			var metadata map[string]any
 			if err := json.Unmarshal([]byte(sess.FirstTaskMetadata.String), &metadata); err == nil {
 				// Check task_context.force_research (explicit research mode flag)
+				// 检查 task_context.force_research（显式研究模式标记）
 				if taskContext, ok := metadata["task_context"].(map[string]any); ok {
 					if fr, ok := taskContext["force_research"].(bool); ok && fr {
 						isResearch = true
@@ -1149,6 +1207,7 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get total count for pagination
+	// 取分页所需的总数
 	var totalCount int
 	err = h.db.GetContext(ctx, &totalCount, `
         SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
@@ -1156,10 +1215,12 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Warn("Failed to get total session count", zap.Error(err))
 		// Don't fail the request, just return 0 total
+		// 不要让请求失败，总数返回 0 即可
 		totalCount = len(sessions)
 	}
 
 	// Enrich with real-time token usage from Redis if available
+	// 若 Redis 可用，用其实时 token 用量补充数据
 	if h.redis != nil && len(sessions) > 0 {
 		// Prepare keys for MGET using the canonical session ID.
 		// For list view, we only use "session:<uuid>" to keep the call efficient.
@@ -1177,23 +1238,27 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Execute MGET
+		// 执行 MGET
 		if len(keys) > 0 {
 			values, err := h.redis.MGet(ctx, keys...).Result()
 			if err != nil {
 				h.logger.Warn("Failed to fetch session data from Redis", zap.Error(err))
 			} else {
 				// Update sessions with Redis data
+				// 用 Redis 数据更新 session
 				for i, val := range values {
 					if val == nil {
 						continue
 					}
 
 					// Redis returns interface{}, needs type assertion
+					// Redis 返回 interface{}，需要类型断言
 					if strVal, ok := val.(string); ok {
 						var sessionData map[string]any
 						if err := json.Unmarshal([]byte(strVal), &sessionData); err == nil {
 							if tokens, ok := sessionData["total_tokens_used"].(float64); ok {
 								// Update if Redis has more current data
+								// 若 Redis 数据更实时则覆盖
 								if int(tokens) > sessions[i].TokensUsed {
 									sessions[i].TokensUsed = int(tokens)
 								}
@@ -1212,27 +1277,32 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Build response
+	// 构建响应
 	resp := ListSessionsResponse{
 		Sessions:   sessions,
 		TotalCount: totalCount,
 	}
 
 	// Send response
+	// 发送响应
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(resp)
 }
 
 // sendError sends an error response
+// sendError 发送错误响应
 func (h *SessionHandler) sendError(w http.ResponseWriter, message string, code int) {
 	writeJSON(w, code, map[string]string{"error": message})
 }
 
 // UpdateSessionTitle handles PATCH /api/v1/sessions/{sessionId}
+// UpdateSessionTitle 处理 PATCH /api/v1/sessions/{sessionId}
 func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user context
+	// 取出用户 context
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -1240,6 +1310,7 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Extract session ID from path
+	// 从路径中取出 session ID
 	sessionID := r.PathValue("sessionId")
 	if sessionID == "" {
 		h.sendError(w, "Session ID is required", http.StatusBadRequest)
@@ -1247,6 +1318,7 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Parse request body
+	// 解析请求体
 	var reqBody struct {
 		Title string `json:"title"`
 	}
@@ -1256,6 +1328,7 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Validate title
+	// 校验 title
 	title := strings.TrimSpace(reqBody.Title)
 	if title == "" {
 		h.sendError(w, "Title cannot be empty", http.StatusBadRequest)
@@ -1266,12 +1339,13 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 	// 清洗标题：去掉控制字符（换行、制表符、零宽字符等）。
 	title = strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) || r == '\u200B' || r == '\uFEFF' {
-			return -1 // Remove control characters, zero-width space, and BOM
+			return -1 // Remove control characters, zero-width space, and BOM 注：移除控制字符、零宽空格与 BOM
 		}
 		return r
 	}, title)
 
 	// Re-check after sanitization
+	// 清洗后重新校验
 	if strings.TrimSpace(title) == "" {
 		h.sendError(w, "Title cannot contain only control characters", http.StatusBadRequest)
 		return
@@ -1285,6 +1359,7 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Verify session exists and user has access (fetch ID for Redis cache)
+	// 校验 session 存在且用户有访问权（同时取出 ID 供 Redis cache 使用）
 	var session struct {
 		ID      string `db:"id"`
 		UserID  string `db:"user_id"`
@@ -1308,6 +1383,7 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Parse existing context
+	// 解析已有的 context
 	var contextData map[string]any
 	if len(session.Context) > 0 {
 		if err := json.Unmarshal(session.Context, &contextData); err != nil {
@@ -1319,9 +1395,11 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Update title in context
+	// 在 context 中更新 title
 	contextData[SessionContextKeyTitle] = title
 
 	// Serialize updated context
+	// 序列化更新后的 context
 	updatedContext, err := json.Marshal(contextData)
 	if err != nil {
 		h.logger.Error("Failed to serialize context", zap.Error(err))
@@ -1352,19 +1430,21 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 		// Try multiple possible Redis keys: input sessionID, DB UUID, and external_id
 		// 依次尝试可能的 Redis key：传入的 sessionID、DB 中的 UUID 以及 external_id。
 		keysToTry := []string{
-			fmt.Sprintf("session:%s", sessionID),  // Original input (could be UUID or external_id)
-			fmt.Sprintf("session:%s", session.ID), // Database UUID
+			fmt.Sprintf("session:%s", sessionID),  // Original input (could be UUID or external_id) 注：原始输入（可能是 UUID 或 external_id）
+			fmt.Sprintf("session:%s", session.ID), // Database UUID 注：数据库中的 UUID
 		}
 		// Also add external_id if present
+		// 若存在 external_id 也一并加入
 		if extID, ok := contextData["external_id"].(string); ok && extID != "" {
 			keysToTry = append(keysToTry, fmt.Sprintf("session:%s", extID))
 		}
 
 		// Try each possible key
+		// 依次尝试每个可能的 key
 		for _, redisKey := range keysToTry {
 			sessionData, err := h.redis.Get(ctx, redisKey).Result()
 			if err != nil {
-				continue // Try next key
+				continue // Try next key 注：尝试下一个 key
 			}
 
 			var redisSession map[string]any
@@ -1414,6 +1494,7 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 	)
 
 	// Return success with updated title
+	// 返回成功及更新后的 title
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
@@ -1423,10 +1504,12 @@ func (h *SessionHandler) UpdateSessionTitle(w http.ResponseWriter, r *http.Reque
 }
 
 // DeleteSession handles DELETE /api/v1/sessions/{sessionId}
+// DeleteSession 处理 DELETE /api/v1/sessions/{sessionId}
 func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user context
+	// 取出用户 context
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -1465,6 +1548,7 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Soft delete (idempotent)
+	// 软删除（幂等）
 	if _, err := h.db.ExecContext(ctx, `
         UPDATE sessions
         SET deleted_at = NOW(), deleted_by = $2, updated_at = NOW()
@@ -1495,18 +1579,22 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 			zap.Error(err),
 			zap.String("workspace_key", workspaceKey))
 		// Don't fail the delete - just skip cleanup
+		// 不让删除失败——仅跳过清理
 	} else {
 		// Attempt workspace cleanup (best-effort)
+		// 尝试清理 workspace（尽力而为）
 		if cleanupErr := h.cleanupWorkspace(ctx, workspaceKey, workspacePath); cleanupErr != nil {
 			h.logger.Warn("Workspace cleanup failed (will be cleaned by cron)",
 				zap.Error(cleanupErr),
 				zap.String("session_id", sessMeta.ID),
 				zap.String("workspace_key", workspaceKey))
 			// Don't return error - session is already soft-deleted
+			// 不返回错误——session 已完成软删除
 		}
 	}
 
 	// Clear Redis cache for this session (best-effort)
+	// 清理该 session 的 Redis cache（尽力而为）
 	if h.redis != nil {
 		// Try all possible keys: original input, DB UUID, and external_id (if present)
 		// 尝试所有可能的 key：原始输入、DB 中的 UUID 以及 external_id（若有）。
@@ -1522,6 +1610,7 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// No content, idempotent
+	// 无内容返回，保持幂等
 	w.WriteHeader(http.StatusNoContent)
 }
 

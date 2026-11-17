@@ -35,6 +35,7 @@ import (
 
 func main() {
 	// Initialize logger
+	// 初始化 logger
 	logger, err := zap.NewProduction()
 	if err != nil {
 		log.Fatalf("Failed to initialize logger: %v", err)
@@ -63,6 +64,7 @@ func main() {
 	}
 
 	// Initialize database
+	// 初始化数据库
 	dbConfig := &db.Config{
 		Host:     getEnvOrDefault("POSTGRES_HOST", "postgres"),
 		Port:     getEnvOrDefaultInt("POSTGRES_PORT", 5432),
@@ -79,9 +81,11 @@ func main() {
 	defer dbClient.Close()
 
 	// Create sqlx.DB wrapper for auth service
+	// 为 auth service 创建 sqlx.DB 封装
 	pgDB := sqlx.NewDb(dbClient.GetDB(), "postgres")
 
 	// Initialize Redis client for rate limiting and idempotency
+	// 初始化 Redis client，用于 rate limiting 与幂等控制
 	redisURL := getEnvOrDefault("REDIS_URL", "redis://redis:6379")
 	redisOpts, err := redis.ParseURL(redisURL)
 	if err != nil {
@@ -91,6 +95,7 @@ func main() {
 	defer redisClient.Close()
 
 	// Test Redis connection
+	// 测试 Redis 连接
 	ctx := context.Background()
 	if _, err := redisClient.Ping(ctx).Result(); err != nil {
 		logger.Fatal("Failed to connect to Redis", zap.Error(err))
@@ -110,14 +115,16 @@ func main() {
 	streaming.InitializeRedis(streamingRedis, logger)
 
 	// Initialize auth service (direct access to internal package)
+	// 初始化 auth service（直接访问 internal 包）
 	jwtSecret := getEnvOrDefault("JWT_SECRET", "your-secret-key")
 	authService := authpkg.NewService(pgDB, logger, jwtSecret)
 
 	// Connect to orchestrator gRPC
+	// 连接 orchestrator 的 gRPC
 	orchAddr := getEnvOrDefault("ORCHESTRATOR_GRPC", "orchestrator:50052")
 	conn, err := grpc.Dial(orchAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(50*1024*1024)), // 50MB
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(50*1024*1024)), // 50MB 注：gRPC 单条消息上限 50MB
 	)
 	if err != nil {
 		logger.Fatal("Failed to connect to orchestrator", zap.Error(err))
@@ -127,6 +134,7 @@ func main() {
 	orchClient := orchpb.NewOrchestratorServiceClient(conn)
 
 	// Initialize skill registry
+	// 初始化 skill registry
 	skillRegistry := skills.NewRegistry()
 	for _, dir := range skills.ResolveSkillDirs() {
 		if err := skillRegistry.LoadDirectory(dir); err != nil {
@@ -149,6 +157,7 @@ func main() {
 	}
 
 	// Create handlers
+	// 创建 handlers
 	taskHandler := handlers.NewTaskHandler(orchClient, pgDB, redisClient, skillRegistry, logger, sessionMgr)
 	sessionHandler := handlers.NewSessionHandler(pgDB, redisClient, logger)
 	approvalHandler := handlers.NewApprovalHandler(orchClient, logger)
@@ -196,6 +205,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService, oauthVerifier, pgDB, logger, rateLimitConfig)
 
 	// Create middlewares
+	// 创建 middlewares
 	authMiddleware := middleware.NewAuthMiddleware(authService, logger).Middleware
 	rateLimiter := middleware.NewRateLimiterWithConfig(redisClient, logger, rateLimitConfig).Middleware
 	idempotencyMiddleware := middleware.NewIdempotencyMiddleware(redisClient, logger).Middleware
@@ -203,25 +213,31 @@ func main() {
 	validationMiddleware := middleware.NewValidationMiddleware(logger).Middleware
 
 	// OpenAI-compatible API handler
+	// OpenAI 兼容 API handler
 	openaiHandler, err := openai.NewHandler(orchClient, pgDB, redisClient, logger, adminURL)
 	if err != nil {
 		logger.Warn("Failed to create OpenAI handler, endpoint disabled", zap.Error(err))
 	}
 
 	// Tool execution handler
+	// tool 执行 handler
 	toolsHandler := handlers.NewToolsHandler(pgDB, logger)
 
 	// Setup HTTP mux
+	// 初始化 HTTP mux
 	mux := http.NewServeMux()
 
 	// Health check (no auth required)
+	// 健康检查（无需 authentication）
 	mux.HandleFunc("GET /health", healthHandler.Health)
 	mux.HandleFunc("GET /readiness", healthHandler.Readiness)
 
 	// Prometheus metrics endpoint (no auth required)
+	// Prometheus metrics 端点（无需 authentication）
 	mux.Handle("GET /metrics", promhttp.Handler())
 
 	// OpenAPI spec (no auth required)
+	// OpenAPI spec（无需 authentication）
 	mux.HandleFunc("GET /openapi.json", openapiHandler.ServeSpec)
 
 	// Auth endpoints (no auth required for registration, auth required for me/refresh)
@@ -245,6 +261,7 @@ func main() {
 	)
 
 	// API Key management endpoints (require auth)
+	// API Key 管理端点（需要 authentication）
 	mux.Handle("GET /api/v1/auth/api-keys",
 		tracingMiddleware(
 			authMiddleware(
@@ -270,6 +287,7 @@ func main() {
 	)
 
 	// Task endpoints (require auth)
+	// task 端点（需要 authentication）
 	mux.Handle("POST /api/v1/tasks",
 		tracingMiddleware(
 			authMiddleware(
@@ -359,6 +377,7 @@ func main() {
 	)
 
 	// Pause workflow
+	// 暂停 workflow
 	mux.Handle("POST /api/v1/tasks/{id}/pause",
 		tracingMiddleware(
 			authMiddleware(
@@ -374,6 +393,7 @@ func main() {
 	)
 
 	// Resume workflow
+	// 恢复 workflow
 	mux.Handle("POST /api/v1/tasks/{id}/resume",
 		tracingMiddleware(
 			authMiddleware(
@@ -403,6 +423,7 @@ func main() {
 	)
 
 	// Get control state
+	// 获取 control state
 	mux.Handle("GET /api/v1/tasks/{id}/control-state",
 		tracingMiddleware(
 			authMiddleware(
@@ -416,6 +437,7 @@ func main() {
 	)
 
 	// Approval endpoints (require auth)
+	// approval 端点（需要 authentication）
 	mux.Handle("POST /api/v1/approvals/decision",
 		tracingMiddleware(
 			authMiddleware(
@@ -431,6 +453,7 @@ func main() {
 	)
 
 	// HITL Research Review
+	// HITL 研究评审（research review）
 	mux.Handle("GET /api/v1/tasks/{workflowID}/review",
 		tracingMiddleware(
 			authMiddleware(
@@ -453,6 +476,7 @@ func main() {
 	)
 
 	// Session endpoints (require auth)
+	// session 端点（需要 authentication）
 	mux.Handle("GET /api/v1/sessions",
 		tracingMiddleware(
 			authMiddleware(
@@ -498,6 +522,7 @@ func main() {
 	)
 
 	// Update session title
+	// 更新 session 标题
 	mux.Handle("PATCH /api/v1/sessions/{sessionId}",
 		tracingMiddleware(
 			authMiddleware(
@@ -511,6 +536,7 @@ func main() {
 	)
 
 	// Soft delete session (idempotent)
+	// 软删除 session（幂等）
 	mux.Handle("DELETE /api/v1/sessions/{sessionId}",
 		tracingMiddleware(
 			authMiddleware(
@@ -539,6 +565,7 @@ func main() {
 	)
 
 	// Download file from session workspace (path is the file path within workspace)
+	// 从 session workspace 下载文件（path 为 workspace 内的文件路径）
 	mux.Handle("GET /api/v1/sessions/{sessionId}/files/{path...}",
 		tracingMiddleware(
 			authMiddleware(
@@ -567,6 +594,7 @@ func main() {
 	)
 
 	// Download file from authenticated user's memory directory
+	// 从已认证用户的 memory 目录下载文件
 	mux.Handle("GET /api/v1/memory/files/{path...}",
 		tracingMiddleware(
 			authMiddleware(
@@ -580,6 +608,7 @@ func main() {
 	)
 
 	// Schedule endpoints (require auth)
+	// schedule 端点（需要 authentication）
 	mux.Handle("POST /api/v1/schedules",
 		tracingMiddleware(
 			authMiddleware(
@@ -717,6 +746,7 @@ func main() {
 	)
 
 	// Skills endpoints (require auth)
+	// skill 端点（需要 authentication）
 	mux.Handle("GET /api/v1/skills",
 		tracingMiddleware(
 			authMiddleware(
@@ -788,8 +818,10 @@ func main() {
 	)
 
 	// OpenAI-compatible API endpoints (/v1/*)
+	// OpenAI 兼容 API 端点（/v1/*）
 	if openaiHandler != nil {
 		// POST /v1/chat/completions - main chat completion endpoint
+		// POST /v1/chat/completions —— 主要的 chat completion 端点
 		mux.Handle("POST /v1/chat/completions",
 			tracingMiddleware(
 				authMiddleware(
@@ -819,6 +851,7 @@ func main() {
 		)
 
 		// GET /v1/models - list available models
+		// GET /v1/models —— 列出可用模型
 		mux.Handle("GET /v1/models",
 			tracingMiddleware(
 				authMiddleware(
@@ -828,6 +861,7 @@ func main() {
 		)
 
 		// GET /v1/models/{model} - get specific model info
+		// GET /v1/models/{model} —— 获取指定模型信息
 		mux.Handle("GET /v1/models/{model}",
 			tracingMiddleware(
 				authMiddleware(
@@ -837,6 +871,7 @@ func main() {
 		)
 
 		// GET /v1/llm-models - list available LLM provider models (from models.yaml)
+		// GET /v1/llm-models —— 列出可用的 LLM provider 模型（来自 models.yaml）
 		mux.Handle("GET /v1/llm-models",
 			tracingMiddleware(
 				authMiddleware(
@@ -858,6 +893,7 @@ func main() {
 	}
 
 	// Proxy SSE and WebSocket endpoints
+	// 代理 SSE 与 WebSocket 端点
 	mux.Handle("/api/v1/stream/sse",
 		tracingMiddleware(
 			authMiddleware(
@@ -879,6 +915,7 @@ func main() {
 	)
 
 	// Daemon command channel
+	// daemon 命令通道
 	daemonHub := daemon.NewHub(redisClient, logger)
 	// Apply claim TTL from features config if loaded
 	// 若已加载 features 配置，则应用其中的 claim TTL。
@@ -907,6 +944,7 @@ func main() {
 	)
 
 	// Daemon status API
+	// daemon 状态 API
 	mux.Handle("GET /api/v1/daemon/status",
 		tracingMiddleware(
 			authMiddleware(
@@ -941,6 +979,7 @@ func main() {
 						return
 					}
 					// Rebuild target URL
+					// 重建目标 URL
 					target := strings.TrimRight(adminURL, "/") + "/timeline?workflow_id=" + id
 					if raw := r.URL.RawQuery; raw != "" {
 						target += "&" + raw
@@ -970,16 +1009,18 @@ func main() {
 	corsHandler := corsMiddleware(mux)
 
 	// Create HTTP server
+	// 创建 HTTP server
 	port := getEnvOrDefaultInt("PORT", 8080)
 	server := &http.Server{
 		Addr:         ":" + strconv.Itoa(port),
 		Handler:      corsHandler,
 		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 0,                 // No write timeout for SSE/streaming support
-		IdleTimeout:  300 * time.Second, // 5 minutes idle for long-lived SSE connections
+		WriteTimeout: 0,                 // No write timeout for SSE/streaming support 注：为支持 SSE/streaming 不设写超时
+		IdleTimeout:  300 * time.Second, // 5 minutes idle for long-lived SSE connections 注：长连接 SSE 空闲 5 分钟
 	}
 
 	// Start server in goroutine
+	// 在 goroutine 中启动 server
 	go func() {
 		logger.Info("Gateway starting", zap.Int("port", port))
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -988,6 +1029,7 @@ func main() {
 	}()
 
 	// Wait for interrupt signal to gracefully shutdown the server
+	// 等待中断信号，优雅关闭 server
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
@@ -1002,6 +1044,7 @@ func main() {
 	}
 
 	// Graceful shutdown with timeout
+	// 带超时的优雅关闭
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -1013,6 +1056,7 @@ func main() {
 }
 
 // corsMiddleware adds CORS headers for development
+// corsMiddleware 为开发场景添加 CORS header
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		isStreaming := strings.HasPrefix(r.URL.Path, "/api/v1/stream/")
@@ -1041,6 +1085,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 
 		if r.Method == http.MethodOptions {
 			// Handle preflight - headers already set above
+			// 处理 preflight —— 相关 header 已在上面设置
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -1050,6 +1095,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 }
 
 // Helper functions
+// 辅助函数
 func getEnvOrDefault(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value

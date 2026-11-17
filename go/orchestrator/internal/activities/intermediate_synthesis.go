@@ -13,25 +13,27 @@ import (
 )
 
 // IntermediateSynthesisInput is the input for intermediate synthesis between iterations
+// IntermediateSynthesisInput 是迭代之间做 intermediate synthesis 的输入。
 type IntermediateSynthesisInput struct {
 	Query             string                   `json:"query"`
 	Iteration         int                      `json:"iteration"`
 	MaxIterations     int                      `json:"max_iterations"`
 	AgentResults      []AgentExecutionResult   `json:"agent_results"`
-	PreviousSynthesis string                   `json:"previous_synthesis,omitempty"` // From prior iteration
-	CoverageGaps      []string                 `json:"coverage_gaps,omitempty"`       // Gaps identified so far
+	PreviousSynthesis string                   `json:"previous_synthesis,omitempty"` // From prior iteration 注：来自上一轮迭代
+	CoverageGaps      []string                 `json:"coverage_gaps,omitempty"`       // Gaps identified so far 注：目前已识别的缺口
 	Context           map[string]any   `json:"context,omitempty"`
 	ParentWorkflowID  string                   `json:"parent_workflow_id,omitempty"`
 }
 
 // IntermediateSynthesisResult is the result of intermediate synthesis
+// IntermediateSynthesisResult 是 intermediate synthesis 的结果。
 type IntermediateSynthesisResult struct {
-	Synthesis         string   `json:"synthesis"`           // Combined understanding so far
-	KeyFindings       []string `json:"key_findings"`        // Extracted key findings
-	CoverageAreas     []string `json:"coverage_areas"`      // Areas covered so far
-	ConfidenceScore   float64  `json:"confidence_score"`    // 0.0-1.0 confidence in completeness
-	NeedsMoreResearch bool     `json:"needs_more_research"` // Whether another iteration is needed
-	SuggestedFocus    []string `json:"suggested_focus"`     // Suggested areas for next iteration
+	Synthesis         string   `json:"synthesis"`           // Combined understanding so far 注：目前的综合理解
+	KeyFindings       []string `json:"key_findings"`        // Extracted key findings 注：抽取出的关键发现
+	CoverageAreas     []string `json:"coverage_areas"`      // Areas covered so far 注：目前覆盖的领域
+	ConfidenceScore   float64  `json:"confidence_score"`    // 0.0-1.0 confidence in completeness 注：完整性置信度，取值 0.0-1.0
+	NeedsMoreResearch bool     `json:"needs_more_research"` // Whether another iteration is needed 注：是否需要再进行一轮迭代
+	SuggestedFocus    []string `json:"suggested_focus"`     // Suggested areas for next iteration 注：建议下一轮迭代关注的领域
 	TokensUsed        int      `json:"tokens_used"`
 	ModelUsed         string   `json:"model_used"`
 	Provider          string   `json:"provider"`
@@ -51,17 +53,18 @@ func (a *Activities) IntermediateSynthesis(ctx context.Context, input Intermedia
 	)
 
 	// Build system prompt for intermediate synthesis
+	// 为 intermediate synthesis 构建 system prompt。
 	systemPrompt := buildIntermediateSynthesisPrompt(input)
 	userContent := buildAgentResultsContent(input)
 
 	// Call LLM service
+	// 调用 LLM service。
 	llmServiceURL := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
 	reqBody := map[string]any{
 		"query":       userContent,
-		"max_tokens":  8192, // Extended for comprehensive intermediate synthesis
-		// 加大到 8192，以容纳完整的 intermediate synthesis。
+		"max_tokens":  8192, // Extended for comprehensive intermediate synthesis 注：加大到 8192，以容纳完整的 intermediate synthesis。
 		"temperature": 0.3,
 		"agent_id":    "intermediate_synthesis",
 		"model_tier":  "small",
@@ -77,8 +80,7 @@ func (a *Activities) IntermediateSynthesis(ctx context.Context, input Intermedia
 	}
 
 	client := &http.Client{
-		Timeout:   120 * time.Second, // Extended for LLM processing time
-		// 加长到 120s，覆盖 LLM 处理耗时。
+		Timeout:   120 * time.Second, // Extended for LLM processing time 注：加长到 120s，覆盖 LLM 处理耗时。
 		Transport: interceptors.NewWorkflowHTTPRoundTripper(nil),
 	}
 
@@ -103,6 +105,7 @@ func (a *Activities) IntermediateSynthesis(ctx context.Context, input Intermedia
 	}
 
 	// Parse response
+	// 解析响应。
 	var llmResp struct {
 		Success  bool   `json:"success"`
 		Response string `json:"response"`
@@ -129,6 +132,7 @@ func (a *Activities) IntermediateSynthesis(ctx context.Context, input Intermedia
 	}
 
 	// Try to parse structured response
+	// 尝试解析结构化响应。
 	if err := parseIntermediateSynthesisResponse(llmResp.Response, result); err != nil {
 		logger.Warn("IntermediateSynthesis: failed to parse structured response, using raw",
 			"error", err,
@@ -149,6 +153,7 @@ func (a *Activities) IntermediateSynthesis(ctx context.Context, input Intermedia
 }
 
 // buildIntermediateSynthesisPrompt creates the system prompt for intermediate synthesis
+// buildIntermediateSynthesisPrompt 创建 intermediate synthesis 的 system prompt。
 func buildIntermediateSynthesisPrompt(input IntermediateSynthesisInput) string {
 	var sb strings.Builder
 
@@ -198,6 +203,7 @@ Return a JSON object with these fields:
 }
 
 // buildAgentResultsContent builds the user content from agent results
+// buildAgentResultsContent 由 agent 结果构建 user content。
 func buildAgentResultsContent(input IntermediateSynthesisInput) string {
 	var sb strings.Builder
 
@@ -226,6 +232,7 @@ func buildAgentResultsContent(input IntermediateSynthesisInput) string {
 }
 
 // parseIntermediateSynthesisResponse parses the LLM response into structured result
+// parseIntermediateSynthesisResponse 把 LLM 响应解析为结构化结果。
 func parseIntermediateSynthesisResponse(response string, result *IntermediateSynthesisResult) error {
 	start := strings.Index(response, "{")
 	end := strings.LastIndex(response, "}")
@@ -260,6 +267,7 @@ func parseIntermediateSynthesisResponse(response string, result *IntermediateSyn
 }
 
 // truncateStr truncates a string to maxLen
+// truncateStr 把字符串截断到 maxLen。
 func truncateStr(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s

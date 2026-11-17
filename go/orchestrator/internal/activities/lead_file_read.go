@@ -11,6 +11,7 @@ import (
 )
 
 // ReadWorkspaceFileInput is the input for the ReadWorkspaceFile activity.
+// ReadWorkspaceFileInput 是 ReadWorkspaceFile activity 的输入。
 type ReadWorkspaceFileInput struct {
 	SessionID string `json:"session_id"`
 	Path      string `json:"path"`
@@ -18,6 +19,7 @@ type ReadWorkspaceFileInput struct {
 }
 
 // ReadWorkspaceFileResult is the output of the ReadWorkspaceFile activity.
+// ReadWorkspaceFileResult 是 ReadWorkspaceFile activity 的输出。
 type ReadWorkspaceFileResult struct {
 	Path      string `json:"path"`
 	Content   string `json:"content"`

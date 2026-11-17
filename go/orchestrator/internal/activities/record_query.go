@@ -173,18 +173,12 @@ func recordQueryCore(ctx context.Context, in RecordQueryInput) (RecordQueryResul
 				// Build payload with chunk metadata
 				// 构造带 chunk metadata 的 payload。
 				payload := map[string]any{
-					"query": q, // Original query
-					// 原始 query。
-					"chunk_text": chunk.Text, // The actual chunk (no full answer stored)
-					// 实际 chunk 内容（不存完整 answer）。
-					"qa_id": chunk.QAID, // UUID for this Q&A pair
-					// 该 Q&A 对的 UUID。
-					"chunk_index": chunk.Index, // 0-based chunk position
-					// chunk 位置，从 0 开始。
-					"chunk_count": chunk.TotalCount, // Total chunks for this Q&A
-					// 该 Q&A 的 chunk 总数。
-					"is_chunked": true, // Flag for retrieval
-					// 供检索使用的标记。
+					"query": q, // Original query 注：原始 query。
+					"chunk_text": chunk.Text, // The actual chunk (no full answer stored) 注：实际 chunk 内容（不存完整 answer）。
+					"qa_id": chunk.QAID, // UUID for this Q&A pair 注：该 Q&A 对的 UUID。
+					"chunk_index": chunk.Index, // 0-based chunk position 注：chunk 位置，从 0 开始。
+					"chunk_count": chunk.TotalCount, // Total chunks for this Q&A 注：该 Q&A 的 chunk 总数。
+					"is_chunked": true, // Flag for retrieval 注：供检索使用的标记。
 					"session_id": in.SessionID,
 					"user_id":    in.UserID,
 					"tenant_id":  in.TenantID,
@@ -252,8 +246,7 @@ func recordQueryCore(ctx context.Context, in RecordQueryInput) (RecordQueryResul
 	payload := map[string]any{
 		"query":      q,
 		"answer":     a,
-		"is_chunked": false, // Flag for retrieval
-		// 供检索使用的标记。
+		"is_chunked": false, // Flag for retrieval 注：供检索使用的标记。
 		"session_id": in.SessionID,
 		"user_id":    in.UserID,
 		"tenant_id":  in.TenantID,
@@ -263,7 +256,7 @@ func recordQueryCore(ctx context.Context, in RecordQueryInput) (RecordQueryResul
 	maps.Copy(payload, in.Metadata)
 
 	// Upsert point
-	// upsert point。
+	// 写入（upsert）向量点。
 	if _, err := vdb.UpsertTaskEmbedding(ctx, vec, payload); err != nil {
 		logger.Warn("Failed to upsert task embedding to vector store",
 			"session_id", in.SessionID,
@@ -286,8 +279,7 @@ func RecordQuery(ctx context.Context, in RecordQueryInput) (RecordQueryResult, e
 			// 供 memory 写入展示的友好文案。
 			msg := "Saved to task memory"
 			count := res.ChunksCreated
-			if count <= 0 { // single vector path
-				// 单向量路径。
+			if count <= 0 { // single vector path 注：单向量路径。
 				count = 1
 			}
 			streaming.Get().Publish(wfID, streaming.Event{

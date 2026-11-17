@@ -231,7 +231,7 @@ def test_redis_cache_roundtrip_preserves_content_blocks():
     assert len(deserialized.content_blocks) == 4
     assert deserialized.content_blocks[0]["thinking"] == "private reasoning"
     assert deserialized.content_blocks[0]["signature"] == "sigA"
-    assert deserialized.cached is True  # cache marker still flips
+    assert deserialized.cached is True  # cache marker still flips 注：cache 标记仍会翻转
 
 
 def test_redis_cache_legacy_response_no_content_blocks():

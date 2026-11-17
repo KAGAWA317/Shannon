@@ -58,6 +58,7 @@ import asyncio
 from functools import lru_cache
 
 # TODO: Add langchain dependencies to requirements.txt when implementing
+# TODO：实现时需要把 langchain 依赖加入 requirements.txt
 # langchain>=0.1.0
 # langchain-community>=0.0.20
 # langchain-experimental>=0.0.50
@@ -91,8 +92,7 @@ class LangChainToolResult:
     error_message: Optional[str] = None
     tool_name: Optional[str] = None
     execution_time_ms: Optional[int] = None
-    tokens_used: Optional[int] = None  # If applicable
-    # 适用时填写
+    tokens_used: Optional[int] = None  # If applicable 注：适用时填写
     metadata: Dict[str, Any] = None
 
 
@@ -115,8 +115,7 @@ class LangChainBridge:
 
         # TODO: Load from Shannon configuration
         # TODO：改为从 Shannon 配置加载
-        self.max_tool_execution_time = 60  # seconds
-        # 秒
+        self.max_tool_execution_time = 60  # seconds 注：秒
         self.enable_tool_caching = True
 
         # TODO: Integration with Shannon's metrics system
@@ -177,6 +176,7 @@ class LangChainBridge:
         创建 Notion 集成 tool。
         """
         # TODO: Get credentials from Shannon's secure config
+        # TODO：从 Shannon 的安全配置读取凭据
         # notion_token = get_shannon_secret("NOTION_INTEGRATION_TOKEN")
         # return NotionDBLoader(integration_token=notion_token)
         return None
@@ -187,6 +187,7 @@ class LangChainBridge:
         创建 Slack 集成 tool。
         """
         # TODO: Get credentials from Shannon's secure config
+        # TODO：从 Shannon 的安全配置读取凭据
         # slack_token = get_shannon_secret("SLACK_BOT_TOKEN")
         # return SlackSendMessage(slack_token=slack_token)
         return None
@@ -197,6 +198,7 @@ class LangChainBridge:
         创建 Gmail 集成 tool。
         """
         # TODO: Get credentials from Shannon's secure config
+        # TODO：从 Shannon 的安全配置读取凭据
         # gmail_creds = get_shannon_secret("GMAIL_CREDENTIALS")
         # return GmailSendMessage(credentials=gmail_creds)
         return None
@@ -207,6 +209,7 @@ class LangChainBridge:
         创建 Google Drive 集成 tool。
         """
         # TODO: Get credentials from Shannon's secure config
+        # TODO：从 Shannon 的安全配置读取凭据
         # gdrive_creds = get_shannon_secret("GOOGLE_DRIVE_CREDENTIALS")
         # return GoogleDriveSearchTool(credentials=gdrive_creds)
         return None
@@ -260,9 +263,13 @@ class LangChainBridge:
                 )
 
             # TODO: Pre-execution security checks
+            # TODO：执行前的安全检查
             # - Validate parameters against schema
+            # - 按 schema 校验参数
             # - Check user permissions for this tool
+            # - 检查用户对该 tool 的权限
             # - Verify rate limits not exceeded
+            # - 确认未超过限流阈值
 
             # Execute tool with timeout protection
             # 带 timeout 保护地执行 tool
@@ -297,9 +304,13 @@ class LangChainBridge:
                 )
 
                 # TODO: Post-execution processing
+                # TODO：执行后的处理
                 # - Sanitize result data for security
+                # - 出于安全清洗结果数据
                 # - Extract token usage if applicable
+                # - 适用时提取 token 用量
                 # - Update usage metrics
+                # - 更新用量指标
 
                 return LangChainToolResult(
                     success=True,
@@ -310,6 +321,7 @@ class LangChainBridge:
                         "langchain_tool_type": type(tool).__name__,
                         "params_count": len(params),
                         # TODO: Add more relevant metadata
+                        # TODO：补充更多相关 metadata
                     },
                 )
 
@@ -353,7 +365,9 @@ class LangChainBridge:
             return []
 
         # TODO: Dynamically discover available tools based on installed packages
+        # TODO：按已安装的包动态发现可用 tool
         # and configured credentials
+        # 以及已配置的凭据
         available_tools = [
             {
                 "name": "langchain_arxiv",
@@ -441,7 +455,7 @@ async def execute_langchain_tool(
     Add routing logic:
 
     if tool_name.startswith("langchain_"):
-        langchain_tool_name = tool_name[10:]  # Remove "langchain_" prefix
+        langchain_tool_name = tool_name[10:]  # Remove "langchain_" prefix 注：去掉 "langchain_" 前缀
         return await execute_langchain_tool(langchain_tool_name, parameters)
 
     Shannon tool executor 调用 LangChain tool 的主入口。

@@ -23,6 +23,7 @@ type EventLog struct {
 }
 
 // SaveEventLog inserts a new event_logs row.
+// SaveEventLog 插入一条新的 event_logs 记录。
 func (c *Client) SaveEventLog(ctx context.Context, e *EventLog) error {
 	if e == nil {
 		return nil

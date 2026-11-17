@@ -17,6 +17,7 @@ import (
 )
 
 // ConfigFormat represents supported configuration file formats
+// ConfigFormat 表示支持的配置文件格式
 type ConfigFormat string
 
 const (
@@ -25,14 +26,16 @@ const (
 )
 
 // ChangeEvent represents a configuration change event
+// ChangeEvent 表示一次配置变更事件
 type ChangeEvent struct {
 	File      string         `json:"file"`
-	Action    string         `json:"action"` // create, modify, delete
+	Action    string         `json:"action"` // create, modify, delete 注：create、modify、delete
 	Config    map[string]any `json:"config"`
 	Timestamp time.Time      `json:"timestamp"`
 }
 
 // ChangeHandler is called when configuration changes
+// ChangeHandler 在配置变更时被调用
 type ChangeHandler func(event ChangeEvent) error
 
 // ConfigManager manages file-based configuration with hot-reload
@@ -41,7 +44,7 @@ type ConfigManager struct {
 	configDir      string
 	configs        map[string]map[string]any
 	handlers       map[string][]ChangeHandler
-	policyHandlers []func() error // Policy reload handlers for .rego files
+	policyHandlers []func() error // Policy reload handlers for .rego files 注：.rego 文件的 policy 重载 handler
 	watcher        *fsnotify.Watcher
 	started        bool
 	stopCh         chan struct{}
@@ -50,6 +53,7 @@ type ConfigManager struct {
 	watcherMu      sync.Mutex
 
 	// Configuration validation
+	// 配置校验
 	validators map[string]func(map[string]any) error
 
 	// Polling fallback for when fsnotify isn't reliable
@@ -59,12 +63,14 @@ type ConfigManager struct {
 }
 
 // NewConfigManager creates a new configuration manager
+// NewConfigManager 新建一个配置管理器
 func NewConfigManager(configDir string, logger *zap.Logger) (*ConfigManager, error) {
 	if configDir == "" {
 		return nil, fmt.Errorf("config directory cannot be empty")
 	}
 
 	// Ensure config directory exists
+	// 确保配置目录存在
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}
@@ -82,12 +88,13 @@ func NewConfigManager(configDir string, logger *zap.Logger) (*ConfigManager, err
 		watcher:       watcher,
 		stopCh:        make(chan struct{}),
 		logger:        logger,
-		pollInterval:  10 * time.Second, // Fallback polling interval
-		enablePolling: false,            // Disabled by default
+		pollInterval:  10 * time.Second, // Fallback polling interval 注：兜底轮询间隔
+		enablePolling: false,            // Disabled by default 注：默认关闭
 	}, nil
 }
 
 // Start begins watching for configuration changes
+// Start 开始监听配置变更
 func (cm *ConfigManager) Start(ctx context.Context) error {
 	// Fast path: avoid holding cm.mu while doing I/O (watcher add, file loads)
 	// 快路径：避免在 I/O（注册 watcher、加载文件）期间持有 cm.mu
@@ -111,6 +118,7 @@ func (cm *ConfigManager) Start(ctx context.Context) error {
 	}
 
 	// Mark as started
+	// 标记为已启动
 	cm.mu.Lock()
 	cm.started = true
 	// Snapshot values for logging while holding the lock
@@ -120,9 +128,11 @@ func (cm *ConfigManager) Start(ctx context.Context) error {
 	cm.mu.Unlock()
 
 	// Start file watcher goroutine
+	// 启动文件 watcher goroutine
 	go cm.watchLoop()
 
 	// Start polling fallback if enabled
+	// 若已启用则启动轮询兜底
 	if polling {
 		go cm.pollLoop()
 	}
@@ -137,6 +147,7 @@ func (cm *ConfigManager) Start(ctx context.Context) error {
 }
 
 // Stop stops watching for configuration changes
+// Stop 停止监听配置变更
 func (cm *ConfigManager) Stop() error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -175,6 +186,7 @@ func (cm *ConfigManager) RegisterHandler(filename string, handler ChangeHandler)
 
 // RegisterValidator registers a configuration validator for a specific file
 // RegisterValidator 为指定文件注册配置校验器
+// RegisterValidator 为指定文件注册配置校验器
 func (cm *ConfigManager) RegisterValidator(filename string, validator func(map[string]any) error) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -184,6 +196,7 @@ func (cm *ConfigManager) RegisterValidator(filename string, validator func(map[s
 }
 
 // RegisterPolicyHandler registers a handler for policy file changes
+// RegisterPolicyHandler 注册 policy 文件变更的处理函数
 // RegisterPolicyHandler 注册 policy 文件变更的处理函数
 func (cm *ConfigManager) RegisterPolicyHandler(handler func() error) {
 	cm.mu.Lock()
@@ -213,6 +226,7 @@ func (cm *ConfigManager) GetConfig(filename string) (map[string]any, bool) {
 }
 
 // GetAllConfigs returns all loaded configurations
+// GetAllConfigs 返回所有已加载的配置
 func (cm *ConfigManager) GetAllConfigs() map[string]map[string]any {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
@@ -235,6 +249,7 @@ func (cm *ConfigManager) ReloadConfig(filename string) error {
 }
 
 // ReloadAllConfigs manually reloads all configuration files
+// ReloadAllConfigs 手动重载所有配置文件
 func (cm *ConfigManager) ReloadAllConfigs() error {
 	return cm.loadAllConfigs()
 }
@@ -243,11 +258,13 @@ func (cm *ConfigManager) ReloadAllConfigs() error {
 // SetConfig 以编程方式设置配置（便于测试）
 func (cm *ConfigManager) SetConfig(filename string, config map[string]any) error {
 	// Get validator with minimal lock time
+	// 以最短持锁时间取出 validator
 	cm.mu.RLock()
 	validator, hasValidator := cm.validators[filename]
 	cm.mu.RUnlock()
 
 	// Validate outside of lock
+	// 在锁外做校验
 	if hasValidator {
 		if err := validator(config); err != nil {
 			return fmt.Errorf("configuration validation failed for %s: %w", filename, err)
@@ -273,11 +290,12 @@ func (cm *ConfigManager) SetConfig(filename string, config map[string]any) error
 		event := ChangeEvent{
 			File:      filename,
 			Action:    "programmatic_set",
-			Config:    configCopy, // Use the copy to prevent concurrent modification
+			Config:    configCopy, // Use the copy to prevent concurrent modification 注：传副本，避免并发修改
 			Timestamp: time.Now(),
 		}
 
 		// Execute handlers asynchronously to prevent blocking
+		// 异步执行 handler，避免阻塞
 		for _, handler := range handlers {
 			h := handler
 			go func() {
@@ -313,6 +331,7 @@ func (cm *ConfigManager) EnablePolling(interval time.Duration) {
 }
 
 // watchLoop handles file system events
+// watchLoop 处理文件系统事件
 func (cm *ConfigManager) watchLoop() {
 	defer func() {
 		if r := recover(); r != nil {
@@ -395,6 +414,7 @@ func (cm *ConfigManager) checkForChanges(lastModTimes map[string]time.Time) {
 }
 
 // handleWatchEvent processes file system watch events
+// handleWatchEvent 处理文件系统 watch 事件
 func (cm *ConfigManager) handleWatchEvent(event fsnotify.Event) {
 	cm.watcherMu.Lock()
 	defer cm.watcherMu.Unlock()
@@ -402,6 +422,7 @@ func (cm *ConfigManager) handleWatchEvent(event fsnotify.Event) {
 	filename := filepath.Base(event.Name)
 
 	// Process config files OR policy files
+	// 处理配置文件或 policy 文件
 	isConfig := cm.isConfigFile(event.Name)
 	isPolicy := cm.isPolicyFile(event.Name)
 
@@ -426,6 +447,7 @@ func (cm *ConfigManager) handleWatchEvent(event fsnotify.Event) {
 		action = "rename"
 	case event.Op&fsnotify.Chmod == fsnotify.Chmod:
 		// Usually ignore chmod events
+		// 通常忽略 chmod 事件
 		return
 	default:
 		action = event.Op.String()
@@ -478,6 +500,7 @@ func (cm *ConfigManager) loadAllConfigs() error {
 }
 
 // loadConfigFile loads a single configuration file
+// loadConfigFile 加载单个配置文件
 func (cm *ConfigManager) loadConfigFile(filePath, action string) error {
 	// Perform all I/O and parsing operations before acquiring any locks
 	// 在获取任何锁之前完成全部 I/O 与解析操作
@@ -506,11 +529,13 @@ func (cm *ConfigManager) loadConfigFile(filePath, action string) error {
 	}
 
 	// Get validator with minimal lock time
+	// 以最短持锁时间取出 validator
 	cm.mu.RLock()
 	validator := cm.validators[filename]
 	cm.mu.RUnlock()
 
 	// Validate outside of lock
+	// 在锁外做校验
 	if validator != nil {
 		if err := validator(config); err != nil {
 			return fmt.Errorf("configuration validation failed for %s: %w", filename, err)
@@ -538,13 +563,15 @@ func (cm *ConfigManager) loadConfigFile(filePath, action string) error {
 		event := ChangeEvent{
 			File:      filename,
 			Action:    action,
-			Config:    configCopy, // Use the copy to prevent concurrent modification
+			Config:    configCopy, // Use the copy to prevent concurrent modification 注：传副本，避免并发修改
 			Timestamp: time.Now(),
 		}
 
 		// Execute handlers asynchronously to prevent blocking
+		// 异步执行 handler，避免阻塞
 		for _, handler := range handlers {
 			// Copy handler to avoid closure issues
+			// 复制 handler，避免闭包捕获问题
 			h := handler
 			go func() {
 				if err := h(event); err != nil {
@@ -589,15 +616,17 @@ func (cm *ConfigManager) handleFileRemoval(filename string) {
 	}
 
 	// Notify handlers asynchronously without holding locks
+	// 不持锁异步通知 handler
 	if len(handlers) > 0 {
 		event := ChangeEvent{
 			File:      filename,
 			Action:    "delete",
-			Config:    configCopy, // Last known config (copy)
+			Config:    configCopy, // Last known config (copy) 注：最后一次已知配置（副本）
 			Timestamp: time.Now(),
 		}
 
 		// Execute handlers asynchronously to prevent blocking
+		// 异步执行 handler，避免阻塞
 		for _, handler := range handlers {
 			h := handler
 			go func() {
@@ -654,6 +683,7 @@ func (cm *ConfigManager) isPolicyFile(filename string) bool {
 }
 
 // detectFormat detects the configuration file format
+// detectFormat 判断配置文件格式
 func (cm *ConfigManager) detectFormat(filename string) ConfigFormat {
 	ext := filepath.Ext(filename)
 	switch ext {
@@ -662,6 +692,6 @@ func (cm *ConfigManager) detectFormat(filename string) ConfigFormat {
 	case ".yaml", ".yml":
 		return FormatYAML
 	default:
-		return FormatJSON // Default fallback
+		return FormatJSON // Default fallback 注：默认兜底
 	}
 }

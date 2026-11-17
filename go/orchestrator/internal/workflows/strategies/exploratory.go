@@ -26,12 +26,14 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	)
 
 	// Determine workflow ID for event streaming
+	// 确定用于事件流式的 workflow ID
 	workflowID := input.ParentWorkflowID
 	if workflowID == "" {
 		workflowID = workflow.GetInfo(ctx).WorkflowExecution.ID
 	}
 
 	// Input validation
+	// 输入校验
 	if err := validateInput(input); err != nil {
 		return TaskResult{
 			Success:      false,
@@ -40,9 +42,11 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	}
 
 	// Load configuration
+	// 加载配置
 	config := getWorkflowConfig(ctx)
 
 	// Initialize control signal handler for pause/resume/cancel
+	// 初始化 pause/resume/cancel 控制信号处理器
 	emitCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Second,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
@@ -59,6 +63,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	controlHandler.Setup(ctx)
 
 	// Prepare pattern options
+	// 准备 pattern options
 	opts := patterns.Options{
 		UserID:         input.UserID,
 		BudgetAgentMax: getBudgetMax(input.Context),
@@ -66,12 +71,12 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	}
 
 	// Phase 1: Use Tree-of-Thoughts for systematic exploration
+	// Phase 1：用 Tree-of-Thoughts 做系统性探索
 	totConfig := patterns.TreeOfThoughtsConfig{
 		MaxDepth:         config.ExploratoryMaxIterations,
 		BranchingFactor:  config.ExploratoryBranchFactor,
 		EvaluationMethod: "scoring",
-		PruningThreshold: 1.0 - config.ExploratoryConfidenceThreshold, // Invert for pruning
-		// 配置里是"可接受置信度"，剪枝要的是"最低分"，两者互为补数。
+		PruningThreshold: 1.0 - config.ExploratoryConfidenceThreshold, // Invert for pruning 注：配置里是"可接受置信度"，剪枝要的是"最低分"，两者互为补数。
 		ExplorationBudget: config.ExploratoryMaxIterations * config.ExploratoryBranchFactor,
 		BacktrackEnabled:  true,
 		ModelTier:         opts.ModelTier,
@@ -83,6 +88,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	)
 
 	// Ensure parent workflow ID is available in context passed to patterns
+	// 确保传给 pattern 的 context 里带有 parent workflow ID
 	ctxMap := make(map[string]any)
 	maps.Copy(ctxMap, input.Context)
 	if input.ParentWorkflowID != "" {
@@ -97,15 +103,16 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	var memoryItems []map[string]any
 	if hierarchicalVersion >= 1 && input.SessionID != "" {
 		// Use hierarchical memory (combines recent + semantic)
+		// 使用 hierarchical memory（合并近期与语义）
 		var hierMemory activities.FetchHierarchicalMemoryResult
 		_ = workflow.ExecuteActivity(ctx, activities.FetchHierarchicalMemory,
 			activities.FetchHierarchicalMemoryInput{
 				Query:        input.Query,
 				SessionID:    input.SessionID,
 				TenantID:     input.TenantID,
-				RecentTopK:   5,    // Fixed for determinism
-				SemanticTopK: 5,    // Fixed for determinism
-				Threshold:    0.75, // Fixed semantic threshold
+				RecentTopK:   5,    // Fixed for determinism 注：固定值，保证确定性
+				SemanticTopK: 5,    // Fixed for determinism 注：固定值，保证确定性
+				Threshold:    0.75, // Fixed semantic threshold 注：固定的语义阈值
 			}).Get(ctx, &hierMemory)
 
 		if len(hierMemory.Items) > 0 {
@@ -119,12 +126,13 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 		}
 	} else if sessionVersion >= 1 && input.SessionID != "" {
 		// Fallback to simple session memory if hierarchical not enabled
+		// hierarchical 未启用时回退到简单的 session memory
 		var sessionMemory activities.FetchSessionMemoryResult
 		_ = workflow.ExecuteActivity(ctx, activities.FetchSessionMemory,
 			activities.FetchSessionMemoryInput{
 				SessionID: input.SessionID,
 				TenantID:  input.TenantID,
-				TopK:      20, // Fixed for determinism
+				TopK:      20, // Fixed for determinism 注：固定值，保证确定性
 			}).Get(ctx, &sessionMemory)
 
 		if len(sessionMemory.Items) > 0 {
@@ -142,6 +150,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	compressionVersion := workflow.GetVersion(ctx, "context_compress_v1", workflow.DefaultVersion, 1)
 	if compressionVersion >= 1 && input.SessionID != "" && len(input.History) > 20 {
 		// Check if compression is needed with rate limiting
+		// 带限流地检查是否需要压缩
 		estimatedTokens := activities.EstimateTokens(convertHistoryForAgent(input.History))
 
 		var checkResult activities.CheckCompressionNeededResult
@@ -161,6 +170,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 			)
 
 			// Compress context via activity
+			// 通过 activity 压缩 context
 			var compressResult activities.CompressContextResult
 			err = workflow.ExecuteActivity(ctx, activities.CompressAndStoreContext,
 				activities.CompressContextInput{
@@ -177,6 +187,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 				)
 
 				// Update compression state in session
+				// 更新 session 中的压缩状态
 				var updateResult activities.UpdateCompressionStateResult
 				_ = workflow.ExecuteActivity(ctx, "UpdateCompressionStateActivity",
 					activities.UpdateCompressionStateInput{
@@ -188,6 +199,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	}
 
 	// Check pause/cancel before Tree-of-Thoughts execution
+	// Tree-of-Thoughts 执行前检查 pause/cancel
 	if err := controlHandler.CheckPausePoint(ctx, "pre_execution"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
@@ -218,6 +230,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 
 	if totResult.Confidence < config.ExploratoryConfidenceThreshold {
 		// Check pause/cancel before debate phase
+		// debate 阶段前检查 pause/cancel
 		if err := controlHandler.CheckPausePoint(ctx, "pre_debate"); err != nil {
 			return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 		}
@@ -228,11 +241,12 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 		)
 
 		// Extract top perspectives from tree exploration
+		// 从树探索结果中取出前几个视角
 		perspectives := []string{}
 		if totResult.ExplorationTree != nil {
 			for i := range totResult.ExplorationTree.Children {
 				if i >= 3 {
-					break // Limit to 3 perspectives
+					break // Limit to 3 perspectives 注：最多 3 个视角
 				}
 				perspectives = append(perspectives, fmt.Sprintf("perspective_%d", i+1))
 			}
@@ -249,6 +263,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 		}
 
 		// Prepare debate context with exploration findings
+		// 用探索结论准备 debate context
 		debateContext := make(map[string]any)
 		maps.Copy(debateContext, input.Context)
 		if input.ParentWorkflowID != "" {
@@ -275,7 +290,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 		if err == nil {
 			finalResult = debateResult.FinalPosition
 			totalTokens += debateResult.TotalTokens
-			finalConfidence = 0.8 // Debate increases confidence
+			finalConfidence = 0.8 // Debate increases confidence 注：debate 之后会抬高置信度
 			logger.Info("Debate enhanced the exploration result")
 		} else {
 			logger.Warn("Debate pattern failed, using tree-of-thoughts result", "error", err)
@@ -286,6 +301,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	// 0.9 以上不再 reflection：多一轮 LLM 调用换来的提升有限。
 	if finalConfidence < 0.9 {
 		// Check pause/cancel before reflection phase
+		// reflection 阶段前检查 pause/cancel
 		if err := controlHandler.CheckPausePoint(ctx, "pre_reflection"); err != nil {
 			return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 		}
@@ -301,6 +317,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 		}
 
 		// Create mock agent results for reflection
+		// 为 reflection 构造临时的 agent 结果
 		agentResults := []activities.AgentExecutionResult{
 			{
 				Response:   finalResult,
@@ -330,6 +347,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	}
 
 	// Optional: append Sources when citations provided in context
+	// 可选：context 里给了 citations 时追加 Sources 段落
 	if v, ok := input.Context["enable_citations"].(bool); ok && v {
 		if citationList, ok2 := ctxMap["available_citations"].(string); ok2 && citationList != "" {
 			finalResult = formatting.FormatReportWithCitations(finalResult, citationList)
@@ -337,6 +355,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	}
 
 	// Update session
+	// 更新 session
 	if input.SessionID != "" {
 		if err := updateSession(ctx, input.SessionID, finalResult, totalTokens, totResult.TotalThoughts); err != nil {
 			logger.Warn("Failed to update session",
@@ -354,7 +373,9 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	)
 
 	// Emit final clean LLM_OUTPUT for OpenAI-compatible streaming.
+	// 发出最终干净的 LLM_OUTPUT，供 OpenAI 兼容的流式输出使用。
 	// Agent ID "final_output" signals the streamer to always show this content.
+	// Agent ID "final_output" 提示 streamer 这段内容必须展示。
 	if finalResult != "" {
 		_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: workflowID,
@@ -369,6 +390,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	}
 
 	// Emit WORKFLOW_COMPLETED before returning
+	// 返回前发出 WORKFLOW_COMPLETED
 	_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 		WorkflowID: workflowID,
 		EventType:  activities.StreamEventWorkflowCompleted,
@@ -378,6 +400,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	}).Get(ctx, nil)
 
 	// Build metadata with agent information
+	// 构造带 agent 信息的 metadata
 	meta := map[string]any{
 		"workflow_type":      "exploratory",
 		"pattern_used":       "tree_of_thoughts",
@@ -397,16 +420,17 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 			AgentID:      "exploratory-agent",
 			ModelUsed:    actualModel,
 			TokensUsed:   totResult.TotalTokens,
-			InputTokens:  totResult.TotalTokens * 6 / 10, // Estimate 60/40 split
+			InputTokens:  totResult.TotalTokens * 6 / 10, // Estimate 60/40 split 注：按 60/40 估算 input/output 拆分
 			OutputTokens: totResult.TotalTokens * 4 / 10,
 			Success:      true,
 		},
 	}
-	reflectionTokensCount := totalTokens - totResult.TotalTokens // Approximate reflection tokens
+	reflectionTokensCount := totalTokens - totResult.TotalTokens // Approximate reflection tokens 注：反推的 reflection token 数，是近似值
 	agentMeta := metadata.AggregateAgentMetadata(agentResults, reflectionTokensCount)
 	maps.Copy(meta, agentMeta)
 
 	// Align: compute and include estimated cost using centralized pricing
+	// 对齐：用集中式 pricing 计算并写入估算成本
 	if totalTokens > 0 {
 		metaModel := ""
 		if m, ok := meta["model"].(string); ok && m != "" {
@@ -416,6 +440,7 @@ func ExploratoryWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, err
 	}
 
 	// Check pause/cancel before completion
+	// 完成前检查 pause/cancel
 	if err := controlHandler.CheckPausePoint(ctx, "pre_completion"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}

@@ -15,7 +15,7 @@ import (
 // daemonStreamTracker tracks initialization state of daemon event streams.
 // daemonStreamTracker 跟踪 daemon event stream 的初始化状态。
 type daemonStreamTracker struct {
-	initState *sync.Map // Key: messageID, Value: bool (true=initialized, false=failed)
+	initState *sync.Map // Key: messageID, Value: bool (true=initialized, false=failed) 注：Key 为 messageID，Value 为 bool（true=已初始化，false=失败）
 	// 键为 messageID，值为 bool（true=已初始化，false=失败）
 }
 
@@ -119,9 +119,11 @@ func HandleConnection(ctx context.Context, hub *Hub, ws *websocket.Conn, tenantI
 	}()
 
 	// Send connected confirmation.
+	// 发送连接确认。
 	conn.Send(ServerMessage{Type: MsgTypeConnected})
 
 	// Configure WebSocket.
+	// 配置 WebSocket。
 	ws.SetReadLimit(64 * 1024)
 	ws.SetReadDeadline(time.Now().Add(pongWait))
 	ws.SetPongHandler(func(string) error {
@@ -130,10 +132,12 @@ func HandleConnection(ctx context.Context, hub *Hub, ws *websocket.Conn, tenantI
 	})
 
 	// Ping ticker.
+	// Ping ticker（心跳）。
 	ticker := time.NewTicker(pingPeriod)
 	defer ticker.Stop()
 
 	// Read pump in separate goroutine.
+	// 在独立 goroutine 中读取 pump。
 	msgCh := make(chan DaemonMessage, 16)
 	go func() {
 		defer close(msgCh)
@@ -173,7 +177,7 @@ func HandleConnection(ctx context.Context, hub *Hub, ws *websocket.Conn, tenantI
 
 func handleDaemonMessage(ctx context.Context, hub *Hub, conn *DaemonConn, msg DaemonMessage, cbs *ConnCallbacks, logger *zap.Logger) {
 	if msg.Type == "" {
-		return // Ignore empty-type messages (e.g. keep-alive frames)
+		return // Ignore empty-type messages (e.g. keep-alive frames) 注：忽略空类型消息（如 keep-alive 帧）
 		// 忽略无类型的消息（如 keep-alive 帧）
 	}
 
@@ -382,6 +386,7 @@ func handleDaemonEvent(ctx context.Context, hub *Hub, messageID string, rawPaylo
 	}
 
 	// Copy daemon data and inject daemon_seq.
+	// 复制 daemon 数据并注入 daemon_seq。
 	data := payload.Data
 	if data == nil {
 		data = make(map[string]any)
@@ -391,7 +396,7 @@ func handleDaemonEvent(ctx context.Context, hub *Hub, messageID string, rawPaylo
 	publisher.Publish(streamID, streaming.Event{
 		WorkflowID: streamID,
 		Type:       payload.EventType,
-		AgentID:    "", // Must be empty — StreamConsumer's isSynthesisAgent filter drops non-empty for LLM_OUTPUT/LLM_PARTIAL
+		AgentID:    "", // Must be empty — StreamConsumer's isSynthesisAgent filter drops non-empty for LLM_OUTPUT/LLM_PARTIAL 注：必须为空——StreamConsumer 的 isSynthesisAgent 过滤会把非空值从 LLM_OUTPUT/LLM_PARTIAL 中丢弃
 		// 必须为空——StreamConsumer 的 isSynthesisAgent 过滤会对 LLM_OUTPUT/LLM_PARTIAL 丢弃非空值
 		Message:    payload.Message,
 		Payload:    data,

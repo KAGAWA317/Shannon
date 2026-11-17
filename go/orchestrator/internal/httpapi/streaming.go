@@ -84,8 +84,9 @@ func (h *StreamingHandler) handleBlobFetch(w http.ResponseWriter, r *http.Reques
 	_ = h.mgr.RefreshBlobTTL(ctx, key)
 
 	// Return the raw base64 data
+	// 返回原始 base64 数据
 	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set("Cache-Control", "private, max-age=604800") // 7 day cache
+	w.Header().Set("Cache-Control", "private, max-age=604800") // 7 day cache 注：缓存 7 天
 	w.Write([]byte(data))
 }
 
@@ -100,6 +101,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Optional: type filter (comma-separated)
+	// 可选：type 过滤（逗号分隔）
 	typeFilter := map[string]struct{}{}
 	if s := r.URL.Query().Get("types"); s != "" {
 		for t := range strings.SplitSeq(s, ",") {
@@ -129,6 +131,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 				zap.String("stream_id", lastStreamID))
 		} else {
 			// Try to parse as numeric sequence
+			// 尝试按数字序列解析
 			if n, err := strconv.ParseUint(lastEventID, 10, 64); err == nil {
 				lastSeq = n
 				h.logger.Debug("Resume from sequence",
@@ -139,6 +142,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// SSE headers
+	// SSE 响应头
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache, no-transform")
 	w.Header().Set("Connection", "keep-alive")
@@ -268,6 +272,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 	// 按续传点回放遗漏的 event
 	if lastStreamID != "" {
 		// Resume from Redis stream ID
+		// 从 Redis stream ID 续传
 		events := h.mgr.ReplayFromStreamID(wf, lastStreamID)
 		for _, ev := range events {
 			// Mark that at least one event exists (even if filtered)
@@ -279,6 +284,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			// Track last stream ID from replay
+			// 记录重放得到的最后一个 stream ID
 			if ev.StreamID != "" {
 				lastSentStreamID = ev.StreamID
 			}
@@ -286,6 +292,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if lastSeq > 0 {
 		// Resume from numeric sequence
+		// 从数字序列续传
 		events := h.mgr.ReplaySince(wf, lastSeq)
 		for _, ev := range events {
 			// Mark that at least one event exists (even if filtered)
@@ -297,6 +304,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			// Track last stream ID from replay
+			// 记录重放得到的最后一个 stream ID
 			if ev.StreamID != "" {
 				lastSentStreamID = ev.StreamID
 			}
@@ -308,13 +316,14 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 	// Use last stream ID if available to avoid gaps, otherwise start fresh
 	// 从回放结束处订阅实时 event
 	// 有 last stream ID 时用它以避免缺口，否则从头开始
-	startFrom := "$" // Default to new messages only
+	startFrom := "$" // Default to new messages only 注：默认只取新消息
 	if lastSentStreamID != "" {
 		// Continue from last replayed message to avoid gaps
 		// 从最后回放的消息继续，避免缺口
 		startFrom = lastSentStreamID
 	} else if lastStreamID == "" && lastSeq == 0 {
 		// No resume point, start from beginning
+		// 无续传点，从头开始
 		startFrom = "0-0"
 	}
 	ch := h.mgr.SubscribeFrom(wf, 256, startFrom)
@@ -326,6 +335,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 	defer hb.Stop()
 
 	// First-event timeout timer
+	// 首个事件的超时定时器
 	firstEventTimer := time.NewTimer(30 * time.Second)
 	defer firstEventTimer.Stop()
 
@@ -363,6 +373,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					if _, ok := err.(*serviceerror.NotFound); ok {
 						// Emit an error event and close
+						// 发送 error 事件并关闭
 						fmt.Fprintf(w, "event: ERROR_OCCURRED\n")
 						fmt.Fprintf(w, "data: {\"workflow_id\":\"%s\",\"type\":\"ERROR_OCCURRED\",\"message\":\"Workflow not found\"}\n\n", wf)
 						flusher.Flush()
@@ -381,6 +392,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-postCompleteCh:
 			// Close after inactivity window following completion
+			// 完成后经过空闲窗口再关闭
 			return
 		case evt := <-ch:
 			// Detect completion and stream end ahead of filtering
@@ -395,6 +407,7 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Start/reset post-completion inactivity timer
+			// 启动/重置完成后的空闲定时器
 			if isCompleted || completedSeen {
 				completedSeen = true
 				if postCompleteTimer == nil {
@@ -423,9 +436,11 @@ func (h *StreamingHandler) handleSSE(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Write event
+			// 写入事件
 			writeEvent(evt)
 
 			// Close immediately on STREAM_END
+			// 收到 STREAM_END 立即关闭
 			if isStreamEnd {
 				return
 			}

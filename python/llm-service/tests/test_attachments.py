@@ -140,7 +140,7 @@ class TestBuildAgentMessagesAttachments:
         msgs = build_agent_messages(body, raw_attachments=raw_atts)
         user_content = msgs[1]["content"]
         assert isinstance(user_content, list)
-        assert len(user_content) == 3  # 2 attachments + 1 text
+        assert len(user_content) == 3  # 2 attachments + 1 text 注：2 个附件 + 1 段文本
         # 2 个 attachment + 1 个 text
         assert user_content[0]["type"] == "shannon_attachment"
         assert user_content[1]["type"] == "shannon_attachment"

@@ -20,6 +20,7 @@ type FetchSessionMemoryInput struct {
 }
 
 // FetchSessionMemoryResult contains retrieved items for merging
+// FetchSessionMemoryResult 包含用于合并的检索结果
 type FetchSessionMemoryResult struct {
 	Items []map[string]any `json:"items"`
 }

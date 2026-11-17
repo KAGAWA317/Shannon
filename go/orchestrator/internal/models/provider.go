@@ -97,39 +97,46 @@ func detectProviderFromPattern(model string) string {
 	}
 
 	// MiniMax models
+	// MiniMax 模型
 	if strings.Contains(ml, "minimax") {
 		return "minimax"
 	}
 
 	// OpenAI models
+	// OpenAI 模型
 	if strings.Contains(ml, "gpt-") || strings.Contains(ml, "davinci") ||
 		strings.Contains(ml, "turbo") || strings.Contains(ml, "text-") {
 		return "openai"
 	}
 
 	// Anthropic models
+	// Anthropic 模型
 	if strings.Contains(ml, "claude") || strings.Contains(ml, "opus") ||
 		strings.Contains(ml, "sonnet") || strings.Contains(ml, "haiku") {
 		return "anthropic"
 	}
 
 	// Google models
+	// Google 模型
 	if strings.Contains(ml, "gemini") || strings.Contains(ml, "palm") ||
 		strings.Contains(ml, "bard") {
 		return "google"
 	}
 
 	// DeepSeek models
+	// DeepSeek 模型
 	if strings.Contains(ml, "deepseek") {
 		return "deepseek"
 	}
 
 	// Qwen models
+	// Qwen 模型
 	if strings.Contains(ml, "qwen") {
 		return "qwen"
 	}
 
 	// X.AI models
+	// X.AI 模型
 	if strings.Contains(ml, "grok") {
 		return "xai"
 	}
@@ -143,11 +150,13 @@ func detectProviderFromPattern(model string) string {
 	}
 
 	// ZhipuAI models
+	// ZhipuAI 模型
 	if strings.Contains(ml, "glm") {
 		return "zai"
 	}
 
 	// Groq models
+	// Groq 模型
 	if strings.Contains(ml, "groq") {
 		return "groq"
 	}

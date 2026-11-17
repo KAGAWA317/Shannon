@@ -46,6 +46,7 @@ def select_tools():
     selected = []
     
     # Simple heuristic selection
+    # 简单启发式选择
     if 'calculate' in task.lower() or 'math' in task.lower() or '+' in task or '-' in task:
         selected.append({
             "tool_name": "calculator",
@@ -99,6 +100,7 @@ def execute_tool():
         max_results = parameters.get('max_results', 3)
         
         # Mock search results
+        # 模拟搜索结果
         results = []
         for i in range(min(max_results, 3)):
             results.append({
@@ -128,14 +130,14 @@ def execute_tool():
         })
 
 @app.route('/analyze_task', methods=['POST'])
-@app.route('/complexity/analyze_task', methods=['POST'])  # Support both paths
-# 同时兼容两个路径
+@app.route('/complexity/analyze_task', methods=['POST'])  # Support both paths 注：同时兼容两个路径
 def analyze_task():
     """Analyze task complexity"""
     data = request.json
     query = data.get('query', '')
     
     # Simple heuristic for complexity
+    # 复杂度的简单启发式
     word_count = len(query.split())
     
     if word_count < 5:

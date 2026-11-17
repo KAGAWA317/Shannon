@@ -16,6 +16,7 @@ import (
 var ErrNoDaemonConnected = errors.New("no daemon connected")
 
 // DaemonConn represents a single connected daemon.
+// DaemonConn 表示单个已连接的 daemon。
 type DaemonConn struct {
 	ID          string
 	TenantID    string
@@ -44,11 +45,11 @@ type WorkflowStartedCallback func(ctx context.Context, messageID string, meta Cl
 // Hub 管理所有已连接的 daemon WebSocket 连接。
 type Hub struct {
 	mu          sync.RWMutex
-	conns       map[string]*DaemonConn         // conn_id -> connection
-	index       map[string]map[string]struct{} // "tenant:user" -> set of conn_ids
-	sticky      map[string]string              // "channel_type:thread_id" -> conn_id
-	pendingMeta    map[string]ClaimMetadata // messageID -> metadata template (set by Dispatch, consumed by HandleClaim)
-	pendingTimers  map[string]*time.Timer  // messageID -> cleanup timer
+	conns       map[string]*DaemonConn         // conn_id -> connection 注：conn_id -> 连接对象
+	index       map[string]map[string]struct{} // "tenant:user" -> set of conn_ids 注："tenant:user" -> conn_id 集合
+	sticky      map[string]string              // "channel_type:thread_id" -> conn_id 注："channel_type:thread_id" -> conn_id
+	pendingMeta    map[string]ClaimMetadata // messageID -> metadata template (set by Dispatch, consumed by HandleClaim) 注：messageID -> metadata 模板（由 Dispatch 设置，由 HandleClaim 消费）
+	pendingTimers  map[string]*time.Timer  // messageID -> cleanup timer 注：messageID -> 清理 timer
 
 	claims *ClaimManager
 	logger *zap.Logger
@@ -70,7 +71,7 @@ func NewHub(rc redis.Cmdable, logger *zap.Logger) *Hub {
 	}
 }
 
-const pendingMetaTTL = 90 * time.Second // must exceed claim timeout + processing start
+const pendingMetaTTL = 90 * time.Second // must exceed claim timeout + processing start 注：必须大于 claim timeout 加上开始处理的时间
 
 func indexKey(tenantID, userID string) string {
 	return tenantID + ":" + userID
@@ -266,6 +267,7 @@ func (h *Hub) Dispatch(ctx context.Context, tenantID, userID string, payload Mes
 	}
 
 	// Broadcast: collect target connections.
+	// Broadcast：收集目标连接。
 	ik := indexKey(tenantID, userID)
 	set := h.index[ik]
 	if len(set) == 0 {
@@ -403,7 +405,7 @@ func (h *Hub) HandleProgress(ctx context.Context, messageID string, payload *Pro
 		if err != nil {
 			return err
 		}
-		if meta.WorkflowID == "" { // Only set once
+		if meta.WorkflowID == "" { // Only set once 注：只设置一次
 			meta.WorkflowID = payload.WorkflowID
 			if err := h.claims.UpdateClaim(ctx, messageID, meta); err != nil {
 				return err
@@ -462,6 +464,7 @@ func (h *Hub) SendToConn(connID string, msg ServerMessage) error {
 }
 
 // Claims returns the underlying ClaimManager.
+// Claims 返回底层的 ClaimManager。
 func (h *Hub) Claims() *ClaimManager {
 	return h.claims
 }

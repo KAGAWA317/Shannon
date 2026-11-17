@@ -14,6 +14,7 @@ import (
 )
 
 // Config holds database configuration
+// Config 保存数据库配置
 type Config struct {
 	Host            string
 	Port            int
@@ -27,19 +28,22 @@ type Config struct {
 }
 
 // Client manages database connections and operations
+// Client 管理数据库连接与操作
 type Client struct {
 	db     *circuitbreaker.DatabaseWrapper
 	logger *zap.Logger
 	config *Config
 
 	// Write queue for async operations
+	// 异步写入队列
 	writeQueue chan WriteRequest
 	workers    int
 	stopCh     chan struct{}
-	workerWg   sync.WaitGroup // Track worker goroutines for graceful shutdown
+	workerWg   sync.WaitGroup // Track worker goroutines for graceful shutdown 注：跟踪 worker goroutine 以支持优雅关闭
 }
 
 // WriteRequest represents an async write operation
+// WriteRequest 表示一次异步写操作
 type WriteRequest struct {
 	Type     WriteType
 	Data     any
@@ -95,26 +99,31 @@ func NewClient(config *Config, logger *zap.Logger) (*Client, error) {
 	}
 
 	// Build connection string
+	// 拼接连接字符串
 	dsn := fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		config.Host, config.Port, config.User, config.Password, config.Database, config.SSLMode,
 	)
 
 	// Open database connection
+	// 打开数据库连接
 	rawDB, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
 	// Configure connection pool
+	// 配置连接池
 	rawDB.SetMaxOpenConns(config.MaxConnections)
 	rawDB.SetMaxIdleConns(config.IdleConnections)
 	rawDB.SetConnMaxLifetime(config.MaxLifetime)
 
 	// Create circuit breaker wrapped database
+	// 创建带熔断器的数据库封装
 	db := circuitbreaker.NewDatabaseWrapper(rawDB, logger)
 
 	// Test connection
+	// 测试连接
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -127,15 +136,17 @@ func NewClient(config *Config, logger *zap.Logger) (*Client, error) {
 		db:         db,
 		logger:     logger,
 		config:     config,
-		writeQueue: make(chan WriteRequest, 1000), // Buffer size of 1000
-		workers:    10,                            // Default 10 workers
+		writeQueue: make(chan WriteRequest, 1000), // Buffer size of 1000 注：缓冲区大小 1000
+		workers:    10,                            // Default 10 workers 注：默认 10 个 worker
 		stopCh:     make(chan struct{}),
 	}
 
 	// Start async workers
+	// 启动异步 worker
 	client.startWorkers()
 
 	// Start health check routine
+	// 启动健康检查例程
 	go client.healthCheck()
 
 	logger.Info("Database client initialized",
@@ -162,6 +173,7 @@ func (c *Client) writeWorker(id int) {
 	c.logger.Debug("Write worker started", zap.Int("worker_id", id))
 
 	// Batch buffer for batch writes
+	// 批量写入的缓冲
 	batchBuffer := make([]WriteRequest, 0, 100)
 	batchTicker := time.NewTicker(1 * time.Second)
 	defer batchTicker.Stop()
@@ -170,6 +182,7 @@ func (c *Client) writeWorker(id int) {
 		select {
 		case <-c.stopCh:
 			// Drain remaining requests
+			// 排空剩余 request
 			c.drainQueue(batchBuffer)
 			c.logger.Info("Write worker stopped", zap.Int("worker_id", id))
 			c.workerWg.Done()
@@ -177,6 +190,7 @@ func (c *Client) writeWorker(id int) {
 
 		case req := <-c.writeQueue:
 			// Handle different write types
+			// 处理不同的写入类型
 			switch req.Type {
 			case WriteTypeBatch:
 				batchBuffer = append(batchBuffer, req)
@@ -186,11 +200,13 @@ func (c *Client) writeWorker(id int) {
 				}
 			default:
 				// Process immediately
+				// 立即处理
 				c.processWrite(req)
 			}
 
 		case <-batchTicker.C:
 			// Flush batch buffer periodically
+			// 定期刷出批量缓冲
 			if len(batchBuffer) > 0 {
 				c.processBatch(batchBuffer)
 				batchBuffer = batchBuffer[:0]
@@ -200,6 +216,7 @@ func (c *Client) writeWorker(id int) {
 }
 
 // processWrite handles a single write request
+// processWrite 处理单个写 request
 func (c *Client) processWrite(req WriteRequest) {
 	var err error
 
@@ -227,6 +244,7 @@ func (c *Client) processWrite(req WriteRequest) {
 	}
 
 	// Call callback if provided
+	// 如提供了回调则调用
 	if req.Callback != nil {
 		req.Callback(err)
 	}
@@ -240,6 +258,7 @@ func (c *Client) processWrite(req WriteRequest) {
 }
 
 // processBatch handles batch writes
+// processBatch 处理批量写入
 func (c *Client) processBatch(batch []WriteRequest) {
 	if len(batch) == 0 {
 		return
@@ -272,6 +291,7 @@ func (c *Client) processBatch(batch []WriteRequest) {
 			// WriteTypeBatch 应包含一组内层 request
 			if innerReqs, ok := req.Data.([]WriteRequest); ok {
 				// Recursively process the inner requests
+				// 递归处理内层 request
 				for _, innerReq := range innerReqs {
 					switch innerReq.Type {
 					case WriteTypeTaskExecution:
@@ -293,6 +313,7 @@ func (c *Client) processBatch(batch []WriteRequest) {
 	}
 
 	// Batch insert each type
+	// 按类型批量插入
 	ctx := context.Background()
 
 	if len(taskExecutions) > 0 {
@@ -315,6 +336,7 @@ func (c *Client) processBatch(batch []WriteRequest) {
 }
 
 // drainQueue processes remaining requests during shutdown
+// drainQueue 在关闭期间处理剩余 request
 func (c *Client) drainQueue(batchBuffer []WriteRequest) {
 	timeout := time.After(10 * time.Second)
 
@@ -327,6 +349,7 @@ func (c *Client) drainQueue(batchBuffer []WriteRequest) {
 			return
 		default:
 			// Queue is empty
+			// 队列为空
 			if len(batchBuffer) > 0 {
 				c.processBatch(batchBuffer)
 			}
@@ -358,6 +381,7 @@ func (c *Client) QueueWrite(writeType WriteType, data any, callback func(error))
 		}
 
 		// Execute synchronously
+		// 同步执行
 		c.processWrite(req)
 		return nil
 	}
@@ -401,6 +425,7 @@ func (c *Client) QueueWriteWithRetry(writeType WriteType, data any, callback fun
 }
 
 // healthCheck periodically checks database connectivity
+// healthCheck 定期检查数据库连通性
 func (c *Client) healthCheck() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -425,6 +450,7 @@ func (c *Client) Close() error {
 	c.logger.Info("Shutting down database client")
 
 	// Signal workers to stop
+	// 通知 worker 停止
 	close(c.stopCh)
 
 	// Wait for all workers to finish draining
@@ -433,6 +459,7 @@ func (c *Client) Close() error {
 	c.workerWg.Wait()
 
 	// Close database connection
+	// 关闭数据库连接
 	if err := c.db.Close(); err != nil {
 		return fmt.Errorf("failed to close database: %w", err)
 	}

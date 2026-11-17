@@ -26,6 +26,7 @@ from llm_provider.litellm_provider import LiteLLMProvider
 
 # ===========================================================================
 # Helpers
+# 辅助函数
 # ===========================================================================
 
 
@@ -194,6 +195,7 @@ def _tc_delta(
 
 # ===========================================================================
 # Configuration / initialization
+# 配置 / 初始化
 # ===========================================================================
 
 
@@ -247,6 +249,7 @@ class TestLiteLLMInitialization(unittest.TestCase):
 
 # ===========================================================================
 # Request construction
+# 请求构建
 # ===========================================================================
 
 
@@ -322,6 +325,7 @@ class TestRequestKwargs(unittest.TestCase):
 
 # ===========================================================================
 # complete() — non-streaming
+# complete() —— 非流式
 # ===========================================================================
 
 
@@ -401,6 +405,7 @@ class TestComplete(unittest.TestCase):
 
 # ===========================================================================
 # stream_complete() — provider-shape coverage
+# stream_complete() —— 各 provider 响应形态覆盖
 # ===========================================================================
 
 
@@ -434,7 +439,7 @@ class TestStreamComplete(unittest.TestCase):
                 _content_chunk("1"),
                 _content_chunk(", 2"),
                 _content_chunk(", 3"),
-                _content_chunk(None),  # finish-only chunk, no content
+                _content_chunk(None),  # finish-only chunk, no content 注：仅含 finish 的 chunk，无 content
                 _usage_only_chunk(
                     {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8}
                 ),
@@ -496,7 +501,7 @@ class TestStreamComplete(unittest.TestCase):
             provider,
             [
                 _content_chunk("hi"),
-                _content_chunk(None),  # finish chunk with no content
+                _content_chunk(None),  # finish chunk with no content 注：带 finish 的 chunk，无 content
             ],
             request,
         )
@@ -522,6 +527,7 @@ class TestStreamComplete(unittest.TestCase):
 
 # ===========================================================================
 # count_tokens
+# count_tokens 计数
 # ===========================================================================
 
 
@@ -546,6 +552,7 @@ class TestCountTokens(unittest.TestCase):
 
 # ===========================================================================
 # Review-feedback fixes (Shannon PR #172)
+# 评审反馈修复（Shannon PR #172）
 # ===========================================================================
 # The first round of this provider missed six correctness behaviors that
 # openai_provider / anthropic_provider already had. The tests below pin the

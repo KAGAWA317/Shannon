@@ -28,13 +28,16 @@ func SelectAgentForTask(
 	logger := workflow.GetLogger(ctx)
 
 	// Version gate for safe rollout
+	// 版本闸门，保障安全上线
 	selectionVersion := workflow.GetVersion(ctx, "agent_selection_v1", workflow.DefaultVersion, 1)
 	if selectionVersion < 1 {
 		// Use default agent (no selection logic)
+		// 使用默认 agent（不启用选择逻辑）
 		return defaultAgent, nil
 	}
 
 	// Fetch agent performance data
+	// 拉取 agent 性能数据
 	activityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -47,7 +50,7 @@ func SelectAgentForTask(
 		activities.FetchAgentPerformances,
 		activities.FetchAgentPerformancesInput{
 			AgentIDs:  availableAgents,
-			SessionID: "", // Can be scoped to session if needed
+			SessionID: "", // Can be scoped to session if needed 注：如需可按 session 限定范围
 		}).Get(ctx, &performances)
 
 	if err != nil {
@@ -59,6 +62,7 @@ func SelectAgentForTask(
 	}
 
 	// Use epsilon-greedy selection (10% exploration)
+	// 使用 epsilon-greedy 选择（10% 探索）
 	var selectionResult activities.SelectAgentEpsilonGreedyResult
 	err = workflow.ExecuteActivity(activityCtx,
 		activities.SelectAgentEpsilonGreedy,
@@ -66,7 +70,7 @@ func SelectAgentForTask(
 			Performances:      performances,
 			AvailableAgentIDs: availableAgents,
 			DefaultAgentID:    defaultAgent,
-			Epsilon:           0.1, // 10% exploration rate
+			Epsilon:           0.1, // 10% exploration rate 注：10% 探索率
 		}).Get(ctx, &selectionResult)
 
 	if err != nil {
@@ -87,6 +91,8 @@ func SelectAgentForTask(
 
 // SelectAgentUCB is an alternative using UCB1 algorithm instead of epsilon-greedy.
 // UCB1 provides better exploration/exploitation balance for some scenarios.
+// SelectAgentUCB 是改用 UCB1 算法替代 epsilon-greedy 的另一种实现。
+// 在某些场景下 UCB1 能给出更好的探索/利用平衡。
 func SelectAgentUCB(
 	ctx workflow.Context,
 	taskID string,

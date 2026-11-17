@@ -8,6 +8,7 @@ import (
 )
 
 // ExecutionMode represents the execution mode for workflows
+// ExecutionMode 表示 workflow 的执行模式
 type ExecutionMode string
 
 const (
@@ -17,6 +18,7 @@ const (
 )
 
 // ModeDowngradeReason explains why mode was downgraded
+// ModeDowngradeReason 说明模式被降级的原因
 type ModeDowngradeReason string
 
 const (
@@ -28,12 +30,14 @@ const (
 )
 
 // ModeManager handles mode selection and degradation decisions
+// ModeManager 负责模式选择与降级决策
 type ModeManager struct {
 	strategy DegradationStrategy
 	logger   *zap.Logger
 }
 
 // NewModeManager creates a new mode manager with degradation strategy
+// NewModeManager 按降级策略创建新的 mode manager
 func NewModeManager(strategy DegradationStrategy, logger *zap.Logger) *ModeManager {
 	return &ModeManager{
 		strategy: strategy,
@@ -51,6 +55,7 @@ func (mm *ModeManager) DetermineFinalMode(
 	sessionID string,
 ) (ExecutionMode, *ModeDowngradeReason, error) {
 	// Check if degradation is necessary
+	// 检查是否需要降级
 	shouldDegrade, degradationLevel, err := mm.strategy.ShouldDegrade(ctx)
 	if err != nil {
 		return originalMode, nil, fmt.Errorf("failed to check degradation: %w", err)
@@ -58,10 +63,12 @@ func (mm *ModeManager) DetermineFinalMode(
 
 	if !shouldDegrade {
 		// No degradation needed, return original mode
+		// 无需降级，返回原始模式
 		return originalMode, nil, nil
 	}
 
 	// Determine if mode downgrade is needed based on degradation level and original mode
+	// 依据降级级别与原始模式判断是否需要降级模式
 	finalMode, reason := mm.calculateDowngradedMode(originalMode, degradationLevel)
 
 	if finalMode != originalMode {
@@ -74,6 +81,7 @@ func (mm *ModeManager) DetermineFinalMode(
 		)
 
 		// Record metrics
+		// 记录 metrics
 		RecordModeDowngrade(string(originalMode), string(finalMode), string(reason))
 		mm.strategy.RecordDegradation(degradationLevel, fmt.Sprintf("mode_downgrade_%s_to_%s", originalMode, finalMode))
 	}
@@ -82,6 +90,7 @@ func (mm *ModeManager) DetermineFinalMode(
 }
 
 // calculateDowngradedMode determines the appropriate downgraded mode
+// calculateDowngradedMode 确定合适的降级后模式
 func (mm *ModeManager) calculateDowngradedMode(
 	originalMode ExecutionMode,
 	degradationLevel DegradationLevel,
@@ -124,6 +133,7 @@ func (mm *ModeManager) calculateDowngradedMode(
 }
 
 // ShouldUsePartialResults determines if partial results should be returned
+// ShouldUsePartialResults 判断是否应返回 partial results
 func (mm *ModeManager) ShouldUsePartialResults(ctx context.Context, workflowType string) (bool, error) {
 	shouldDegrade, degradationLevel, err := mm.strategy.ShouldDegrade(ctx)
 	if err != nil {
@@ -149,16 +159,19 @@ func (mm *ModeManager) ShouldUsePartialResults(ctx context.Context, workflowType
 }
 
 // GetFallbackBehaviorForOperation returns the appropriate fallback behavior
+// GetFallbackBehaviorForOperation 返回该 operation 对应的 fallback 行为
 func (mm *ModeManager) GetFallbackBehaviorForOperation(operation string) FallbackBehavior {
 	behavior := mm.strategy.GetFallbackBehavior(operation)
 
 	// Record that fallback behavior was requested
+	// 记录 fallback 行为被请求
 	RecordFallbackBehavior(operation, behavior)
 
 	return behavior
 }
 
 // CanExecuteOperation checks if an operation should proceed in current degradation state
+// CanExecuteOperation 检查在当前降级状态下该 operation 是否应继续执行
 func (mm *ModeManager) CanExecuteOperation(ctx context.Context, operation string) (bool, FallbackBehavior, error) {
 	behavior := mm.GetFallbackBehaviorForOperation(operation)
 
@@ -166,35 +179,37 @@ func (mm *ModeManager) CanExecuteOperation(ctx context.Context, operation string
 	case BehaviorProceed:
 		return true, behavior, nil
 	case BehaviorDegrade:
-		return true, behavior, nil // Proceed but with degraded mode
+		return true, behavior, nil // Proceed but with degraded mode 注：继续执行，但使用降级模式
 	case BehaviorCache:
-		return true, behavior, nil // Proceed but use cached results
+		return true, behavior, nil // Proceed but use cached results 注：继续执行，但使用缓存结果
 	case BehaviorSkip:
-		return false, behavior, nil // Skip this operation
+		return false, behavior, nil // Skip this operation 注：跳过该 operation
 	case BehaviorFail:
 		return false, behavior, fmt.Errorf("operation %s failed due to degradation", operation)
 	default:
-		return true, behavior, nil // Default to proceed
+		return true, behavior, nil // Default to proceed 注：默认继续执行
 	}
 }
 
 // ModeDowngradeDecision encapsulates a mode downgrade decision for workflow context
+// ModeDowngradeDecision 封装面向 workflow context 的模式降级决策
 type ModeDowngradeDecision struct {
 	OriginalMode     ExecutionMode
 	FinalMode        ExecutionMode
 	WasDowngraded    bool
 	Reason           ModeDowngradeReason
 	DegradationLevel DegradationLevel
-	Timestamp        int64 // Unix timestamp for determinism
+	Timestamp        int64 // Unix timestamp for determinism 注：用于确定性的 Unix 时间戳
 }
 
 // CreateModeDecision creates a deterministic mode decision for workflow use
+// CreateModeDecision 为 workflow 创建确定性的模式决策
 func (mm *ModeManager) CreateModeDecision(
 	ctx context.Context,
 	originalMode ExecutionMode,
 	query string,
 	sessionID string,
-	timestamp int64, // Passed from workflow for determinism
+	timestamp int64, // Passed from workflow for determinism 注：由 workflow 传入以保证确定性
 ) (*ModeDowngradeDecision, error) {
 	finalMode, reasonPtr, err := mm.DetermineFinalMode(ctx, originalMode, query, sessionID)
 	if err != nil {
@@ -209,9 +224,10 @@ func (mm *ModeManager) CreateModeDecision(
 	wasDowngraded := finalMode != originalMode
 
 	// Get current degradation level for context
+	// 获取当前降级级别用于 context
 	_, degradationLevel, err := mm.strategy.ShouldDegrade(ctx)
 	if err != nil {
-		degradationLevel = LevelNone // Default to no degradation on error
+		degradationLevel = LevelNone // Default to no degradation on error 注：出错时默认不降级
 	}
 
 	return &ModeDowngradeDecision{

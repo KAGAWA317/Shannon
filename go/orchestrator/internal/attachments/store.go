@@ -17,6 +17,7 @@ import (
 var ErrAttachmentNotFound = errors.New("attachment not found or expired")
 
 // Attachment represents a stored file attachment.
+//Attachment 表示一个已存储的文件附件。
 type Attachment struct {
 	ID        string `json:"id"`
 	SessionID string `json:"session_id"`
@@ -27,6 +28,7 @@ type Attachment struct {
 }
 
 // Store manages attachment storage in Redis.
+//Store 管理 Redis 中的附件存储。
 type Store struct {
 	client *redis.Client
 	ttl    time.Duration
@@ -79,6 +81,7 @@ func (s *Store) Get(ctx context.Context, id string, sessionID ...string) (*Attac
 		return nil, fmt.Errorf("redis get: %w", err)
 	}
 	// Refresh TTL on access
+	//访问时刷新 TTL
 	if err := s.client.Expire(ctx, key, s.ttl).Err(); err != nil {
 		log.Printf("WARN: failed to refresh TTL for attachment %s: %v", id, err)
 	}
@@ -94,13 +97,14 @@ func (s *Store) Get(ctx context.Context, id string, sessionID ...string) (*Attac
 	// session 隔离：提供 sessionID 时必须与存储记录一致。仅当两侧都非空才执行校验——确实需要绕过的内部调用方（如 admin/cleanup）只需不传该参数。
 	if len(sessionID) > 0 && sessionID[0] != "" {
 		if att.SessionID != "" && att.SessionID != sessionID[0] {
-			return nil, ErrAttachmentNotFound // don't leak existence
+			return nil, ErrAttachmentNotFound // don't leak existence 注：不泄露附件是否存在
 		}
 	}
 	return &att, nil
 }
 
 // Delete removes an attachment.
+//Delete 删除一个附件。
 func (s *Store) Delete(ctx context.Context, id string) error {
 	return s.client.Del(ctx, s.redisKey(id)).Err()
 }

@@ -16,6 +16,7 @@ import (
 )
 
 // OrchestratorRegistry implements the Registry interface
+// OrchestratorRegistry 实现 Registry 接口
 type OrchestratorRegistry struct {
 	config         *RegistryConfig
 	logger         *zap.Logger
@@ -24,6 +25,7 @@ type OrchestratorRegistry struct {
 }
 
 // NewOrchestratorRegistry creates a new registry instance
+// NewOrchestratorRegistry 创建一个新的 registry 实例
 func NewOrchestratorRegistry(
 	config *RegistryConfig,
 	logger *zap.Logger,
@@ -44,20 +46,24 @@ func (r *OrchestratorRegistry) RegisterWorkflows(w worker.Worker) error {
 	r.logger.Info("Registering workflows")
 
 	// Core workflows - always registered
+	// 核心 workflow —— 始终注册
 	w.RegisterWorkflow(workflows.OrchestratorWorkflow)
 	w.RegisterWorkflow(workflows.SimpleTaskWorkflow)
 	w.RegisterWorkflow(workflows.SupervisorWorkflow)
 	w.RegisterWorkflow(workflows.TemplateWorkflow)
 
 	// Scheduled task workflow
+	// 定时任务 workflow
 	w.RegisterWorkflow(scheduled.ScheduledTaskWorkflow)
 
 	// Cognitive workflows that need pattern migration
+	// 需要 pattern 迁移的认知类 workflow
 	w.RegisterWorkflow(workflows.ExploratoryWorkflow)
 	w.RegisterWorkflow(workflows.ScientificWorkflow)
 	r.logger.Info("Registered core workflows")
 
 	// Optional workflows based on configuration
+	// 按配置启用的可选 workflow
 	if r.config.EnableStreamingWorkflows {
 		w.RegisterWorkflow(workflows.StreamingWorkflow)
 		w.RegisterWorkflow(workflows.ParallelStreamingWorkflow)
@@ -65,6 +71,7 @@ func (r *OrchestratorRegistry) RegisterWorkflows(w worker.Worker) error {
 	}
 
 	// Strategy workflows (pattern-based)
+	// Strategy workflow（基于 pattern）
 	w.RegisterWorkflow(strategies.DAGWorkflow)
 	w.RegisterWorkflow(strategies.ReactWorkflow)
 	w.RegisterWorkflow(strategies.ResearchWorkflow)
@@ -73,6 +80,7 @@ func (r *OrchestratorRegistry) RegisterWorkflows(w worker.Worker) error {
 	r.logger.Info("Registered strategy workflows")
 
 	// Agent workflow (single-purpose deterministic agents)
+	// Agent workflow（单一用途的确定性 agent）
 	w.RegisterWorkflow(workflows.AgentWorkflow)
 	r.logger.Info("Registered agent workflow")
 
@@ -83,6 +91,7 @@ func (r *OrchestratorRegistry) RegisterWorkflows(w worker.Worker) error {
 	r.logger.Info("Registered swarm agent workflows")
 
 	// Enterprise features - conditionally compiled
+	// 企业版特性 —— 条件编译
 	r.registerEnterpriseWorkflows(w)
 
 	r.logger.Info("All workflows registered successfully")
@@ -95,18 +104,22 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 	r.logger.Info("Registering activities")
 
 	// Construct activity receiver with dependencies
+	// 构造带依赖的 activity receiver
 	acts := activities.NewActivities(r.sessionManager, r.logger)
 
 	// Core activities
+	// 核心 activity
 	w.RegisterActivity(activities.ExecuteAgent)
-	w.RegisterActivity(activities.ExecuteSimpleTask) // Consolidated activity for simple tasks
+	w.RegisterActivity(activities.ExecuteSimpleTask) // Consolidated activity for simple tasks 注：普通任务的合并 activity
 	w.RegisterActivity(activities.SynthesizeResults)
 	// LLM-backed synthesis (can be selected via workflow versioning)
 	// 基于 LLM 的汇总（可通过 workflow 版本控制选择）
 	w.RegisterActivity(activities.SynthesizeResultsLLM)
 	// Reflection activity for quality evaluation
+	// 用于质量评估的 reflection activity
 	w.RegisterActivity(acts.EvaluateResult)
 	// Deep Research 2.0 activities
+	// Deep Research 2.0 相关 activity
 	w.RegisterActivityWithOptions(acts.EvaluateCoverage, activity.RegisterOptions{Name: "EvaluateCoverage"})
 	w.RegisterActivityWithOptions(acts.IntermediateSynthesis, activity.RegisterOptions{Name: "IntermediateSynthesis"})
 	w.RegisterActivityWithOptions(acts.GenerateSubqueries, activity.RegisterOptions{Name: "GenerateSubqueries"})
@@ -115,6 +128,7 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 	w.RegisterActivityWithOptions(acts.RouteSearch, activity.RegisterOptions{Name: "RouteSearch"})
 	w.RegisterActivityWithOptions(acts.MergeSearchResults, activity.RegisterOptions{Name: "MergeSearchResults"})
 	// Claim verification activity (Phase 4)
+	// Claim 校验 activity（Phase 4）
 	w.RegisterActivityWithOptions(acts.VerifyClaimsActivity, activity.RegisterOptions{Name: "VerifyClaimsActivity"})
 	// Citation Agent activity (post-synthesis citation injection)
 	// Citation Agent activity（汇总后注入引用）
@@ -124,33 +138,42 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 	w.RegisterActivityWithOptions(acts.AddCitationsWithVerify, activity.RegisterOptions{Name: "AddCitationsWithVerify"})
 	w.RegisterActivityWithOptions(acts.VerifyBatch, activity.RegisterOptions{Name: "VerifyBatch"})
 	// Configuration activity
+	// 配置读取 activity
 	w.RegisterActivity(activities.GetWorkflowConfig)
 	// Context compression + store
+	// 上下文压缩 + 存储
 	w.RegisterActivity(activities.CompressAndStoreContext)
 	// Compression rate limiting activities
+	// 压缩限流 activity
 	w.RegisterActivity(acts.CheckCompressionNeeded)
 	w.RegisterActivity(acts.UpdateCompressionStateActivity)
 
 	// Vector intelligence activities
+	// 向量智能 activity
 	w.RegisterActivity(activities.RecordQuery)
 	w.RegisterActivity(activities.FetchSessionMemory)
 	// Agent-scoped memory activities (agent_memory_v1)
+	// agent 维度的 memory activity（agent_memory_v1）
 	w.RegisterActivity(activities.FetchAgentMemory)
 	w.RegisterActivity(activities.RecordAgentMemory)
 	// Semantic memory activities (Phase 1.1)
+	// 语义 memory activity（Phase 1.1）
 	w.RegisterActivity(activities.FetchSemanticMemory)
 	w.RegisterActivity(activities.FetchHierarchicalMemory)
 
 	// Enhanced supervisor memory activities
+	// 增强的 supervisor memory activity
 	w.RegisterActivity(activities.FetchSupervisorMemory)
 	w.RegisterActivity(activities.RecordDecomposition)
 	w.RegisterActivity(activities.RecommendWorkflowStrategy)
 	w.RegisterActivity(activities.RecordLearningRouterMetrics)
 	// Consensus memory for debate pattern
+	// 供 debate pattern 使用的共识 memory
 	w.RegisterActivity(activities.PersistDebateConsensus)
 	w.RegisterActivity(activities.FetchConsensusMemory)
 
 	// Dynamic team authorization
+	// 动态 team 授权
 	w.RegisterActivity(activities.AuthorizeTeamAction)
 
 	// Forced tool execution (used by auto file_write guard in swarm)
@@ -158,21 +181,26 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 	w.RegisterActivity(activities.ExecuteAgentWithForcedTools)
 
 	// P2P mailbox + workspace (receiver methods)
+	// P2P mailbox + workspace（receiver 方法）
 	w.RegisterActivityWithOptions(acts.SendAgentMessage, activity.RegisterOptions{Name: constants.SendAgentMessageActivity})
 	w.RegisterActivityWithOptions(acts.FetchAgentMessages, activity.RegisterOptions{Name: constants.FetchAgentMessagesActivity})
 	w.RegisterActivityWithOptions(acts.WorkspaceAppend, activity.RegisterOptions{Name: constants.WorkspaceAppendActivity})
 	w.RegisterActivityWithOptions(acts.WorkspaceList, activity.RegisterOptions{Name: constants.WorkspaceListActivity})
 	w.RegisterActivityWithOptions(acts.WorkspaceListAll, activity.RegisterOptions{Name: constants.WorkspaceListAllActivity})
 	// Structured protocol wrappers
+	// 结构化协议封装
 	w.RegisterActivityWithOptions(acts.SendTaskRequest, activity.RegisterOptions{Name: constants.SendTaskRequestActivity})
 	w.RegisterActivityWithOptions(acts.SendTaskOffer, activity.RegisterOptions{Name: constants.SendTaskOfferActivity})
 	w.RegisterActivityWithOptions(acts.SendTaskAccept, activity.RegisterOptions{Name: constants.SendTaskAcceptActivity})
 	// File registry (swarm file tracking)
+	// 文件注册表（swarm 文件追踪）
 	w.RegisterActivityWithOptions(acts.RegisterFile, activity.RegisterOptions{Name: constants.RegisterFileActivity})
 	w.RegisterActivityWithOptions(acts.GetFileRegistry, activity.RegisterOptions{Name: constants.GetFileRegistryActivity})
 	// Workspace directory setup
+	// workspace 目录初始化
 	w.RegisterActivityWithOptions(acts.SetupWorkspaceDirs, activity.RegisterOptions{Name: constants.SetupWorkspaceDirsActivity})
 	// TaskList activities (swarm task tracking)
+	// TaskList activity（swarm 任务追踪）
 	w.RegisterActivityWithOptions(acts.InitTaskList, activity.RegisterOptions{Name: constants.InitTaskListActivity})
 	w.RegisterActivityWithOptions(acts.GetTaskList, activity.RegisterOptions{Name: constants.GetTaskListActivity})
 	w.RegisterActivityWithOptions(acts.UpdateTaskStatus, activity.RegisterOptions{Name: constants.UpdateTaskStatusActivity})
@@ -180,12 +208,14 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 	w.RegisterActivityWithOptions(acts.UpdateTaskDescription, activity.RegisterOptions{Name: constants.UpdateTaskDescriptionActivity})
 	w.RegisterActivityWithOptions(acts.ClaimTask, activity.RegisterOptions{Name: constants.ClaimTaskActivity})
 	// Lead Agent decision activity
+	// Lead Agent 决策 activity
 	w.RegisterActivityWithOptions(activities.LeadDecision, activity.RegisterOptions{Name: constants.LeadDecisionActivity})
 	w.RegisterActivityWithOptions(activities.ListWorkspaceFiles, activity.RegisterOptions{Name: constants.ListWorkspaceFilesActivity})
 	w.RegisterActivityWithOptions(activities.ReadWorkspaceFile, activity.RegisterOptions{Name: constants.ReadWorkspaceFileActivity})
 	w.RegisterActivityWithOptions(activities.LeadExecuteTool, activity.RegisterOptions{Name: constants.LeadExecuteToolActivity})
 
 	// Session activities - register with consistent naming
+	// Session activity —— 使用一致的命名注册
 	w.RegisterActivityWithOptions(acts.DecomposeTask, activity.RegisterOptions{Name: constants.DecomposeTaskActivity})
 	w.RegisterActivityWithOptions(acts.RefineResearchQuery, activity.RegisterOptions{Name: constants.RefineResearchQueryActivity})
 	// Legacy activity name for Temporal replay compatibility
@@ -197,9 +227,11 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 	w.RegisterActivityWithOptions(acts.GenerateSessionTitle, activity.RegisterOptions{Name: "GenerateSessionTitle"})
 
 	// HITL Research Review
+	// HITL 研究评审
 	w.RegisterActivityWithOptions(activities.GenerateResearchPlan, activity.RegisterOptions{Name: constants.GenerateResearchPlanActivity})
 
 	// Schedule activities
+	// 调度相关 activity
 	scheduleActivities := activities.NewScheduleActivities(r.db, r.config.TemporalClient, r.logger)
 	w.RegisterActivityWithOptions(scheduleActivities.RecordScheduleExecutionStart, activity.RegisterOptions{
 		Name: "RecordScheduleExecutionStart",
@@ -223,6 +255,7 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 	r.logger.Info("Registered daemon dispatch activity", zap.Bool("hub_available", r.config.DaemonHub != nil))
 
 	// Human intervention activities
+	// 人工介入 activity
 	if r.config.EnableApprovalWorkflows {
 		humanActivities := activities.NewHumanInterventionActivities()
 		w.RegisterActivityWithOptions(humanActivities.RequestApproval, activity.RegisterOptions{
@@ -238,6 +271,7 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 	}
 
 	// Streaming activities
+	// 流式 activity
 	if r.config.EnableStreamingWorkflows {
 		streamingActivities := activities.NewStreamingActivities()
 		w.RegisterActivityWithOptions(streamingActivities.StreamExecute, activity.RegisterOptions{
@@ -265,17 +299,21 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 	})
 
 	// Pattern metrics activity
+	// pattern 指标 activity
 	w.RegisterActivityWithOptions(activities.RecordPatternMetrics, activity.RegisterOptions{
 		Name: "RecordPatternMetrics",
 	})
 
 	// Enterprise features - conditionally compiled
+	// 企业版特性 —— 条件编译
 	r.registerEnterpriseActivities(w)
 
 	// User-level memory extraction (Phase 2)
+	// 用户级 memory 抽取（Phase 2）
 	w.RegisterActivity(activities.ExtractMemoryActivity)
 
 	// Agent selection activities (performance-based)
+	// agent 选择 activity（基于性能）
 	w.RegisterActivity(activities.FetchAgentPerformances)
 	w.RegisterActivity(activities.SelectAgentEpsilonGreedy)
 	w.RegisterActivity(activities.SelectAgentUCB1)
@@ -289,6 +327,7 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 	w.RegisterActivity(activities.PersistToolExecutionStandalone)
 
 	// Budget activities
+	// 预算 activity
 	if r.config.EnableBudgetedWorkflows {
 		var budgetActivities *activities.BudgetActivities
 		if r.config.DefaultTaskBudget > 0 || r.config.DefaultSessionBudget > 0 {
@@ -312,6 +351,7 @@ func (r *OrchestratorRegistry) RegisterActivities(w worker.Worker) error {
 			Name: constants.GenerateUsageReportActivity,
 		})
 		// Also register ExecuteAgentWithBudget activity
+		// 另外注册 ExecuteAgentWithBudget activity
 		w.RegisterActivityWithOptions(budgetActivities.ExecuteAgentWithBudget, activity.RegisterOptions{
 			Name: constants.ExecuteAgentWithBudgetActivity,
 		})

@@ -50,7 +50,7 @@ class TestHistoryTruncation:
         file_read 结果不应被截到 2000 字符：5000 字符的文件内容是 agent 的工作记忆，
         截断会迫使它在下一轮迭代重新读取同一文件。
         """
-        file_content = "# Report\n" + "x" * 5000  # 5010 chars total
+        file_content = "# Report\n" + "x" * 5000  # 5010 chars total 注：共 5010 字符
         history = [
             AgentLoopTurn(
                 iteration=1,
@@ -70,7 +70,7 @@ class TestHistoryTruncation:
 
         web_search 结果仍应截断到中等长度，避免历史撑爆 prompt。
         """
-        search_content = "Search result: " + "y" * 10000  # 10015 chars
+        search_content = "Search result: " + "y" * 10000  # 10015 chars 注：10015 字符
         history = [
             AgentLoopTurn(
                 iteration=1,
@@ -186,7 +186,7 @@ class TestPromptCharBudget:
             _build_multi_turn_messages,
         )
 
-        big_obs = "x" * 150_000  # ~150K chars per frozen observation
+        big_obs = "x" * 150_000  # ~150K chars per frozen observation 注：每条冻结 observation 约 150K 字符
         history = [
             AgentLoopTurn(
                 iteration=i,

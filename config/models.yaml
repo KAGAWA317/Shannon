@@ -152,13 +152,15 @@ model_tiers:
         priority: 14
 
 # Model selection strategy
+# 模型选择策略
 selection_strategy:
-  mode: priority  # priority, round-robin, least-cost, random
+  mode: priority  # priority, round-robin, least-cost, random 注：可选值：priority、round-robin、least-cost、random
   fallback_enabled: true
   max_retries: 3
   timeout_seconds: 120
 
 # Cost controls
+# 成本控制
 cost_controls:
   max_cost_per_request: 2.00
   max_tokens_per_request: 100000
@@ -166,6 +168,7 @@ cost_controls:
   alert_threshold_percent: 90
 
 # Prompt caching configuration
+# prompt 缓存配置
 prompt_cache:
   enabled: true
   similarity_threshold: 0.95
@@ -173,6 +176,7 @@ prompt_cache:
   max_cache_size_mb: 2048
 
 # Provider-specific settings
+# provider 专属配置
 provider_settings:
   openai:
     base_url: https://api.openai.com/v1
@@ -232,7 +236,7 @@ provider_settings:
     max_retries: 3
 
   meta:
-    base_url: https://api.together.xyz/v1  # Together AI for Llama models
+    base_url: https://api.together.xyz/v1  # Together AI for Llama models 注：Llama 模型走 Together AI
     timeout: 90
     max_retries: 3
     
@@ -329,7 +333,7 @@ model_catalog:
       supports_functions: true
       supports_streaming: true
       supports_vision: true
-      supports_effort: true  # Opus 4.5 unique feature
+      supports_effort: true  # Opus 4.5 unique feature 注：Opus 4.5 独有能力
     claude-sonnet-4-6:
       model_id: claude-sonnet-4-6
       tier: medium
@@ -568,7 +572,7 @@ model_catalog:
       supports_functions: true
       supports_streaming: true
       supports_vision: true
-      enabled: false  # disabled pending provider availability
+      enabled: false  # disabled pending provider availability 注：provider 暂不可用，先停用
 
   groq:
     llama-3.3-70b-versatile:
@@ -588,6 +592,7 @@ model_catalog:
 
   ollama:
     # --- Small tier (<10B) ---
+    # --- Small tier（小于 10B） ---
     qwen3:4b:
       model_id: qwen3:4b
       tier: small
@@ -728,7 +733,7 @@ model_catalog:
 # 供 Go/Rust/Python 共用，以保证成本计算一致。
 pricing:
   defaults:
-    combined_per_1k: 0.005  # Default cost per 1K tokens when model is unknown
+    combined_per_1k: 0.005  # Default cost per 1K tokens when model is unknown 注：模型未知时每 1K Token 的默认成本
   models:
     openai:
       gpt-4.1-2025-04-14:
@@ -911,13 +916,14 @@ pricing:
     # 校验：(7500 / 1000) × combined_per_1k = 每次调用成本
     shannon-scraper:
       shannon_web_search:
-        combined_per_1k: 0.002        # (7500/1000) × 0.002 = $0.015 (SerpAPI)
+        combined_per_1k: 0.002        # (7500/1000) × 0.002 = $0.015 (SerpAPI) 注：(7500/1000) × 0.002 = 0.015 美元（SerpAPI）
       shannon_firecrawl:
-        combined_per_1k: 0.000133     # (7500/1000) × 0.000133 ≈ $0.001 (Firecrawl)
+        combined_per_1k: 0.000133     # (7500/1000) × 0.000133 ≈ $0.001 (Firecrawl) 注：(7500/1000) × 0.000133 ≈ 0.001 美元（Firecrawl）
       shannon_web_fetch:
-        combined_per_1k: 0.00035      # SMALL model weighted avg; fallback only (real cost via cost_usd override)
+        combined_per_1k: 0.00035      # SMALL model weighted avg; fallback only (real cost via cost_usd override) 注：SMALL 模型加权均价；仅作兜底（真实成本由 cost_usd 覆盖）
 
 # Feature flags for advanced capabilities
+# 高级能力的 feature flag
 feature_flags:
   enable_thinking_mode: true
   enable_computer_use: true
@@ -927,6 +933,7 @@ feature_flags:
   enable_prompt_caching: true
 
 # Model capabilities matrix
+# 模型能力矩阵
 model_capabilities:
   multimodal_models:
     - gpt-5.1
@@ -963,18 +970,18 @@ model_capabilities:
     - qwen3-omni-30b-a3b-instruct
 
   long_context_models:
-    - llama-4-scout-17b-16e-instruct  # 10M tokens
-    - gemini-3-pro-preview  # 1M tokens
-    - gemini-2.5-flash  # 1M tokens
-    - claude-sonnet-4-6  # 1M tokens (native, no beta header)
-    - claude-opus-4-6  # 1M tokens (native, no beta header)
-    - MiniMax-M3  # 512K tokens
-    - qwen3-omni-30b-a3b-instruct  # 262K tokens
-    - claude-opus-4-5-20251101  # 200K tokens
-    - claude-sonnet-4-5-20250929  # 200K tokens
-    - kimi-k2.5  # 256K tokens
-    - MiniMax-M2.7  # 204K tokens
-    - glm-5  # 200K tokens
+    - llama-4-scout-17b-16e-instruct  # 10M tokens 注：上下文 10M Token
+    - gemini-3-pro-preview  # 1M tokens 注：上下文 1M Token
+    - gemini-2.5-flash  # 1M tokens 注：上下文 1M Token
+    - claude-sonnet-4-6  # 1M tokens (native, no beta header) 注：上下文 1M Token（原生，无需 beta header）
+    - claude-opus-4-6  # 1M tokens (native, no beta header) 注：上下文 1M Token（原生，无需 beta header）
+    - MiniMax-M3  # 512K tokens 注：上下文 512K Token
+    - qwen3-omni-30b-a3b-instruct  # 262K tokens 注：上下文 262K Token
+    - claude-opus-4-5-20251101  # 200K tokens 注：上下文 200K Token
+    - claude-sonnet-4-5-20250929  # 200K tokens 注：上下文 200K Token
+    - kimi-k2.5  # 256K tokens 注：上下文 256K Token
+    - MiniMax-M2.7  # 204K tokens 注：上下文 204K Token
+    - glm-5  # 200K tokens 注：上下文 200K Token
 
 # Rate limiting configuration
 # Per-provider RPM is disabled by default (0). The gateway layer handles
@@ -998,6 +1005,7 @@ rate_limits:
       tpm: 50000
 
 # Monitoring and alerting
+# 监控与告警
 monitoring:
   enabled: true
   metrics_export_interval: 30

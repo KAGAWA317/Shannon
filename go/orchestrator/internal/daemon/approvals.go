@@ -28,8 +28,8 @@ type PendingApproval struct {
 	Agent       string            `json:"agent"`
 	Tool        string            `json:"tool"`
 	Args        string            `json:"args"`
-	ThreadID    string            `json:"thread_id,omitempty"`    // Slack/LINE thread context for in-thread approvals
-	ChannelMsgs map[string]string `json:"channel_msgs,omitempty"` // channelID -> platform message ID (for dismissal)
+	ThreadID    string            `json:"thread_id,omitempty"`    // Slack/LINE thread context for in-thread approvals 注：用于线程内审批的 Slack/LINE thread 上下文
+	ChannelMsgs map[string]string `json:"channel_msgs,omitempty"` // channelID -> platform message ID (for dismissal) 注：channelID -> 平台消息 ID（用于撤回）
 	CreatedAt   string            `json:"created_at"`
 }
 
@@ -124,6 +124,7 @@ func (am *ApprovalManager) UpdateChannelMsg(ctx context.Context, requestID, chan
 		return err
 	}
 	// Re-set with remaining TTL
+	// 以剩余 TTL 重新设置
 	ttl, err := am.rc.TTL(ctx, approvalKey(requestID)).Result()
 	if err != nil || ttl <= 0 {
 		ttl = approvalTTL

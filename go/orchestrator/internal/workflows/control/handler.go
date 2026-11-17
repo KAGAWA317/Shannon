@@ -12,6 +12,7 @@ import (
 
 
 // SignalHandler manages pause/resume/cancel for any workflow
+// SignalHandler 为任意 workflow 管理暂停/恢复/取消
 type SignalHandler struct {
 	State      *WorkflowControlState
 	WorkflowID string
@@ -20,7 +21,9 @@ type SignalHandler struct {
 	EmitCtx    workflow.Context
 
 	// SkipSSEEmit when true, suppresses SSE event emissions.
+	// SkipSSEEmit 为 true 时抑制 SSE event 的发送。
 	// Used for child workflows where the parent already emits events.
+	// 用于父 workflow 已经发送 event 的子 workflow 场景。
 	SkipSSEEmit bool
 
 	// Child workflow management - simple slice is safe because Temporal workflows
@@ -30,6 +33,7 @@ type SignalHandler struct {
 }
 
 // Setup initializes signal channels and query handler
+// Setup 初始化 signal channel 与 query handler
 func (h *SignalHandler) Setup(ctx workflow.Context) {
 	version := workflow.GetVersion(ctx, "pause_resume_v1", workflow.DefaultVersion, 1)
 	if version < 1 {
@@ -40,6 +44,7 @@ func (h *SignalHandler) Setup(ctx workflow.Context) {
 	h.childWorkflowIDs = []string{}
 
 	// Query handler
+	// 控制状态查询 handler
 	_ = workflow.SetQueryHandler(ctx, QueryControlState, func() (WorkflowControlState, error) {
 		return *h.State, nil
 	})
@@ -76,11 +81,13 @@ func (h *SignalHandler) Setup(ctx workflow.Context) {
 }
 
 // RegisterChildWorkflow adds a child workflow ID for signal propagation
+// RegisterChildWorkflow 注册子 workflow ID，用于 signal 传播
 func (h *SignalHandler) RegisterChildWorkflow(childID string) {
 	h.childWorkflowIDs = append(h.childWorkflowIDs, childID)
 }
 
 // UnregisterChildWorkflow removes a completed child workflow
+// UnregisterChildWorkflow 移除已完成的子 workflow
 func (h *SignalHandler) UnregisterChildWorkflow(childID string) {
 	for i, id := range h.childWorkflowIDs {
 		if id == childID {
@@ -102,6 +109,7 @@ func (h *SignalHandler) handlePause(ctx workflow.Context, req PauseRequest) {
 	h.State.PausedBy = req.RequestedBy
 
 	// Only emit SSE event if not suppressed (child workflows skip to avoid duplicates)
+	// 仅在未被抑制时发送 SSE event（子 workflow 跳过以避免重复）
 	if !h.SkipSSEEmit {
 		_ = workflow.ExecuteActivity(h.EmitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: h.WorkflowID,
@@ -113,6 +121,7 @@ func (h *SignalHandler) handlePause(ctx workflow.Context, req PauseRequest) {
 	}
 
 	// Propagate pause to all child workflows
+	// 把暂停传播给所有子 workflow
 	h.propagateSignalToChildren(ctx, SignalPause, req)
 }
 
@@ -128,6 +137,7 @@ func (h *SignalHandler) handleResume(ctx workflow.Context, req ResumeRequest) {
 	h.State.PausedBy = ""
 
 	// Only emit SSE event if not suppressed (child workflows skip to avoid duplicates)
+	// 仅在未被抑制时发送 SSE event（子 workflow 跳过以避免重复）
 	if !h.SkipSSEEmit {
 		_ = workflow.ExecuteActivity(h.EmitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: h.WorkflowID,
@@ -139,6 +149,7 @@ func (h *SignalHandler) handleResume(ctx workflow.Context, req ResumeRequest) {
 	}
 
 	// Propagate resume to all child workflows
+	// 把恢复传播给所有子 workflow
 	h.propagateSignalToChildren(ctx, SignalResume, req)
 }
 
@@ -148,6 +159,7 @@ func (h *SignalHandler) handleCancel(ctx workflow.Context, req CancelRequest) {
 	h.State.CancelledBy = req.RequestedBy
 
 	// Only emit SSE event if not suppressed (child workflows skip to avoid duplicates)
+	// 仅在未被抑制时发送 SSE event（子 workflow 跳过以避免重复）
 	if !h.SkipSSEEmit {
 		_ = workflow.ExecuteActivity(h.EmitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: h.WorkflowID,
@@ -159,20 +171,24 @@ func (h *SignalHandler) handleCancel(ctx workflow.Context, req CancelRequest) {
 	}
 
 	// Propagate cancel to all child workflows
+	// 把取消传播给所有子 workflow
 	h.propagateSignalToChildren(ctx, SignalCancel, req)
 }
 
 // propagateSignalToChildren sends signal to all registered child workflows
+// propagateSignalToChildren 向所有已注册的子 workflow 发送 signal
 func (h *SignalHandler) propagateSignalToChildren(ctx workflow.Context, signalName string, payload any) {
 	if len(h.childWorkflowIDs) == 0 {
 		return
 	}
 
 	// Copy slice to avoid issues if modified during iteration
+	// 复制 slice，避免迭代过程中被修改引发问题
 	children := make([]string, len(h.childWorkflowIDs))
 	copy(children, h.childWorkflowIDs)
 
 	// Send signals in parallel to avoid sequential blocking
+	// 并行发送 signal，避免串行阻塞
 	futures := make([]workflow.Future, 0, len(children))
 	for _, childID := range children {
 		future := workflow.SignalExternalWorkflow(ctx, childID, "", signalName, payload)
@@ -180,19 +196,23 @@ func (h *SignalHandler) propagateSignalToChildren(ctx workflow.Context, signalNa
 	}
 
 	// Wait for all signals to complete (in parallel, not sequential)
+	// 等待所有 signal 完成（并行，而非串行）
 	for _, future := range futures {
-		_ = future.Get(ctx, nil) // Ignore errors - child may have completed
+		_ = future.Get(ctx, nil) // Ignore errors - child may have completed 注：忽略错误 —— 子 workflow 可能已结束
 	}
 }
 
 // CheckPausePoint blocks if paused, returns error if cancelled
+// CheckPausePoint 在暂停时阻塞，被取消时返回错误
 func (h *SignalHandler) CheckPausePoint(ctx workflow.Context, checkpoint string) error {
 	if h.State == nil {
 		return nil
 	}
 
 	// Yield to ensure pending signals are processed before checking state
+	// 先让出执行权，确保检查状态前待处理的 signal 已被处理
 	// This prevents race where signal is received but not yet processed
+	// 避免「signal 已收到但尚未处理」的竞态
 	_ = workflow.Sleep(ctx, 0)
 
 	if h.State.IsCancelled {
@@ -233,6 +253,7 @@ func (h *SignalHandler) CheckPausePoint(ctx workflow.Context, checkpoint string)
 
 		if h.State.IsCancelled {
 			// Always emit WORKFLOW_CANCELLED when cancelled while paused
+			// 暂停期间被取消时始终发送 WORKFLOW_CANCELLED
 			_ = workflow.ExecuteActivity(h.EmitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 				WorkflowID: h.WorkflowID,
 				EventType:  activities.StreamEventWorkflowCancelled,
@@ -251,11 +272,13 @@ func (h *SignalHandler) CheckPausePoint(ctx workflow.Context, checkpoint string)
 }
 
 // IsCancelled returns true if the workflow has been cancelled
+// IsCancelled 在 workflow 已被取消时返回 true
 func (h *SignalHandler) IsCancelled() bool {
 	return h.State != nil && h.State.IsCancelled
 }
 
 // IsPaused returns true if the workflow is paused
+// IsPaused 在 workflow 处于暂停状态时返回 true
 func (h *SignalHandler) IsPaused() bool {
 	return h.State != nil && h.State.IsPaused
 }

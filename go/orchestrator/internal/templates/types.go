@@ -1,6 +1,7 @@
 package templates
 
 // NodeType enumerates supported template node types.
+// NodeType 枚举模板支持的 node 类型。
 type NodeType string
 
 const (

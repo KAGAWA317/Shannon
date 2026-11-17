@@ -37,7 +37,7 @@ class TestDetectLanguage:
         assert detect_language("你好世界 hello") == "zh"
 
     def test_empty_string(self):
-        assert detect_language("") == "en"  # Default fallback
+        assert detect_language("") == "en"  # Default fallback 注：默认兜底
 
 
 class TestTokenize:
@@ -50,7 +50,7 @@ class TestTokenize:
         assert "quick" in tokens
         assert "brown" in tokens
         assert "fox" in tokens
-        assert "the" in tokens  # Stopwords are included (lowercase)
+        assert "the" in tokens  # Stopwords are included (lowercase) 注：停用词会被保留（小写）
 
     def test_chinese_tokenization(self):
         tokens = tokenize("人工智能技术")
@@ -130,7 +130,7 @@ class TestExtractCitedNumbers:
         result = _extract_cited_numbers(text, max_citations=10)
         assert 1 in result
         assert 2 in result
-        assert 15 not in result  # Exceeds max_citations
+        assert 15 not in result  # Exceeds max_citations 注：超出 max_citations
 
     def test_limit_parameter(self):
         text = "[1][2][3][4][5][6][7][8][9][10]"

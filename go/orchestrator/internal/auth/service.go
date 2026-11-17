@@ -24,30 +24,33 @@ import (
 type QuotaDefaults struct {
 	MonthlyTokens        int     `yaml:"monthly_tokens"`
 	DailyTokens          int     `yaml:"daily_tokens"`
-	HardCapMonthlyTokens int     `yaml:"hard_cap_monthly_tokens"` // 0 = unlimited; absolute ceiling even with overage
+	HardCapMonthlyTokens int     `yaml:"hard_cap_monthly_tokens"` // 0 = unlimited; absolute ceiling even with overage 注：0 表示不限；即使有超额也是绝对上限
 	OverageEnabled       bool    `yaml:"overage_enabled"`
 	OveragePer1MTokens   float64 `yaml:"overage_per_1m_tokens"`
-	OverageGraceTokens   int     `yaml:"overage_grace_tokens"` // One-time free overage tokens for first overage event
-	MaxSchedules         int     `yaml:"max_schedules"`        // 0 = unlimited
+	OverageGraceTokens   int     `yaml:"overage_grace_tokens"` // One-time free overage tokens for first overage event 注：首次超额事件的一次性免费超额 token
+	MaxSchedules         int     `yaml:"max_schedules"`        // 0 = unlimited 注：0 表示不限
 }
 
 // asyncUpdate represents a background update task
+// asyncUpdate 表示一个后台更新任务
 type asyncUpdate struct {
 	query string
 	args  []any
 }
 
 // Service handles authentication operations
+// Service 负责认证相关操作
 type Service struct {
 	db            *sqlx.DB
 	logger        *zap.Logger
 	jwtManager    *JWTManager
 	quotaDefaults map[string]QuotaDefaults
-	updateCh      chan asyncUpdate // Bounded channel for async DB updates
-	stopCh        chan struct{}    // Signal to stop background workers
+	updateCh      chan asyncUpdate // Bounded channel for async DB updates 注：用于异步 DB 更新的有界 channel
+	stopCh        chan struct{}    // Signal to stop background workers 注：用于停止后台 worker 的 signal
 }
 
 // NewService creates a new authentication service
+// NewService 创建认证服务
 func NewService(db *sqlx.DB, logger *zap.Logger, jwtSecret string) *Service {
 	quotaDefaults := defaultQuotaDefaults()
 
@@ -57,10 +60,10 @@ func NewService(db *sqlx.DB, logger *zap.Logger, jwtSecret string) *Service {
 		quotaDefaults: quotaDefaults,
 		jwtManager: NewJWTManager(
 			jwtSecret,
-			1*time.Hour,     // Access token expiry
-			30*24*time.Hour, // Refresh token expiry
+			1*time.Hour,     // Access token expiry 注：访问 token 过期时间
+			30*24*time.Hour, // Refresh token expiry 注：refresh token 过期时间
 		),
-		updateCh: make(chan asyncUpdate, 100), // Bounded buffer of 100 pending updates
+		updateCh: make(chan asyncUpdate, 100), // Bounded buffer of 100 pending updates 注：100 个待处理更新的有界缓冲
 		stopCh:   make(chan struct{}),
 	}
 
@@ -95,6 +98,7 @@ func (s *Service) asyncUpdateWorker(workerID int) {
 }
 
 // Close gracefully shuts down the service
+// Close 优雅关闭服务
 func (s *Service) Close() {
 	close(s.stopCh)
 }
@@ -105,6 +109,7 @@ func (s *Service) enqueueUpdate(query string, args ...any) {
 	select {
 	case s.updateCh <- asyncUpdate{query: query, args: args}:
 		// Successfully queued
+		// 入队成功
 	default:
 		// Channel full, log and drop (better than unbounded goroutines)
 		// channel 已满，记录日志并丢弃（优于无界 goroutine）
@@ -154,8 +159,10 @@ func defaultQuotaDefaults() map[string]QuotaDefaults {
 }
 
 // Register creates a new user account
+// Register 创建新用户账号
 func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*User, error) {
 	// Check if email already exists
+	// 检查邮箱是否已存在
 	var exists bool
 	err := s.db.GetContext(ctx, &exists,
 		"SELECT EXISTS(SELECT 1 FROM auth.users WHERE email = $1)", req.Email)
@@ -167,6 +174,7 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*User, er
 	}
 
 	// Check if username already exists
+	// 检查用户名是否已存在
 	err = s.db.GetContext(ctx, &exists,
 		"SELECT EXISTS(SELECT 1 FROM auth.users WHERE username = $1)", req.Username)
 	if err != nil {
@@ -177,12 +185,14 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*User, er
 	}
 
 	// Hash password
+	// 对密码做哈希
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
 	// Determine tenant ID
+	// 确定租户 ID
 	var tenantID uuid.UUID
 	if req.TenantID != "" {
 		tenantID, err = uuid.Parse(req.TenantID)
@@ -191,6 +201,7 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*User, er
 		}
 	} else {
 		// Create new tenant for the user
+		// 为该用户创建新租户
 		tenantID, err = s.createTenant(ctx, req.Username, "shannon")
 		if err != nil {
 			return nil, fmt.Errorf("failed to create tenant: %w", err)
@@ -198,6 +209,7 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*User, er
 	}
 
 	// Create user
+	// 创建用户
 	user := &User{
 		ID:           uuid.New(),
 		Email:        req.Email,
@@ -223,6 +235,7 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*User, er
 	}
 
 	// Log audit event
+	// 记录审计事件
 	s.logAuditEvent(ctx, AuditEventAccountCreated, user.ID, tenantID, nil)
 
 	s.logger.Info("User registered successfully",
@@ -237,12 +250,14 @@ func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*User, er
 // Login 对用户做 authentication 并返回 token
 func (s *Service) Login(ctx context.Context, req *LoginRequest) (*TokenPair, error) {
 	// Find user by email
+	// 按邮箱查找用户
 	var user User
 	query := `SELECT * FROM auth.users WHERE email = $1 AND is_active = true`
 	err := s.db.GetContext(ctx, &user, query, req.Email)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// Log failed attempt
+			// 记录失败尝试
 			s.logAuditEvent(ctx, AuditEventLoginFailed, uuid.Nil, uuid.Nil,
 				map[string]any{"email": req.Email})
 			return nil, fmt.Errorf("invalid email or password")
@@ -251,26 +266,31 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*TokenPair, err
 	}
 
 	// Verify password
+	// 校验密码
 	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password))
 	if err != nil {
 		// Log failed attempt
+		// 记录失败尝试
 		s.logAuditEvent(ctx, AuditEventLoginFailed, user.ID, user.TenantID, nil)
 		return nil, fmt.Errorf("invalid email or password")
 	}
 
 	// Generate token pair
+	// 生成 token 对
 	tokens, refreshTokenHash, err := s.jwtManager.GenerateTokenPair(&user)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate tokens: %w", err)
 	}
 
 	// Store refresh token
+	// 存储 refresh token
 	err = s.storeRefreshToken(ctx, s.db, &user, refreshTokenHash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store refresh token: %w", err)
 	}
 
 	// Update last login
+	// 更新最后登录时间
 	_, err = s.db.ExecContext(ctx,
 		"UPDATE auth.users SET last_login = NOW() WHERE id = $1", user.ID)
 	if err != nil {
@@ -278,6 +298,7 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*TokenPair, err
 	}
 
 	// Log audit event
+	// 记录审计事件
 	s.logAuditEvent(ctx, AuditEventLogin, user.ID, user.TenantID, nil)
 
 	s.logger.Info("User logged in successfully",
@@ -333,6 +354,7 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*TokenPair,
 	defer tx.Rollback()
 
 	// Store new refresh token first
+	// 先存储新的 refresh token
 	if err := s.storeRefreshToken(ctx, tx, &user, newHash); err != nil {
 		return nil, fmt.Errorf("failed to store new refresh token: %w", err)
 	}
@@ -349,6 +371,7 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*TokenPair,
 	}
 
 	// Commit transaction
+	// 提交事务
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -391,6 +414,7 @@ func (s *Service) ValidateAccessToken(ctx context.Context, token string) (*UserC
 // ValidateAPIKey 校验 API key 并返回用户 context
 func (s *Service) ValidateAPIKey(ctx context.Context, apiKey string) (*UserContext, error) {
 	// Extract key prefix (first 8 chars)
+	// 提取 key 前缀（前 8 个字符）
 	if len(apiKey) < 8 {
 		return nil, fmt.Errorf("invalid API key format")
 	}
@@ -431,6 +455,7 @@ func (s *Service) ValidateAPIKey(ctx context.Context, apiKey string) (*UserConte
 	}
 
 	// Check expiration
+	// 检查过期
 	if key.ExpiresAt != nil && key.ExpiresAt.Before(time.Now()) {
 		return nil, fmt.Errorf("API key expired")
 	}
@@ -440,6 +465,7 @@ func (s *Service) ValidateAPIKey(ctx context.Context, apiKey string) (*UserConte
 	s.enqueueUpdate("UPDATE auth.api_keys SET last_used = NOW() WHERE id = $1", key.ID)
 
 	// Get user details
+	// 获取用户详情
 	var user User
 	err = s.db.GetContext(ctx, &user,
 		"SELECT * FROM auth.users WHERE id = $1", key.UserID)
@@ -460,6 +486,7 @@ func (s *Service) ValidateAPIKey(ctx context.Context, apiKey string) (*UserConte
 	}
 
 	// Log audit event
+	// 记录审计事件
 	s.logAuditEvent(ctx, AuditEventAPIKeyUsed, user.ID, user.TenantID,
 		map[string]any{"api_key_id": key.ID.String()})
 
@@ -491,12 +518,14 @@ func (s *Service) CreateAPIKey(ctx context.Context, userID uuid.UUID, req *Creat
 	}
 
 	// Generate API key
+	// 生成 API key
 	apiKey, keyHash, keyPrefix, err := generateAPIKey()
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to generate API key: %w", err)
 	}
 
 	// Set default scopes if not provided
+	// 未提供时设置默认 scope
 	scopes := req.Scopes
 	if len(scopes) == 0 {
 		scopes = []string{
@@ -544,6 +573,7 @@ func (s *Service) CreateAPIKey(ctx context.Context, userID uuid.UUID, req *Creat
 	}
 
 	// Log audit event
+	// 记录审计事件
 	s.logAuditEvent(ctx, AuditEventAPIKeyCreated, userID, user.TenantID,
 		map[string]any{"api_key_id": key.ID.String(), "name": key.Name})
 
@@ -580,6 +610,7 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 			zap.String("user_id", existingUser.ID.String()))
 
 		// Generate JWT tokens for web session
+		// 为 web session 生成 JWT token
 		tokens, refreshTokenHash, err := s.jwtManager.GenerateTokenPair(&existingUser)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate tokens: %w", err)
@@ -592,12 +623,13 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 		}
 
 		// Update last login time
+		// 更新最后登录时间
 		s.db.ExecContext(ctx, "UPDATE auth.users SET last_login = NOW() WHERE id = $1", existingUser.ID)
 
 		return &OAuthLoginResult{
 			Tokens:    tokens,
 			User:      &existingUser,
-			APIKey:    "", // No new API key for existing users
+			APIKey:    "", // No new API key for existing users 注：已有用户不签发新的 API key
 			IsNewUser: false,
 		}, nil
 	}
@@ -613,12 +645,14 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 		zap.String("name", googleUser.Name))
 
 	// Generate username from email (before @ symbol)
+	// 由邮箱生成 username（取 @ 之前部分）
 	username := googleUser.Email
 	if atIdx := strings.Index(googleUser.Email, "@"); atIdx > 0 {
 		username = googleUser.Email[:atIdx]
 	}
 
 	// Ensure username is unique
+	// 确保 username 唯一
 	baseUsername := username
 	suffix := 0
 	for {
@@ -636,6 +670,7 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 	}
 
 	// Create tenant for new user
+	// 为新用户创建租户
 	tenantID, err := s.createTenant(ctx, username, "shannon")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tenant: %w", err)
@@ -647,7 +682,7 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 		ID:              uuid.New(),
 		Email:           googleUser.Email,
 		Username:        username,
-		PasswordHash:    "", // OAuth users don't have passwords
+		PasswordHash:    "", // OAuth users don't have passwords 注：OAuth 用户没有密码
 		FullName:        &googleUser.Name,
 		TenantID:        tenantID,
 		Role:            RoleUser,
@@ -674,6 +709,7 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 	}
 
 	// Log audit event
+	// 记录审计事件
 	s.logAuditEvent(ctx, AuditEventAccountCreated, newUser.ID, tenantID, map[string]any{
 		"oauth_provider": "google",
 		"email":          googleUser.Email,
@@ -695,6 +731,7 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 	}
 
 	// Generate JWT tokens for web session
+	// 为 web session 生成 JWT token
 	tokens, refreshTokenHash, err := s.jwtManager.GenerateTokenPair(newUser)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate tokens: %w", err)
@@ -709,12 +746,13 @@ func (s *Service) RegisterFromOAuth(ctx context.Context, googleUser *GoogleUser)
 	return &OAuthLoginResult{
 		Tokens:    tokens,
 		User:      newUser,
-		APIKey:    apiKey, // Only returned for new users
+		APIKey:    apiKey, // Only returned for new users 注：仅对新用户返回
 		IsNewUser: true,
 	}, nil
 }
 
 // Helper functions
+// 辅助函数
 
 // GetQuotaDefaults returns a copy of the built-in quota defaults for all plans.
 // GetQuotaDefaults 返回所有套餐内置配额默认值的副本。
@@ -737,6 +775,7 @@ func (s *Service) ResolveQuotaDefaults(product, plan string) QuotaDefaults {
 		return q
 	}
 	// Hardcoded fallback (Model C free tier)
+	// 硬编码回退（Model C 免费档）
 	s.logger.Warn("Quota defaults not found, using fallback",
 		zap.String("product", product), zap.String("plan", plan))
 	return QuotaDefaults{MonthlyTokens: 1_000_000, DailyTokens: 500_000, HardCapMonthlyTokens: 1_000_000}
@@ -755,7 +794,7 @@ func (s *Service) createTenant(ctx context.Context, username, product string) (u
 		Slug:             fmt.Sprintf("%s-%s", username, generateRandomString(6)),
 		Plan:             PlanFree,
 		TokenLimit:       quotas.MonthlyTokens,
-		RateLimitPerHour: 1000, // From rate_limits.yaml free tier: requests_per_hour
+		RateLimitPerHour: 1000, // From rate_limits.yaml free tier: requests_per_hour 注：来自 rate_limits.yaml 免费档：requests_per_hour
 		IsActive:         true,
 		CreatedAt:        time.Now(),
 		UpdatedAt:        time.Now(),
@@ -806,6 +845,7 @@ func (s *Service) logAuditEvent(ctx context.Context, eventType string, userID, t
 	`
 
 	// Convert nil UUIDs to NULL
+	// 将 nil UUID 转成 NULL
 	var userIDPtr, tenantIDPtr *uuid.UUID
 	if userID != uuid.Nil {
 		userIDPtr = &userID
@@ -897,12 +937,12 @@ func (s *Service) ProvisionUser(ctx context.Context, tenantID uuid.UUID, usernam
 		ID:              uuid.New(),
 		Email:           syntheticEmail,
 		Username:        username,
-		PasswordHash:    "", // no password — service-provisioned account
+		PasswordHash:    "", // no password — service-provisioned account 注：无密码 —— 服务预置账号
 		FullName:        fullName,
 		TenantID:        tenantID,
 		Role:            RoleUser,
 		IsActive:        true,
-		IsVerified:      true, // trusted: BFF has already verified the external identity
+		IsVerified:      true, // trusted: BFF has already verified the external identity 注：可信：BFF 已校验过外部身份
 		EmailVerifiedAt: &now,
 		CreatedAt:       now,
 		UpdatedAt:       now,
@@ -1123,6 +1163,7 @@ func (s *Service) ProvisionUserAutoTenant(ctx context.Context, tenantID uuid.UUI
 
 func generateAPIKey() (key, hash, prefix string, err error) {
 	// Generate 32 random bytes
+	// 生成 32 字节随机数
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return "", "", "", fmt.Errorf("failed to generate random bytes: %w", err)

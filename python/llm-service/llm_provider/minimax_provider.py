@@ -40,7 +40,7 @@ from .base import (
 _THINK_TAG_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 
 _MINIMAX_BASE_URL = "https://api.minimax.io/v1"
-_TEMP_MIN = 0.01  # MiniMax requires temperature > 0
+_TEMP_MIN = 0.01  # MiniMax requires temperature > 0 注：MiniMax 要求 temperature > 0
 # MiniMax 要求 temperature > 0
 
 

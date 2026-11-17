@@ -17,6 +17,7 @@ import (
 )
 
 // RedisHealthChecker checks Redis connectivity
+// RedisHealthChecker 检查 Redis 连通性
 type RedisHealthChecker struct {
 	client  redis.UniversalClient
 	wrapper *circuitbreaker.RedisWrapper
@@ -25,6 +26,7 @@ type RedisHealthChecker struct {
 }
 
 // NewRedisHealthChecker creates a Redis health checker
+// NewRedisHealthChecker 创建一个 Redis 健康检查器
 func NewRedisHealthChecker(client redis.UniversalClient, wrapper *circuitbreaker.RedisWrapper, logger *zap.Logger) *RedisHealthChecker {
 	return &RedisHealthChecker{
 		client:  client,
@@ -47,6 +49,7 @@ func (r *RedisHealthChecker) Check(ctx context.Context) CheckResult {
 	}
 
 	// Check circuit breaker state
+	// 检查熔断器状态
 	if r.wrapper != nil && r.wrapper.IsCircuitBreakerOpen() {
 		result.Status = StatusUnhealthy
 		result.Error = "circuit breaker open"
@@ -56,6 +59,7 @@ func (r *RedisHealthChecker) Check(ctx context.Context) CheckResult {
 	}
 
 	// Try to ping Redis
+	// 尝试 ping Redis
 	err := r.client.Ping(ctx).Err()
 	result.Duration = time.Since(startTime)
 
@@ -71,6 +75,7 @@ func (r *RedisHealthChecker) Check(ctx context.Context) CheckResult {
 	}
 
 	// Check if degraded (high latency)
+	// 检查是否降级（高延迟）
 	if result.Duration > 100*time.Millisecond {
 		result.Status = StatusDegraded
 		result.Message = "Redis responding but with high latency"
@@ -88,6 +93,7 @@ func (r *RedisHealthChecker) Check(ctx context.Context) CheckResult {
 }
 
 // DatabaseHealthChecker checks PostgreSQL connectivity
+// DatabaseHealthChecker 检查 PostgreSQL 连通性
 type DatabaseHealthChecker struct {
 	db      *sql.DB
 	wrapper *circuitbreaker.DatabaseWrapper
@@ -96,6 +102,7 @@ type DatabaseHealthChecker struct {
 }
 
 // NewDatabaseHealthChecker creates a database health checker
+// NewDatabaseHealthChecker 创建一个数据库健康检查器
 func NewDatabaseHealthChecker(db *sql.DB, wrapper *circuitbreaker.DatabaseWrapper, logger *zap.Logger) *DatabaseHealthChecker {
 	return &DatabaseHealthChecker{
 		db:      db,
@@ -118,6 +125,7 @@ func (d *DatabaseHealthChecker) Check(ctx context.Context) CheckResult {
 	}
 
 	// Check circuit breaker state
+	// 检查熔断器状态
 	if d.wrapper != nil && d.wrapper.IsCircuitBreakerOpen() {
 		result.Status = StatusUnhealthy
 		result.Error = "circuit breaker open"
@@ -127,6 +135,7 @@ func (d *DatabaseHealthChecker) Check(ctx context.Context) CheckResult {
 	}
 
 	// Try to ping database
+	// 尝试 ping 数据库
 	err := d.db.PingContext(ctx)
 	result.Duration = time.Since(startTime)
 
@@ -142,9 +151,11 @@ func (d *DatabaseHealthChecker) Check(ctx context.Context) CheckResult {
 	}
 
 	// Get connection stats
+	// 获取连接统计
 	stats := d.db.Stats()
 
 	// Check for connection pool issues
+	// 检查连接池问题
 	if stats.OpenConnections >= stats.MaxOpenConnections && stats.MaxOpenConnections > 0 {
 		result.Status = StatusDegraded
 		result.Message = "Database connection pool exhausted"
@@ -169,6 +180,7 @@ func (d *DatabaseHealthChecker) Check(ctx context.Context) CheckResult {
 }
 
 // AgentCoreHealthChecker checks Agent Core gRPC service
+// AgentCoreHealthChecker 检查 Agent Core gRPC 服务
 type AgentCoreHealthChecker struct {
 	client  agentpb.AgentServiceClient
 	conn    *grpc.ClientConn
@@ -200,6 +212,7 @@ func (a *AgentCoreHealthChecker) Check(ctx context.Context) CheckResult {
 	}
 
 	// Check gRPC connection state
+	// 检查 gRPC 连接状态
 	connState := a.conn.GetState()
 
 	// Call Agent Core health check RPC (defined in internal/pb/agent)
@@ -209,6 +222,7 @@ func (a *AgentCoreHealthChecker) Check(ctx context.Context) CheckResult {
 	result.Duration = time.Since(startTime)
 
 	// Analyze the error
+	// 分析错误
 	if err != nil {
 		st, ok := status.FromError(err)
 		if ok {
@@ -243,6 +257,7 @@ func (a *AgentCoreHealthChecker) Check(ctx context.Context) CheckResult {
 }
 
 // LLMServiceHealthChecker checks LLM service HTTP endpoint
+// LLMServiceHealthChecker 检查 LLM 服务的 HTTP endpoint
 type LLMServiceHealthChecker struct {
 	baseURL string
 	logger  *zap.Logger
@@ -260,7 +275,7 @@ func NewLLMServiceHealthChecker(baseURL string, logger *zap.Logger) *LLMServiceH
 }
 
 func (l *LLMServiceHealthChecker) Name() string           { return "llm_service" }
-func (l *LLMServiceHealthChecker) IsCritical() bool       { return false } // Non-critical, can fallback
+func (l *LLMServiceHealthChecker) IsCritical() bool       { return false } // Non-critical, can fallback 注：非关键，可降级回退
 func (l *LLMServiceHealthChecker) Timeout() time.Duration { return l.timeout }
 
 func (l *LLMServiceHealthChecker) Check(ctx context.Context) CheckResult {
@@ -298,6 +313,7 @@ type CustomHealthChecker struct {
 }
 
 // NewCustomHealthChecker creates a custom health checker
+// NewCustomHealthChecker 创建一个自定义健康检查器
 func NewCustomHealthChecker(name string, critical bool, timeout time.Duration, checkFn func(ctx context.Context) CheckResult) *CustomHealthChecker {
 	return &CustomHealthChecker{
 		name:     name,

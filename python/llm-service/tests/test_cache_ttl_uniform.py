@@ -164,7 +164,7 @@ class TestBlocksWithoutCacheControlUntouched:
 
     def test_blocks_without_cache_control_stay_without(self):
         req = {
-            "tools": [{"name": "t"}],  # no cache_control
+            "tools": [{"name": "t"}],  # no cache_control 注：不带 cache_control
             "system": [{"type": "text", "text": "s"}],
             "messages": [{"role": "user", "content": [{"type": "text", "text": "u"}]}],
         }
@@ -316,7 +316,7 @@ class TestMarkLastBlockDedupInteraction:
             ],
             temperature=0.0,
             max_tokens=100,
-            cache_source="agent_execute",  # resolves to 5m
+            cache_source="agent_execute",  # resolves to 5m 注：解析为 5m
         )
         api_req = provider._build_api_request(request, _model_config())
         blocks = _collect_ttls(api_req)

@@ -76,10 +76,11 @@ func (c *Client) scrollRecent(ctx context.Context, sessionID string, must []map[
 	// 多取一些以留出排序/MMR 重排的余地
 	poolMultiplier := c.cfg.MMRPoolMultiplier
 	if poolMultiplier <= 0 {
-		poolMultiplier = 3 // Default multiplier
+		poolMultiplier = 3 // Default multiplier 注：默认倍数
 	}
 	limit := min(topK*poolMultiplier,
 		// Cap to prevent excessive data transfer
+		// 设上限以避免传输过多数据
 		100)
 	body := map[string]any{
 		"limit":        limit,
@@ -122,6 +123,7 @@ func (c *Client) scrollRecent(ctx context.Context, sessionID string, must []map[
 		tsI, okI := out[i].Payload["timestamp"].(float64)
 		tsJ, okJ := out[j].Payload["timestamp"].(float64)
 		// If both have timestamps, sort descending
+		// 二者都有时间戳时按时间降序
 		if okI && okJ {
 			return tsI > tsJ
 		}
@@ -134,10 +136,12 @@ func (c *Client) scrollRecent(ctx context.Context, sessionID string, must []map[
 			return false
 		}
 		// Neither has timestamp, maintain original order
+		// 都没有时间戳时保持原有顺序
 		return false
 	})
 
 	// Limit to topK after sorting
+	// 排序后限制为 topK
 	if len(out) > topK {
 		out = out[:topK]
 	}

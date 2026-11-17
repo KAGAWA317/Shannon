@@ -379,6 +379,7 @@ class FileReadTool(Tool):
                 )
 
             # Check file size
+            # 检查文件大小
             file_size_mb = path_absolute.stat().st_size / (1024 * 1024)
             if file_size_mb > max_size_mb:
                 return ToolResult(
@@ -388,6 +389,7 @@ class FileReadTool(Tool):
                 )
 
             # Read file
+            # 读取文件
             async with aiofiles.open(path, mode="r", encoding=encoding) as f:
                 content = await f.read()
 
@@ -398,7 +400,7 @@ class FileReadTool(Tool):
             # 对按行范围读取应用 offset/limit
             if offset > 0 or limit > 0:
                 lines = content.splitlines(keepends=True)
-                start = max(0, offset - 1)  # 1-based to 0-based
+                start = max(0, offset - 1)  # 1-based to 0-based 注：1-based 转为 0-based
                 end = start + limit if limit > 0 else len(lines)
                 selected = lines[start:end]
                 # Format with line numbers
@@ -473,14 +475,14 @@ class FileWriteTool(Tool):
             description="Write content to a file in session workspace",
             category="file",
             author="Shannon",
-            requires_auth=True,  # Writing requires auth
+            requires_auth=True,  # Writing requires auth 注：写操作需要鉴权
             # 写入操作需要 authentication
             rate_limit=50,
             timeout_seconds=10,
             memory_limit_mb=256,
             sandboxed=True,
             session_aware=True,
-            dangerous=True,  # File writing is potentially dangerous
+            dangerous=True,  # File writing is potentially dangerous 注：写文件存在潜在危险
             # 文件写入具有潜在危险
             cost_per_use=0.001,
         )
@@ -928,7 +930,7 @@ class FileSearchTool(Tool):
     # 安全限制
     _MAX_QUERY_LENGTH = 200
     _MAX_FILES_TO_SCAN = 1000
-    _MAX_FILE_SIZE_BYTES = 500 * 1024  # 500KB
+    _MAX_FILE_SIZE_BYTES = 500 * 1024  # 500KB 注：500KB
     _MAX_CONTEXT_LINES = 5
 
     def _get_metadata(self) -> ToolMetadata:
@@ -1264,7 +1266,7 @@ class FileEditTool(Tool):
 
     _MAX_OLD_TEXT_LENGTH = 10000
     _MAX_NEW_TEXT_LENGTH = 50000
-    _MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
+    _MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB 注：10MB
 
     def _get_metadata(self) -> ToolMetadata:
         return ToolMetadata(
@@ -1633,7 +1635,7 @@ class FileDeleteTool(Tool):
                                 match.rmdir()
                                 deleted_paths.append(str(match.relative_to(workspace)))
                             except OSError:
-                                pass  # Non-empty directory, skip
+                                pass  # Non-empty directory, skip 注：非空目录，跳过
                                 # 非空目录，跳过
                     except OSError:
                         continue
@@ -1686,7 +1688,7 @@ class FileDeleteTool(Tool):
                     path.unlink()
                 elif path.is_dir():
                     try:
-                        path.rmdir()  # Only empty directories
+                        path.rmdir()  # Only empty directories 注：只删空目录
                         # 仅空目录
                     except OSError:
                         return ToolResult(

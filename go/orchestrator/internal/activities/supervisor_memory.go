@@ -29,6 +29,7 @@ func getFloatEnv(key string, defaultValue float64) float64 {
 }
 
 // getFloatEnvWithRange gets a float environment variable within a specified range
+// getFloatEnvWithRange 获取 float 类型的环境变量，并限制在指定区间内
 func getFloatEnvWithRange(key string, defaultValue, min, max float64) float64 {
 	val := getFloatEnv(key, defaultValue)
 	if val < min {
@@ -41,6 +42,7 @@ func getFloatEnvWithRange(key string, defaultValue, min, max float64) float64 {
 }
 
 // Configuration constants for supervisor memory
+// supervisor memory 的配置常量
 var (
 	// Similarity threshold for matching decomposition patterns (0.0 to 1.0)
 	// 匹配 decomposition pattern 的相似度阈值（0.0 到 1.0）
@@ -77,6 +79,7 @@ var (
 )
 
 // SupervisorMemoryContext enriches raw memory with strategic insights
+// SupervisorMemoryContext 用战略洞察增强原始 memory
 type SupervisorMemoryContext struct {
 	// Raw conversation history (what we have now)
 	// 原始对话历史（目前已有的内容）
@@ -92,9 +95,9 @@ type SupervisorMemoryContext struct {
 }
 
 type DecompositionMemory struct {
-	QueryPattern string    `json:"query_pattern"` // "optimize API endpoint"
+	QueryPattern string    `json:"query_pattern"` // "optimize API endpoint" 注：例如 "optimize API endpoint"
 	Subtasks     []string  `json:"subtasks"`
-	Strategy     string    `json:"strategy"` // "parallel", "sequential"
+	Strategy     string    `json:"strategy"` // "parallel", "sequential" 注：可选 "parallel"、"sequential"
 	SuccessRate  float64   `json:"success_rate"`
 	AvgDuration  int64     `json:"avg_duration_ms"`
 	LastUsed     time.Time `json:"last_used"`
@@ -132,10 +135,10 @@ type FailurePattern struct {
 }
 
 type UserProfile struct {
-	ExpertiseLevel  string   `json:"expertise_level"`   // "beginner", "intermediate", "expert"
-	PreferredStyle  string   `json:"preferred_style"`   // "detailed", "concise", "educational"
-	DomainFocus     []string `json:"domain_focus"`      // ["ml", "web", "data"]
-	SpeedVsAccuracy float64  `json:"speed_vs_accuracy"` // 0.0 (speed) to 1.0 (accuracy)
+	ExpertiseLevel  string   `json:"expertise_level"`   // "beginner", "intermediate", "expert" 注：可选 "beginner"、"intermediate"、"expert"
+	PreferredStyle  string   `json:"preferred_style"`   // "detailed", "concise", "educational" 注：可选 "detailed"、"concise"、"educational"
+	DomainFocus     []string `json:"domain_focus"`      // ["ml", "web", "data"] 注：例如 ["ml", "web", "data"]
+	SpeedVsAccuracy float64  `json:"speed_vs_accuracy"` // 0.0 (speed) to 1.0 (accuracy) 注：0.0（偏速度）到 1.0（偏准确）
 }
 
 type DecompositionSuggestion struct {
@@ -150,6 +153,7 @@ type DecompositionSuggestion struct {
 }
 
 // RecommendStrategyInput captures the request for a strategy recommendation.
+// RecommendStrategyInput 承载 strategy 推荐请求。
 type RecommendStrategyInput struct {
 	SessionID string `json:"session_id"`
 	UserID    string `json:"user_id"`
@@ -158,6 +162,7 @@ type RecommendStrategyInput struct {
 }
 
 // RecommendStrategyOutput returns the suggested strategy (if any).
+// RecommendStrategyOutput 返回建议的 strategy（若有）。
 type RecommendStrategyOutput struct {
 	Strategy   string  `json:"strategy"`
 	Confidence float64 `json:"confidence"`
@@ -165,6 +170,7 @@ type RecommendStrategyOutput struct {
 }
 
 // FetchSupervisorMemoryInput for the enhanced activity
+// FetchSupervisorMemoryInput 是增强版 activity 的输入
 type FetchSupervisorMemoryInput struct {
 	SessionID string `json:"session_id"`
 	UserID    string `json:"user_id"`
@@ -173,20 +179,25 @@ type FetchSupervisorMemoryInput struct {
 }
 
 // getLoggerSafe returns a logger that works in both activity and regular contexts
+// getLoggerSafe 返回一个在 activity 与普通上下文中都可用的 logger
 func getLoggerSafe(ctx context.Context) (logger log.Logger) {
 	// Try to get activity logger, catch panic if not in activity context
+	// 尝试获取 activity logger，若非 activity 上下文则捕获 panic
 	defer func() {
 		if r := recover(); r != nil {
 			// Panic caught, return fallback logger
+			// 已捕获 panic，返回 fallback logger
 			logger = &fallbackLogger{}
 		}
 	}()
 
 	// This will panic if not in an activity context
+	// 若不在 activity 上下文中，此处会 panic
 	return activity.GetLogger(ctx)
 }
 
 // fallbackLogger implements log.Logger for non-activity contexts
+// fallbackLogger 为非 activity 上下文实现 log.Logger
 type fallbackLogger struct{}
 
 func (f *fallbackLogger) Debug(msg string, keyvals ...any) {}
@@ -258,6 +269,7 @@ func FetchSupervisorMemory(ctx context.Context, input FetchSupervisorMemoryInput
 	if err := loadUserPreferences(ctx, memory, input.SessionID, input.UserID); err != nil {
 		logger.Warn("Failed to load user preferences", "error", err)
 		// Use defaults
+		// 使用默认值
 		memory.UserPreferences = UserProfile{
 			ExpertiseLevel:  "intermediate",
 			PreferredStyle:  "concise",
@@ -266,6 +278,7 @@ func FetchSupervisorMemory(ctx context.Context, input FetchSupervisorMemoryInput
 	}
 
 	// Record metrics
+	// 记录指标
 	metrics.MemoryFetches.WithLabelValues("supervisor", "enhanced", "hit").Inc()
 	metrics.MemoryItemsRetrieved.WithLabelValues("supervisor", "enhanced").Observe(float64(len(memory.DecompositionHistory)))
 
@@ -274,6 +287,7 @@ func FetchSupervisorMemory(ctx context.Context, input FetchSupervisorMemoryInput
 
 func fetchDecompositionPatterns(ctx context.Context, memory *SupervisorMemoryContext, query, sessionID string) error {
 	// Generate embedding for the query
+	// 为 query 生成 embedding
 	svc := embeddings.Get()
 	vdb := vectordb.Get()
 	if svc == nil || vdb == nil {
@@ -286,6 +300,7 @@ func fetchDecompositionPatterns(ctx context.Context, memory *SupervisorMemoryCon
 	}
 
 	// Search for similar decompositions recorded for this session
+	// 搜索该 session 记录过的相似 decomposition
 	results, err := vdb.SearchDecompositionPatterns(ctx, queryEmbedding, sessionID, "", 5, 0.7)
 	if err != nil {
 		// Collection might not exist yet, log but don't fail
@@ -303,6 +318,7 @@ func fetchDecompositionPatterns(ctx context.Context, memory *SupervisorMemoryCon
 			}
 
 			// Extract subtasks
+			// 提取 subtasks
 			if subtasks, ok := result.Payload["subtasks"].([]any); ok {
 				for _, st := range subtasks {
 					if s, ok := st.(string); ok {
@@ -312,6 +328,7 @@ func fetchDecompositionPatterns(ctx context.Context, memory *SupervisorMemoryCon
 			}
 
 			// Extract strategy
+			// 提取 strategy
 			if strategy, ok := result.Payload["strategy"].(string); ok {
 				dm.Strategy = strategy
 			}
@@ -390,6 +407,7 @@ func fetchStrategyPerformance(ctx context.Context, memory *SupervisorMemoryConte
 					"error", err, "strategy", strategy,
 					"session_id", sessionID, "user_id", userID)
 				// TODO: Add metrics.DatabaseErrors when available
+				// TODO: 待 metrics.DatabaseErrors 可用时补充
 				continue
 			}
 
@@ -405,9 +423,11 @@ func fetchStrategyPerformance(ctx context.Context, memory *SupervisorMemoryConte
 
 func identifyFailurePatterns(ctx context.Context, memory *SupervisorMemoryContext, query string) error {
 	// Check for known failure indicators in the query
+	// 检查 query 中已知的失败征兆
 	queryLower := strings.ToLower(query)
 
 	// Common failure patterns
+	// 常见的 failure pattern
 	patterns := []FailurePattern{
 		{
 			Pattern:     "rate_limit",
@@ -496,7 +516,7 @@ func loadUserPreferences(ctx context.Context, memory *SupervisorMemoryContext, s
 
 	// Speed vs accuracy preference (based on retry patterns)
 	// speed 与 accuracy 偏好（依据 retry 模式）
-	memory.UserPreferences.SpeedVsAccuracy = DefaultSpeedVsAccuracy // Default balanced
+	memory.UserPreferences.SpeedVsAccuracy = DefaultSpeedVsAccuracy // Default balanced 注：默认均衡
 
 	// Ensure SpeedVsAccuracy is within valid range [0.0, 1.0]
 	// 保证 SpeedVsAccuracy 落在 [0.0, 1.0] 的有效区间内
@@ -508,12 +528,15 @@ func loadUserPreferences(ctx context.Context, memory *SupervisorMemoryContext, s
 
 	// TODO: Calculate and update user preference inference accuracy metric
 	// This would compare inferred preferences against actual user behavior
+	// TODO: 计算并更新用户偏好推断准确率指标
+	// 也就是把推断出的偏好与用户实际行为做对比
 	// metrics.UserPreferenceInferenceAccuracy.Set(calculatedAccuracy)
 
 	return nil
 }
 
 // RecommendWorkflowStrategy provides a suggested workflow strategy using supervisor memory.
+// RecommendWorkflowStrategy 借助 supervisor memory 给出建议的 workflow strategy。
 func RecommendWorkflowStrategy(ctx context.Context, input RecommendStrategyInput) (RecommendStrategyOutput, error) {
 	memory, err := FetchSupervisorMemory(ctx, FetchSupervisorMemoryInput(input))
 	if err != nil {
@@ -633,19 +656,22 @@ func clamp01(v float64) float64 {
 }
 
 // DecompositionAdvisor suggests decomposition based on memory
+// DecompositionAdvisor 依据 memory 给出 decomposition 建议
 type DecompositionAdvisor struct {
 	Memory *SupervisorMemoryContext
 }
 
 // NewDecompositionAdvisor creates a new advisor with memory context
+// NewDecompositionAdvisor 用 memory 上下文创建新的 advisor
 func NewDecompositionAdvisor(memory *SupervisorMemoryContext) *DecompositionAdvisor {
 	return &DecompositionAdvisor{Memory: memory}
 }
 
 // SuggestDecomposition provides intelligent decomposition suggestions
+// SuggestDecomposition 提供智能的 decomposition 建议
 func (da *DecompositionAdvisor) SuggestDecomposition(query string) DecompositionSuggestion {
 	suggestion := DecompositionSuggestion{
-		Strategy:   "parallel", // Default
+		Strategy:   "parallel", // Default 注：默认值
 		Confidence: 0.5,
 	}
 
@@ -674,6 +700,7 @@ func (da *DecompositionAdvisor) SuggestDecomposition(query string) Decomposition
 	}
 
 	// Track strategy selection
+	// 记录 strategy 选择情况
 	if suggestion.Strategy != "" {
 		metrics.StrategySelectionDistribution.WithLabelValues(suggestion.Strategy).Inc()
 	}
@@ -707,10 +734,12 @@ func (da *DecompositionAdvisor) SuggestDecomposition(query string) Decomposition
 	// 5. 考虑 speed 与 accuracy 偏好
 	if da.Memory.UserPreferences.SpeedVsAccuracy < SpeedPriorityThreshold {
 		// Prioritize speed
+		// 优先速度
 		suggestion.Strategy = "parallel"
 		suggestion.PreferSequential = false
 	} else if da.Memory.UserPreferences.SpeedVsAccuracy > AccuracyPriorityThreshold {
 		// Prioritize accuracy
+		// 优先准确度
 		suggestion.Strategy = "sequential"
 		suggestion.PreferSequential = true
 	}
@@ -756,7 +785,7 @@ func (da *DecompositionAdvisor) selectOptimalStrategy() string {
 	}
 
 	if bestStrategy == "" {
-		bestStrategy = "parallel" // Default fallback
+		bestStrategy = "parallel" // Default fallback 注：默认兜底
 	}
 
 	return bestStrategy
@@ -765,7 +794,7 @@ func (da *DecompositionAdvisor) selectOptimalStrategy() string {
 func (da *DecompositionAdvisor) selectLeastUsedStrategy() string {
 	strategies := []string{"parallel", "sequential", "hierarchical", "iterative"}
 
-	minRuns := int(^uint(0) >> 1) // Max int
+	minRuns := int(^uint(0) >> 1) // Max int 注：最大 int
 	leastUsed := "parallel"
 
 	for _, strategy := range strategies {
@@ -785,6 +814,7 @@ func (da *DecompositionAdvisor) selectLeastUsedStrategy() string {
 }
 
 // Helper functions
+// 辅助函数
 func calculateSimilarity(a, b string) float64 {
 	// In production, this would use embedding similarity
 	// For now, use simple string comparison
@@ -798,6 +828,7 @@ func calculateSimilarity(a, b string) float64 {
 	}
 
 	// Count common words
+	// 统计共同词的数量
 	aWords := strings.Fields(aLower)
 	bWords := strings.Fields(bLower)
 
@@ -839,10 +870,12 @@ type RecordDecompositionInput struct {
 }
 
 // RecordDecomposition stores decomposition results for future reference
+// RecordDecomposition 存储 decomposition 结果，供后续参考
 func RecordDecomposition(ctx context.Context, input RecordDecompositionInput) error {
 	logger := getLoggerSafe(ctx)
 
 	// Generate embedding for the query pattern
+	// 为 query pattern 生成 embedding
 	svc := embeddings.Get()
 	vdb := vectordb.Get()
 	if svc == nil || vdb == nil {
@@ -856,6 +889,7 @@ func RecordDecomposition(ctx context.Context, input RecordDecompositionInput) er
 	}
 
 	// Prepare payload
+	// 准备 payload
 	payload := map[string]any{
 		"pattern":     input.Query,
 		"subtasks":    input.Subtasks,
@@ -872,6 +906,7 @@ func RecordDecomposition(ctx context.Context, input RecordDecompositionInput) er
 	}
 
 	// Store in decomposition_patterns collection
+	// 写入 decomposition_patterns collection
 	collection := "decomposition_patterns"
 	point := vectordb.UpsertItem{
 		ID:      uuid.New().String(),
@@ -884,6 +919,7 @@ func RecordDecomposition(ctx context.Context, input RecordDecompositionInput) er
 			"error", err, "collection", collection,
 			"session_id", input.SessionID, "strategy", input.Strategy)
 		// TODO: Add metrics.VectorDBErrors when available
+		// TODO: 待 metrics.VectorDBErrors 可用时补充
 
 		// Fallback: try storing in generic task_embeddings so retrieval still has signal
 		// Fallback：退而写入通用的 task_embeddings，保证检索仍有信号
@@ -891,6 +927,7 @@ func RecordDecomposition(ctx context.Context, input RecordDecompositionInput) er
 			logger.Error("Fallback store to task_embeddings also failed",
 				"error", fbErr, "session_id", input.SessionID)
 			// TODO: Add metrics.VectorDBErrors when available
+			// TODO: 待 metrics.VectorDBErrors 可用时补充
 		} else {
 			logger.Info("Successfully stored decomposition pattern in fallback collection",
 				"session_id", input.SessionID)
@@ -923,6 +960,7 @@ func cleanupStrategyPerformance(memory *SupervisorMemoryContext, logger log.Logg
 	expiredCount := 0
 
 	// Remove entries older than TTL
+	// 删除超过 TTL 的 entry
 	for strategy, stats := range memory.StrategyPerformance {
 		if now.Sub(stats.LastAccessed) > StrategyPerformanceTTL {
 			delete(memory.StrategyPerformance, strategy)
@@ -934,6 +972,7 @@ func cleanupStrategyPerformance(memory *SupervisorMemoryContext, logger log.Logg
 	// 仍超限时，删除最久未访问的 entry
 	if len(memory.StrategyPerformance) > MaxStrategyPerformanceEntries {
 		// Create a slice for sorting by LastAccessed
+		// 创建切片，便于按 LastAccessed 排序
 		type strategyEntry struct {
 			strategy string
 			stats    StrategyStats
@@ -970,6 +1009,7 @@ func cleanupStrategyPerformance(memory *SupervisorMemoryContext, logger log.Logg
 }
 
 // RecordLearningRouterMetrics records metrics for learning router recommendations
+// RecordLearningRouterMetrics 记录 learning router 推荐的相关指标
 func RecordLearningRouterMetrics(ctx context.Context, input map[string]any) error {
 	latency, _ := input["latency_seconds"].(float64)
 	strategy, _ := input["strategy"].(string)
@@ -983,6 +1023,7 @@ func RecordLearningRouterMetrics(ctx context.Context, input map[string]any) erro
 	}
 
 	// Record metrics using global metrics package
+	// 使用全局 metrics 包记录指标
 	metrics.LearningRouterLatency.Observe(latency)
 	metrics.LearningRouterRecommendations.WithLabelValues(strategy, source, successStr).Inc()
 	if success && strategy != "none" {

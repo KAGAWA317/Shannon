@@ -13,6 +13,7 @@ import (
 )
 
 // llmModelEntry represents a single LLM provider model.
+// llmModelEntry 表示单个 LLM provider model。
 type llmModelEntry struct {
 	ID       string `json:"id"`
 	Provider string `json:"provider"`
@@ -21,11 +22,13 @@ type llmModelEntry struct {
 }
 
 // llmModelsResponse is the response for GET /v1/llm-models.
+// llmModelsResponse 是 GET /v1/llm-models 的响应。
 type llmModelsResponse struct {
 	Models []llmModelEntry `json:"models"`
 }
 
 // YAML parsing types for models.yaml
+// models.yaml 的 YAML 解析类型
 
 type modelsYAMLProvider struct {
 	Provider string `yaml:"provider"`
@@ -48,6 +51,7 @@ type modelsYAMLConfig struct {
 }
 
 // LLMModelsHandler serves the list of available LLM provider models.
+// LLMModelsHandler 提供可用 LLM provider model 列表。
 type LLMModelsHandler struct {
 	configPath string
 	logger     *zap.Logger
@@ -58,6 +62,7 @@ type LLMModelsHandler struct {
 }
 
 // NewLLMModelsHandler creates a new LLM models handler.
+// NewLLMModelsHandler 创建新的 LLM models handler。
 func NewLLMModelsHandler(configPath string, logger *zap.Logger) *LLMModelsHandler {
 	return &LLMModelsHandler{
 		configPath: configPath,
@@ -173,6 +178,7 @@ func (h *LLMModelsHandler) loadModels() ([]llmModelEntry, error) {
 }
 
 // ListLLMModels handles GET /v1/llm-models.
+// ListLLMModels 处理 GET /v1/llm-models。
 func (h *LLMModelsHandler) ListLLMModels(w http.ResponseWriter, r *http.Request) {
 	if _, ok := r.Context().Value(auth.UserContextKey).(*auth.UserContext); !ok {
 		w.Header().Set("Content-Type", "application/json")
@@ -191,6 +197,7 @@ func (h *LLMModelsHandler) ListLLMModels(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Optional tier filter
+	// 可选的 tier 过滤
 	tierFilter := r.URL.Query().Get("tier")
 	result := models
 	if tierFilter != "" {

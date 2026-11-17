@@ -55,6 +55,7 @@ func Initialize(cfg Config) {
 func Get() *Client { return global }
 
 // GetConfig returns the current configuration
+// GetConfig 返回当前配置
 func (c *Client) GetConfig() Config {
 	if c == nil {
 		return Config{
@@ -65,6 +66,7 @@ func (c *Client) GetConfig() Config {
 }
 
 // qdrant search request/response (simplified)
+// qdrant 检索请求/响应（简化）
 type qdrantQueryRequest struct {
 	Query          []float32      `json:"query"`
 	Limit          int            `json:"limit"`
@@ -102,6 +104,7 @@ func (c *Client) search(ctx context.Context, collection string, vec []float32, l
 	start := time.Now()
 
 	// Start tracing span for vector search
+	// 为向量检索开启 tracing span
 	ctx, span := tracing.StartHTTPSpan(ctx, "POST", fmt.Sprintf("%s/collections/%s/points/query", c.base, collection))
 	defer span.End()
 
@@ -133,8 +136,10 @@ func (c *Client) search(ctx context.Context, collection string, vec []float32, l
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		// fallback to /points/search
+		// 回退到 /points/search
 		urlSearch := fmt.Sprintf("%s/collections/%s/points/search", c.base, collection)
 		// map to search payload {vector: ...}
+		// 映射为 search 请求体 {vector: ...}
 		legacy := map[string]any{"vector": vec, "limit": limit, "with_payload": true, "with_vector": c.cfg.MMREnabled}
 		if threshold > 0 {
 			legacy["score_threshold"] = threshold
@@ -180,6 +185,7 @@ func (c *Client) Upsert(ctx context.Context, collection string, points []UpsertI
 	}
 
 	// Start tracing span for vector upsert
+	// 为向量 upsert 开启 tracing span
 	url := fmt.Sprintf("%s/collections/%s/points", c.base, collection)
 	ctx, span := tracing.StartHTTPSpan(ctx, "PUT", url)
 	defer span.End()
@@ -238,6 +244,7 @@ func (c *Client) UpsertSummaryEmbedding(ctx context.Context, vec []float32, payl
 }
 
 // Convert to ContextItem format
+// 转换为 ContextItem 格式
 func contextItems(points []qdrantPoint) []ContextItem {
 	items := make([]ContextItem, 0, len(points))
 	for _, point := range points {
@@ -301,6 +308,7 @@ func (c *Client) GetSessionContextSemanticByEmbedding(ctx context.Context, embed
 	}
 
 	// Create proper Qdrant filter structure
+	// 构建规范的 Qdrant 过滤器结构
 	filter := map[string]any{
 		"must": mustClauses,
 	}
@@ -313,6 +321,7 @@ func (c *Client) GetSessionContextSemanticByEmbedding(ctx context.Context, embed
 	}
 
 	// Search with embedding and filter
+	// 带 embedding 和 filter 执行检索
 	points, err := c.search(ctx, c.cfg.TaskEmbeddings, embedding, topK, threshold, filter)
 	if err != nil {
 		return nil, err
@@ -340,6 +349,7 @@ func (c *Client) SearchSummaries(ctx context.Context, embedding []float32, sessi
 	}
 
 	// Add tenant filter if provided
+	// 提供了 tenant 时再加上租户过滤
 	if tenantID != "" {
 		mustClauses = append(mustClauses, map[string]any{
 			"key": "tenant_id",
@@ -350,6 +360,7 @@ func (c *Client) SearchSummaries(ctx context.Context, embedding []float32, sessi
 	}
 
 	// Create proper Qdrant filter structure
+	// 构建规范的 Qdrant 过滤器结构
 	filter := map[string]any{
 		"must": mustClauses,
 	}
@@ -358,10 +369,11 @@ func (c *Client) SearchSummaries(ctx context.Context, embedding []float32, sessi
 	// 使用传入的 limit，否则回退到配置值
 	topK := limit
 	if topK <= 0 {
-		topK = 3 // Default to 3 summaries
+		topK = 3 // Default to 3 summaries 注：默认取 3 条摘要
 	}
 
 	// Search with embedding and filter
+	// 带 embedding 和 filter 执行检索
 	points, err := c.search(ctx, c.cfg.Summaries, embedding, topK, threshold, filter)
 	if err != nil {
 		return nil, err

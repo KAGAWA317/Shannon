@@ -23,7 +23,7 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-ATTACHMENT_TTL = 1800  # 30 minutes
+ATTACHMENT_TTL = 1800  # 30 minutes 注：30 分钟
 
 # MIME types that should be decoded to text instead of passed as binary.
 # These are readable by ALL providers without special content block support.
@@ -107,7 +107,7 @@ class AttachmentResolver:
             "id": att["id"],
             "media_type": media_type,
             "filename": filename,
-            "data": att["data"],  # base64 encoded string
+            "data": att["data"],  # base64 encoded string 注：base64 编码的字符串
             "source": "base64",
         }
 
@@ -120,7 +120,7 @@ class AttachmentResolver:
         # 区分需要 Redis 异步 I/O 的引用与即时可用的 URL 引用。
         url_results = []
         coros = []
-        order: list[tuple[int, str]] = []  # (original_index, "id"|"url")
+        order: list[tuple[int, str]] = []  # (original_index, "id"|"url") 注：(原始下标, "id"|"url")
 
         for i, ref in enumerate(attachment_refs):
             if not isinstance(ref, dict):

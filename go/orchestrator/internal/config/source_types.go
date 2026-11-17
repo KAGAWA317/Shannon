@@ -11,6 +11,7 @@ import (
 )
 
 // SourceTypeConfig represents a source type definition
+// SourceTypeConfig 表示一种来源类型的定义
 type SourceTypeConfig struct {
 	Description         string   `yaml:"description"`
 	Strategy            string   `yaml:"strategy"`
@@ -39,8 +40,7 @@ type RegionalSourceConfig struct {
 type DimensionSourceMapping struct {
 	Primary    []string `yaml:"primary"`
 	Secondary  []string `yaml:"secondary"`
-	GapQueries []string `yaml:"gap_queries"` // Queries to use when info is missing
-	// 信息缺失时使用的查询
+	GapQueries []string `yaml:"gap_queries"` // Queries to use when info is missing 注：信息缺失时使用的查询
 }
 
 // EntityGapQuery represents gap-filling query patterns for missing entity info
@@ -51,6 +51,7 @@ type EntityGapQuery struct {
 }
 
 // EntityRelevanceConfig represents entity relevance filtering settings
+// EntityRelevanceConfig 表示实体相关性过滤设置
 type EntityRelevanceConfig struct {
 	RequireEntityMention bool     `yaml:"require_entity_mention"`
 	MinNameSimilarity    float64  `yaml:"min_name_similarity"`
@@ -61,13 +62,14 @@ type EntityRelevanceConfig struct {
 // PrefetchSource represents a forced prefetch source pattern
 // PrefetchSource 表示强制预取的来源模式
 type PrefetchSource struct {
-	Pattern   string   `yaml:"pattern"`   // URL pattern with {slug} placeholder
-	Priority  int      `yaml:"priority"`  // Lower = higher priority
-	InfoTypes []string `yaml:"info_types"` // Types of info this source provides
-	Subpages  int      `yaml:"subpages"`  // Number of subpages to fetch
+	Pattern   string   `yaml:"pattern"`   // URL pattern with {slug} placeholder 注：含 {slug} 占位符的 URL 模式
+	Priority  int      `yaml:"priority"`  // Lower = higher priority 注：数值越小优先级越高
+	InfoTypes []string `yaml:"info_types"` // Types of info this source provides 注：该来源提供的信息类型
+	Subpages  int      `yaml:"subpages"`  // Number of subpages to fetch 注：需要抓取的子页面数量
 }
 
 // SearchStrategyConfig represents a search strategy configuration
+// SearchStrategyConfig 表示一种搜索策略配置
 type SearchStrategyConfig struct {
 	QueryFormat           string `yaml:"query_format"`
 	MergeStrategy         string `yaml:"merge_strategy"`
@@ -78,6 +80,7 @@ type SearchStrategyConfig struct {
 }
 
 // ResultMergingConfig represents result merging configuration
+// ResultMergingConfig 表示结果合并配置
 type ResultMergingConfig struct {
 	URLNormalization        bool    `yaml:"url_normalization"`
 	SimilarityThreshold     float64 `yaml:"similarity_threshold"`
@@ -100,7 +103,7 @@ type SourceTypesConfig struct {
 	SearchStrategies       map[string]SearchStrategyConfig   `yaml:"search_strategies"`
 	ResultMerging          ResultMergingConfig               `yaml:"result_merging"`
 	EntityRelevance        EntityRelevanceConfig             `yaml:"entity_relevance"`
-	PrefetchSources        map[string][]PrefetchSource       `yaml:"prefetch_sources"` // query_type -> sources
+	PrefetchSources        map[string][]PrefetchSource       `yaml:"prefetch_sources"` // query_type -> sources 注：query_type -> 来源列表
 }
 
 var (
@@ -122,10 +125,12 @@ func LoadSourceTypes() (*SourceTypesConfig, error) {
 	sourceTypesConfigMu.RUnlock()
 
 	// Upgrade to write lock for initialization
+	// 升级为写锁以便初始化
 	sourceTypesConfigMu.Lock()
 	defer sourceTypesConfigMu.Unlock()
 
 	// Double-check after acquiring write lock
+	// 取得写锁后再次检查
 	if sourceTypesLoaded {
 		return sourceTypesConfig, sourceTypesConfigErr
 	}
@@ -141,6 +146,7 @@ func loadSourceTypesFromFile() (*SourceTypesConfig, error) {
 	cfgPath := os.Getenv("SOURCE_TYPES_CONFIG_PATH")
 	if cfgPath == "" {
 		// Try common paths
+		// 尝试常见路径
 		candidates := []string{
 			"/app/config/source_types.yaml",
 			"config/source_types.yaml",
@@ -171,12 +177,14 @@ func loadSourceTypesFromFile() (*SourceTypesConfig, error) {
 	}
 
 	// Apply defaults for missing values
+	// 为缺失的值填充默认值
 	applySourceTypeDefaults(&cfg)
 
 	return &cfg, nil
 }
 
 // defaultSourceTypesConfig returns a minimal default configuration
+// defaultSourceTypesConfig 返回最小的默认配置
 func defaultSourceTypesConfig() *SourceTypesConfig {
 	return &SourceTypesConfig{
 		SourceTypes: map[string]SourceTypeConfig{
@@ -293,6 +301,7 @@ func (c *SourceTypesConfig) GetDimensionSources(dimension string) ([]string, []s
 	mapping, ok := c.DimensionSourceMapping[dimension]
 	if !ok {
 		// Default sources if no mapping found
+		// 未找到映射时使用默认来源
 		return []string{"news", "aggregator"}, []string{}
 	}
 	return mapping.Primary, mapping.Secondary
@@ -335,6 +344,7 @@ func (c *SourceTypesConfig) GetDimensionsForQueryType(queryType string) []string
 		return dims
 	}
 	// Default to company dimensions
+	// 默认使用公司相关维度
 	return []string{"entity_identity", "business_model", "market_position"}
 }
 
@@ -358,6 +368,7 @@ func NormalizeDimensionName(dimension string) string {
 	normalized = strings.ReplaceAll(normalized, " ", "_")
 	normalized = strings.ReplaceAll(normalized, "-", "_")
 	// Remove special characters
+	// 移除特殊字符
 	result := strings.Builder{}
 	for _, r := range normalized {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' {
@@ -371,15 +382,18 @@ func NormalizeDimensionName(dimension string) string {
 // GetSourceTypesForDimension 返回某个维度的来源类型（带规范化）
 func (c *SourceTypesConfig) GetSourceTypesForDimension(dimension string) (primary, secondary []string) {
 	// Try exact match first
+	// 先尝试精确匹配
 	if mapping, ok := c.DimensionSourceMapping[dimension]; ok {
 		return mapping.Primary, mapping.Secondary
 	}
 	// Try normalized match
+	// 再尝试规范化后的键匹配
 	normalized := NormalizeDimensionName(dimension)
 	if mapping, ok := c.DimensionSourceMapping[normalized]; ok {
 		return mapping.Primary, mapping.Secondary
 	}
 	// Default fallback
+	// 默认兜底
 	return []string{"news", "aggregator"}, []string{}
 }
 
@@ -491,6 +505,7 @@ func GetPrefetchURLs(entityName string, queryType string) []string {
 	}, slug)
 
 	// Also create underscore variant
+	// 同时生成下划线变体
 	slugUnderscore := strings.ReplaceAll(slug, "-", "_")
 
 	var urls []string
@@ -498,11 +513,13 @@ func GetPrefetchURLs(entityName string, queryType string) []string {
 
 	for _, src := range sources {
 		// Replace placeholders in pattern
+		// 替换 pattern 中的占位符
 		url := src.Pattern
 		url = strings.ReplaceAll(url, "{slug}", slug)
 		url = strings.ReplaceAll(url, "{slug_underscore}", slugUnderscore)
 
 		// Ensure https:// prefix
+		// 确保带上 https:// 前缀
 		if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
 			url = "https://" + url
 		}

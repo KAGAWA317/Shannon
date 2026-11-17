@@ -31,7 +31,7 @@ class SessionFileWriteTool(Tool):
             version="1.0.0",
             description="Write content to a file with session tracking",
             category="file",
-            session_aware=True,  # This tool is session-aware
+            session_aware=True,  # This tool is session-aware 注：该工具具备 session 感知
             # 该 tool 是 session-aware 的
             sandboxed=True,
             rate_limit=100,

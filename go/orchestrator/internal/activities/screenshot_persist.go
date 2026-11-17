@@ -70,6 +70,7 @@ func persistScreenshot(logger *zap.Logger, sessionID, workflowID string, index i
 	}
 
 	// Build file path
+	// 构建文件路径
 	baseDir := os.Getenv("SHANNON_SESSION_WORKSPACES_DIR")
 	if baseDir == "" {
 		baseDir = "/tmp/shannon-sessions"
@@ -89,12 +90,14 @@ func persistScreenshot(logger *zap.Logger, sessionID, workflowID string, index i
 	absPath := filepath.Join(absDir, filename)
 
 	// Create directory
+	// 创建目录
 	if err := os.MkdirAll(absDir, 0755); err != nil {
 		logger.Warn("persistScreenshot: mkdir failed", zap.String("dir", absDir), zap.Error(err))
 		return ""
 	}
 
 	// Write file
+	// 写入文件
 	if err := os.WriteFile(absPath, data, 0644); err != nil {
 		logger.Warn("persistScreenshot: write failed", zap.String("path", absPath), zap.Error(err))
 		return ""

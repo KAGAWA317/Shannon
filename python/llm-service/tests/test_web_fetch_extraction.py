@@ -158,7 +158,7 @@ class TestExtractWithLlm:
         user_msg = call_args.kwargs["messages"][1]["content"]
         # The page content portion should be capped
         # 页面正文部分应被截断到上限
-        assert len(user_msg) <= EXTRACTION_CONTENT_CAP + 200  # +200 for prompt prefix
+        assert len(user_msg) <= EXTRACTION_CONTENT_CAP + 200  # +200 for prompt prefix 注：+200 为 prompt 前缀预留
 
 
 # --- Tests for apply_extraction ---
@@ -259,15 +259,15 @@ class TestApplyExtraction:
         """
         long_content = "x" * 20000
         result = _make_tool_result(long_content)
-        result.tokens_used = 100  # Pre-existing tokens from tool
-        result.cost_usd = 0.005  # Pre-existing cost
+        result.tokens_used = 100  # Pre-existing tokens from tool 注：tool 原有的 tokens
+        result.cost_usd = 0.005  # Pre-existing cost 注：原有的 cost
 
         manager = _mock_llm_manager()
         with patch("llm_provider.manager.get_llm_manager", return_value=manager):
             processed = await apply_extraction(result, "extract pricing", 10000)
 
-        assert processed.tokens_used == 600  # 100 + 500
-        assert processed.cost_usd == pytest.approx(0.006)  # 0.005 + 0.001
+        assert processed.tokens_used == 600  # 100 + 500 注：100 + 500
+        assert processed.cost_usd == pytest.approx(0.006)  # 0.005 + 0.001 注：0.005 + 0.001
 
 
 # --- Tests for WebFetchTool integration ---
@@ -690,7 +690,7 @@ class TestExtractBatchWithLlm:
         assert result is not None
         extracted, _, _, _ = result
         assert extracted[0] == "Extracted A"
-        assert extracted[1] == ""  # Missing page gets empty string
+        assert extracted[1] == ""  # Missing page gets empty string 注：缺失的页面返回空字符串
 
     @pytest.mark.asyncio
     async def test_batch_caps_combined_content(self):
@@ -716,7 +716,7 @@ class TestExtractBatchWithLlm:
         # 校验发给 LLM 的合并内容不超过 EXTRACTION_CONTENT_CAP
         call_args = manager.complete.call_args
         user_msg = call_args.kwargs["messages"][1]["content"]
-        assert len(user_msg) <= EXTRACTION_CONTENT_CAP + 1000  # +1000 for prompt overhead
+        assert len(user_msg) <= EXTRACTION_CONTENT_CAP + 1000  # +1000 for prompt overhead 注：+1000 为 prompt 额外开销预留
 
 
 # --- Tests for _fetch_batch consolidated extraction ---
@@ -737,8 +737,7 @@ class TestBatchFetchUsesConsolidatedExtraction:
         extract_with_llm 不被调用。
         """
         tool = WebFetchTool()
-        long_content = "x" * 20000  # Over per-URL budget of ~3333 chars (10000/3)
-        # 超过每 URL budget ~3333 字符（10000/3）
+        long_content = "x" * 20000  # Over per-URL budget of ~3333 chars (10000/3) 注：超过每 URL budget ~3333 字符（10000/3）
 
         with patch.object(tool, "_fetch_pure_python", new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = ToolResult(
@@ -774,7 +773,7 @@ class TestBatchFetchUsesConsolidatedExtraction:
                 result = await tool._fetch_batch(
                     ["https://a.com", "https://b.com", "https://c.com"],
                     max_length=10000,
-                    total_chars_cap=200000,  # High cap to avoid skipping
+                    total_chars_cap=200000,  # High cap to avoid skipping 注：上限设高以避免被跳过
                 )
 
                 # Batch extraction called once (not per-URL)
@@ -881,7 +880,7 @@ class TestBatchFetchUsesConsolidatedExtraction:
                 result = await tool._fetch_batch(
                     ["https://a.com", "https://b.com", "https://c.com"],
                     max_length=10000,
-                    total_chars_cap=200000,  # High cap to avoid skipping
+                    total_chars_cap=200000,  # High cap to avoid skipping 注：上限设高以避免被跳过
                 )
 
                 assert result.success
@@ -958,14 +957,14 @@ class TestFirecrawlSparseFallback:
         mock_firecrawl.fetch = AsyncMock(return_value={
             "url": "https://example.com",
             "title": "Blocked",
-            "content": "Please enable JavaScript.",  # Only 26 chars
+            "content": "Please enable JavaScript.",  # Only 26 chars 注：仅 26 个字符
             "char_count": 26,
         })
         tool.firecrawl_provider = mock_firecrawl
 
         # Mock pure_python returning real content
         # mock 出返回真实内容的 pure_python
-        good_content = "A" * 2000  # Substantive content
+        good_content = "A" * 2000  # Substantive content 注：实质性内容
         python_result = ToolResult(
             success=True,
             output={
@@ -1002,7 +1001,7 @@ class TestFirecrawlSparseFallback:
         tool = WebFetchTool()
         tool.exa_api_key = None
 
-        good_content = "B" * 600  # Above threshold
+        good_content = "B" * 600  # Above threshold 注：高于阈值
         mock_firecrawl = MagicMock()
         mock_firecrawl.fetch = AsyncMock(return_value={
             "url": "https://example.com",
@@ -1029,7 +1028,7 @@ class TestFirecrawlSparseFallback:
         tool = WebFetchTool()
         tool.exa_api_key = None
 
-        pdf_content = "%PDF-1.4 short"  # Only 14 chars but it's a PDF
+        pdf_content = "%PDF-1.4 short"  # Only 14 chars but it's a PDF 注：仅 14 个字符，但它是 PDF
         mock_firecrawl = MagicMock()
         mock_firecrawl.fetch = AsyncMock(return_value={
             "url": "https://example.com/doc.pdf",
@@ -1061,7 +1060,7 @@ class TestFirecrawlSparseFallback:
         mock_firecrawl._scrape = AsyncMock(return_value={
             "url": "https://example.com",
             "title": "Blocked",
-            "content": "Enable JS",  # Only 9 chars
+            "content": "Enable JS",  # Only 9 chars 注：仅 9 个字符
             "char_count": 9,
             "status_code": 200,
         })

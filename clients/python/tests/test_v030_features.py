@@ -25,6 +25,7 @@ class TestTaskStatusFields:
 
         try:
             # Submit a simple task
+            # 提交一个简单 task
             handle = client.submit_task(
                 "What is 2 + 2?",
                 session_id="sdk-test-v030-status",
@@ -35,9 +36,11 @@ class TestTaskStatusFields:
             print(f"\n  Task submitted: {handle.task_id}")
 
             # Wait for completion
+            # 等待完成
             status = client.wait(handle.task_id, timeout=60)
 
             # Verify core fields
+            # 校验核心字段
             assert status.task_id == handle.task_id
             assert status.status == TaskStatusEnum.COMPLETED
             assert status.result is not None
@@ -45,23 +48,29 @@ class TestTaskStatusFields:
             print(f"  Result: {status.result[:100]}...")
 
             # Verify extended fields
+            # 校验扩展字段
             print("\n  === Extended Fields ===")
 
             # workflow_id
+            # workflow_id 字段
             print(f"  workflow_id: {status.workflow_id}")
 
             # Timestamps
+            # 时间戳
             print(f"  created_at: {status.created_at}")
             print(f"  updated_at: {status.updated_at}")
 
             # Query echo
+            # query 回显
             print(f"  query: {status.query}")
             assert status.query is not None, "query should be returned"
 
             # Session association
+            # session 关联
             print(f"  session_id: {status.session_id}")
 
             # Execution mode
+            # 执行模式
             print(f"  mode: {status.mode}")
 
             # Model/provider info (critical for cost tracking)
@@ -72,15 +81,18 @@ class TestTaskStatusFields:
             assert status.provider is not None, "provider should be populated"
 
             # Usage breakdown
+            # usage 明细
             print(f"  usage: {status.usage}")
             if status.usage:
                 assert "total_tokens" in status.usage or "cost_usd" in status.usage, \
                     "usage should contain token/cost info"
 
             # Metadata
+            # metadata 信息
             print(f"  metadata: {status.metadata}")
 
             # Context
+            # context 信息
             print(f"  context: {status.context}")
 
             print("\n  ✓ All TaskStatus extended fields validated")
@@ -98,6 +110,7 @@ class TestSessionFields:
 
         try:
             # First create a task to ensure we have a session
+            # 先创建一个 task，确保存在 session
             handle = client.submit_task(
                 "Simple test for session listing",
                 session_id="sdk-test-v030-sessions",
@@ -106,6 +119,7 @@ class TestSessionFields:
             client.wait(handle.task_id, timeout=60)
 
             # List sessions
+            # 列出 session
             sessions, total = client.list_sessions(limit=10)
 
             print(f"\n  Found {total} sessions, showing {len(sessions)}")
@@ -120,6 +134,7 @@ class TestSessionFields:
                 print(f"  updated_at: {s.updated_at}")
 
                 # Budget tracking
+                # budget 追踪
                 print(f"\n  Budget Tracking:")
                 print(f"    token_budget: {s.token_budget}")
                 print(f"    budget_remaining: {s.budget_remaining}")
@@ -127,29 +142,34 @@ class TestSessionFields:
                 print(f"    is_near_budget_limit: {s.is_near_budget_limit}")
 
                 # Activity
+                # 活跃度
                 print(f"\n  Activity:")
                 print(f"    is_active: {s.is_active}")
                 print(f"    last_activity_at: {s.last_activity_at}")
                 print(f"    expires_at: {s.expires_at}")
 
                 # Success metrics
+                # 成功率指标
                 print(f"\n  Success Metrics:")
                 print(f"    successful_tasks: {s.successful_tasks}")
                 print(f"    failed_tasks: {s.failed_tasks}")
                 print(f"    success_rate: {s.success_rate}")
 
                 # Cost tracking
+                # 成本追踪
                 print(f"\n  Cost Tracking:")
                 print(f"    total_tokens_used: {s.total_tokens_used}")
                 print(f"    total_cost_usd: {s.total_cost_usd}")
                 print(f"    average_cost_per_task: {s.average_cost_per_task}")
 
                 # Latest task preview
+                # 最近一次 task 预览
                 print(f"\n  Latest Task Preview:")
                 print(f"    latest_task_query: {s.latest_task_query}")
                 print(f"    latest_task_status: {s.latest_task_status}")
 
                 # Research detection
+                # 研究型 session 识别
                 print(f"\n  Research Detection:")
                 print(f"    is_research_session: {s.is_research_session}")
                 print(f"    first_task_mode: {s.first_task_mode}")
@@ -165,6 +185,7 @@ class TestSessionFields:
 
         try:
             # Create a task with known session
+            # 用已知 session 创建一个 task
             session_id = "sdk-test-v030-get-session"
             handle = client.submit_task(
                 "Test for get_session validation",
@@ -174,6 +195,7 @@ class TestSessionFields:
             client.wait(handle.task_id, timeout=60)
 
             # Get session details
+            # 获取 session 详情
             session = client.get_session(session_id)
 
             print("\n  === Session Extended Fields ===")
@@ -205,6 +227,7 @@ class TestSessionFields:
             session_id = "sdk-test-v030-title"
 
             # Create a task first
+            # 先创建一个 task
             handle = client.submit_task(
                 "Test for title update",
                 session_id=session_id,
@@ -213,12 +236,14 @@ class TestSessionFields:
             client.wait(handle.task_id, timeout=60)
 
             # Update title
+            # 更新标题
             new_title = "SDK Current Test Session"
             result = client.update_session_title(session_id, new_title)
             assert result is True, "update_session_title should return True"
             print(f"\n  Title updated to: '{new_title}'")
 
             # Verify title was updated
+            # 校验标题已更新
             session = client.get_session(session_id)
             print(f"  Retrieved title: '{session.title}'")
 
@@ -238,6 +263,7 @@ class TestAsyncClient:
         """Verify async client returns all new TaskStatus fields."""
         async with AsyncShannonClient(base_url="http://localhost:8080") as client:
             # Submit task
+            # 提交 task
             handle = await client.submit_task(
                 "Async test: What is 3 + 3?",
                 session_id="sdk-test-v030-async",
@@ -247,9 +273,11 @@ class TestAsyncClient:
             print(f"\n  Async task submitted: {handle.task_id}")
 
             # Wait for completion
+            # 等待完成
             status = await client.wait(handle.task_id, timeout=60)
 
             # Verify new fields
+            # 校验新增字段
             print(f"  Status: {status.status.value}")
             print(f"  model_used: {status.model_used}")
             print(f"  provider: {status.provider}")

@@ -16,6 +16,7 @@ def extract_json_block(text: str) -> Optional[Dict[str, Any]]:
     except Exception:
         pass
     # Try fenced JSON or first {...} block
+    # 尝试 fenced JSON 或第一个 {...} 块
     fence = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", text, re.IGNORECASE)
     blob = fence.group(1) if fence else None
     if not blob:

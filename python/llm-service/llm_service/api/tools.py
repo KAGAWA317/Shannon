@@ -47,7 +47,7 @@ router = APIRouter(prefix="/tools", tags=["tools"])
 # Simple in-memory TTL cache for tool selection
 # 用于 tool 选择的简单内存 TTL cache
 _SELECT_CACHE: Dict[str, Dict[str, Any]] = {}
-_SELECT_TTL_SECONDS = 300  # 5 minutes
+_SELECT_TTL_SECONDS = 300  # 5 minutes 注：5 分钟
 
 
 class ToolExecuteRequest(BaseModel):

@@ -20,14 +20,14 @@ type SubqueryGeneratorInput struct {
 	CoverageGaps     []CoverageGap  `json:"coverage_gaps"`
 	CurrentSynthesis string         `json:"current_synthesis,omitempty"`
 	Iteration        int            `json:"iteration"`
-	MaxSubqueries    int            `json:"max_subqueries"` // Limit new queries per iteration
+	MaxSubqueries    int            `json:"max_subqueries"` // Limit new queries per iteration 注：每轮新增 query 的上限
 	Context          map[string]any `json:"context,omitempty"`
 	ParentWorkflowID string         `json:"parent_workflow_id,omitempty"`
 	// Deep Research 2.0: Source-type aware search
 	// Deep Research 2.0：检索时感知 source type。
-	EntityName      string   `json:"entity_name,omitempty"`      // Primary entity being researched
-	QueryType       string   `json:"query_type,omitempty"`       // company, industry, scientific, etc.
-	TargetLanguages []string `json:"target_languages,omitempty"` // Languages for regional searches
+	EntityName      string   `json:"entity_name,omitempty"`      // Primary entity being researched 注：正在研究的核心实体
+	QueryType       string   `json:"query_type,omitempty"`       // company, industry, scientific, etc. 注：company、industry、scientific 等
+	TargetLanguages []string `json:"target_languages,omitempty"` // Languages for regional searches 注：地区检索使用的语言
 }
 
 // GeneratedSubquery represents a generated subquery for gap-filling
@@ -35,11 +35,11 @@ type SubqueryGeneratorInput struct {
 type GeneratedSubquery struct {
 	ID             string         `json:"id"`
 	Query          string         `json:"query"`
-	TargetGap      string         `json:"target_gap"`      // Which gap this addresses
-	Priority       string         `json:"priority"`        // "high", "medium", "low"
-	SuggestedTools []string       `json:"suggested_tools"` // Tools to use
-	SourceTypes    []string       `json:"source_types"`    // Source types to target
-	ToolParameters map[string]any `json:"tool_parameters"` // Pre-structured tool params
+	TargetGap      string         `json:"target_gap"`      // Which gap this addresses 注：针对哪个缺口
+	Priority       string         `json:"priority"`        // "high", "medium", "low" 注："high"、"medium"、"low"
+	SuggestedTools []string       `json:"suggested_tools"` // Tools to use 注：使用的 tool
+	SourceTypes    []string       `json:"source_types"`    // Source types to target 注：目标 source types
+	ToolParameters map[string]any `json:"tool_parameters"` // Pre-structured tool params 注：预构造的 tool 参数
 	// Task contract fields
 	// Task contract 字段。
 	OutputFormat   *OutputFormatSpec   `json:"output_format,omitempty"`
@@ -76,7 +76,7 @@ func (a *Activities) GenerateSubqueries(ctx context.Context, input SubqueryGener
 	// 默认的最大 subquery 数。
 	maxSub := input.MaxSubqueries
 	if maxSub == 0 {
-		maxSub = 3 // Default: 3 gap-filling queries per iteration
+		maxSub = 3 // Default: 3 gap-filling queries per iteration 注：默认每轮 3 条补缺 query
 	}
 
 	// Build generation prompt
@@ -91,7 +91,7 @@ func (a *Activities) GenerateSubqueries(ctx context.Context, input SubqueryGener
 
 	reqBody := map[string]any{
 		"query":       userContent,
-		"max_tokens":  8192, // Extended for structured JSON output with multiple subqueries
+		"max_tokens":  8192, // Extended for structured JSON output with multiple subqueries 注：为输出多条 subquery 的结构化 JSON 而调大
 		"temperature": 0.3,
 		"agent_id":    "subquery_generator",
 		"model_tier":  "small",
@@ -107,7 +107,7 @@ func (a *Activities) GenerateSubqueries(ctx context.Context, input SubqueryGener
 	}
 
 	client := &http.Client{
-		Timeout:   120 * time.Second, // Extended for LLM processing time
+		Timeout:   120 * time.Second, // Extended for LLM processing time 注：为 LLM 处理时间而调大
 		Transport: interceptors.NewWorkflowHTTPRoundTripper(nil),
 	}
 
@@ -132,6 +132,7 @@ func (a *Activities) GenerateSubqueries(ctx context.Context, input SubqueryGener
 	}
 
 	// Parse response
+	// 解析 response
 	var llmResp struct {
 		Success  bool   `json:"success"`
 		Response string `json:"response"`
@@ -158,6 +159,7 @@ func (a *Activities) GenerateSubqueries(ctx context.Context, input SubqueryGener
 	}
 
 	// Parse response
+	// 解析 response
 	if err := parseSubqueryGenerationResponse(llmResp.Response, result, input.Iteration); err != nil {
 		logger.Warn("GenerateSubqueries: failed to parse structured response",
 			"error", err,
@@ -377,7 +379,7 @@ func generateFallbackSubqueries(input SubqueryGeneratorInput, maxSub int) []Gene
 	// 加载 source types 配置。
 	stConfig, err := config.LoadSourceTypes()
 	if err != nil {
-		stConfig = nil // Will use basic fallback
+		stConfig = nil // Will use basic fallback 注：将使用基础兜底
 	}
 
 	// Track which entity gap types we've already queried to avoid duplicates
@@ -407,7 +409,7 @@ func generateFallbackSubqueries(input SubqueryGeneratorInput, maxSub int) []Gene
 			sourceTypes = primary
 		}
 		if len(sourceTypes) == 0 {
-			sourceTypes = []string{"aggregator", "news"} // Default
+			sourceTypes = []string{"aggregator", "news"} // Default 注：默认值
 		}
 
 		// Deep Research 2.0: Use entity_gap_queries for specific missing info types
@@ -492,7 +494,7 @@ func generateFallbackSubqueries(input SubqueryGeneratorInput, maxSub int) []Gene
 		if len(input.TargetLanguages) > 0 && stConfig != nil && len(subqueries) < maxSub {
 			for _, lang := range input.TargetLanguages {
 				if lang == "en" {
-					continue // Skip English, already covered
+					continue // Skip English, already covered 注：跳过英文，已覆盖
 				}
 				regionalSources := stConfig.GetRegionalSourcesForLanguage(lang)
 				if len(regionalSources) > 0 {
@@ -594,13 +596,16 @@ func detectGapInfoType(gapArea string) string {
 		// 创始人 / CEO / 管理层信息。
 		"founder_ceo": {
 			// English
+			// 英文
 			"founder", "co-founder", "founding team", "founding members",
 			"ceo", "chief executive officer", "leadership", "leadership team",
 			"executive", "executive team", "management", "management team",
 			// Chinese
+			// 中文
 			"创始人", "联合创始人", "创办人", "创立者", "创始团队", "创业团队",
 			"首席执行官", "领导", "领导层", "管理层", "管理团队", "高管", "核心团队",
 			// Japanese
+			// 日文
 			"創業者", "共同創業者", "創業メンバー", "創設者", "創業チーム", "創設メンバー",
 			"代表取締役", "経営陣", "経営チーム", "マネジメント", "幹部",
 		},
@@ -608,14 +613,17 @@ func detectGapInfoType(gapArea string) string {
 		// 融资 / 投资历史。
 		"funding_history": {
 			// English
+			// 英文
 			"funding", "funding history", "investment", "investments", "raised",
 			"fundraising", "financing", "funding round", "funding rounds",
 			"series a", "series b", "series c", "seed round", "pre-seed",
 			"venture capital", "vc", "investors",
 			// Chinese
+			// 中文
 			"融资", "融資", "融资历史", "融资情况", "融资轮次", "融资阶段",
 			"投资", "投資", "资金", "资本", "融资金额", "天使轮", "A轮", "B轮", "C轮",
 			// Japanese
+			// 日文
 			"資金調達", "資金調達ラウンド", "調達ラウンド", "調達額",
 			"投資", "出資", "出資ラウンド", "シリーズa", "シリーズb", "シードラウンド",
 		},
@@ -623,23 +631,29 @@ func detectGapInfoType(gapArea string) string {
 		// 员工数 / 人员规模。
 		"employee_count": {
 			// English
+			// 英文
 			"employee", "employees", "employee count", "headcount",
 			"team size", "staff", "staff size", "workforce", "number of employees",
 			// Chinese
+			// 中文
 			"员工", "員工", "员工人数", "员工规模", "团队规模", "人员规模", "员工总数", "在职人数",
 			// Japanese
+			// 日文
 			"従業員", "従業員数", "社員数", "人員", "人数", "人員規模", "従業員規模", "スタッフ数",
 		},
 		// Founding year / company age
 		// 成立年份 / 公司年限。
 		"founding_year": {
 			// English
+			// 英文
 			"founded", "founded in", "founding", "founding year",
 			"established", "established in", "started", "started in",
 			"inception", "launch date",
 			// Chinese
+			// 中文
 			"成立", "成立时间", "成立于", "创建于", "創立", "创立时间", "创办时间", "成立日期", "公司历史",
 			// Japanese
+			// 日文
 			"設立", "設立年", "設立日", "設立年月日",
 			"創業", "創業年", "創業日", "創立", "創立年", "創立日",
 		},
@@ -647,26 +661,32 @@ func detectGapInfoType(gapArea string) string {
 		// 总部 / 所在地。
 		"headquarters": {
 			// English
+			// 英文
 			"headquarters", "hq", "head office", "headquarter",
 			"based in", "based at", "located in", "location",
 			"office location", "main office", "corporate headquarters", "address",
 			// Chinese
+			// 中文
 			"总部", "總部", "总部所在地", "公司所在地", "所在城市", "所在地", "注册地", "注册地址",
 			"办公地址", "办公地点", "总部地点", "位置",
 			// Japanese
+			// 日文
 			"本社", "本社所在地", "所在地", "本社オフィス", "本社住所", "住所", "拠点", "本部",
 		},
 		// Revenue / financial performance
 		// 营收 / 财务表现。
 		"revenue": {
 			// English
+			// 英文
 			"revenue", "revenues", "arr", "annual recurring revenue",
 			"mrr", "monthly recurring revenue", "sales", "turnover",
 			"income", "earnings", "financial performance", "revenue growth",
 			// Chinese
+			// 中文
 			"收入", "营收", "營收", "营业收入", "營業收入", "营业额", "營業額",
 			"营收增长", "收入规模", "营业情况", "财务表现",
 			// Japanese
+			// 日文
 			"売上", "売上高", "売上収益", "売上額", "収益",
 			"売上成長", "売上成長率", "売上規模", "売上実績",
 		},
@@ -710,7 +730,7 @@ func generateEntityGapQueries(stConfig *config.SourceTypesConfig, entityName, in
 			ID:             fmt.Sprintf("iter%d-gap%d-%s-%d", iteration, gapIdx, infoType, i+1),
 			Query:          query,
 			TargetGap:      infoType,
-			Priority:       "high", // Entity gap queries are high priority
+			Priority:       "high", // Entity gap queries are high priority 注：entity gap query 属于高优先级
 			SuggestedTools: []string{"web_search"},
 			SourceTypes:    sourceTypes,
 			ToolParameters: map[string]any{

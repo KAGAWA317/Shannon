@@ -37,6 +37,7 @@ func withGRPCMetadata(ctx context.Context, r *http.Request) context.Context {
 		md.Set("x-tenant-id", userCtx.TenantID.String())
 	} else {
 		// Fallback to HTTP headers (dev mode support)
+// 回退到 HTTP header（兼容 dev 模式）
 		if userID := r.Header.Get("x-user-id"); userID != "" {
 			md.Set("x-user-id", userID)
 		}

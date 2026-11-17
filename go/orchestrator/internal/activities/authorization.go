@@ -10,7 +10,7 @@ import (
 // TeamActionInput captures a dynamic team action request for policy evaluation
 // TeamActionInput 承载一次动态 team action request，用于 policy 评估。
 type TeamActionInput struct {
-	Action    string         `json:"action"` // "recruit" | "retire"
+	Action    string         `json:"action"` // "recruit" | "retire" 注："recruit" | "retire"
 	SessionID string         `json:"session_id"`
 	UserID    string         `json:"user_id"`
 	AgentID   string         `json:"agent_id"`
@@ -36,7 +36,7 @@ func AuthorizeTeamAction(ctx context.Context, in TeamActionInput) (TeamActionDec
 	pi := policyInputForTeam(in)
 	start := time.Now()
 	dec, err := policyEngine.Evaluate(ctx, pi)
-	_ = start // metrics can be added in future; keep function minimal
+	_ = start // metrics can be added in future; keep function minimal 注：日后可加 metrics；函数保持最小
 	if err != nil {
 		return TeamActionDecision{Allow: false, Reason: err.Error()}, nil
 	}
@@ -56,8 +56,8 @@ func policyInputForTeam(in TeamActionInput) *policy.PolicyInput {
 		SessionID:   in.SessionID,
 		UserID:      in.UserID,
 		AgentID:     in.AgentID,
-		Query:       "", // not applicable
-		Mode:        "", // not applicable
+		Query:       "", // not applicable 注：不适用
+		Mode:        "", // not applicable 注：不适用
 		Context:     ctx,
 		Environment: "dev",
 		Timestamp:   time.Now(),

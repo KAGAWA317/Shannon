@@ -12,7 +12,7 @@ from shannon import ShannonClient, TaskStatusEnum
 # 初始化客户端
 client = ShannonClient(
     base_url="http://localhost:8080",
-    api_key=os.getenv("SHANNON_API_KEY", ""),  # or use bearer_token
+    api_key=os.getenv("SHANNON_API_KEY", ""),  # or use bearer_token 注：或改用 bearer_token
 )
 
 # Submit a simple task

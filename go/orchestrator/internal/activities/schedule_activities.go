@@ -18,12 +18,12 @@ import (
 // ScheduleActivities 持有 schedule 相关 activity 的依赖。
 type ScheduleActivities struct {
 	DB             *sql.DB
-	TemporalClient client.Client // optional, nil = skip Temporal schedule pause
-// 可选；为 nil 时跳过 Temporal schedule 的 pause。
+	TemporalClient client.Client // optional, nil = skip Temporal schedule pause 注：可选；为 nil 时跳过 Temporal schedule 的 pause。
 	Logger         *zap.Logger
 }
 
 // NewScheduleActivities creates a new ScheduleActivities instance
+//NewScheduleActivities 创建一个 ScheduleActivities 实例
 func NewScheduleActivities(sqlDB *sql.DB, temporalClient client.Client, logger *zap.Logger) *ScheduleActivities {
 	return &ScheduleActivities{
 		DB:             sqlDB,
@@ -36,8 +36,8 @@ func NewScheduleActivities(sqlDB *sql.DB, temporalClient client.Client, logger *
 // RecordScheduleExecutionInput 是开始记录一次 schedule 执行的入参。
 type RecordScheduleExecutionInput struct {
 	ScheduleID uuid.UUID
-	TaskID     string // workflow_id of the child workflow
-	Query      string // task query for display
+	TaskID     string // workflow_id of the child workflow 注：子 workflow 的 workflow_id
+	Query      string // task query for display 注：用于展示的 task query
 	UserID     string
 	TenantID   string
 }
@@ -59,8 +59,7 @@ func (a *ScheduleActivities) RecordScheduleExecutionStart(ctx context.Context, i
 		a.Logger.Error("Failed to begin transaction", zap.Error(err))
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback() // Rollback if not committed
-// 未 commit 时回滚。
+	defer tx.Rollback() // Rollback if not committed 注：未 commit 时回滚。
 
 	// 1. Create link record in scheduled_task_executions
 	// 1. 在 scheduled_task_executions 建关联记录。
@@ -143,10 +142,10 @@ func (a *ScheduleActivities) RecordScheduleExecutionStart(ctx context.Context, i
 type RecordScheduleExecutionCompleteInput struct {
 	ScheduleID uuid.UUID
 	TaskID     string
-	Status     string // COMPLETED, FAILED, CANCELLED
+	Status     string // COMPLETED, FAILED, CANCELLED 注：COMPLETED、FAILED、CANCELLED
 	TotalCost  float64
 	ErrorMsg   string
-	Result     string // optional result text
+	Result     string // optional result text 注：可选的结果文本
 
 	// Metadata from child workflow (for unified task_executions consistency)
 	// 来自子 workflow 的 metadata，用于保持 task_executions 口径一致。
@@ -328,7 +327,7 @@ func (a *ScheduleActivities) PauseScheduleForQuota(ctx context.Context, input Pa
 		a.Logger.Error("Failed to get schedule for auto-pause",
 			zap.String("schedule_id", input.ScheduleID.String()),
 			zap.Error(err))
-		return nil // non-fatal
+		return nil // non-fatal 注：非致命
 	}
 
 	if currentStatus == "PAUSED" {
@@ -350,8 +349,7 @@ func (a *ScheduleActivities) PauseScheduleForQuota(ctx context.Context, input Pa
 				zap.String("schedule_id", input.ScheduleID.String()),
 				zap.String("temporal_id", temporalScheduleID),
 				zap.Error(err))
-			return nil // non-fatal, next execution will retry pause
-// 非致命：下次执行会 retry pause。
+			return nil // non-fatal, next execution will retry pause 注：非致命：下次执行会 retry pause。
 		}
 	}
 
@@ -364,8 +362,7 @@ func (a *ScheduleActivities) PauseScheduleForQuota(ctx context.Context, input Pa
 		a.Logger.Error("Failed to update schedule status to PAUSED",
 			zap.String("schedule_id", input.ScheduleID.String()),
 			zap.Error(err))
-		return nil // non-fatal — Temporal is paused, DB will catch up on next query
-// 非致命：Temporal 已暂停，DB 会在下次查询时对齐。
+		return nil // non-fatal — Temporal is paused, DB will catch up on next query 注：非致命：Temporal 已暂停，DB 会在下次查询时对齐。
 	}
 
 	a.Logger.Info("Auto-paused schedule due to quota exceeded",

@@ -14,11 +14,13 @@ type ValidationIssue struct {
 }
 
 // ValidationError aggregates template validation failures.
+// ValidationError 汇总模板校验失败项。
 type ValidationError struct {
 	Issues []ValidationIssue
 }
 
 // Error implements the error interface.
+// Error 实现 error 接口。
 func (e *ValidationError) Error() string {
 	if len(e.Issues) == 0 {
 		return "template validation failed"

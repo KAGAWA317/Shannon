@@ -67,6 +67,7 @@ var (
 )
 
 // RecordDependencyHealth updates dependency health metrics
+// RecordDependencyHealth 更新依赖健康度 metrics
 func RecordDependencyHealth(dependency string, healthy bool) {
 	value := 0.0
 	if healthy {
@@ -86,16 +87,19 @@ func RecordCircuitBreakerHealth(dependency string, isOpen bool) {
 }
 
 // RecordFallbackBehavior records when a fallback behavior is executed
+// RecordFallbackBehavior 记录 fallback 行为的执行
 func RecordFallbackBehavior(operation string, behavior FallbackBehavior) {
 	fallbackBehaviorExecuted.WithLabelValues(operation, behavior.String()).Inc()
 }
 
 // RecordModeDowngrade records when a workflow mode is downgraded
+// RecordModeDowngrade 记录 workflow 模式降级
 func RecordModeDowngrade(fromMode, toMode, reason string) {
 	modeDowngradeEvents.WithLabelValues(fromMode, toMode, reason).Inc()
 }
 
 // RecordPartialResults records when partial results are returned
+// RecordPartialResults 记录返回部分结果的情况
 func RecordPartialResults(workflowType, reason string) {
 	partialResultsReturned.WithLabelValues(workflowType, reason).Inc()
 }

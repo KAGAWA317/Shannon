@@ -165,16 +165,19 @@ credibility_rules:
         - "lobste.rs"
 
   # Default score for unknown domains
+  # 未知域名的默认分数
   default_score: 0.60
 
 # Quality gates for citation filtering
+# 引用过滤的质量门槛
 quality_gates:
-  min_credibility_score: 0.50  # Minimum to be included
-  preferred_score: 0.70         # Preferred threshold for research
-  high_quality_score: 0.80      # High-quality threshold
+  min_credibility_score: 0.50  # Minimum to be included 注：被收录的最低分
+  preferred_score: 0.70         # Preferred threshold for research 注：research 场景的偏好阈值
+  high_quality_score: 0.80      # High-quality threshold 注：高质量阈值
 
 # Source diversity rules
+# 来源多样性规则
 diversity_rules:
-  max_per_domain: 50             # Maximum citations from same domain (increased for subpage fetch scenarios)
-  min_unique_domains: 5          # Target minimum unique domains
-  diversity_bonus: 0.05          # Bonus for diverse sources
+  max_per_domain: 50             # Maximum citations from same domain (increased for subpage fetch scenarios) 注：同一域名最多引用数（为子页面抓取场景已调高）
+  min_unique_domains: 5          # Target minimum unique domains 注：目标最少独立域名数
+  diversity_bonus: 0.05          # Bonus for diverse sources 注：来源多样性的加分

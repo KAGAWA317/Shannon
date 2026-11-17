@@ -26,8 +26,8 @@ var wsUpgrader = websocket.Upgrader{
 type DaemonHandler struct {
 	hub         *daemon.Hub
 	approvals   *daemon.ApprovalManager
-	adminURL    string // orchestrator admin server URL for Temporal signals
-	eventsToken string // auth token for admin server
+	adminURL    string // orchestrator admin server URL for Temporal signals 注：orchestrator admin server URL，用于 Temporal signal
+	eventsToken string // auth token for admin server 注：admin server 的鉴权 token
 	logger      *zap.Logger
 }
 
@@ -68,6 +68,7 @@ func (dh *DaemonHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Approval callbacks
+	// 审批回调
 	onApprovalRequest := func(ctx context.Context, connID, tID, uID string, req daemon.DaemonApprovalRequest) {
 		if dh.approvals == nil {
 			return
@@ -102,6 +103,7 @@ func (dh *DaemonHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request)
 
 	onProactive := func(ctx context.Context, connID, tID, uID string, payload daemon.ProactivePayload) error {
 		// Outbound channel routing removed in OSS
+		// OSS 版本已移除出站渠道路由
 		return nil
 	}
 
@@ -183,6 +185,7 @@ func (dh *DaemonHandler) handleApprovalRequest(ctx context.Context, connID, tena
 	}
 
 	// Outbound channel broadcast removed in OSS
+	// OSS 版本已移除出站渠道广播
 }
 
 // handleApprovalResolved dismisses channel approval messages when ShanClaw resolved first.
@@ -200,6 +203,7 @@ func (dh *DaemonHandler) handleApprovalResolved(ctx context.Context, resolved da
 }
 
 // Valid approval decisions that the daemon recognizes.
+// daemon 认可的有效审批决定。
 var validDecisions = map[string]bool{
 	"allow":        true,
 	"deny":         true,
@@ -242,6 +246,7 @@ func (dh *DaemonHandler) ResolveApproval(ctx context.Context, requestID, decisio
 			zap.Error(err),
 		)
 		// Re-store so another responder can retry
+		// 重新存回，便于其他响应方 retry
 		if storeErr := dh.approvals.Store(ctx, approval); storeErr != nil {
 			dh.logger.Error("failed to re-store approval after send failure",
 				zap.String("request_id", requestID),
@@ -253,11 +258,13 @@ func (dh *DaemonHandler) ResolveApproval(ctx context.Context, requestID, decisio
 	}
 
 	// Outbound channel dismiss removed in OSS
+	// OSS 版本已移除出站渠道 dismiss
 
 	return nil
 }
 
 // Approvals returns the approval manager (used by interaction handlers).
+// Approvals 返回审批 manager（供 interaction handler 使用）。
 func (dh *DaemonHandler) Approvals() *daemon.ApprovalManager {
 	return dh.approvals
 }

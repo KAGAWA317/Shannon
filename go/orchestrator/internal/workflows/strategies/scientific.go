@@ -28,12 +28,14 @@ func ScientificWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	)
 
 	// Determine workflow ID for event streaming
+	// 确定用于事件流的 workflow ID。
 	workflowID := input.ParentWorkflowID
 	if workflowID == "" {
 		workflowID = workflow.GetInfo(ctx).WorkflowExecution.ID
 	}
 
 	// Input validation
+	// 入参校验。
 	if err := validateInput(input); err != nil {
 		return TaskResult{
 			Success:      false,
@@ -42,14 +44,17 @@ func ScientificWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	}
 
 	// Load configuration
+	// 加载配置。
 	config := getWorkflowConfig(ctx)
 
 	// Initialize control signal handler for pause/resume/cancel
+	// 初始化 pause/resume/cancel 的控制信号 handler。
 	emitCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Second,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
 	})
 	// Skip SSE emissions when running as child workflow (parent already emits)
+	// 作为子 workflow 运行时跳过 SSE 事件发射（父 workflow 已经发射）。
 	controlHandler := &control.SignalHandler{
 		WorkflowID:  workflowID,
 		AgentID:     "scientific",
@@ -60,6 +65,7 @@ func ScientificWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	controlHandler.Setup(ctx)
 
 	// Prepare pattern options
+	// 准备 pattern 选项。
 	opts := patterns.Options{
 		UserID:         input.UserID,
 		BudgetAgentMax: getBudgetMax(input.Context),
@@ -69,6 +75,7 @@ func ScientificWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	totalTokens := 0
 
 	// Phase 1: Generate hypotheses using Chain-of-Thought pattern
+	// Phase 1：用 Chain-of-Thought pattern 生成假设。
 	logger.Info("Phase 1: Generating hypotheses with Chain-of-Thought")
 
 	cotConfig := patterns.ChainOfThoughtConfig{
@@ -91,32 +98,36 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	)
 
 	// Ensure parent workflow ID is included in context for downstream activities
+	// 确保父 workflow ID 被写入 context，供下游 activity 使用。
 	cotCtx := cloneContextMap(input.Context)
 	if input.ParentWorkflowID != "" {
 		cotCtx["parent_workflow_id"] = input.ParentWorkflowID
 	}
 
 	// Check pause/cancel before execution
+	// 执行前检查 pause/cancel。
 	if err := controlHandler.CheckPausePoint(ctx, "pre_execution"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
 
 	// Memory retrieval with gate precedence (hierarchical > simple session)
+	// memory 检索，按开关优先级（hierarchical > simple session）。
 	hierarchicalVersion := workflow.GetVersion(ctx, "memory_retrieval_v1", workflow.DefaultVersion, 1)
 	sessionVersion := workflow.GetVersion(ctx, "session_memory_v1", workflow.DefaultVersion, 1)
 
 	var memoryItems []map[string]any
 	if hierarchicalVersion >= 1 && input.SessionID != "" {
 		// Use hierarchical memory (combines recent + semantic)
+		// 使用 hierarchical memory（融合近期与语义记忆）。
 		var hierMemory activities.FetchHierarchicalMemoryResult
 		_ = workflow.ExecuteActivity(ctx, activities.FetchHierarchicalMemory,
 			activities.FetchHierarchicalMemoryInput{
 				Query:        input.Query,
 				SessionID:    input.SessionID,
 				TenantID:     input.TenantID,
-				RecentTopK:   5,    // Fixed for determinism
-				SemanticTopK: 5,    // Fixed for determinism
-				Threshold:    0.75, // Fixed semantic threshold
+				RecentTopK:   5,    // Fixed for determinism 注：为保证确定性固定取值
+				SemanticTopK: 5,    // Fixed for determinism 注：为保证确定性固定取值
+				Threshold:    0.75, // Fixed semantic threshold 注：固定的语义阈值
 			}).Get(ctx, &hierMemory)
 
 		if len(hierMemory.Items) > 0 {
@@ -130,12 +141,13 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 		}
 	} else if sessionVersion >= 1 && input.SessionID != "" {
 		// Fallback to simple session memory if hierarchical not enabled
+		// hierarchical 未启用时回退到 simple session memory。
 		var sessionMemory activities.FetchSessionMemoryResult
 		_ = workflow.ExecuteActivity(ctx, activities.FetchSessionMemory,
 			activities.FetchSessionMemoryInput{
 				SessionID: input.SessionID,
 				TenantID:  input.TenantID,
-				TopK:      20, // Fixed for determinism
+				TopK:      20, // Fixed for determinism 注：为保证确定性固定取值
 			}).Get(ctx, &sessionMemory)
 
 		if len(sessionMemory.Items) > 0 {
@@ -169,6 +181,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	totalTokens += cotResult.TotalTokens
 
 	// Extract hypotheses from Chain-of-Thought reasoning
+	// 从 Chain-of-Thought 推理中抽取假设。
 	hypotheses := extractHypothesesFromSteps(cotResult.ReasoningSteps, cotResult.FinalAnswer)
 
 	logger.Info("Generated hypotheses",
@@ -177,14 +190,17 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	)
 
 	// Check pause/cancel before debate phase
+	// debate 阶段前检查 pause/cancel。
 	if err := controlHandler.CheckPausePoint(ctx, "pre_debate"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
 
 	// Phase 2: Test competing hypotheses using Debate pattern
+	// Phase 2：用 Debate pattern 检验相互竞争的假设。
 	logger.Info("Phase 2: Testing hypotheses with multi-agent Debate")
 
 	// Create perspectives for each hypothesis
+	// 为每个假设创建 perspective。
 	perspectives := make([]string, 0, len(hypotheses))
 	for i := range hypotheses {
 		perspectives = append(perspectives, fmt.Sprintf("hypothesis_%d_advocate", i+1))
@@ -201,6 +217,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	}
 
 	// Prepare debate context with hypotheses
+	// 准备带假设的 debate context。
 	debateContext := cloneContextMap(input.Context)
 	if input.ParentWorkflowID != "" {
 		debateContext["parent_workflow_id"] = input.ParentWorkflowID
@@ -210,6 +227,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	debateContext["confidence_threshold"] = config.ScientificConfidenceThreshold
 
 	// Inject memory into debate context (reuse from earlier fetch)
+	// 把 memory 注入 debate context（复用前面取到的结果）。
 	if len(memoryItems) > 0 {
 		debateContext["agent_memory"] = memoryItems
 	}
@@ -245,11 +263,13 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	totalTokens += debateResult.TotalTokens
 
 	// Check pause/cancel before tree-of-thoughts phase
+	// tree-of-thoughts 阶段前检查 pause/cancel。
 	if err := controlHandler.CheckPausePoint(ctx, "pre_tree_of_thoughts"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
 
 	// Phase 3: Synthesize findings with Tree-of-Thoughts for exploration
+	// Phase 3：用 Tree-of-Thoughts 综合结论并探索。
 	logger.Info("Phase 3: Exploring implications with Tree-of-Thoughts")
 
 	totConfig := patterns.TreeOfThoughtsConfig{
@@ -263,6 +283,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	}
 
 	// Explore implications of winning hypothesis
+	// 探索胜出假设的潜在影响。
 	totQuery := fmt.Sprintf(
 		"Based on the winning hypothesis: %s\n"+
 			"What are the implications and next steps for: %s",
@@ -279,14 +300,17 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	totContext["consensus_reached"] = debateResult.ConsensusReached
 
 	// Inject memory into ToT context (reuse from earlier fetch)
+	// 把 memory 注入 ToT context（复用前面取到的结果）。
 	if len(memoryItems) > 0 {
 		totContext["agent_memory"] = memoryItems
 	}
 
 	// Context compression before Tree-of-Thoughts (version-gated for determinism)
+	// Tree-of-Thoughts 之前的 context 压缩（用版本门控保证确定性）。
 	compressionVersion := workflow.GetVersion(ctx, "context_compress_v1", workflow.DefaultVersion, 1)
 	if compressionVersion >= 1 && input.SessionID != "" && len(input.History) > 20 {
 		// Check if compression is needed with rate limiting
+		// 检查是否需要压缩，并做限流。
 		estimatedTokens := activities.EstimateTokens(convertHistoryForAgent(input.History))
 
 		var checkResult activities.CheckCompressionNeededResult
@@ -306,6 +330,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 			)
 
 			// Compress context via activity
+			// 通过 activity 压缩 context。
 			var compressResult activities.CompressContextResult
 			err = workflow.ExecuteActivity(ctx, activities.CompressAndStoreContext,
 				activities.CompressContextInput{
@@ -322,6 +347,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 				)
 
 				// Update compression state in session
+				// 在 session 中更新压缩状态。
 				var updateResult activities.UpdateCompressionStateResult
 				_ = workflow.ExecuteActivity(ctx, "UpdateCompressionStateActivity",
 					activities.UpdateCompressionStateInput{
@@ -345,6 +371,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	if err != nil {
 		logger.Warn("Tree-of-Thoughts exploration failed, using debate result", "error", err)
 		// Fall back to debate result
+		// 回退到 debate 的结果。
 		totResult = &patterns.TreeOfThoughtsResult{
 			BestSolution: debateResult.FinalPosition,
 			Confidence:   0.7,
@@ -354,11 +381,13 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	totalTokens += totResult.TotalTokens
 
 	// Check pause/cancel before reflection phase
+	// reflection 阶段前检查 pause/cancel。
 	if err := controlHandler.CheckPausePoint(ctx, "pre_reflection"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
 
 	// Phase 4: Final quality check with Reflection
+	// Phase 4：用 Reflection 做最终质量检查。
 	logger.Info("Phase 4: Applying reflection for final synthesis")
 
 	reflectionConfig := patterns.ReflectionConfig{
@@ -370,6 +399,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	}
 
 	// Create comprehensive result for reflection
+	// 构造供 reflection 使用的完整结果。
 	comprehensiveResult := fmt.Sprintf(
 		"Scientific Investigation Results:\n\n"+
 			"Hypotheses Tested:\n%s\n\n"+
@@ -383,6 +413,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	)
 
 	// Mock agent results for reflection
+	// 为 reflection 构造 mock 的 agent 结果。
 	agentResults := []activities.AgentExecutionResult{
 		{
 			Response:   comprehensiveResult,
@@ -410,6 +441,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	}
 
 	// Build structured scientific report
+	// 构建结构化的科学调研报告。
 	scientificReport := buildScientificReport(
 		input.Query,
 		hypotheses,
@@ -420,6 +452,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	)
 
 	// Update session
+	// 更新 session。
 	if input.SessionID != "" {
 		if err := updateSession(ctx, input.SessionID, scientificReport, totalTokens, len(hypotheses)*3); err != nil {
 			logger.Warn("Failed to update session",
@@ -437,7 +470,9 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	)
 
 	// Emit final clean LLM_OUTPUT for OpenAI-compatible streaming.
+	// 为兼容 OpenAI 的流式输出发射最终的干净 LLM_OUTPUT。
 	// Agent ID "final_output" signals the streamer to always show this content.
+	// agent ID 为 "final_output" 时提示 streamer 始终展示这段内容。
 	if finalResult != "" {
 		_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: workflowID,
@@ -452,6 +487,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	}
 
 	// Emit WORKFLOW_COMPLETED before returning
+	// 返回前发射 WORKFLOW_COMPLETED。
 	_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 		WorkflowID: workflowID,
 		EventType:  activities.StreamEventWorkflowCompleted,
@@ -461,6 +497,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	}).Get(ctx, nil)
 
 	// Build metadata with agent information
+	// 构建包含 agent 信息的 metadata。
 	meta := map[string]any{
 		"workflow_type":     "scientific",
 		"patterns_used":     []string{"chain_of_thought", "debate", "tree_of_thoughts", "reflection"},
@@ -472,9 +509,12 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	}
 
 	// Aggregate agent metadata (model, provider, tokens, cost)
+	// 聚合 agent metadata（model、provider、tokens、cost）。
 	// Note: ScientificWorkflow uses multiple patterns without direct agent tracking
+	// 注意：ScientificWorkflow 组合多个 pattern，没有直接的 agent 追踪。
 	// Estimate based on total tokens
-	modelTierFromContext := "medium" // Default
+	// 按总 token 数估算。
+	modelTierFromContext := "medium" // Default 注：默认值
 	if tier, ok := input.Context["model_tier"].(string); ok && tier != "" {
 		modelTierFromContext = tier
 	}
@@ -483,15 +523,16 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 			AgentID:      "scientific-agent",
 			ModelUsed:    modelTierFromContext,
 			TokensUsed:   totalTokens,
-			InputTokens:  totalTokens * 6 / 10, // Estimate 60/40 split
+			InputTokens:  totalTokens * 6 / 10, // Estimate 60/40 split 注：按 60/40 拆分估算
 			OutputTokens: totalTokens * 4 / 10,
 			Success:      true,
 		},
 	}
-	agentMeta := metadata.AggregateAgentMetadata(mockAgentResults, 0) // No separate synthesis
+	agentMeta := metadata.AggregateAgentMetadata(mockAgentResults, 0) // No separate synthesis 注：无单独的 synthesis 环节
 	maps.Copy(meta, agentMeta)
 
 	// Align: compute and include estimated cost using centralized pricing
+	// 对齐：用集中式 pricing 计算并写入估算成本。
 	if totalTokens > 0 {
 		modelForCost := ""
 		if m, ok := meta["model"].(string); ok && m != "" {
@@ -503,6 +544,7 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 	}
 
 	// Check pause/cancel before completion
+	// 完成前检查 pause/cancel。
 	if err := controlHandler.CheckPausePoint(ctx, "pre_completion"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
@@ -516,15 +558,18 @@ Therefore: List exactly %d hypotheses, each starting with "Hypothesis N:"`,
 }
 
 // extractHypothesesFromSteps extracts hypotheses from Chain-of-Thought reasoning
+// extractHypothesesFromSteps 从 Chain-of-Thought 推理中抽取假设。
 func extractHypothesesFromSteps(steps []string, finalAnswer string) []string {
 	hypotheses := []string{}
 
 	// First check the final answer for structured hypotheses
+	// 先检查最终答案里是否有结构化假设。
 	lines := strings.SplitSeq(finalAnswer, "\n")
 	for line := range lines {
 		line = strings.TrimSpace(line)
 		if strings.Contains(strings.ToLower(line), "hypothesis") {
 			// Extract the hypothesis after the colon
+			// 取出冒号之后的假设内容。
 			parts := strings.SplitN(line, ":", 2)
 			if len(parts) == 2 {
 				hypothesis := strings.TrimSpace(parts[1])
@@ -536,6 +581,7 @@ func extractHypothesesFromSteps(steps []string, finalAnswer string) []string {
 	}
 
 	// If not enough in final answer, check reasoning steps
+	// 最终答案中数量不足时，再检查推理步骤。
 	if len(hypotheses) < 3 {
 		for _, step := range steps {
 			if strings.Contains(strings.ToLower(step), "hypothesis") {
@@ -551,6 +597,7 @@ func extractHypothesesFromSteps(steps []string, finalAnswer string) []string {
 	}
 
 	// Fallback: if still no hypotheses, use the reasoning steps themselves
+	// 兜底：仍然没有假设时，直接用推理步骤本身。
 	if len(hypotheses) == 0 && len(steps) > 0 {
 		for i, step := range steps {
 			if i >= 3 {
@@ -564,6 +611,7 @@ func extractHypothesesFromSteps(steps []string, finalAnswer string) []string {
 }
 
 // buildScientificReport creates a structured scientific investigation report
+// buildScientificReport 生成结构化的科学调研报告。
 func buildScientificReport(
 	query string,
 	hypotheses []string,
@@ -612,6 +660,7 @@ func buildScientificReport(
 }
 
 // convertHistoryMapForCompression converts Message history to map format for compression
+// convertHistoryMapForCompression 把 Message history 转成 map 形式，供压缩使用。
 func convertHistoryMapForCompression(messages []Message) []map[string]string {
 	result := make([]map[string]string, len(messages))
 	for i, msg := range messages {

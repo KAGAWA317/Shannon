@@ -13,11 +13,11 @@ import (
 // PersistDebateConsensusInput 用于存储一次 debate 的结果
 type PersistDebateConsensusInput struct {
 	SessionID        string         `json:"session_id"`
-	Topic            string         `json:"topic"`            // Original query/topic
-	WinningPosition  string         `json:"winning_position"` // The consensus or winning argument
+	Topic            string         `json:"topic"`            // Original query/topic 注：原始查询/主题
+	WinningPosition  string         `json:"winning_position"` // The consensus or winning argument 注：共识或胜出的论点
 	ConsensusReached bool           `json:"consensus_reached"`
 	Confidence       float64        `json:"confidence"`
-	Positions        []string       `json:"positions"` // All debate positions
+	Positions        []string       `json:"positions"` // All debate positions 注：全部辩论立场
 	Metadata         map[string]any `json:"metadata"`
 }
 
@@ -41,18 +41,20 @@ func PersistDebateConsensus(ctx context.Context, in PersistDebateConsensusInput)
 	}
 
 	// Create a searchable text from the consensus
+	// 用 consensus 生成可检索的文本
 	searchableText := fmt.Sprintf("Topic: %s\nConsensus: %s", in.Topic, in.WinningPosition)
 
 	// Generate embedding for semantic retrieval
+	// 生成 embedding 以支持语义检索
 	vec, err := svc.GenerateEmbedding(ctx, searchableText, "")
 	if err != nil {
 		return PersistDebateConsensusResult{Stored: false, Error: err.Error()}, nil
 	}
 
 	// Build payload with consensus metadata
+	// 构造带 consensus 元数据的 payload
 	payload := map[string]any{
-		"type":              "consensus", // IMPORTANT: Identifies this as consensus memory
-		// IMPORTANT: 标记此条为 consensus memory
+		"type":              "consensus", // IMPORTANT: Identifies this as consensus memory 注：IMPORTANT: 标记此条为 consensus memory
 		"session_id":        in.SessionID,
 		"topic":             in.Topic,
 		"winning_position":  in.WinningPosition,
@@ -63,15 +65,16 @@ func PersistDebateConsensus(ctx context.Context, in PersistDebateConsensusInput)
 	}
 
 	// Add positions if provided
+	// 若提供了 positions 则一并写入
 	if len(in.Positions) > 0 {
 		payload["positions"] = in.Positions
 		payload["num_positions"] = len(in.Positions)
 	}
 
 	// Merge additional metadata
+	// 合并额外的 metadata
 	for k, v := range in.Metadata {
-		if k != "type" && k != "session_id" { // Protect critical keys
-			// 保护关键 key
+		if k != "type" && k != "session_id" { // Protect critical keys 注：保护关键 key
 			payload[k] = v
 		}
 	}
@@ -90,10 +93,10 @@ func PersistDebateConsensus(ctx context.Context, in PersistDebateConsensusInput)
 // FetchConsensusMemoryInput retrieves past consensus decisions
 // FetchConsensusMemoryInput 用于检索历史 consensus 决策
 type FetchConsensusMemoryInput struct {
-	Query     string  `json:"query"`      // Current topic/query
-	SessionID string  `json:"session_id"` // Optional: filter by session
-	Threshold float64 `json:"threshold"`  // Similarity threshold
-	TopK      int     `json:"top_k"`      // Max results
+	Query     string  `json:"query"`      // Current topic/query 注：当前主题/查询
+	SessionID string  `json:"session_id"` // Optional: filter by session 注：可选：按 session 过滤
+	Threshold float64 `json:"threshold"`  // Similarity threshold 注：相似度阈值
+	TopK      int     `json:"top_k"`      // Max results 注：返回条数上限
 }
 
 // FetchConsensusMemoryResult contains relevant past consensus decisions
@@ -126,32 +129,36 @@ func FetchConsensusMemory(ctx context.Context, in FetchConsensusMemoryInput) (Fe
 	}
 
 	// Generate embedding for the query
+	// 为查询生成 embedding
 	_, err := svc.GenerateEmbedding(ctx, in.Query, "")
 	if err != nil {
 		return FetchConsensusMemoryResult{Items: nil}, nil
 	}
 
 	// Search with type filter for consensus items
+	// 带 type 过滤条件搜索 consensus 条目
 	filter := map[string]any{
 		"type": "consensus",
 	}
 
 	// Add session filter if provided
+	// 若提供 session 则追加过滤条件
 	if in.SessionID != "" {
 		filter["session_id"] = in.SessionID
 	}
 
 	// Use threshold or default
+	// 使用传入的 threshold，否则用默认值
 	threshold := in.Threshold
 	if threshold <= 0 {
-		threshold = 0.7 // Lower threshold for consensus (more lenient)
-		// consensus 使用更低的 threshold（更宽松）
+		threshold = 0.7 // Lower threshold for consensus (more lenient) 注：consensus 使用更低的 threshold（更宽松）
 	}
 
 	// Determine TopK
+	// 确定 TopK
 	topK := in.TopK
 	if topK <= 0 {
-		topK = 3 // Default to top 3 consensus items
+		topK = 3 // Default to top 3 consensus items 注：默认取前 3 条 consensus
 	}
 
 	// Search in the summaries collection (where consensus is stored)
@@ -164,7 +171,9 @@ func FetchConsensusMemory(ctx context.Context, in FetchConsensusMemoryInput) (Fe
 	// 目前先记录为后续增强
 
 	// TODO: Add search method for summaries collection or use task_embeddings
+	// TODO: 为 summaries collection 增加搜索方法，或改用 task_embeddings
 	// For MVP, we can store consensus in task_embeddings with type="consensus"
+	// MVP 阶段可用 type="consensus" 把 consensus 存入 task_embeddings
 
 	return FetchConsensusMemoryResult{Items: nil}, nil
 }

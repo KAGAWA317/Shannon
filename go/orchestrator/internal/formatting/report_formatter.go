@@ -35,6 +35,7 @@ func FormatReportWithCitations(synthesis string, citationsList string) string {
     for _, m := range re.FindAllStringSubmatch(s, -1) {
         if len(m) == 2 {
             // parse int safely
+            // 安全地解析 int
             if n, _ := strconv.Atoi(m[1]); n > 0 {
                 used[n] = true
             }
@@ -66,6 +67,7 @@ func FormatReportWithCitations(synthesis string, citationsList string) string {
             continue
         }
         // Determine index from leading [n]
+        // 从行首 [n] 判断编号
         idx := 0
         if m := re.FindStringSubmatch(t); len(m) == 2 {
             idx, _ = strconv.Atoi(m[1])
@@ -75,11 +77,13 @@ func FormatReportWithCitations(synthesis string, citationsList string) string {
             label = "Used inline"
         }
         // Keep original line, append label
+        // 保留原行，追加标签
         rebuilt = append(rebuilt, t+" - "+label)
     }
 
     if len(rebuilt) == 0 {
         // Nothing to append
+        // 无需追加
         return cut
     }
 
@@ -87,6 +91,7 @@ func FormatReportWithCitations(synthesis string, citationsList string) string {
     // 尽量按数字编号排序各行
     sort.SliceStable(rebuilt, func(i, j int) bool {
         // Extract first number in each line
+        // 提取每行第一个数字
         first := func(s string) int {
             if m := re.FindStringSubmatch(s); len(m) == 2 {
                 n, _ := strconv.Atoi(m[1])

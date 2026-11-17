@@ -19,6 +19,7 @@ type AgentState struct {
 }
 
 // PlanningState represents the planning phase state
+// PlanningState 表示规划阶段的状态
 type PlanningState struct {
 	CurrentStep    int         `json:"current_step" validate:"min=0"`
 	TotalSteps     int         `json:"total_steps" validate:"min=1"`
@@ -29,6 +30,7 @@ type PlanningState struct {
 }
 
 // ExecutionState represents the execution phase state
+// ExecutionState 表示执行阶段的状态
 type ExecutionState struct {
 	Status         string    `json:"status" validate:"oneof=pending running completed failed paused"`
 	StartTime      time.Time `json:"start_time"`
@@ -49,6 +51,7 @@ type BeliefState struct {
 }
 
 // Hypothesis represents a working hypothesis
+// Hypothesis 表示一个待验证的假设
 type Hypothesis struct {
 	ID          string    `json:"id"`
 	Description string    `json:"description"`
@@ -83,6 +86,7 @@ type ErrorRecord struct {
 }
 
 // Validate validates the AgentState
+// Validate 校验 AgentState
 func (as *AgentState) Validate() error {
 	if as.Query == "" {
 		return fmt.Errorf("query cannot be empty")
@@ -124,12 +128,14 @@ func (as *AgentState) CanRetry() bool {
 }
 
 // AddToolResult adds a tool execution result
+// AddToolResult 追加一条 tool 执行结果
 func (as *AgentState) AddToolResult(result ToolResult) {
 	as.ToolResults = append(as.ToolResults, result)
 	as.ExecutionState.LastUpdateTime = time.Now()
 }
 
 // AddError adds an error record
+// AddError 追加一条错误记录
 func (as *AgentState) AddError(err ErrorRecord) {
 	as.Errors = append(as.Errors, err)
 	as.ExecutionState.ErrorCount++
@@ -137,6 +143,7 @@ func (as *AgentState) AddError(err ErrorRecord) {
 }
 
 // UpdateStep updates the current planning step
+// UpdateStep 更新当前规划步骤
 func (as *AgentState) UpdateStep(step int, completed bool) error {
 	if step >= as.PlanningState.TotalSteps {
 		return fmt.Errorf("step %d exceeds total steps %d", step, as.PlanningState.TotalSteps)
@@ -162,6 +169,7 @@ func (as *AgentState) GetTotalTokensUsed() int {
 }
 
 // GetExecutionDuration calculates the total execution duration
+// GetExecutionDuration 计算总执行耗时
 func (as *AgentState) GetExecutionDuration() time.Duration {
 	if as.ExecutionState.StartTime.IsZero() {
 		return 0

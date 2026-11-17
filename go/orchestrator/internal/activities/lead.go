@@ -17,19 +17,20 @@ import (
 )
 
 // ── Lead Decision Types ─────────────────────────────────────────────────────
+// ── Lead 决策类型 ─────────────────────────────────────────────────────
 
 // LeadEvent describes what triggered the Lead to wake up.
 // LeadEvent 描述这次唤醒 Lead 的触发源。
 type LeadEvent struct {
-	Type             string            `json:"type"` // "agent_completed", "agent_idle", "help_request", "checkpoint", "human_input"
+	Type             string            `json:"type"` // "agent_completed", "agent_idle", "help_request", "checkpoint", "human_input" 注：取值："agent_completed"、"agent_idle"、"help_request"、"checkpoint"、"human_input"
 	AgentID          string            `json:"agent_id"`
 	ResultSummary    string            `json:"result_summary"`
 	HumanMessage     string            `json:"human_message,omitempty"`
 	CompletionReport map[string]any    `json:"completion_report,omitempty"`
 	Error            string            `json:"error,omitempty"`
 	Success          bool              `json:"success,omitempty"`
-	FileContents     []FileReadResult  `json:"file_contents,omitempty"` // Lead file_read results
-	ToolResults      []ToolResultEntry `json:"tool_results,omitempty"`  // Lead tool_call results
+	FileContents     []FileReadResult  `json:"file_contents,omitempty"` // Lead file_read results 注：Lead 的 file_read 结果
+	ToolResults      []ToolResultEntry `json:"tool_results,omitempty"`  // Lead tool_call results 注：Lead 的 tool_call 结果
 }
 
 // FileReadResult holds the content of a file read by Lead.
@@ -42,6 +43,7 @@ type FileReadResult struct {
 }
 
 // ToolResultEntry holds the result of a tool executed by Lead.
+// ToolResultEntry 保存 Lead 执行某个工具的结果。
 type ToolResultEntry struct {
 	Tool   string `json:"tool"`
 	Output string `json:"output"`
@@ -52,12 +54,12 @@ type ToolResultEntry struct {
 // LeadAgentState 记录 agent 当前状态，供 Lead 做决策。
 type LeadAgentState struct {
 	AgentID        string   `json:"agent_id"`
-	Status         string   `json:"status"`          // "running", "idle", "completed"
+	Status         string   `json:"status"`          // "running", "idle", "completed" 注：取值："running"、"idle"、"completed"
 	CurrentTask    string   `json:"current_task"`
 	IterationsUsed int      `json:"iterations_used"`
-	ElapsedSeconds int      `json:"elapsed_seconds,omitempty"` // Wall-clock time since agent started current task
-	Role           string   `json:"role,omitempty"`             // Agent's assigned role (researcher, analyst, synthesis_writer, etc.)
-	FilesWritten   []string `json:"files_written,omitempty"`    // Files written by agent (for Lead to pass to synthesis_writer)
+	ElapsedSeconds int      `json:"elapsed_seconds,omitempty"` // Wall-clock time since agent started current task 注：agent 开始当前 task 以来的实际耗时
+	Role           string   `json:"role,omitempty"`             // Agent's assigned role (researcher, analyst, synthesis_writer, etc.) 注：agent 被分配的角色（researcher、analyst、synthesis_writer 等）
+	FilesWritten   []string `json:"files_written,omitempty"`    // Files written by agent (for Lead to pass to synthesis_writer) 注：agent 写入的文件（供 Lead 传给 synthesis_writer）
 }
 
 // LeadBudget tracks global budget for the swarm.
@@ -72,43 +74,45 @@ type LeadBudget struct {
 }
 
 // LeadDecisionInput is the input to the LeadDecision activity.
+// LeadDecisionInput 是 LeadDecision activity 的输入。
 type LeadDecisionInput struct {
 	WorkflowID    string                   `json:"workflow_id"`
 	Event         LeadEvent                `json:"event"`
 	TaskList      []SwarmTask              `json:"task_list"`
 	AgentStates   []LeadAgentState         `json:"agent_states"`
 	Budget        LeadBudget               `json:"budget"`
-	History       []map[string]any `json:"history"`                    // Recent Lead decisions
-	Messages            []map[string]any `json:"messages,omitempty"`              // Agent→Lead mailbox messages
-	OriginalQuery       string                   `json:"original_query,omitempty"`        // User's original query (for language context)
-	ConversationHistory []map[string]any `json:"conversation_history,omitempty"`   // Session history for multi-turn context
-	WorkspaceFiles      []string                 `json:"workspace_files,omitempty"`        // File paths in workspace (for planning context)
-	HitlMessages        []string                 `json:"hitl_messages,omitempty"`           // All HITL messages received during this execution
-	LeadModelOverride    string                  `json:"lead_model_override,omitempty"`     // Explicit model for Lead (e.g. "kimi-k2.5")
-	LeadProviderOverride string                  `json:"lead_provider_override,omitempty"`  // Explicit provider for Lead (e.g. "kimi")
+	History       []map[string]any `json:"history"`                    // Recent Lead decisions 注：最近的 Lead 决策
+	Messages            []map[string]any `json:"messages,omitempty"`              // Agent→Lead mailbox messages 注：Agent→Lead 的邮箱消息
+	OriginalQuery       string                   `json:"original_query,omitempty"`        // User's original query (for language context) 注：用户的原始 query（用于语言上下文）
+	ConversationHistory []map[string]any `json:"conversation_history,omitempty"`   // Session history for multi-turn context 注：session 历史，用于多轮上下文
+	WorkspaceFiles      []string                 `json:"workspace_files,omitempty"`        // File paths in workspace (for planning context) 注：workspace 中的文件路径（用于规划上下文）
+	HitlMessages        []string                 `json:"hitl_messages,omitempty"`           // All HITL messages received during this execution 注：本次执行期间收到的全部 HITL 消息
+	LeadModelOverride    string                  `json:"lead_model_override,omitempty"`     // Explicit model for Lead (e.g. "kimi-k2.5") 注：为 Lead 显式指定的 model（例如 "kimi-k2.5"）
+	LeadProviderOverride string                  `json:"lead_provider_override,omitempty"`  // Explicit provider for Lead (e.g. "kimi") 注：为 Lead 显式指定的 provider（例如 "kimi"）
 }
 
 // LeadAction is a single action the Lead wants to take.
 // LeadAction 是 Lead 想执行的一条动作。
 type LeadAction struct {
-	Type            string           `json:"type"` // assign_task, spawn_agent, send_message, broadcast, revise_plan, file_read, done
+	Type            string           `json:"type"` // assign_task, spawn_agent, send_message, broadcast, revise_plan, file_read, done 注：取值：assign_task、spawn_agent、send_message、broadcast、revise_plan、file_read、done
 	TaskID          string           `json:"task_id,omitempty"`
 	AgentID         string           `json:"agent_id,omitempty"`
 	Role            string           `json:"role,omitempty"`
 	TaskDescription string           `json:"task_description,omitempty"`
 	To              string           `json:"to,omitempty"`
 	Content         string           `json:"content,omitempty"`
-	ModelTier       string           `json:"model_tier,omitempty"` // small, medium, large
+	ModelTier       string           `json:"model_tier,omitempty"` // small, medium, large 注：取值：small、medium、large
 	Create          []map[string]any `json:"create,omitempty"`
 	Cancel          []string                 `json:"cancel,omitempty"`
-	Update          []map[string]any `json:"update,omitempty"` // revise_plan: update existing task descriptions
-	Path            string                   `json:"path,omitempty"`            // file_read target path
-	Tool               string                   `json:"tool,omitempty"`                // tool_call: web_search, web_fetch, calculator
-	ToolParams         map[string]any   `json:"tool_params,omitempty"`         // tool_call: tool arguments
-	SkipAttachments bool `json:"skip_attachments,omitempty"` // spawn_agent: set true to NOT pass user files (e.g. web research agents)
+	Update          []map[string]any `json:"update,omitempty"` // revise_plan: update existing task descriptions 注：revise_plan：更新已有 task 描述
+	Path            string                   `json:"path,omitempty"`            // file_read target path 注：file_read 的目标路径
+	Tool               string                   `json:"tool,omitempty"`                // tool_call: web_search, web_fetch, calculator 注：tool_call：web_search、web_fetch、calculator
+	ToolParams         map[string]any   `json:"tool_params,omitempty"`         // tool_call: tool arguments 注：tool_call：工具参数
+	SkipAttachments bool `json:"skip_attachments,omitempty"` // spawn_agent: set true to NOT pass user files (e.g. web research agents) 注：spawn_agent：置为 true 则不传递用户文件（例如 web 研究类 agent）
 }
 
 // LeadDecisionResult is the output from the LeadDecision activity.
+// LeadDecisionResult 是 LeadDecision activity 的输出。
 type LeadDecisionResult struct {
 	DecisionSummary     string       `json:"decision_summary"`
 	UserSummary         string       `json:"user_summary"`
@@ -186,11 +190,13 @@ func LeadDecision(ctx context.Context, in LeadDecisionInput) (LeadDecisionResult
 }
 
 // ListWorkspaceFilesInput is the input for the ListWorkspaceFiles activity.
+// ListWorkspaceFilesInput 是 ListWorkspaceFiles activity 的输入。
 type ListWorkspaceFilesInput struct {
 	SessionID string `json:"session_id"`
 }
 
 // ListWorkspaceFilesResult is the output of the ListWorkspaceFiles activity.
+// ListWorkspaceFilesResult 是 ListWorkspaceFiles activity 的输出。
 type ListWorkspaceFilesResult struct {
 	Files []WorkspaceMaterial `json:"files"`
 }
@@ -211,8 +217,10 @@ func ListWorkspaceFiles(ctx context.Context, in ListWorkspaceFilesInput) (ListWo
 }
 
 // ── Lead Tool Execution ───────────────────────────────────────────────────
+// ── Lead 工具执行 ───────────────────────────────────────────────────
 
 // LeadToolInput is the input for direct tool execution by Lead.
+// LeadToolInput 是 Lead 直接执行工具时的输入。
 type LeadToolInput struct {
 	Tool       string         `json:"tool"`
 	ToolParams map[string]any `json:"tool_params"`
@@ -220,9 +228,10 @@ type LeadToolInput struct {
 }
 
 // LeadToolResult is the output of direct tool execution.
+// LeadToolResult 是直接执行工具的输出。
 type LeadToolResult struct {
 	Success bool   `json:"success"`
-	Output  string `json:"output"` // formatted text
+	Output  string `json:"output"` // formatted text 注：格式化后的文本
 	Error   string `json:"error,omitempty"`
 }
 
@@ -261,8 +270,7 @@ func LeadExecuteTool(ctx context.Context, in LeadToolInput) (LeadToolResult, err
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return LeadToolResult{Error: err.Error()}, nil // Return error in result, don't fail activity
-// 把错误放进返回值，不让 activity 失败。
+		return LeadToolResult{Error: err.Error()}, nil // Return error in result, don't fail activity 注：把错误放进返回值，不让 activity 失败。
 	}
 	defer resp.Body.Close()
 

@@ -22,9 +22,11 @@ var (
 )
 
 // JSONMap handles JSON database columns
+// JSONMap 处理 JSON 数据库列
 type JSONMap map[string]any
 
 // Scan implements sql.Scanner interface
+// Scan 实现 sql.Scanner 接口
 func (j *JSONMap) Scan(value any) error {
 	if value == nil {
 		*j = make(map[string]any)
@@ -38,6 +40,7 @@ func (j *JSONMap) Scan(value any) error {
 }
 
 // Value implements driver.Valuer interface
+// Value 实现 driver.Valuer 接口
 func (j JSONMap) Value() (driver.Value, error) {
 	if j == nil {
 		return "{}", nil
@@ -46,14 +49,15 @@ func (j JSONMap) Value() (driver.Value, error) {
 }
 
 // User represents an authenticated user
+// User 表示一个已认证用户
 type User struct {
 	ID              uuid.UUID  `json:"id" db:"id"`
 	Email           string     `json:"email" db:"email"`
 	Username        string     `json:"username" db:"username"`
 	PasswordHash    string     `json:"-" db:"password_hash"`
-	FullName        *string    `json:"full_name,omitempty" db:"full_name"` // Nullable in DB
+	FullName        *string    `json:"full_name,omitempty" db:"full_name"` // Nullable in DB 注：数据库中可为 NULL
 	TenantID        uuid.UUID  `json:"tenant_id" db:"tenant_id"`
-	Role            string     `json:"role" db:"role"` // user, admin, owner
+	Role            string     `json:"role" db:"role"` // user, admin, owner 注：取值 user、admin、owner
 	IsActive        bool       `json:"is_active" db:"is_active"`
 	IsVerified      bool       `json:"is_verified" db:"is_verified"`
 	EmailVerifiedAt *time.Time `json:"email_verified_at,omitempty" db:"email_verified_at"`
@@ -64,11 +68,12 @@ type User struct {
 }
 
 // Tenant represents an organization/workspace
+// Tenant 表示一个组织/工作空间
 type Tenant struct {
 	ID                     uuid.UUID `json:"id" db:"id"`
 	Name                   string    `json:"name" db:"name"`
 	Slug                   string    `json:"slug" db:"slug"`
-	Plan                   string    `json:"plan" db:"plan"` // free, pro, enterprise
+	Plan                   string    `json:"plan" db:"plan"` // free, pro, enterprise 注：取值 free、pro、enterprise
 	TokenLimit             int       `json:"token_limit" db:"token_limit"`
 	MonthlyTokenUsage      int       `json:"monthly_token_usage" db:"monthly_token_usage"`
 	RateLimitPerHour       int       `json:"rate_limit_per_hour" db:"rate_limit_per_hour"`
@@ -89,7 +94,7 @@ type APIKey struct {
 	UserID           uuid.UUID      `json:"user_id" db:"user_id"`
 	TenantID         uuid.UUID      `json:"tenant_id" db:"tenant_id"`
 	Name             string         `json:"name" db:"name"`
-	Description      *string        `json:"description,omitempty" db:"description"` // Nullable in DB
+	Description      *string        `json:"description,omitempty" db:"description"` // Nullable in DB 注：数据库中可为 NULL
 	Scopes           pq.StringArray `json:"scopes" db:"scopes"`
 	RateLimitPerHour int            `json:"rate_limit_per_hour" db:"rate_limit_per_hour"`
 	LastUsed         *time.Time     `json:"last_used,omitempty" db:"last_used"`
@@ -123,24 +128,26 @@ type UserContext struct {
 	Role      string    `json:"role"`
 	Scopes    []string  `json:"scopes"`
 	IsAPIKey  bool      `json:"is_api_key"`
-	TokenType string    `json:"token_type"` // jwt or api_key
+	TokenType string    `json:"token_type"` // jwt or api_key 注：取值 jwt 或 api_key
 
 	// API key details
-	APIKeyID   uuid.UUID `json:"api_key_id,omitempty"`   // ID of the API key (if IsAPIKey)
-	// API key 的 ID（当 IsAPIKey 为 true）
-	APIKeyTier string    `json:"api_key_tier,omitempty"` // Tier: free, pro, enterprise
-	TenantPlan string    `json:"tenant_plan,omitempty"`  // Tenant plan for rate limiting
+// API key 详情
+	APIKeyID   uuid.UUID `json:"api_key_id,omitempty"`   // ID of the API key (if IsAPIKey) 注：API key 的 ID（当 IsAPIKey 为 true）
+	APIKeyTier string    `json:"api_key_tier,omitempty"` // Tier: free, pro, enterprise 注：档位：free、pro、enterprise
+	TenantPlan string    `json:"tenant_plan,omitempty"`  // Tenant plan for rate limiting 注：租户套餐，用于限流
 
 	// Dev mode: Auth bypassed (GATEWAY_SKIP_AUTH=1)
+	// dev 模式：跳过鉴权（GATEWAY_SKIP_AUTH=1）
 	AuthBypassed bool `json:"auth_bypassed,omitempty"`
 }
 
 // TokenPair represents access and refresh tokens
+// TokenPair 表示 access token 与 refresh token
 type TokenPair struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	TokenType    string `json:"token_type"`
-	ExpiresIn    int    `json:"expires_in"` // seconds
+	ExpiresIn    int    `json:"expires_in"` // seconds 注：单位秒
 }
 
 // OAuthLoginResult represents the result of OAuth login/registration
@@ -148,26 +155,27 @@ type TokenPair struct {
 // OAuthLoginResult 表示 OAuth 登录/注册的结果
 // 将 session token（web UI 用）与 API key（SDK/编程访问用）分开
 type OAuthLoginResult struct {
-	Tokens    *TokenPair `json:"tokens"`            // JWT access + refresh tokens for web session
-	// web session 用的 JWT access + refresh token
-	User      *User      `json:"user"`              // User info
-	APIKey    string     `json:"api_key,omitempty"` // Only set for NEW registrations
-	IsNewUser bool       `json:"is_new_user"`       // True if user was just created
+	Tokens    *TokenPair `json:"tokens"`            // JWT access + refresh tokens for web session 注：web session 用的 JWT access + refresh token
+	User      *User      `json:"user"`              // User info 注：用户信息
+	APIKey    string     `json:"api_key,omitempty"` // Only set for NEW registrations 注：仅在 NEW 注册时返回
+	IsNewUser bool       `json:"is_new_user"`       // True if user was just created 注：用户刚创建时为 true
 }
 
 // LoginRequest represents a login request
+// LoginRequest 表示登录请求
 type LoginRequest struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required,min=8"`
 }
 
 // RegisterRequest represents a registration request
+// RegisterRequest 表示注册请求
 type RegisterRequest struct {
 	Email    string `json:"email" validate:"required,email"`
 	Username string `json:"username" validate:"required,min=3,max=50"`
 	Password string `json:"password" validate:"required,min=8"`
 	FullName string `json:"full_name" validate:"required"`
-	TenantID string `json:"tenant_id,omitempty"` // Optional, create new if not provided
+	TenantID string `json:"tenant_id,omitempty"` // Optional, create new if not provided 注：可选，未提供则新建
 }
 
 // CreateAPIKeyRequest represents a request to create an API key
@@ -180,6 +188,7 @@ type CreateAPIKeyRequest struct {
 }
 
 // AuditEvent types
+// AuditEvent 类型
 const (
 	AuditEventLogin            = "login"
 	AuditEventLogout           = "logout"
@@ -195,6 +204,7 @@ const (
 )
 
 // Scopes for authorization
+// 鉴权用的 scope
 const (
 	ScopeWorkflowsRead   = "workflows:read"
 	ScopeWorkflowsWrite  = "workflows:write"
@@ -204,10 +214,11 @@ const (
 	ScopeAPIKeysManage   = "api_keys:manage"
 	ScopeUsersManage     = "users:manage"
 	ScopeTenantManage    = "tenant:manage"
-	ScopeSkillsDangerous = "skills:dangerous" // Required for invoking dangerous skills
+	ScopeSkillsDangerous = "skills:dangerous" // Required for invoking dangerous skills 注：调用 dangerous skill 所必需
 )
 
 // User roles
+// 用户角色
 const (
 	RoleUser  = "user"
 	RoleAdmin = "admin"
@@ -215,6 +226,7 @@ const (
 )
 
 // Tenant plans
+// 租户套餐
 const (
 	PlanFree       = "free"
 	PlanPro        = "pro"

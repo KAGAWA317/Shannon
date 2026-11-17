@@ -69,17 +69,20 @@ models:
     max_tokens_default: 8192
 
 # Default model when none specified
+# 未指定时的默认 model
 default_model: shannon-chat
 
 # Global settings
+# 全局设置
 settings:
   # Maximum allowed max_tokens (hard limit)
   # 允许的 max_tokens 上限（硬性限制）
   max_tokens_limit: 16384
 
   # Default temperature if not specified
+  # 未指定时的默认 temperature
   default_temperature: 0.7
 
   # Session TTL for multi-turn conversations (seconds)
   # 多轮对话的 session TTL（秒）
-  session_ttl: 86400  # 24 hours
+  session_ttl: 86400  # 24 hours 注：24 小时

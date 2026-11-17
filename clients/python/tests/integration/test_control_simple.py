@@ -41,6 +41,7 @@ def test_simple_control():
     print("=" * 60)
 
     # Submit a simple task
+    # 提交一个 simple task
     print("\n[1] Submitting a simple task...")
     handle = client.submit_task(
         "Calculate 2 + 2 and explain the result",
@@ -51,10 +52,12 @@ def test_simple_control():
     print(f"✓ Task submitted: {handle.task_id}")
 
     # Wait for task to start
+    # 等待 task 启动
     print("\n[2] Waiting 2 seconds for task to start...")
     time.sleep(2)
 
     # Pause
+    # 暂停
     print("\n[3] Pausing task...")
     client.pause_task(handle.task_id, reason="Simple test pause")
     print("✓ Pause request sent")
@@ -62,6 +65,7 @@ def test_simple_control():
     time.sleep(2)
 
     # Check control state
+    # 检查 control 状态
     print("\n[4] Checking control state...")
     state = client.get_control_state(handle.task_id)
     print(f"✓ Paused: {state.is_paused}")
@@ -70,6 +74,7 @@ def test_simple_control():
         print(f"  At: {state.paused_at}")
 
     # Resume
+    # 恢复
     print("\n[5] Resuming task...")
     client.resume_task(handle.task_id, reason="Simple test resume")
     print("✓ Resume request sent")

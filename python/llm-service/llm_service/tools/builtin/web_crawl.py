@@ -29,8 +29,7 @@ from urllib.parse import urlparse
 
 from ..base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolResult
 from ..openapi_parser import _is_private_ip
-from .web_fetch import detect_blocked_reason, clean_markdown_noise, apply_extraction, apply_research_truncation, EXTRACTION_INTERNAL_MAX  # P0-A: Reuse blocked detection and noise cleaning logic
-# P0-A：复用拦截检测与噪声清理逻辑
+from .web_fetch import detect_blocked_reason, clean_markdown_noise, apply_extraction, apply_research_truncation, EXTRACTION_INTERNAL_MAX  # P0-A: Reuse blocked detection and noise cleaning logic 注：P0-A：复用拦截检测与噪声清理逻辑
 
 logger = logging.getLogger(__name__)
 
@@ -49,10 +48,8 @@ MAX_LIMIT = 100
 DEFAULT_LIMIT = 10
 DEFAULT_MAX_LENGTH = 8000
 CRAWL_TIMEOUT = int(os.getenv("WEB_FETCH_CRAWL_TIMEOUT", "120"))
-POLL_INTERVAL = 2  # seconds between status checks
-# 状态检查间隔（秒）
-MAX_POLL_ATTEMPTS = 60  # 60 * 2s = 2 minutes max
-# 60 * 2s = 最多 2 分钟
+POLL_INTERVAL = 2  # seconds between status checks 注：状态检查间隔（秒）
+MAX_POLL_ATTEMPTS = 60  # 60 * 2s = 2 minutes max 注：60 * 2s = 最多 2 分钟
 
 
 class WebCrawlTool(Tool):
@@ -114,15 +111,12 @@ class WebCrawlTool(Tool):
             category="retrieval",
             author="Shannon",
             requires_auth=False,
-            rate_limit=10,  # Lower rate limit due to resource intensive
-            # 资源消耗较大，因此 rate limit 更低
-            timeout_seconds=180,  # 3 minutes max
-            # 最长 3 分钟
+            rate_limit=10,  # Lower rate limit due to resource intensive 注：资源消耗较大，因此 rate limit 更低
+            timeout_seconds=180,  # 3 minutes max 注：最长 3 分钟
             memory_limit_mb=512,
             sandboxed=False,
             dangerous=False,
-            cost_per_use=0.01,  # Higher cost for crawl
-            # crawl 成本更高
+            cost_per_use=0.01,  # Higher cost for crawl 注：crawl 成本更高
         )
 
     def _get_parameters(self) -> List[ToolParameter]:
@@ -171,8 +165,7 @@ class WebCrawlTool(Tool):
         url = kwargs.get("url")
         limit = kwargs.get("limit", DEFAULT_LIMIT)
         max_length = kwargs.get("max_length", DEFAULT_MAX_LENGTH)
-        extract_prompt = kwargs.get("extract_prompt")  # Optional: targeted extraction query
-        # 可选：定向提取查询
+        extract_prompt = kwargs.get("extract_prompt")  # Optional: targeted extraction query 注：可选：定向提取查询
 
         # Skip auto-extraction in research mode (issue #43): OODA loop does many
         # fast fetches; LLM extraction adds ~40-60s latency per call, causing timeout.
@@ -401,8 +394,7 @@ class WebCrawlTool(Tool):
         if len(unique_results) == 1:
             r = unique_results[0]
             content = r.get("markdown", "")
-            content = clean_markdown_noise(content)  # Clean noise before truncation
-            # 截断前先清理噪声
+            content = clean_markdown_noise(content)  # Clean noise before truncation 注：截断前先清理噪声
             if len(content) > max_length:
                 content = content[:max_length]
             # P0-A: Detect blocked content for Citation V2 filtering
@@ -416,28 +408,23 @@ class WebCrawlTool(Tool):
                 "pages_fetched": 1,
                 "word_count": len(content.split()),
                 "char_count": len(content),
-                "tool_source": "fetch",  # Citation V2: mark as fetch-origin
-                # Citation V2：标记为 fetch 来源
-                "status_code": 200,  # P0-A: Firecrawl crawl success = 200
-                # P0-A：Firecrawl crawl 成功即 200
-                "blocked_reason": blocked_reason,  # P0-A: Content-based detection
-                # P0-A：基于内容检测
+                "tool_source": "fetch",  # Citation V2: mark as fetch-origin 注：Citation V2：标记为 fetch 来源
+                "status_code": 200,  # P0-A: Firecrawl crawl success = 200 注：P0-A：Firecrawl crawl 成功即 200
+                "blocked_reason": blocked_reason,  # P0-A: Content-based detection 注：P0-A：基于内容检测
             }
 
         # Multiple pages - merge with markdown separators
         # 多页——用 markdown 分隔符合并
         merged_content = []
         total_chars = 0
-        char_budget = max_length * len(unique_results)  # Total budget across pages
-        # 所有页面的总 budget
+        char_budget = max_length * len(unique_results)  # Total budget across pages 注：所有页面的总 budget
 
         for i, r in enumerate(unique_results):
             metadata = r.get("metadata", {})
             page_url = metadata.get("url", "")
             page_title = metadata.get("title", "")
             page_content = r.get("markdown", "")
-            page_content = clean_markdown_noise(page_content)  # Clean noise
-            # 清理噪声
+            page_content = clean_markdown_noise(page_content)  # Clean noise 注：清理噪声
 
             # Per-page truncation
             # 单页截断
@@ -474,12 +461,9 @@ class WebCrawlTool(Tool):
             "pages_fetched": len(unique_results),
             "word_count": len(final_content.split()),
             "char_count": total_chars,
-            "tool_source": "fetch",  # Citation V2: mark as fetch-origin
-            # Citation V2：标记为 fetch 来源
-            "status_code": 200,  # P0-A: Firecrawl crawl success = 200
-            # P0-A：Firecrawl crawl 成功即 200
-            "blocked_reason": blocked_reason,  # P0-A: Content-based detection
-            # P0-A：基于内容检测
+            "tool_source": "fetch",  # Citation V2: mark as fetch-origin 注：Citation V2：标记为 fetch 来源
+            "status_code": 200,  # P0-A: Firecrawl crawl success = 200 注：P0-A：Firecrawl crawl 成功即 200
+            "blocked_reason": blocked_reason,  # P0-A: Content-based detection 注：P0-A：基于内容检测
             "metadata": {
                 "total_crawled": len(results),
                 "unique_pages": len(unique_results),

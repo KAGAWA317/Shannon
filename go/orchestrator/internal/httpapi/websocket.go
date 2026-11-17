@@ -12,11 +12,11 @@ import (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin:     func(r *http.Request) bool { return true }, // Dev-friendly, secure via proxy in prod
-	// 便于开发，生产环境通过代理保证安全
+	CheckOrigin:     func(r *http.Request) bool { return true }, // Dev-friendly, secure via proxy in prod 注：便于开发，生产环境通过代理保证安全
 }
 
 // RegisterWebSocket registers /stream/ws endpoint.
+// RegisterWebSocket 注册 /stream/ws endpoint。
 func (h *StreamingHandler) RegisterWebSocket(mux *http.ServeMux) {
 	mux.HandleFunc("/stream/ws", h.handleWS)
 }
@@ -34,6 +34,7 @@ func (h *StreamingHandler) handleWS(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 
 	// Optional filters
+	// 可选的过滤条件
 	typeFilter := map[string]struct{}{}
 	if s := r.URL.Query().Get("types"); s != "" {
 		for t := range strings.SplitSeq(s, ",") {
@@ -58,6 +59,7 @@ func (h *StreamingHandler) handleWS(w http.ResponseWriter, r *http.Request) {
 			lastStreamID = lastEventID
 		} else {
 			// Try to parse as numeric sequence
+			// 尝试按数字序号解析
 			if n, err := strconv.ParseUint(lastEventID, 10, 64); err == nil {
 				lastSeq = n
 			}
@@ -68,6 +70,7 @@ func (h *StreamingHandler) handleWS(w http.ResponseWriter, r *http.Request) {
 	// 按续传点回放遗漏的 event
 	if lastStreamID != "" {
 		// Resume from Redis stream ID
+		// 从 Redis stream ID 续传
 		events := h.mgr.ReplayFromStreamID(wf, lastStreamID)
 		for _, ev := range events {
 			if len(typeFilter) > 0 {
@@ -76,6 +79,7 @@ func (h *StreamingHandler) handleWS(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			// Track last stream ID from replay
+			// 记录回放得到的最后一个 stream ID
 			if ev.StreamID != "" {
 				lastSentStreamID = ev.StreamID
 			}
@@ -85,6 +89,7 @@ func (h *StreamingHandler) handleWS(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if lastSeq > 0 {
 		// Resume from numeric sequence
+		// 按数字序号续传
 		events := h.mgr.ReplaySince(wf, lastSeq)
 		for _, ev := range events {
 			if len(typeFilter) > 0 {
@@ -93,6 +98,7 @@ func (h *StreamingHandler) handleWS(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			// Track last stream ID from replay
+			// 记录回放得到的最后一个 stream ID
 			if ev.StreamID != "" {
 				lastSentStreamID = ev.StreamID
 			}
@@ -106,19 +112,21 @@ func (h *StreamingHandler) handleWS(w http.ResponseWriter, r *http.Request) {
 	// Use last stream ID if available to avoid gaps, otherwise start fresh
 	// 从回放结束处订阅实时 event
 	// 有 last stream ID 时用它以避免缺口，否则从头开始
-	startFrom := "$" // Default to new messages only
+	startFrom := "$" // Default to new messages only 注：默认只收新消息
 	if lastSentStreamID != "" {
 		// Continue from last replayed message to avoid gaps
 		// 从最后回放的消息继续，避免缺口
 		startFrom = lastSentStreamID
 	} else if lastStreamID == "" && lastSeq == 0 {
 		// No resume point, start from beginning
+		// 无续传点，从头开始
 		startFrom = "0-0"
 	}
 	ch := h.mgr.SubscribeFrom(wf, 256, startFrom)
 	defer h.mgr.Unsubscribe(wf, ch)
 
 	// Heartbeat ping
+	// 心跳 ping
 	conn.SetReadLimit(512)
 	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	conn.SetPongHandler(func(string) error {
@@ -130,6 +138,7 @@ func (h *StreamingHandler) handleWS(w http.ResponseWriter, r *http.Request) {
 	defer ticker.Stop()
 
 	// Reader pump (discard client messages)
+	// 读泵（丢弃客户端消息）
 	go func() {
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {
@@ -139,6 +148,7 @@ func (h *StreamingHandler) handleWS(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// Writer pump
+	// 写泵
 	for {
 		select {
 		case <-r.Context().Done():

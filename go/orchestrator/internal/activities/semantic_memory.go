@@ -11,11 +11,11 @@ import (
 // FetchSemanticMemoryInput requests semantic search within a session
 // FetchSemanticMemoryInput 用于在指定 session 内发起 semantic search
 type FetchSemanticMemoryInput struct {
-	Query     string  `json:"query"`      // The query to generate embedding from
-	SessionID string  `json:"session_id"` // Session to filter by
-	TenantID  string  `json:"tenant_id"`  // Tenant ID (for future multi-tenancy)
-	Threshold float64 `json:"threshold"`  // Similarity threshold (0.0-1.0)
-	TopK      int     `json:"top_k"`      // Maximum results to return
+	Query     string  `json:"query"`      // The query to generate embedding from 注：用于生成 embedding 的 query
+	SessionID string  `json:"session_id"` // Session to filter by 注：用于过滤的 session
+	TenantID  string  `json:"tenant_id"`  // Tenant ID (for future multi-tenancy) 注：tenant ID（为后续多租户预留）
+	Threshold float64 `json:"threshold"`  // Similarity threshold (0.0-1.0) 注：相似度阈值（0.0-1.0）
+	TopK      int     `json:"top_k"`      // Maximum results to return 注：返回结果的最大条数
 }
 
 // FetchSemanticMemoryResult contains semantically similar items
@@ -39,20 +39,20 @@ func FetchSemanticMemory(ctx context.Context, in FetchSemanticMemoryInput) (Fetc
 // FetchHierarchicalMemoryInput combines recent and semantic retrieval
 // FetchHierarchicalMemoryInput 组合 recent 与 semantic 两种检索
 type FetchHierarchicalMemoryInput struct {
-	Query        string  `json:"query"`          // For semantic search
-	SessionID    string  `json:"session_id"`     // Session identifier
-	TenantID     string  `json:"tenant_id"`      // Tenant ID
-	RecentTopK   int     `json:"recent_top_k"`   // Recent items from session
-	SemanticTopK int     `json:"semantic_top_k"` // Semantic items
-	SummaryTopK  int     `json:"summary_top_k"`  // Summary items (default: 3)
-	Threshold    float64 `json:"threshold"`      // Semantic similarity threshold
+	Query        string  `json:"query"`          // For semantic search 注：用于 semantic search
+	SessionID    string  `json:"session_id"`     // Session identifier 注：session 标识
+	TenantID     string  `json:"tenant_id"`      // Tenant ID 注：tenant ID
+	RecentTopK   int     `json:"recent_top_k"`   // Recent items from session 注：来自 session 的 recent 条目数
+	SemanticTopK int     `json:"semantic_top_k"` // Semantic items 注：semantic 条目数
+	SummaryTopK  int     `json:"summary_top_k"`  // Summary items (default: 3) 注：summary 条目数（默认 3）
+	Threshold    float64 `json:"threshold"`      // Semantic similarity threshold 注：语义相似度阈值
 }
 
 // FetchHierarchicalMemoryResult contains deduplicated memory items
 // FetchHierarchicalMemoryResult 包含去重后的 memory 条目
 type FetchHierarchicalMemoryResult struct {
 	Items   []map[string]any `json:"items"`
-	Sources map[string]int   `json:"sources"` // Count by source type
+	Sources map[string]int   `json:"sources"` // Count by source type 注：按来源类型计数
 }
 
 // FetchHierarchicalMemory combines recent session memory with semantic search
@@ -66,6 +66,7 @@ func FetchHierarchicalMemory(ctx context.Context, in FetchHierarchicalMemoryInpu
 	}
 
 	// Fetch recent items from session
+	// 从 session 抓取 recent 条目
 	if in.RecentTopK > 0 {
 		recentResult, _ := FetchSessionMemory(ctx, FetchSessionMemoryInput{
 			SessionID: in.SessionID,
@@ -83,6 +84,7 @@ func FetchHierarchicalMemory(ctx context.Context, in FetchHierarchicalMemoryInpu
 		metrics.MemoryItemsRetrieved.WithLabelValues("hierarchical-recent", "qdrant").Observe(float64(len(recentResult.Items)))
 
 		// Add recent items with source marker
+		// 添加 recent 条目并打上来源标记
 		for _, item := range recentResult.Items {
 			if item != nil {
 				item["_source"] = "recent"
@@ -97,6 +99,7 @@ func FetchHierarchicalMemory(ctx context.Context, in FetchHierarchicalMemoryInpu
 	seen := make(map[string]bool)
 
 	// Fetch semantic items if query provided
+	// 若提供了 query 则抓取 semantic 条目
 	if in.SemanticTopK > 0 && in.Query != "" {
 		semanticResult, _ := FetchSemanticMemory(ctx, FetchSemanticMemoryInput{
 			Query:     in.Query,
@@ -112,9 +115,11 @@ func FetchHierarchicalMemory(ctx context.Context, in FetchHierarchicalMemoryInpu
 		}
 
 		// Add non-duplicate semantic items
+		// 添加未重复的 semantic 条目
 		for _, item := range semanticResult.Items {
 			if item != nil {
 				// Build dedup key using same logic
+				// 使用相同逻辑构建去重 key
 				key := memoryDedupKey(item)
 
 				isDuplicate := false
@@ -145,9 +150,11 @@ func FetchHierarchicalMemory(ctx context.Context, in FetchHierarchicalMemoryInpu
 		embSvc := embeddings.Get()
 		if vdb != nil && embSvc != nil && vdb.GetConfig().Summaries != "" {
 			// Generate embedding for query
+			// 为 query 生成 embedding
 			vec, err := embSvc.GenerateEmbedding(ctx, in.Query, "")
 			if err == nil {
 				// Use configured summary limit or default to 3
+				// 使用配置的 summary 上限，未配置时默认 3
 				summaryLimit := in.SummaryTopK
 				if summaryLimit <= 0 {
 					summaryLimit = 3
@@ -155,9 +162,11 @@ func FetchHierarchicalMemory(ctx context.Context, in FetchHierarchicalMemoryInpu
 				summaries, _ := vdb.SearchSummaries(ctx, vec, in.SessionID, in.TenantID, summaryLimit, in.Threshold)
 
 				// Add summaries with source marker and dedup
+				// 添加 summaries，打上来源标记并去重
 				for _, summary := range summaries {
 					if summary.Payload != nil {
 						// Build dedup key
+						// 构建去重 key
 						key := ""
 						if id, ok := summary.Payload["summary_id"].(string); ok && id != "" {
 							key = "summary_" + id
@@ -171,6 +180,7 @@ func FetchHierarchicalMemory(ctx context.Context, in FetchHierarchicalMemoryInpu
 						}
 
 						// Skip if already seen
+						// 若已出现过则跳过
 						if key != "" && seen[key] {
 							continue
 						}

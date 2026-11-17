@@ -28,6 +28,7 @@ type TimelineHandler struct {
 }
 
 // Helper types for timeline building
+// 构建 timeline 的辅助类型
 type act struct {
 	Type      string
 	ID        string
@@ -57,7 +58,7 @@ func (h *TimelineHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 // handleBuildTimeline: GET /timeline?workflow_id=&run_id=&mode=summary|full&include_payloads=false&persist=true
-// handleBuildTimeline: GET /timeline?workflow_id=&run_id=&mode=summary|full&include_payloads=false&persist=true
+// handleBuildTimeline: 构建 workflow 时间线（GET /timeline?workflow_id=&run_id=&mode=summary|full&include_payloads=false&persist=true）
 func (h *TimelineHandler) handleBuildTimeline(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
@@ -114,6 +115,7 @@ func (h *TimelineHandler) handleBuildTimeline(w http.ResponseWriter, r *http.Req
 	}
 
 	// Return timeline directly
+	// 直接返回 timeline
 	payload := map[string]any{
 		"workflow_id": wf,
 		"events":      events,
@@ -179,6 +181,7 @@ func (h *TimelineHandler) buildTimeline(ctx context.Context, workflowID, runID, 
 			add("WF_CONTINUED_AS_NEW", "Workflow continued as new", ts, uint64(e.GetEventId()))
 
 		// Activities
+		// Activities 事件
 		case enumspb.EVENT_TYPE_ACTIVITY_TASK_SCHEDULED:
 			if a := e.GetActivityTaskScheduledEventAttributes(); a != nil {
 				acts[e.GetEventId()] = &act{Type: a.GetActivityType().GetName(), ID: a.GetActivityId(), Scheduled: ts}
@@ -228,6 +231,7 @@ func (h *TimelineHandler) buildTimeline(ctx context.Context, workflowID, runID, 
 			}
 
 		// Timers
+		// Timers 事件
 		case enumspb.EVENT_TYPE_TIMER_STARTED:
 			if a := e.GetTimerStartedEventAttributes(); a != nil {
 				timers[e.GetEventId()] = &timer{ID: a.GetTimerId(), Started: ts, Timeout: a.GetStartToFireTimeout().AsDuration()}
@@ -247,6 +251,7 @@ func (h *TimelineHandler) buildTimeline(ctx context.Context, workflowID, runID, 
 			}
 
 		// Signals
+		// Signals 事件
 		case enumspb.EVENT_TYPE_WORKFLOW_EXECUTION_SIGNALED:
 			if a := e.GetWorkflowExecutionSignaledEventAttributes(); a != nil {
 				add("SIG_RECEIVED", fmt.Sprintf("Signal received: %s", a.GetSignalName()), ts, uint64(e.GetEventId()))
@@ -261,6 +266,7 @@ func (h *TimelineHandler) buildTimeline(ctx context.Context, workflowID, runID, 
 			add("SIG_SENT_FAILED", "External signal failed", ts, uint64(e.GetEventId()))
 
 		// Child workflows
+		// Child workflow 事件
 		case enumspb.EVENT_TYPE_START_CHILD_WORKFLOW_EXECUTION_INITIATED:
 			if a := e.GetStartChildWorkflowExecutionInitiatedEventAttributes(); a != nil {
 				childs[e.GetEventId()] = &child{Type: a.GetWorkflowType().GetName(), ID: a.GetWorkflowId()}
@@ -306,6 +312,7 @@ func (h *TimelineHandler) buildTimeline(ctx context.Context, workflowID, runID, 
 			}
 
 		// Attributes / Markers (full)
+		// Attributes / Markers（full 模式）
 		case enumspb.EVENT_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES:
 			if mode == "full" {
 				add("ATTR_UPSERT", "Search attributes upserted", ts, uint64(e.GetEventId()))
@@ -322,6 +329,7 @@ func (h *TimelineHandler) buildTimeline(ctx context.Context, workflowID, runID, 
 	}
 
 	// Ensure order by timestamp
+	// 按 timestamp 排序
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Timestamp.Before(out[j].Timestamp) })
 
 	return out, timelineStats{Total: len(out), Mode: mode}, nil

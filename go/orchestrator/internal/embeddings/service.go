@@ -15,6 +15,7 @@ import (
 )
 
 // Service provides embedding generation with caching
+// Service 提供带缓存的 embedding 生成
 type Service struct {
 	cfg   Config
 	http  *http.Client
@@ -23,6 +24,7 @@ type Service struct {
 }
 
 // Global singleton for simple wiring
+// 便于简单装配的全局单例
 var globalSvc *Service
 
 func Initialize(cfg Config, cache EmbeddingCache) {
@@ -46,6 +48,7 @@ func Initialize(cfg Config, cache EmbeddingCache) {
 	}
 
 	// Create HTTP client with workflow interceptor
+	// 创建带 workflow interceptor 的 HTTP client
 	httpClient := &http.Client{
 		Timeout:   c.Timeout,
 		Transport: interceptors.NewWorkflowHTTPRoundTripper(nil),
@@ -57,6 +60,7 @@ func Initialize(cfg Config, cache EmbeddingCache) {
 func Get() *Service { return globalSvc }
 
 // GetConfig returns the current configuration
+// GetConfig 返回当前配置
 func (s *Service) GetConfig() Config {
 	if s == nil {
 		// Return default config if service not initialized
@@ -93,11 +97,13 @@ func (s *Service) GenerateEmbedding(ctx context.Context, text string, model stri
 	key := MakeKey(m, text)
 
 	// LRU first
+	// 先查 LRU
 	if v, ok := s.lru.Get(ctx, key); ok {
 		ometrics.RecordEmbeddingMetrics(m, "lru_hit", 0)
 		return v, nil
 	}
 	// Redis next
+	// 再查 Redis
 	if s.cache != nil {
 		if v, ok := s.cache.Get(ctx, key); ok {
 			s.lru.Set(ctx, key, v, 30*time.Minute)
@@ -109,10 +115,12 @@ func (s *Service) GenerateEmbedding(ctx context.Context, text string, model stri
 	start := time.Now()
 
 	// Start tracing span for embedding request
+	// 为 embedding request 启动 tracing span
 	ctx, span := tracing.StartHTTPSpan(ctx, "POST", fmt.Sprintf("%s/embeddings/", s.cfg.BaseURL))
 	defer span.End()
 
 	// Call LLM service
+	// 调用 LLM service
 	url := fmt.Sprintf("%s/embeddings/", s.cfg.BaseURL)
 	payload := embedRequest{Texts: []string{text}, Model: m}
 	buf, _ := json.Marshal(payload)
@@ -124,6 +132,7 @@ func (s *Service) GenerateEmbedding(ctx context.Context, text string, model stri
 	req.Header.Set("Content-Type", "application/json")
 
 	// Inject W3C traceparent header
+	// 注入 W3C traceparent 头
 	tracing.InjectTraceparent(ctx, req)
 
 	resp, err := s.http.Do(req)
@@ -146,6 +155,7 @@ func (s *Service) GenerateEmbedding(ctx context.Context, text string, model stri
 		return nil, fmt.Errorf("no embeddings returned")
 	}
 	// Convert to float32
+	// 转换为 float32
 	out := make([]float32, len(er.Embeddings[0]))
 	for i, f := range er.Embeddings[0] {
 		out[i] = float32(f)
@@ -177,6 +187,7 @@ func (s *Service) GenerateBatchEmbeddings(ctx context.Context, texts []string, m
 	}
 
 	// Check cache for each text
+	// 逐条文本检查缓存
 	results := make([][]float32, len(texts))
 	uncachedTexts := []string{}
 	uncachedIndices := []int{}
@@ -185,6 +196,7 @@ func (s *Service) GenerateBatchEmbeddings(ctx context.Context, texts []string, m
 		key := MakeKey(m, text)
 
 		// Check LRU cache
+		// 查 LRU 缓存
 		if v, ok := s.lru.Get(ctx, key); ok {
 			results[i] = v
 			ometrics.RecordEmbeddingMetrics(m, "lru_hit", 0)
@@ -192,6 +204,7 @@ func (s *Service) GenerateBatchEmbeddings(ctx context.Context, texts []string, m
 		}
 
 		// Check Redis cache
+		// 查 Redis 缓存
 		if s.cache != nil {
 			if v, ok := s.cache.Get(ctx, key); ok {
 				results[i] = v
@@ -219,6 +232,7 @@ func (s *Service) GenerateBatchEmbeddings(ctx context.Context, texts []string, m
 	defer span.End()
 
 	// Call LLM service with batch
+	// 以批量方式调用 LLM service
 	url := fmt.Sprintf("%s/embeddings/", s.cfg.BaseURL)
 	payload := embedRequest{Texts: uncachedTexts, Model: m}
 	buf, _ := json.Marshal(payload)
@@ -230,6 +244,7 @@ func (s *Service) GenerateBatchEmbeddings(ctx context.Context, texts []string, m
 	req.Header.Set("Content-Type", "application/json")
 
 	// Inject W3C traceparent header
+	// 注入 W3C traceparent 头
 	tracing.InjectTraceparent(ctx, req)
 
 	resp, err := s.http.Do(req)
@@ -269,6 +284,7 @@ func (s *Service) GenerateBatchEmbeddings(ctx context.Context, texts []string, m
 		results[idx] = out
 
 		// Cache the result
+		// 缓存结果
 		key := MakeKey(m, uncachedTexts[i])
 		s.lru.Set(ctx, key, out, 30*time.Minute)
 		if s.cache != nil {

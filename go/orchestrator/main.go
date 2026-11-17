@@ -21,7 +21,7 @@ import (
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/embeddings"
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/health"
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/httpapi"
-	_ "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/metrics" // Import for side effects
+	_ "github.com/Kocoro-lab/Shannon/go/orchestrator/internal/metrics" // Import for side effects 注：仅为副作用导入
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/pricing"
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/registry"
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/schedules"
@@ -50,8 +50,10 @@ import (
 
 func main() {
 	// Create a root context for background services
+	// 为后台服务创建根 context
 	ctx := context.Background()
 	// Initialize logger
+	// 初始化 logger
 	logger, err := zap.NewProduction()
 	if err != nil {
 		log.Fatalf("Failed to initialize logger: %v", err)
@@ -113,6 +115,7 @@ func main() {
 	}
 
 	// Start circuit breaker metrics collection
+	// 启动 circuit breaker 指标采集
 	circuitbreaker.StartMetricsCollection()
 
 	// ------------------------------------------------------------------
@@ -126,26 +129,30 @@ func main() {
 	// admin 端点共用的 HTTP mux（health、approvals，必要时还有 metrics）。
 	httpMux := http.NewServeMux()
 	// Register health endpoints on shared mux
+	// 在共享 mux 上注册 health 端点
 	healthHandler := health.NewHTTPHandler(hm, logger)
 	healthHandler.RegisterRoutes(httpMux)
 	// Configure streaming ring capacity via env (polish)
+	// 通过环境变量配置 streaming ring 容量（打磨项）
 	if capStr := os.Getenv("STREAMING_RING_CAPACITY"); capStr != "" {
 		if n, err := strconv.Atoi(capStr); err == nil && n > 0 {
 			streaming.Configure(n)
 		}
 	}
 	// Register streaming SSE/WS on the shared admin HTTP mux (community-ready)
+	// 在共享 admin HTTP mux 上注册 streaming 的 SSE/WS（community-ready）
 	streamingHandler := httpapi.NewStreamingHandler(streaming.Get(), logger)
 	streamingHandler.RegisterRoutes(httpMux)
 
 	// Start background checks and shared HTTP server
+	// 启动后台检查与共享 HTTP server
 	go func() {
 		_ = hm.Start(ctx)
 		server := &http.Server{
 			Addr:         ":" + strconv.Itoa(healthPort),
 			Handler:      httpMux,
 			ReadTimeout:  10 * time.Second,
-			WriteTimeout: 0, // Disable for SSE streaming (set per-handler if needed)
+			WriteTimeout: 0, // Disable for SSE streaming (set per-handler if needed) 注：SSE streaming 需禁用写超时（必要时可在单个 handler 上设置）
 			IdleTimeout:  120 * time.Second,
 		}
 		logger.Info("Admin HTTP server listening", zap.Int("port", healthPort))
@@ -155,6 +162,7 @@ func main() {
 	}()
 
 	// Initialize database client
+	// 初始化数据库客户端
 	dbConfig := &db.Config{
 		Host:     getEnvOrDefault("POSTGRES_HOST", "postgres"),
 		Port:     getEnvOrDefaultInt("POSTGRES_PORT", 5432),
@@ -171,9 +179,11 @@ func main() {
 	defer dbClient.Close()
 
 	// Set global dbClient for activities to use
+	// 设置全局 dbClient 供 activities 使用
 	activities.SetGlobalDBClient(dbClient)
 
 	// Register database health checker immediately
+	// 立即注册数据库健康检查器
 	if dbClient != nil {
 		dbChecker := health.NewDatabaseHealthChecker(dbClient.GetDB(), dbClient.Wrapper(), logger)
 		_ = hm.RegisterChecker(dbChecker)
@@ -187,7 +197,7 @@ func main() {
 	var shannonCfgMgr *cfg.ShannonConfigManager
 	cfgReady := make(chan struct{})
 	go func() {
-		configDir := "/app/config" // default inside container; can be overridden later
+		configDir := "/app/config" // default inside container; can be overridden later 注：容器内默认路径，之后可覆盖
 		configMgr, err := cfg.NewConfigManager(configDir, logger)
 		if err != nil {
 			logger.Warn("Config manager init failed", zap.Error(err))
@@ -210,9 +220,11 @@ func main() {
 		} else {
 			logger.Info("Shannon configuration loaded successfully")
 			// Signal that config is available for dependent components
+			// 通知配置已可用，供依赖它的组件使用
 			close(cfgReady)
 
 			// Register pricing validator and hot-reload handler for models.yaml
+			// 为 models.yaml 注册 pricing 校验器与热加载 handler
 			configMgr.RegisterValidator("models.yaml", func(m map[string]any) error { return pricing.ValidateMap(m) })
 			configMgr.RegisterHandler("models.yaml", func(ev cfg.ChangeEvent) error {
 				pricing.Reload()
@@ -221,11 +233,13 @@ func main() {
 			})
 
 			// Initialize policy engine from Shannon configuration
+			// 从 Shannon 配置初始化 policy engine
 			if shCfg := shannonCfgMgr.GetConfig(); shCfg != nil {
 				if err := activities.InitializePolicyEngineFromShannonConfig(&shCfg.Policy); err != nil {
 					logger.Warn("Failed to initialize policy engine from Shannon config", zap.Error(err))
 				} else {
 					// Register policy reload handler for .rego file changes
+					// 为 .rego 文件变更注册 policy 热加载 handler
 					if engine := activities.GetPolicyEngine(); engine != nil {
 						configMgr.RegisterPolicyHandler(func() error {
 							logger.Info("Reloading policy engine due to .rego file change")
@@ -236,27 +250,30 @@ func main() {
 				}
 
 				// Initialize embedding service and vectordb from Shannon config
+				// 从 Shannon 配置初始化 embedding 服务与 vectordb
 				{
 					// Embeddings - prefer new Embeddings config, fall back to Vector config
 					// Embeddings：优先使用新的 Embeddings 配置，缺失时回退到旧的 Vector 配置。
 					var ecfg embeddings.Config
 
 					// Check if new Embeddings section exists
+					// 检查是否存在新的 Embeddings 配置段
 					if shCfg.Embeddings.BaseURL != "" {
 						// Use new embeddings configuration
+						// 使用新的 embeddings 配置
 						ecfg = embeddings.Config{
 							BaseURL:      shCfg.Embeddings.BaseURL,
 							DefaultModel: shCfg.Embeddings.DefaultModel,
 							Timeout:      shCfg.Embeddings.Timeout,
 							CacheTTL:     shCfg.Embeddings.CacheTTL,
 							MaxLRU:       shCfg.Embeddings.MaxLRU,
-							EnableRedis:  shCfg.Vector.UseRedisCache, // Still use Vector config for Redis
+							EnableRedis:  shCfg.Vector.UseRedisCache, // Still use Vector config for Redis 注：Redis 仍沿用 Vector 配置
 							RedisAddr:    shCfg.Vector.RedisAddr,
 							Chunking: embeddings.ChunkingConfig{
 								Enabled:       shCfg.Embeddings.Chunking.Enabled,
 								MaxTokens:     shCfg.Embeddings.Chunking.MaxTokens,
 								OverlapTokens: shCfg.Embeddings.Chunking.OverlapTokens,
-								TokenizerMode: "simple", // Default to simple tokenizer
+								TokenizerMode: "simple", // Default to simple tokenizer 注：默认使用 simple tokenizer
 							},
 						}
 						logger.Info("Using new embeddings configuration with chunking",
@@ -264,6 +281,7 @@ func main() {
 							zap.Int("max_tokens", ecfg.Chunking.MaxTokens))
 					} else {
 						// Fall back to legacy configuration from Vector section
+						// 回退到 Vector 配置段中的旧版配置
 						base := shCfg.Agents.LLMServiceEndpoint
 						if base == "" {
 							base = getEnvOrDefault("LLM_SERVICE_URL", "http://llm-service:8000")
@@ -277,6 +295,7 @@ func main() {
 							CacheTTL:     shCfg.Vector.CacheTTL,
 							MaxLRU:       2048,
 							// Use default chunking config
+							// 使用默认的 chunking 配置
 							Chunking: embeddings.DefaultChunkingConfig(),
 						}
 						logger.Info("Using legacy vector configuration for embeddings")
@@ -330,6 +349,7 @@ func main() {
 					}
 
 					// Initialize tracing from Shannon configuration
+					// 从 Shannon 配置初始化 tracing
 					tracingCfg := tracing.Config{
 						Enabled:      shCfg.Tracing.Enabled,
 						ServiceName:  shCfg.Tracing.ServiceName,
@@ -340,16 +360,19 @@ func main() {
 					}
 
 					// Configure streaming ring capacity from config
+					// 从配置设置 streaming ring 容量
 					if shCfg.Streaming.RingCapacity > 0 {
 						streaming.Configure(shCfg.Streaming.RingCapacity)
 					}
 				}
 			} else {
 				// Fallback to environment variables if Shannon config not available
+				// Shannon 配置不可用时回退到环境变量
 				if err := activities.InitializePolicyEngine(); err != nil {
 					logger.Warn("Failed to initialize policy engine from environment", zap.Error(err))
 				} else {
 					// Register policy reload handler for .rego file changes
+					// 为 .rego 文件变更注册 policy 热加载 handler
 					if engine := activities.GetPolicyEngine(); engine != nil {
 						configMgr.RegisterPolicyHandler(func() error {
 							logger.Info("Reloading policy engine due to .rego file change")
@@ -363,9 +386,11 @@ func main() {
 	}()
 
 	// Wait for config to be ready before creating service
+	// 等待配置就绪后再创建 service
 	<-cfgReady
 
 	// Get session config from Shannon config
+	// 从 Shannon 配置读取 session 配置
 	var sessionCfg *session.ManagerConfig
 	if shannonCfgMgr != nil {
 		if shCfg := shannonCfgMgr.GetConfig(); shCfg != nil {
@@ -378,11 +403,13 @@ func main() {
 	}
 
 	// Create orchestrator service with session config
+	// 使用 session 配置创建 orchestrator service
 	orchestratorService, err := server.NewOrchestratorService(nil, dbClient, logger, sessionCfg)
 	if err != nil {
 		logger.Fatal("Failed to create orchestrator service", zap.Error(err))
 	}
 	// Provide typed Shannon config snapshot to server for defaults
+	// 把带类型的 Shannon 配置快照提供给 server 作为默认值
 	if shannonCfgMgr != nil {
 		if shCfg := shannonCfgMgr.GetConfig(); shCfg != nil {
 			orchestratorService.SetShannonConfig(shCfg)
@@ -390,9 +417,11 @@ func main() {
 	}
 
 	// Provide workflow defaults from Shannon config/env at submission time
+	// 在提交时提供来自 Shannon 配置/环境变量的 workflow 默认值
 	orchestratorService.SetWorkflowDefaultsProvider(func() bool {
 		bypass := workflowRuntime.BypassSingleResult
 		// Try Shannon config if available
+		// 若有 Shannon 配置则优先尝试
 		if shannonCfgMgr != nil {
 			if shCfg := shannonCfgMgr.GetConfig(); shCfg != nil {
 				bypass = shCfg.Workflow.BypassSingleResult
@@ -425,12 +454,14 @@ func main() {
 	select {
 	case <-cfgReady:
 		// Config is ready, shannonCfgMgr should be set
+		// 配置已就绪，此时 shannonCfgMgr 应已赋值
 		if shannonCfgMgr != nil {
 			shCfgForAuth = shannonCfgMgr.GetConfig()
 			logger.Info("Auth init using loaded config")
 		}
 	case <-time.After(5 * time.Second):
 		// Timeout waiting for config
+		// 等待配置 timeout
 		logger.Warn("Auth init timeout waiting for config; using defaults")
 	}
 	if shCfgForAuth != nil {
@@ -452,8 +483,10 @@ func main() {
 			zap.Bool("enabled", shCfgForAuth.Auth.Enabled))
 	} else {
 		// Fallback if config manager not available
+		// 配置管理器不可用时的回退
 		dbx := sqlx.NewDb(dbClient.GetDB(), "postgres")
 		// Use JWT_SECRET env var if set, otherwise use a safe default
+		// 若设置了 JWT_SECRET 环境变量则使用它，否则使用安全的默认值
 		jwtSecret := getEnvOrDefault("JWT_SECRET", "change-this-to-a-secure-32-char-minimum-secret")
 		jwtManager = authpkg.NewJWTManager(jwtSecret, 30*time.Minute, 7*24*time.Hour)
 		authService = authpkg.NewService(dbx, logger, jwtSecret)
@@ -462,16 +495,19 @@ func main() {
 	}
 
 	// Register minimal HTTP auth endpoints on the admin mux
+	// 在 admin mux 上注册最小化的 HTTP auth 端点
 	httpapi.NewAuthHTTPHandler(authService, logger).RegisterRoutes(httpMux)
 
 	grpcServer := grpc.NewServer(
 		grpc.UnaryInterceptor(authMiddleware.UnaryServerInterceptor()),
 	)
 	// Register orchestrator service and session service
+	// 注册 orchestrator service 与 session service
 	server.RegisterOrchestratorServiceServer(grpcServer, orchestratorService)
 	sessionService := server.NewSessionService(orchestratorService.SessionManager(), logger)
 	server.RegisterSessionServiceServer(grpcServer, sessionService)
 	// Register streaming gRPC service (backed by in-process manager)
+	// 注册 streaming gRPC service（由进程内 manager 支撑）
 	streamingSvc := server.NewStreamingService(streaming.Get(), logger)
 	orchpb.RegisterStreamingServiceServer(grpcServer, streamingSvc)
 	reflection.Register(grpcServer)
@@ -484,14 +520,17 @@ func main() {
 	}()
 
 	// Create and start Health system (augment configuration from Shannon config)
+	// 创建并启动 Health 系统（用 Shannon 配置补充配置项）
 	agentAddr := getEnvOrDefault("AGENT_CORE_ADDR", "agent-core:50051")
 	llmBase := getEnvOrDefault("LLM_SERVICE_URL", "http://llm-service:8000")
 
 	// Create health configuration from Shannon config
+	// 从 Shannon 配置创建 health 配置
 	var healthConfig *health.HealthConfiguration
 	if shannonCfgMgr != nil {
 		if shCfg := shannonCfgMgr.GetConfig(); shCfg != nil {
 			// Convert Shannon health config to health manager config
+			// 把 Shannon 的 health 配置转换为 health manager 配置
 			healthConfig = buildHealthConfig(shCfg)
 
 			// Update endpoints and port from config (only if not already set via env var)
@@ -511,22 +550,27 @@ func main() {
 	}
 
 	// Apply configuration to existing health manager
+	// 把配置应用到已存在的 health manager
 	if healthConfig != nil {
 		_ = hm.UpdateConfiguration(healthConfig)
 	}
 
 	// Register configuration change callbacks
+	// 注册配置变更回调
 	if shannonCfgMgr != nil {
 		shannonCfgMgr.RegisterCallback(func(oldConfig, newConfig *cfg.ShannonConfig) error {
 			// Update health configuration
+			// 更新 health 配置
 			newHealthConfig := buildHealthConfig(newConfig)
 
 			// Update health manager configuration
+			// 更新 health manager 配置
 			if err := hm.UpdateConfiguration(newHealthConfig); err != nil {
 				logger.Error("Failed to update health configuration", zap.Error(err))
 			}
 
 			// Check for policy configuration changes and reload policy engine
+			// 检查 policy 配置是否变更，并重新加载 policy engine
 			policyChanged := oldConfig.Policy.Enabled != newConfig.Policy.Enabled ||
 				oldConfig.Policy.Mode != newConfig.Policy.Mode ||
 				oldConfig.Policy.Path != newConfig.Policy.Path ||
@@ -564,10 +608,12 @@ func main() {
 			_ = hm.RegisterChecker(rc)
 
 			// Initialize streaming manager with Redis client
+			// 使用 Redis client 初始化 streaming manager
 			streaming.InitializeRedis(rw.GetClient(), logger)
 			logger.Info("Initialized streaming manager with Redis Streams")
 
 			// Create a go-redis/v9 client for daemon hub
+			// 为 daemon hub 创建 go-redis/v9 client
 			redisAddr := os.Getenv("REDIS_ADDR")
 			if redisAddr == "" {
 				redisAddr = "redis:6379"
@@ -610,11 +656,13 @@ func main() {
 	}
 
 	// LLM service checker
+	// LLM service 健康检查器
 	lc := health.NewLLMServiceHealthChecker(llmBase, logger)
 	_ = hm.RegisterChecker(lc)
 	logger.Info("Health checkers registered; starting gRPC setup")
 
 	// Start Prometheus metrics endpoint on configured port
+	// 在配置的端口上启动 Prometheus 指标端点
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
 		port := cfg.MetricsPort(2112)
@@ -626,10 +674,12 @@ func main() {
 	}()
 
 	// Initialize Temporal client and worker in background
+	// 在后台初始化 Temporal client 与 worker
 	var w worker.Worker
 	go func() {
 		host := getEnvOrDefault("TEMPORAL_HOST", "temporal:7233")
 		// TCP pre-check
+		// TCP 预检
 		for i := 1; i <= 60; i++ {
 			c, err := net.DialTimeout("tcp", host, 2*time.Second)
 			if err == nil {
@@ -640,6 +690,7 @@ func main() {
 			time.Sleep(1 * time.Second)
 		}
 		// Dial SDK with retry
+		// 带 retry 地 dial SDK
 		var tClient client.Client
 		var err error
 		for attempt := 1; ; attempt++ {
@@ -658,6 +709,7 @@ func main() {
 		streamingHandler.SetTemporalClient(tClient)
 
 		// Create and wire schedule manager
+		// 创建并接线 schedule manager
 		scheduleConfig := &schedules.Config{
 			MaxPerUser:          getEnvOrDefaultInt("SCHEDULE_MAX_PER_USER", 50),
 			MinCronIntervalMins: getEnvOrDefaultInt("SCHEDULE_MIN_INTERVAL_MINS", 60),
@@ -691,6 +743,7 @@ func main() {
 		// Temporal client 就绪后，按配置启动 Approvals HTTP API。
 		approvalsToken := getEnvOrDefault("APPROVALS_AUTH_TOKEN", "")
 		// Register approvals endpoint on the shared admin mux (same port as health)
+		// 在共享 admin mux 上注册 approvals 端点（与 health 同端口）
 		httpapi.NewApprovalHandler(tClient, logger, approvalsToken).RegisterRoutes(httpMux)
 		logger.Info("Approvals API registered on admin HTTP server", zap.Int("port", healthPort), zap.String("path", "/approvals/decision"))
 
@@ -700,24 +753,29 @@ func main() {
 		logger.Info("Daemon signal API registered on admin HTTP server", zap.Int("port", healthPort), zap.String("path", "/daemon/signal"))
 
 		// Register generic event ingestion endpoint for services (Python LLM, etc.)
+		// 为各服务（Python LLM 等）注册通用 event 摄取端点
 		eventsToken := getEnvOrDefault("EVENTS_AUTH_TOKEN", approvalsToken)
 		httpapi.NewIngestHandler(logger, eventsToken).RegisterRoutes(httpMux)
 		logger.Info("Events ingest API registered on admin HTTP server", zap.Int("port", healthPort), zap.String("path", "/events"))
 
 		// Register timeline builder endpoint on admin HTTP mux
+		// 在 admin HTTP mux 上注册 timeline 构建端点
 		httpapi.NewTimelineHandler(tClient, dbClient, logger).RegisterRoutes(httpMux)
 		logger.Info("Timeline API registered on admin HTTP server", zap.Int("port", healthPort), zap.String("path", "/timeline"))
 
 		// Create workers (single queue or priority queues)
+		// 创建 worker（单队列或优先级队列）
 		priorityQueues := strings.EqualFold(os.Getenv("PRIORITY_QUEUES"), "on") || os.Getenv("PRIORITY_QUEUES") == "1" || strings.EqualFold(os.Getenv("PRIORITY_QUEUES"), "true")
 
 		// Create and configure registry once
+		// 一次性创建并配置 registry
 		registryConfig := &registry.RegistryConfig{
 			EnableBudgetedWorkflows:  true,
 			EnableStreamingWorkflows: true,
 			EnableApprovalWorkflows:  true,
 		}
 		// Wire typed budget defaults and feature flags from shannon config
+		// 从 shannon 配置接线带类型的 budget 默认值与 feature flag
 		if shannonCfgMgr != nil {
 			if shCfg := shannonCfgMgr.GetConfig(); shCfg != nil {
 				if shCfg.Session.TokenBudgetPerTask > 0 {
@@ -731,8 +789,10 @@ func main() {
 			}
 		}
 		// Wire Temporal client for schedule management
+		// 为 schedule 管理接线 Temporal client
 		registryConfig.TemporalClient = tClient
 		// Wire Daemon Hub for scheduled daemon dispatch
+		// 为定时 daemon 派发接线 Daemon Hub
 		if v9Client != nil {
 			registryConfig.DaemonHub = daemon.NewHub(v9Client, logger)
 		}
@@ -765,6 +825,7 @@ func main() {
 
 		if priorityQueues {
 			// Read concurrency from env (defaults shown)
+			// 从环境变量读取并发数（括号内为默认值）
 			ca := getEnvOrDefaultInt("WORKER_ACT_CRITICAL", 12)
 			cw := getEnvOrDefaultInt("WORKER_WF_CRITICAL", 12)
 			ha := getEnvOrDefaultInt("WORKER_ACT_HIGH", 10)
@@ -788,10 +849,11 @@ func main() {
 
 			_ = startWorker("shannon-tasks-critical", ca, cw)
 			_ = startWorker("shannon-tasks-high", ha, hw)
-			w = startWorker("shannon-tasks", na, nw) // normal
+			w = startWorker("shannon-tasks", na, nw) // normal 注：normal 队列
 			_ = startWorker("shannon-tasks-low", la, lw)
 		} else {
 			// Single-queue mode
+			// 单队列模式
 			sa := getEnvOrDefaultInt("WORKER_ACT", 10)
 			sw := getEnvOrDefaultInt("WORKER_WF", 10)
 
@@ -807,18 +869,21 @@ func main() {
 	}()
 
 	// Handle graceful shutdown
+	// 处理优雅关闭
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 	logger.Info("Shutting down orchestrator service")
 
 	// Graceful shutdown
+	// 优雅关闭
 	grpcServer.GracefulStop()
 	if w != nil {
 		w.Stop()
 	}
 
 	// Stop degradation manager and other background services
+	// 停止 degradation manager 及其他后台服务
 	if orchestratorService != nil {
 		if err := orchestratorService.Shutdown(); err != nil {
 			logger.Error("Failed to shutdown orchestrator service", zap.Error(err))
@@ -826,6 +891,7 @@ func main() {
 	}
 
 	// Config manager runs async and will stop when context is cancelled
+	// 配置管理器异步运行，context 取消后即停止
 }
 
 func getEnvOrDefault(key, defaultValue string) string {
@@ -873,6 +939,7 @@ func buildHealthConfig(shCfg *cfg.ShannonConfig) *health.HealthConfiguration {
 		Checks:        make(map[string]health.CheckConfig, len(shCfg.Health.Checks)),
 	}
 	// Convert per-check configuration
+	// 转换每一项检查的配置
 	for name, checkCfg := range shCfg.Health.Checks {
 		hc.Checks[name] = health.CheckConfig{
 			Enabled:  checkCfg.Enabled,

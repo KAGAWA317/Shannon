@@ -11,6 +11,7 @@ import (
 )
 
 // ValidationMiddleware performs basic input validation for common params
+// ValidationMiddleware 对常见参数做基本输入校验
 type ValidationMiddleware struct {
 	logger *zap.Logger
 }
@@ -25,6 +26,7 @@ func (vm *ValidationMiddleware) Middleware(next http.Handler) http.Handler {
 		method := r.Method
 
 		// Validate by route. Keep this minimal and fast.
+		// 按路由分别校验。保持精简、快速。
 		switch {
 		case method == http.MethodGet && path == "/api/v1/tasks":
 			if !vm.validatePagination(w, r, 1, 100) {
@@ -65,6 +67,7 @@ func (vm *ValidationMiddleware) Middleware(next http.Handler) http.Handler {
 
 		case method == http.MethodGet && strings.HasPrefix(path, "/api/v1/tasks/"):
 			// e.g., GET /api/v1/tasks/{id}
+			// 例如 GET /api/v1/tasks/{id}
 			if !vm.validatePathID(w, r) {
 				return
 			}
@@ -94,6 +97,7 @@ func (vm *ValidationMiddleware) Middleware(next http.Handler) http.Handler {
 }
 
 // --- helpers ---
+// --- 辅助函数 ---
 
 var idRe = regexp.MustCompile(`^[A-Za-z0-9:_\-\.]{1,128}$`)
 

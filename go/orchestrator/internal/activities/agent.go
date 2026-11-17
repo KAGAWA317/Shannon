@@ -5,6 +5,11 @@ package activities
 //   - Body field mirroring to prompt_params (generic field mirroring logic)
 //   - Error handling when /agent/query HTTP endpoint fails
 //   - Session context injection and merging
+// TODO：补充以下单元测试：
+//   - ExecuteAgentWithForcedTools（强制 tool 执行路径）
+//   - Body 字段镜像到 prompt_params（通用字段镜像逻辑）
+//   - /agent/query HTTP 端点失败时的错误处理
+//   - session context 的注入与合并
 
 import (
 	"context"
@@ -41,19 +46,21 @@ import (
 
 var (
 	policyEngine   policy.Engine
-	policyEngineMu sync.RWMutex // Protects policyEngine reads and writes
+	policyEngineMu sync.RWMutex // Protects policyEngine reads and writes 注：保护 policyEngine 的读写
 )
 
 // --- Minimal tool metadata cache (cost_per_use) ---
+// --- 最小化的 tool metadata 缓存（cost_per_use）---
 type toolCostCacheEntry struct {
 	cost      float64
 	expiresAt time.Time
 }
 
-var toolCostCache sync.Map // key: tool name -> toolCostCacheEntry
+var toolCostCache sync.Map // key: tool name -> toolCostCacheEntry 注：key：tool 名 -> toolCostCacheEntry
 
 func getToolCostPerUse(ctx context.Context, baseURL, toolName string) float64 {
 	// TTL from env (seconds), default 300s
+	// TTL 取自环境变量（秒），默认 300s
 	ttlSec := getenvInt("MCP_TOOL_COST_TTL_SECONDS", 300)
 	if ttlSec <= 0 {
 		ttlSec = 300
@@ -67,6 +74,7 @@ func getToolCostPerUse(ctx context.Context, baseURL, toolName string) float64 {
 		}
 	}
 	// Best-effort HTTP fetch with short timeout
+	// 尽力而为的 HTTP 拉取，使用较短超时
 	url := fmt.Sprintf("%s/tools/%s/metadata", baseURL, toolName)
 	client := &http.Client{Timeout: 2 * time.Second, Transport: interceptors.NewWorkflowHTTPRoundTripper(nil)}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -96,6 +104,7 @@ func getToolCostPerUse(ctx context.Context, baseURL, toolName string) float64 {
 }
 
 // parseFlexibleFloat attempts to parse a value as float64 from various JSON types
+// parseFlexibleFloat 尝试把各种 JSON 类型的值解析为 float64。
 func parseFlexibleFloat(v any) (float64, bool) {
 	switch val := v.(type) {
 	case float64:
@@ -113,6 +122,7 @@ func parseFlexibleFloat(v any) (float64, bool) {
 }
 
 // parseFlexibleInt attempts to parse a value as int from various JSON types
+// parseFlexibleInt 尝试把各种 JSON 类型的值解析为 int。
 func parseFlexibleInt(v any) (int, bool) {
 	switch val := v.(type) {
 	case float64:
@@ -148,11 +158,14 @@ func ensureSessionContext(ctx map[string]any, sessionID, agentID string) map[str
 
 	// ALWAYS overwrite session_id from the authoritative metadata value.
 	// User-controlled context must not be trusted for session identity.
+	// 始终用 metadata 中的权威值覆盖 session_id。
+	// 不能信任用户可控的 context 来决定 session 身份。
 	if sessionID != "" {
 		ctx["session_id"] = sessionID
 	}
 
 	// Inject agent_id if missing, nil, empty, or wrong type
+	// agent_id 缺失、为 nil、为空或类型不对时注入
 	if agentID != "" {
 		needsInjection := false
 		if existing, exists := ctx["agent_id"]; !exists {
@@ -171,12 +184,14 @@ func ensureSessionContext(ctx map[string]any, sessionID, agentID string) map[str
 }
 
 // validateContext sanitizes user-provided context to prevent injection attacks
+// validateContext 清洗用户提供的 context，防止注入攻击。
 func validateContext(ctx map[string]any, logger *zap.Logger) map[string]any {
 	if ctx == nil {
 		return make(map[string]any)
 	}
 
 	// Blacklist of internal metadata fields that should never reach the LLM
+	// 内部 metadata 字段黑名单：这些字段不应传给 LLM
 	internalFields := map[string]bool{
 		"budget_agent_max":       true,
 		"budget_agent_remaining": true,
@@ -200,6 +215,7 @@ func validateContext(ctx map[string]any, logger *zap.Logger) map[string]any {
 		}
 
 		// Filter out internal metadata fields
+		// 过滤掉内部 metadata 字段
 		if internalFields[key] {
 			logger.Debug("Filtering internal metadata field from context", zap.String("key", key))
 			continue
@@ -216,6 +232,7 @@ func validateContext(ctx map[string]any, logger *zap.Logger) map[string]any {
 		}
 
 		// Validate and sanitize values while preserving arbitrary keys
+		// 校验并清洗各 value，同时保留任意 key
 		if sanitizedValue := sanitizeContextValue(value, key, logger); sanitizedValue != nil {
 			validated[key] = sanitizedValue
 		} else {
@@ -227,6 +244,7 @@ func validateContext(ctx map[string]any, logger *zap.Logger) map[string]any {
 }
 
 // sanitizeContextValue validates individual context values
+// sanitizeContextValue 校验单个 context value。
 func sanitizeContextValue(value any, key string, logger *zap.Logger) any {
 	switch v := value.(type) {
 	case nil:
@@ -235,6 +253,7 @@ func sanitizeContextValue(value any, key string, logger *zap.Logger) any {
 		return v
 	case string:
 		// Limit string length to prevent DoS (UTF-8 safe)
+		// 限制字符串长度以防 DoS（UTF-8 安全）
 		runes := []rune(v)
 		if len(runes) > 10000 {
 			logger.Warn("Truncating oversized string value", zap.String("key", key), zap.Int("original_length", len(runes)))
@@ -245,6 +264,7 @@ func sanitizeContextValue(value any, key string, logger *zap.Logger) any {
 		return v
 	case map[string]any:
 		// Recursively validate nested maps
+		// 递归校验嵌套 map
 		sanitized := make(map[string]any)
 		for k, nested := range v {
 			if len(k) > 100 {
@@ -261,6 +281,7 @@ func sanitizeContextValue(value any, key string, logger *zap.Logger) any {
 	default:
 		reflected := reflect.ValueOf(v)
 		// Security: Filter out unsafe types that could cause panics or security issues
+		// 安全：过滤掉可能引发 panic 或安全问题的类型
 		switch reflected.Kind() {
 		case reflect.Chan, reflect.Func, reflect.UnsafePointer:
 			logger.Warn("Filtering unsafe type from context (security)",
@@ -282,6 +303,7 @@ func sanitizeContextValue(value any, key string, logger *zap.Logger) any {
 }
 
 // getContextKeys returns keys for logging purposes
+// getContextKeys 返回用于日志的 key 列表。
 func getContextKeys(ctx map[string]any) []string {
 	if ctx == nil {
 		return nil
@@ -294,6 +316,7 @@ func getContextKeys(ctx map[string]any) []string {
 }
 
 // sanitizeToolCall validates and sanitizes tool call maps before protobuf conversion
+// sanitizeToolCall 在转 protobuf 前校验并清洗 tool call map。
 func sanitizeToolCall(call map[string]any, logger *zap.Logger) map[string]any {
 	if call == nil {
 		return nil
@@ -302,6 +325,7 @@ func sanitizeToolCall(call map[string]any, logger *zap.Logger) map[string]any {
 	sanitized := make(map[string]any)
 
 	// Validate required "tool" field
+	// 校验必需的 "tool" 字段
 	if tool, exists := call["tool"]; exists {
 		if toolStr, ok := tool.(string); ok && toolStr != "" && len(toolStr) <= 100 {
 			sanitized["tool"] = toolStr
@@ -315,12 +339,14 @@ func sanitizeToolCall(call map[string]any, logger *zap.Logger) map[string]any {
 	}
 
 	// Validate "parameters" field if present
+	// 若存在 "parameters" 字段则校验
 	if params, exists := call["parameters"]; exists {
 		if sanitizedParams := sanitizeToolParameters(params, logger); sanitizedParams != nil {
 			sanitized["parameters"] = sanitizedParams
 		} else {
 			logger.Warn("Failed to sanitize tool parameters")
 			// Still proceed with empty parameters rather than failing entirely
+			// 仍以空 parameters 继续，而不是整体失败
 			sanitized["parameters"] = make(map[string]any)
 		}
 	} else {
@@ -331,6 +357,7 @@ func sanitizeToolCall(call map[string]any, logger *zap.Logger) map[string]any {
 }
 
 // sanitizeToolParameters validates tool parameters recursively
+// sanitizeToolParameters 递归校验 tool parameters。
 func sanitizeToolParameters(params any, logger *zap.Logger) any {
 	switch p := params.(type) {
 	case nil:
@@ -341,6 +368,7 @@ func sanitizeToolParameters(params any, logger *zap.Logger) any {
 		if len(p) > 20 {
 			logger.Warn("Tool parameters map too large, truncating", zap.Int("size", len(p)))
 			// Take first 20 items only
+			// 只取前 20 项
 			truncated := make(map[string]any)
 			count := 0
 			for k, v := range p {
@@ -509,6 +537,7 @@ func sanitizeToolReflectedMap(reflected reflect.Value, logger *zap.Logger) map[s
 }
 
 // InitializePolicyEngine initializes the global policy engine
+// InitializePolicyEngine 初始化全局 policy engine。
 func InitializePolicyEngine() error {
 	config := policy.LoadConfig()
 	logger := zap.L()
@@ -532,6 +561,7 @@ func InitializePolicyEngine() error {
 }
 
 // InitializePolicyEngineFromConfig initializes the global policy engine from Shannon config
+// InitializePolicyEngineFromConfig 从 Shannon 配置初始化全局 policy engine。
 func InitializePolicyEngineFromConfig(shannonPolicyConfig any) error {
 	config := policy.LoadConfigFromShannon(shannonPolicyConfig)
 	logger := zap.L()
@@ -557,8 +587,10 @@ func InitializePolicyEngineFromConfig(shannonPolicyConfig any) error {
 }
 
 // InitializePolicyEngineFromShannonConfig initializes from typed Shannon config
+// InitializePolicyEngineFromShannonConfig 从类型化的 Shannon 配置初始化。
 func InitializePolicyEngineFromShannonConfig(shannonPolicyConfig *config.PolicyConfig) error {
 	// Convert Shannon config to map format that LoadConfigFromShannon expects
+	// 把 Shannon 配置转换为 LoadConfigFromShannon 期望的 map 格式
 	shannonPolicyMap := map[string]any{
 		"enabled":     shannonPolicyConfig.Enabled,
 		"mode":        shannonPolicyConfig.Mode,
@@ -569,6 +601,8 @@ func InitializePolicyEngineFromShannonConfig(shannonPolicyConfig *config.PolicyC
 
 	// Use LoadConfigFromShannon which properly merges environment variables
 	// This ensures emergency kill-switch and canary settings from env vars work
+	// 走 LoadConfigFromShannon，它会正确合并环境变量
+	// 以保证环境变量中的紧急 kill-switch 与 canary 设置生效
 	policyConfig := policy.LoadConfigFromShannon(shannonPolicyMap)
 
 	logger := zap.L()
@@ -594,6 +628,7 @@ func InitializePolicyEngineFromShannonConfig(shannonPolicyConfig *config.PolicyC
 }
 
 // GetPolicyEngine returns the global policy engine instance
+// GetPolicyEngine 返回全局 policy engine 实例。
 func GetPolicyEngine() policy.Engine {
 	policyEngineMu.RLock()
 	defer policyEngineMu.RUnlock()
@@ -601,8 +636,10 @@ func GetPolicyEngine() policy.Engine {
 }
 
 // evaluateAgentPolicy builds policy input and evaluates the agent execution request
+// evaluateAgentPolicy 构造 policy 输入并评估 agent 执行请求。
 func evaluateAgentPolicy(ctx context.Context, input AgentExecutionInput, logger *zap.Logger) (*policy.Decision, error) {
 	// Get environment from active policy engine configuration for consistency
+	// 从当前 policy engine 配置取 environment，保持一致
 	environment := "dev"
 	policyEngineMu.RLock()
 	engine := policyEngine
@@ -624,14 +661,17 @@ func evaluateAgentPolicy(ctx context.Context, input AgentExecutionInput, logger 
 		Query:       input.Query,
 		Mode:        input.Mode,
 		Context:     input.Context,
-		Environment: environment, // Use policy config environment for consistency
+		Environment: environment, // Use policy config environment for consistency 注：使用 policy 配置中的 environment 以保持一致
 		Timestamp:   time.Now(),
 	}
 
 	// Extract additional context if available
+	// 若有则提取额外的 context
 
 	// Use authenticated user_id (input.UserID) as primary source for policy.
 	// Fall back to context["user_id"] only if input.UserID is empty (legacy paths).
+	// policy 以已认证的 user_id（input.UserID）为首要来源。
+	// 仅当 input.UserID 为空（legacy 路径）时才回退到 context["user_id"]。
 	if input.UserID != "" {
 		policyInput.UserID = input.UserID
 	} else if userID, ok := input.Context["user_id"].(string); ok {
@@ -639,24 +679,29 @@ func evaluateAgentPolicy(ctx context.Context, input AgentExecutionInput, logger 
 	}
 
 	// Extract complexity score if available
+	// 若有则提取 complexity score
 	if complexityScore, ok := input.Context["complexity_score"].(float64); ok {
 		policyInput.ComplexityScore = complexityScore
 	}
 
 	// Extract token budget if available
+	// 若有则提取 token budget
 	if tokenBudget, ok := input.Context["token_budget"].(int); ok {
 		policyInput.TokenBudget = tokenBudget
 	}
 
 	// Optional: Vector context enrichment with strict timeouts (protect policy latency)
+	// 可选：带严格超时的向量 context 增强（保护 policy 延迟）
 	if svc := embeddings.Get(); svc != nil {
 		if vdb := vectordb.Get(); vdb != nil {
 			// Budget total vector time aggressively
+			// 严格控制向量环节的总耗时
 			vecCtx, cancel := context.WithTimeout(ctx, 5*time.Millisecond)
 			defer cancel()
 			if emb, err := svc.GenerateEmbedding(vecCtx, input.Query, ""); err == nil {
 				if sims, err := vdb.FindSimilarQueries(vecCtx, emb, 5); err == nil {
 					// Convert to policy.SimilarQuery
+					// 转换为 policy.SimilarQuery
 					sq := make([]policy.SimilarQuery, 0, len(sims))
 					var max float64
 					for _, s := range sims {
@@ -682,6 +727,7 @@ func evaluateAgentPolicy(ctx context.Context, input AgentExecutionInput, logger 
 	duration := time.Since(startTime)
 
 	// Record performance metrics
+	// 记录性能指标
 	policy.RecordEvaluationDuration("agent_execution", duration.Seconds())
 
 	if err != nil {
@@ -707,6 +753,7 @@ func isResearchContext(ctx map[string]any) bool {
 		return false
 	}
 	// Use util.GetContextBool to handle both bool and string "true" (proto map<string,string> converts to string)
+	// 用 util.GetContextBool 兼容 bool 与字符串 "true"（proto map<string,string> 会把值转成字符串）
 	if util.GetContextBool(ctx, "force_research") {
 		return true
 	}
@@ -732,16 +779,20 @@ func roleFromContext(ctx map[string]any) string {
 // 两条 activity（ExecuteAgent 与 ExecuteSimpleTask）共用的 gRPC 执行逻辑，避免 activity 之间直接互调。
 func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *zap.Logger) (AgentExecutionResult, error) {
 	// Ensure we have a valid logger
+	// 确保 logger 可用
 	if logger == nil {
 		logger, _ = zap.NewProduction()
 	}
 
 	// Best-effort role extraction for observability
+	// 尽力提取 role，用于可观测性
 	role := roleFromContext(input.Context)
 
 	// Apply persona settings if specified
+	// 若指定了 persona 则应用其设置
 	if input.PersonaID != "" {
 		// TODO: Re-enable when personas package is complete
+		// TODO：personas 包完成后重新启用
 		// persona, err := personas.GetPersona(input.PersonaID)
 		type Persona struct {
 			SystemPrompt string
@@ -757,6 +808,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 				zap.Error(err))
 		} else {
 			// Apply persona configuration
+			// 应用 persona 配置
 			if persona.SystemPrompt != "" {
 				if input.Context == nil {
 					input.Context = make(map[string]any)
@@ -765,8 +817,10 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 			}
 
 			// Override tools if persona specifies them, but intersect with available tools
+			// 若 persona 指定了 tool 则覆盖，但与可用 tool 取交集
 			if len(persona.Tools) > 0 {
 				// Fetch available tools to intersect with persona tools
+				// 拉取可用 tool，与 persona tool 取交集
 				availableTools := fetchAvailableTools(ctx)
 				intersectedTools := intersectTools(persona.Tools, availableTools)
 
@@ -781,11 +835,13 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 						zap.Strings("persona_tools", persona.Tools),
 						zap.Strings("available_tools", availableTools))
 					// Don't constrain if no tools match
+					// 没有匹配的 tool 时不加限制
 					input.SuggestedTools = nil
 				}
 			}
 
 			// Apply temperature setting
+			// 应用 temperature 设置
 			if persona.Temperature > 0 {
 				if input.Context == nil {
 					input.Context = make(map[string]any)
@@ -794,8 +850,9 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 			}
 
 			// Apply token budget
+			// 应用 token budget
 			// tokenBudget := personas.GetTokenBudgetValue(persona.TokenBudget)
-			tokenBudget := 5000 // Default medium budget
+			tokenBudget := 5000 // Default medium budget 注：默认中等额度
 			if input.Context == nil {
 				input.Context = make(map[string]any)
 			}
@@ -819,9 +876,11 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	)
 
 	// Emit human-readable "agent thinking" event
+	// 发出可读的 "agent thinking" 事件
 	emitAgentThinkingEvent(ctx, input)
 
 	// Policy check - Phase 0.5: Basic enforcement at agent execution boundary
+	// policy 检查 —— Phase 0.5：在 agent 执行边界做基础管控
 	policyEngineMu.RLock()
 	engine := policyEngine
 	policyEngineMu.RUnlock()
@@ -840,6 +899,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 
 		if !decision.Allow {
 			// Check if we're in dry-run mode - if so, don't block execution
+			// 检查是否处于 dry-run 模式：是则不阻断执行
 			if engine != nil && engine.Mode() == policy.ModeDryRun {
 				logger.Info("DRY-RUN: Policy would deny but allowing execution",
 					zap.String("reason", decision.Reason),
@@ -849,11 +909,14 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 				)
 
 				// Record dry-run divergence metrics
+				// 记录 dry-run 偏差指标
 				policy.RecordEvaluation("dry_run_would_deny", "agent_execution", decision.Reason)
 
 				// Continue execution despite policy denial
+				// 即使 policy 拒绝也继续执行
 			} else {
 				// Enforce mode - actually block execution
+				// enforce 模式：真正阻断执行
 				logger.Warn("Agent execution denied by policy",
 					zap.String("reason", decision.Reason),
 					zap.String("agent_id", input.AgentID),
@@ -862,6 +925,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 				)
 
 				// Record enforcement metrics
+				// 记录管控指标
 				policy.RecordEvaluation("deny", "agent_execution", decision.Reason)
 
 				return AgentExecutionResult{
@@ -869,11 +933,12 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 					Role:    role,
 					Success: false,
 					Error:   fmt.Sprintf("denied by policy: %s", decision.Reason),
-				}, nil // Don't return error to avoid workflow failure, just deny execution
+				}, nil // Don't return error to avoid workflow failure, just deny execution 注：不返回 error 以避免 workflow 失败，只拒绝本次执行
 			}
 		}
 
 		// Record successful evaluation (allow or dry-run)
+		// 记录评估成功（allow 或 dry-run）
 		if decision.Allow {
 			policy.RecordEvaluation("allow", "agent_execution", decision.Reason)
 			logger.Debug("Agent execution allowed by policy",
@@ -883,12 +948,14 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 		}
 
 		// Handle approval requirement (future phase)
+		// 处理需人工审批的情况（后续阶段）
 		if decision.RequireApproval {
 			logger.Info("Policy requires approval for agent execution",
 				zap.String("agent_id", input.AgentID),
 				zap.String("reason", decision.Reason),
 			)
 			// TODO: Route to human intervention workflow
+			// TODO：接入人工介入 workflow
 		}
 	}
 
@@ -898,6 +965,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	}
 
 	// Create gRPC connection wrapper with circuit breaker
+	// 创建带 circuit breaker 的 gRPC 连接封装
 	connWrapper := circuitbreaker.NewGRPCConnectionWrapper(addr, "agent-core", logger)
 
 	dialCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -915,9 +983,11 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	client := agentpb.NewAgentServiceClient(conn)
 
 	// Create gRPC call wrapper with circuit breaker
+	// 创建带 circuit breaker 的 gRPC 调用封装
 	grpcWrapper := circuitbreaker.NewGRPCWrapper("agent-core-call", "agent-core", logger)
 
 	// Map string mode to enum
+	// 把字符串 mode 映射为枚举
 	var emode commonpb.ExecutionMode
 	switch input.Mode {
 	case "simple":
@@ -929,6 +999,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	}
 
 	// Build session context for agent if available
+	// 若有则构造 agent 的 session context
 	var sessionCtx *agentpb.SessionContext
 	if input.SessionID != "" || len(input.History) > 0 {
 		sessionCtx = &agentpb.SessionContext{
@@ -936,6 +1007,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 			History:   input.History,
 			UserId:    input.UserID,
 			// Context from input already includes merged session context
+			// input 中的 context 已包含合并后的 session context
 		}
 	}
 
@@ -951,6 +1023,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	var allowedByRole []string
 	if len(input.SuggestedTools) > 0 {
 		// LLM has already suggested tools - use them directly
+		// LLM 已给出建议 tool，直接使用
 		allowedByRole = input.SuggestedTools
 		logger.Info("Using LLM-suggested tools",
 			zap.Strings("tools", allowedByRole),
@@ -959,6 +1032,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	} else {
 		if disableDefaultTools {
 			// No tools suggested and default tools are disabled - keep empty to allow direct LLM response + streaming.
+			// 无建议 tool 且默认 tool 已关闭：保持为空，让 LLM 直接回答并保留 streaming。
 			allowedByRole = []string{}
 			logger.Info("No tools suggested; default tools disabled via DISABLE_DEFAULT_TOOLS=1, using direct LLM response",
 				zap.String("agent_id", input.AgentID),
@@ -966,6 +1040,8 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 		} else {
 			// No tools suggested - default to python_executor for computation support.
 			// Note: Firecracker VM has no network; only pure computation works.
+			// 无建议 tool：默认 python_executor 以支持计算。
+			// 注意：Firecracker VM 无网络，只能做纯计算。
 			allowedByRole = []string{"python_executor"}
 			logger.Info("No tools suggested, defaulting to python_executor",
 				zap.String("agent_id", input.AgentID),
@@ -975,6 +1051,8 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 
 	// Universal guard: If any web_fetch tool is suggested but web_search is not, add web_search
 	// web_fetch tools require URLs that typically come from web_search results
+	// 通用兜底：若建议了任一 web_fetch tool 却没有 web_search，则补上 web_search
+	// web_fetch 类 tool 需要 URL，而 URL 通常来自 web_search 结果
 	hasWebFetch := false
 	hasWebSearch := false
 	for _, tool := range allowedByRole {
@@ -994,6 +1072,8 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 
 	// Research mode guard: If web_search is suggested but no fetch tools, add web_fetch
 	// This ensures DR policy can execute search→fetch chain even if decomposition only suggested search
+	// research 模式兜底：若建议了 web_search 却没有 fetch tool，则补上 web_fetch
+	// 以保证即使分解阶段只建议了 search，DR policy 也能执行 search→fetch 链路
 	isResearchMode := isResearchContext(input.Context)
 	if isResearchMode && hasWebSearch && !hasWebFetch {
 		allowedByRole = append(allowedByRole, "web_fetch", "web_subpage_fetch")
@@ -1004,11 +1084,13 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	}
 
 	// Pass tool parameters to context if provided and valid
+	// 若提供了且有效，则把 tool parameters 传入 context
 	if len(input.ToolParameters) > 0 {
 		toolName, hasToolName := input.ToolParameters["tool"].(string)
 		validParams := hasToolName && validateForcedToolParams(toolName, input.ToolParameters)
 
 		// Only pass parameters if they're valid
+		// 仅在参数有效时才传递
 		if validParams {
 			if input.Context == nil {
 				input.Context = make(map[string]any)
@@ -1017,12 +1099,16 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 
 			// Mirror critical body fields into prompt_params as a resilience fallback
 			// This helps Python OpenAPI tools reconstruct the body if arrays get lost upstream.
+			// 把关键 body 字段镜像到 prompt_params 作为兜底
+			// 帮助 Python OpenAPI tool 在上游丢失数组时重建 body。
 			if bodyRaw, ok := input.ToolParameters["body"]; ok {
 				if body, ok2 := bodyRaw.(map[string]any); ok2 {
 					// Type assert prompt_params with error handling
+					// 类型断言 prompt_params 并处理错误
 					pp, ok := input.Context["prompt_params"].(map[string]any)
 					if !ok {
 						// prompt_params is missing or wrong type, create new map
+						// prompt_params 缺失或类型不对，新建 map
 						logger.Warn("prompt_params missing or invalid type, creating new map",
 							zap.String("workflow_id", input.ParentWorkflowID))
 						pp = make(map[string]any)
@@ -1031,6 +1117,8 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 
 					// Safe field allowlist to prevent leaking sensitive data
 					// Only mirror fields that are safe for vendor adapters
+					// 安全字段白名单，防止泄露敏感数据
+					// 只镜像对 vendor adapter 安全的字段
 					safeFields := map[string]bool{
 						"account_id":   true,
 						"tenant_id":    true,
@@ -1039,7 +1127,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 						"profile_id":   true,
 						"workspace_id": true,
 						"project_id":   true,
-						"aid":          true, // Application ID
+						"aid":          true, // Application ID 注：应用 ID
 						"current_date": true,
 						"role":         true,
 						"limit":        true,
@@ -1053,8 +1141,11 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 
 					// Mirror only safe fields from body into prompt_params when missing
 					// This enables vendor adapters to access request body fields safely
+					// 仅在缺失时把 body 中的安全字段镜像到 prompt_params
+					// 使 vendor adapter 能安全访问 request body 字段
 					for key, val := range body {
 						// Skip fields containing sensitive keywords
+						// 跳过含敏感关键词的字段
 						keyLower := strings.ToLower(key)
 						if strings.Contains(keyLower, "token") ||
 							strings.Contains(keyLower, "secret") ||
@@ -1065,6 +1156,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 						}
 
 						// Only mirror if field is in safe list or already exists
+						// 仅在字段在白名单内或已存在时才镜像
 						if safeFields[key] {
 							if _, exists := pp[key]; !exists {
 								pp[key] = val
@@ -1088,6 +1180,8 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 
 	// Auto-populate tool_calls via /tools/select only if tools were suggested by decomposition
 	// Respect the decomposition decision: if no tools suggested, don't override with tool selection
+	// 仅当分解阶段建议了 tool 时，才通过 /tools/select 自动填充 tool_calls
+	// 尊重分解阶段的决定：未建议 tool 时不改用 tool selection 覆盖
 	var selectedToolCalls []map[string]any
 
 	// Detect research-style contexts where we prefer LLM-native tool selection
@@ -1114,37 +1208,47 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	}
 
 	// Skip tool selection if we already have tool_parameters from decomposition
+	// 若已有分解阶段传来的 tool_parameters 则跳过 tool selection
 	if !disableToolSelectRole && !isResearch && len(input.SuggestedTools) > 0 && len(allowedByRole) > 0 && len(input.ToolParameters) == 0 {
 		if getenvInt("ENABLE_TOOL_SELECTION", 1) > 0 {
 			// Only select tools if we have valid parameters or the tool doesn't require them
 			// Skip tools that require parameters when none are provided to avoid execution errors
+			// 只有在参数有效或该 tool 不需要参数时才选择
+			// 未提供参数时跳过需要参数的 tool，避免执行报错
 			toolsToSelect := allowedByRole
 			if len(input.ToolParameters) == 0 {
 				// Filter out tools that require parameters when none are provided
+				// 未提供参数时过滤掉需要参数的 tool
 				filtered := make([]string, 0, len(allowedByRole))
 				for _, tool := range allowedByRole {
 					// Skip tools that require specific parameters when none are provided
+					// 未提供参数时跳过需要特定参数的 tool
 					switch tool {
 					case "calculator":
 						// Calculator requires an expression parameter
+						// calculator 需要 expression 参数
 						logger.Info("Skipping calculator tool - no parameters provided",
 							zap.String("agent_id", input.AgentID),
 						)
 						continue
 					case "code_executor":
 						// Code executor requires wasm_path or wasm_base64
+						// code_executor 需要 wasm_path 或 wasm_base64
 						logger.Info("Skipping code_executor tool - no parameters provided",
 							zap.String("agent_id", input.AgentID),
 						)
 						continue
 					case "python_executor":
 						// Python executor requires code parameter
+						// python_executor 需要 code 参数
 						logger.Info("Skipping python_executor tool - no parameters provided",
 							zap.String("agent_id", input.AgentID),
 						)
 						continue
 						// web_search, web_fetch and file_read can work with minimal/inferred parameters
 						// so we don't skip them
+						// web_search、web_fetch 与 file_read 可用最少/推断的参数工作
+						// 因此不跳过它们
 					}
 					filtered = append(filtered, tool)
 				}
@@ -1153,6 +1257,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 			if len(toolsToSelect) > 0 {
 				selectedToolCalls = selectToolsForQuery(ctx, input.Query, toolsToSelect, logger, input.ParentWorkflowID)
 				// Emit tool selection events
+				// 发出 tool 选择事件
 				if len(selectedToolCalls) > 0 {
 					emitToolSelectionEvent(ctx, input, selectedToolCalls)
 				}
@@ -1172,11 +1277,14 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 
 	// Create protobuf struct from context AFTER adding tool_parameters and tool_calls
 	// Ensure context is not nil
+	// 在加入 tool_parameters 与 tool_calls 之后，再由 context 创建 protobuf struct
+	// 确保 context 非 nil
 	if input.Context == nil {
 		input.Context = make(map[string]any)
 	}
 
 	// Inject session_id and agent_id for session-aware tools (browser_use, file_*, etc.)
+	// 为 session-aware tool（browser_use、file_* 等）注入 session_id 与 agent_id
 	input.Context = ensureSessionContext(input.Context, input.SessionID, input.AgentID)
 
 	// Add user_id to context for agent-core (memory mount, audit).
@@ -1193,6 +1301,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	}
 
 	// Validate and sanitize context before protobuf conversion to prevent injection
+	// 转 protobuf 前校验并清洗 context，防止注入
 	validatedContext := validateContext(input.Context, logger)
 	st, err := structpb.NewStruct(validatedContext)
 	if err != nil {
@@ -1202,11 +1311,13 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 			zap.Any("validated_context_keys", getContextKeys(validatedContext)),
 		)
 		// Try to manually add tool_parameters if present
+		// 若存在 tool_parameters 则尝试手动加入
 		st = &structpb.Struct{
 			Fields: make(map[string]*structpb.Value),
 		}
 		if tp, ok := input.Context["tool_parameters"]; ok {
 			// Convert tool_parameters manually
+			// 手动转换 tool_parameters
 			if tpMap, ok := tp.(map[string]any); ok {
 				tpStruct, err := structpb.NewStruct(tpMap)
 				if err == nil {
@@ -1223,8 +1334,10 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	}
 
 	// If we have selectedToolCalls, inject them as a protobuf ListValue under "tool_calls"
+	// 若有 selectedToolCalls，则以 protobuf ListValue 形式注入到 "tool_calls"
 	if len(selectedToolCalls) > 0 {
 		// Build []*structpb.Value where each element is a StructValue for one call
+		// 构造 []*structpb.Value，每个元素是一次调用的 StructValue
 		values := make([]*structpb.Value, 0, len(selectedToolCalls))
 		for _, call := range selectedToolCalls {
 			if call == nil {
@@ -1232,6 +1345,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 			}
 
 			// Validate tool call structure before protobuf conversion
+			// 转 protobuf 前校验 tool call 结构
 			sanitizedCall := sanitizeToolCall(call, logger)
 			if sanitizedCall == nil {
 				logger.Debug("Skipping invalid tool_call after sanitization")
@@ -1239,6 +1353,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 			}
 
 			// Safely convert to protobuf with additional error handling
+			// 安全地转换为 protobuf，并补充错误处理
 			func() {
 				defer func() {
 					if r := recover(); r != nil {
@@ -1270,11 +1385,12 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	}
 
 	// Agent runtime config derived from env (or can be made dynamic by policy in future)
+	// agent 运行时配置取自环境变量（后续也可由 policy 动态设置）
 	timeoutSec := getenvInt("AGENT_TIMEOUT_SECONDS", 30)
 	memLimitMB := getenvInt("AGENT_MEMORY_LIMIT_MB", 256)
 
 	req := &agentpb.ExecuteTaskRequest{
-		Metadata: &commonpb.TaskMetadata{ // minimal metadata
+		Metadata: &commonpb.TaskMetadata{ // minimal metadata 注：最小 metadata
 			TaskId: fmt.Sprintf("%s-%d", input.AgentID, time.Now().UnixNano()),
 			UserId: func() string {
 				if input.UserID != "" {
@@ -1303,6 +1419,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	}
 
 	// Emit LLM prompt (sanitized) using parent workflow ID when provided
+	// 发出（已清洗的）LLM prompt，有父 workflow ID 时用它
 	wfID := ""
 	if input.ParentWorkflowID != "" {
 		wfID = input.ParentWorkflowID
@@ -1330,7 +1447,8 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 	}
 
 	// Create a timeout context for gRPC call - use agent timeout + buffer
-	grpcTimeout := time.Duration(timeoutSec+30) * time.Second // Agent timeout + 30s buffer
+	// 为 gRPC 调用创建超时 context —— 用 agent 超时加缓冲
+	grpcTimeout := time.Duration(timeoutSec+30) * time.Second // Agent timeout + 30s buffer 注：agent 超时 + 30s 缓冲
 	llmServiceURL := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	// MCP_COST_TO_TOKENS: legacy path for tool cost -> token conversion.
 	// Superseded by per-tool cost recording via tool_cost_entries in agent metadata.
@@ -1413,6 +1531,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 			}
 			if recvErr != nil {
 				// Flush any buffered content before returning error
+				// 返回错误前先冲刷已缓冲内容
 				flushPartial()
 				return AgentExecutionResult{}, recvErr
 			}
@@ -1430,6 +1549,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 				if toolName == "usage_metrics" && tr.Output != nil {
 					if m, ok := tr.Output.AsInterface().(map[string]any); ok {
 						// Use flexible parsing to handle int/float/string from JSON
+						// 用灵活解析兼容 JSON 中的 int/float/string
 						if v, ok := parseFlexibleInt(m["total_tokens"]); ok {
 							tokens = v
 						}
@@ -1465,10 +1585,12 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 					}
 
 					// Emit TOOL_OBSERVATION event with human-readable message
+					// 发出带可读消息的 TOOL_OBSERVATION 事件
 					if wfID != "" && toolName != "" {
 						var msg string
 						if tr.Status == commonpb.StatusCode_STATUS_CODE_OK {
 							// Format output for human-readable message
+							// 把 output 格式化为可读消息
 							outputStr := ""
 							if output != nil {
 								if str, ok := output.(string); ok {
@@ -1489,6 +1611,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 						if toolName == "browser" && output != nil && input.SessionID != "" {
 							if outputMap, ok := output.(map[string]any); ok {
 								// Case 1: Python already persisted
+								// 情况 1：Python 侧已落盘
 								if pathVal, ok2 := outputMap["screenshot_path"].(string); ok2 && pathVal != "" {
 									streamScreenshotPaths = append(streamScreenshotPaths, pathVal)
 									if wfID != "" {
@@ -1506,6 +1629,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 									payload["output"] = output
 								} else if b64, hasScreenshot := outputMap["screenshot"]; hasScreenshot {
 									// Case 2: base64 present, persist from Go
+									// 情况 2：有 base64，由 Go 侧持久化
 									if b64Str, ok2 := b64.(string); ok2 {
 										if relPath := persistScreenshot(logger, input.SessionID, wfID, streamScreenshotIdx, b64Str); relPath != "" {
 											streamScreenshotPaths = append(streamScreenshotPaths, relPath)
@@ -1561,12 +1685,14 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 
 					if toolName != "" {
 						// Track unique tools
+						// 统计去重后的 tool
 						if _, ok := seenTools[toolName]; !ok {
 							seenTools[toolName] = struct{}{}
 							toolsUsed = append(toolsUsed, toolName)
 						}
 
 						// Apply MCP cost-to-token bump (parity with unary path)
+						// 应用 MCP 成本折算 token 的增量（与 unary 路径保持一致）
 						if mcpCostToTokens > 0 {
 							if costPerUse := getToolCostPerUse(ctx, llmServiceURL, toolName); costPerUse > 0 {
 								toolCostUsd += costPerUse
@@ -1586,6 +1712,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 		}
 
 		// Flush any buffered partials
+		// 冲刷所有已缓冲的 partial
 		flushPartial()
 
 		out := strings.TrimSpace(finalMessage)
@@ -1599,6 +1726,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 		}
 
 		// Fallback: if provider is still empty, use provider_override from context when present
+		// 兜底：provider 仍为空时，若 context 中有 provider_override 则使用它
 		if provider == "" && input.Context != nil {
 			if v, ok := input.Context["provider_override"].(string); ok {
 				if pv := strings.TrimSpace(strings.ToLower(v)); pv != "" {
@@ -1616,6 +1744,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 		}
 
 		// Note: toolsUsed already deduplicated via seenTools map during collection (line 1371-1373)
+		// 注意：toolsUsed 在收集时已通过 seenTools map 去重（见 1371-1373 行）
 
 		if costUsd == 0 && (promptTokens > 0 || completionTokens > 0) {
 			costUsd = pricing.CostForSplitWithCache(model, promptTokens, completionTokens,
@@ -1625,10 +1754,12 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 		}
 
 		// Add tool costs (MCP cost bump)
+		// 计入 tool 成本（MCP cost bump）
 		costUsd += toolCostUsd
 		tokens += toolTokenBump
 
 		// Emit LLM_OUTPUT event with usage metadata in Payload
+		// 发出 LLM_OUTPUT 事件，Payload 中携带 usage metadata
 		if wfID != "" && out != "" {
 			streaming.Get().Publish(wfID, streaming.Event{
 				WorkflowID: wfID,
@@ -1732,9 +1863,11 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 			}
 
 			// Collect/persist browser screenshots
+			// 收集/持久化浏览器截图
 			if toolName == "browser" && output != nil && input.SessionID != "" {
 				if outputMap, ok := output.(map[string]any); ok {
 					// Case 1: Python already persisted
+					// 情况 1：Python 侧已落盘
 					if pathVal, ok2 := outputMap["screenshot_path"].(string); ok2 && pathVal != "" {
 						screenshotPaths = append(screenshotPaths, pathVal)
 						if wfID != "" {
@@ -1751,6 +1884,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 						}
 					} else if b64, hasScreenshot := outputMap["screenshot"]; hasScreenshot {
 						// Case 2: base64 present, persist from Go
+						// 情况 2：有 base64，由 Go 侧持久化
 						if b64Str, ok2 := b64.(string); ok2 {
 							if relPath := persistScreenshot(logger, input.SessionID, wfID, screenshotIdx, b64Str); relPath != "" {
 								screenshotPaths = append(screenshotPaths, relPath)
@@ -1808,6 +1942,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 		}
 
 		// Fallback: if provider is still empty, use provider_override from context when present
+		// 兜底：provider 仍为空时，若 context 中有 provider_override 则使用它
 		if provider == "" && input.Context != nil {
 			if v, ok := input.Context["provider_override"].(string); ok {
 				if pv := strings.TrimSpace(strings.ToLower(v)); pv != "" {
@@ -1867,6 +2002,7 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 		}
 
 		// Extract agent metadata from gRPC response (carries tool_cost_entries, etc.)
+		// 从 gRPC 响应中提取 agent metadata（携带 tool_cost_entries 等）
 		var resultMetadata map[string]any
 		if resp.GetMetadata() != nil {
 			resultMetadata = resp.GetMetadata().AsMap()
@@ -1874,6 +2010,8 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 
 		// Backfill cache stats from metadata — gRPC TokenUsage proto lacks these
 		// fields, but Python's OODA loop returns them in response metadata.
+		// 从 metadata 回填缓存统计 —— gRPC TokenUsage proto 缺少这些
+		// 字段，而 Python 的 OODA 循环会在响应 metadata 中返回它们。
 		if resultMetadata != nil && cacheReadTokens == 0 && cacheCreationTokens == 0 {
 			if v, ok := parseFlexibleInt(resultMetadata["cache_read_tokens"]); ok {
 				cacheReadTokens = v
@@ -1890,6 +2028,8 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 
 		// Merge screenshot paths from metadata (Python agent loop persists screenshots
 		// and records paths in tool_execution_records — not in gRPC ToolResults)
+		// 合并来自 metadata 的截图路径（Python agent 循环会持久化截图
+		// 并把路径记在 tool_execution_records，而非 gRPC ToolResults）
 		if metaPaths := extractScreenshotPathsFromMetadata(resultMetadata); len(metaPaths) > 0 {
 			screenshotPaths = append(screenshotPaths, metaPaths...)
 		}
@@ -1940,14 +2080,19 @@ func executeAgentCore(ctx context.Context, input AgentExecutionInput, logger *za
 // ExecuteAgent is the activity that executes an agent by calling Agent-Core over gRPC
 // This is a Temporal activity that wraps the core logic
 // intersectTools returns the intersection of two tool lists
+// ExecuteAgent 是通过 gRPC 调用 Agent-Core 执行 agent 的 activity。
+// 这是一个封装核心逻辑的 Temporal activity。
+// intersectTools 返回两个 tool 列表的交集。
 func intersectTools(personaTools, availableTools []string) []string {
 	// Create a map for fast lookup
+	// 建 map 以加速查找
 	availableMap := make(map[string]bool)
 	for _, tool := range availableTools {
 		availableMap[tool] = true
 	}
 
 	// Find intersection
+	// 求交集
 	var result []string
 	for _, tool := range personaTools {
 		if availableMap[tool] {
@@ -1959,17 +2104,20 @@ func intersectTools(personaTools, availableTools []string) []string {
 
 func ExecuteAgent(ctx context.Context, input AgentExecutionInput) (AgentExecutionResult, error) {
 	// Use activity logger for proper Temporal correlation
+	// 使用 activity logger 以便 Temporal 正确关联
 	activity.GetLogger(ctx).Info("ExecuteAgent activity started",
 		"agent_id", input.AgentID,
 		"query", input.Query,
 	)
 
 	// Use forced tools path if ToolParameters are pre-computed (analytics queries)
+	// ToolParameters 已预先算好时（analytics 查询）走 forced tool 路径
 	if len(input.ToolParameters) > 0 && len(input.SuggestedTools) > 0 {
 		return ExecuteAgentWithForcedTools(ctx, input)
 	}
 
 	// Standard execution through agent-core gRPC
+	// 通过 agent-core gRPC 的标准执行路径
 	logger := zap.L()
 	return executeAgentCore(ctx, input, logger)
 }
@@ -1988,6 +2136,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	)
 
 	// Bail if no tool parameters to use
+	// 没有可用 tool parameters 则直接返回
 	if len(input.ToolParameters) == 0 {
 		logger.Warn("No ToolParameters provided; falling back to regular ExecuteAgent")
 		zapLogger := zap.L()
@@ -1996,6 +2145,8 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 
 	// Determine which tool to execute (typically just one from decomposition)
 	// Best-effort role extraction for observability (mirrors executeAgentCore)
+	// 确定要执行哪个 tool（通常分解阶段只给一个）
+	// 尽力提取 role 用于可观测性（与 executeAgentCore 一致）
 	role := roleFromContext(input.Context)
 
 	toolName := ""
@@ -2008,6 +2159,8 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 
 	// Build forced_tool_calls payload for /agent/query
 	// Strip metadata keys ("tool", "tool_name") from parameters — they're not actual tool params
+	// 为 /agent/query 构造 forced_tool_calls 载荷
+	// 从参数中去掉 metadata 键（"tool"、"tool_name"）—— 它们不是真正的 tool 参数
 	cleanParams := make(map[string]any, len(input.ToolParameters))
 	for k, v := range input.ToolParameters {
 		if k != "tool" && k != "tool_name" && k != "name" {
@@ -2016,12 +2169,13 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	}
 
 	// Validate required params per tool — fall back to normal agent path if missing
+	// 按 tool 校验必需参数 —— 缺失则回退到普通 agent 路径
 	if !validateForcedToolParams(toolName, cleanParams) {
 		logger.Warn("Forced tool params missing required fields; falling back to agent-core",
 			"tool", toolName,
 			"clean_params", cleanParams,
 		)
-		input.ToolParameters = nil // Clear so executeAgentCore doesn't re-enter this path
+		input.ToolParameters = nil // Clear so executeAgentCore doesn't re-enter this path 注：清空以避免 executeAgentCore 再次进入该路径
 		zapLogger := zap.L()
 		return executeAgentCore(ctx, input, zapLogger)
 	}
@@ -2034,20 +2188,25 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	}
 
 	// Prepare request to /agent/query
+	// 准备发往 /agent/query 的请求
 	llmServiceURL := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
 	// Debug: log session_id before injection
+	// 调试：注入前打印 session_id
 	logger.Info("ExecuteAgentWithForcedTools: session_id before context injection",
 		"session_id", input.SessionID,
 		"agent_id", input.AgentID,
 	)
 
 	// Inject session_id and agent_id for session-aware tools (browser_use, file_*, etc.)
+	// 为 session-aware tool（browser_use、file_* 等）注入 session_id 与 agent_id
 	input.Context = ensureSessionContext(input.Context, input.SessionID, input.AgentID)
 
 	// Add user_id to context for agent-core (memory mount, audit).
 	// Mirrors the injection in executeAgentCore for parity.
+	// 把 user_id 写入 context 供 agent-core 使用（memory 挂载、审计）。
+	// 与 executeAgentCore 中的注入保持一致。
 	if input.UserID != "" {
 		if _, exists := input.Context["user_id"]; !exists {
 			input.Context["user_id"] = input.UserID
@@ -2055,6 +2214,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	}
 
 	// Debug: log context keys after injection
+	// 调试：注入后打印 context 的 key
 	contextKeys := make([]string, 0, len(input.Context))
 	for k := range input.Context {
 		contextKeys = append(contextKeys, k)
@@ -2080,6 +2240,8 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 
 	// Publish TOOL_INVOKED event
 	// Prefer ParentWorkflowID (task ID) for SSE streaming, fall back to Temporal workflow ID
+	// 发布 TOOL_INVOKED 事件
+	// SSE streaming 优先用 ParentWorkflowID（task ID），否则回退到 Temporal workflow ID
 	wfID := ""
 	if input.ParentWorkflowID != "" {
 		wfID = input.ParentWorkflowID
@@ -2088,10 +2250,12 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	}
 
 	// Helper to sanitize parameters for event emission
+	// 用于在发事件前清洗参数的辅助函数
 	sanitizeParams := func(params map[string]any) map[string]any {
 		sanitized := make(map[string]any)
 		for k, v := range params {
 			// Redact common secret keys
+			// 脱敏常见密钥键
 			keyLower := strings.ToLower(k)
 			if strings.Contains(keyLower, "key") ||
 				strings.Contains(keyLower, "token") ||
@@ -2101,6 +2265,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 				sanitized[k] = "[REDACTED]"
 			} else if s, ok := v.(string); ok && len(s) > 500 {
 				// Truncate long strings
+				// 截断过长字符串
 				sanitized[k] = s[:500] + "...(truncated)"
 			} else {
 				sanitized[k] = v
@@ -2127,11 +2292,13 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 
 	toolStartTime := time.Now()
 	// Increased timeout to 10min for deep research agents with many tool calls
+	// 超时放宽到 10min，以支持有大量 tool 调用的 deep research agent
 	client := &http.Client{Timeout: 10 * time.Minute, Transport: interceptors.NewWorkflowHTTPRoundTripper(nil)}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(payloadBytes)))
 	if err != nil {
 		logger.Error("Failed to create HTTP request", "error", err)
 		// Emit failure observation
+		// 发出失败 observation
 		if wfID != "" {
 			streaming.Get().Publish(wfID, streaming.Event{
 				WorkflowID: wfID,
@@ -2155,6 +2322,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	if err != nil {
 		logger.Error("HTTP request failed", "error", err)
 		// Emit failure observation
+		// 发出失败 observation
 		if wfID != "" {
 			streaming.Get().Publish(wfID, streaming.Event{
 				WorkflowID: wfID,
@@ -2177,6 +2345,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		logger.Error("Non-2xx response from /agent/query", "status", resp.StatusCode)
 		// Emit failure observation
+		// 发出失败 observation
 		if wfID != "" {
 			streaming.Get().Publish(wfID, streaming.Event{
 				WorkflowID: wfID,
@@ -2196,6 +2365,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	}
 
 	// Parse response
+	// 解析响应
 	var agentResponse struct {
 		Success      bool           `json:"success"`
 		Response     string         `json:"response"`
@@ -2209,6 +2379,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	if err := json.NewDecoder(resp.Body).Decode(&agentResponse); err != nil {
 		logger.Error("Failed to decode /agent/query response", "error", err)
 		// Emit failure observation
+		// 发出失败 observation
 		if wfID != "" {
 			streaming.Get().Publish(wfID, streaming.Event{
 				WorkflowID: wfID,
@@ -2228,6 +2399,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	}
 
 	// Prefer role reported by llm-service when available
+	// 若 llm-service 返回了 role 则优先使用
 	if agentResponse.Metadata != nil {
 		if v, ok := agentResponse.Metadata["role"].(string); ok && strings.TrimSpace(v) != "" {
 			role = strings.TrimSpace(v)
@@ -2235,6 +2407,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	}
 
 	// Extract detailed token metrics from metadata
+	// 从 metadata 中提取详细的 token 指标
 	inputTokens := 0
 	outputTokens := 0
 	cacheReadTokens := 0
@@ -2278,6 +2451,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	if agentResponse.Metadata != nil {
 		if te, ok := agentResponse.Metadata["tool_executions"].([]any); ok && len(te) > 0 {
 			// Find the entry matching our tool name; fall back to first entry if no match.
+			// 找到与当前 tool 名匹配的条目；无匹配则回退到第一条。
 			var matchedEntry map[string]any
 			for _, raw := range te {
 				if m, ok2 := raw.(map[string]any); ok2 {
@@ -2289,6 +2463,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 			}
 			if matchedEntry == nil {
 				// No exact match — use first entry
+				// 无精确匹配 —— 使用第一条
 				if m, ok2 := te[0].(map[string]any); ok2 {
 					matchedEntry = m
 				}
@@ -2305,6 +2480,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	}
 
 	// Publish TOOL_OBSERVATION event with human-readable message
+	// 发布带可读消息的 TOOL_OBSERVATION 事件
 	if wfID != "" {
 		var msg string
 		if toolSuccess {
@@ -2335,8 +2511,10 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	}
 
 	// Publish LLM_OUTPUT SSE event with complete metadata
+	// 发布携带完整 metadata 的 LLM_OUTPUT SSE 事件
 	if wfID != "" && agentResponse.Response != "" {
 		// Calculate cost using pricing service
+		// 用 pricing 服务计算成本
 		var costUsd float64
 		if agentResponse.ModelUsed != "" && inputTokens > 0 && outputTokens > 0 {
 			costUsd = pricing.CostForSplitWithCache(agentResponse.ModelUsed, inputTokens, outputTokens,
@@ -2365,6 +2543,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	}
 
 	// Extract tools used + executions from metadata when present
+	// 若有则从 metadata 提取 tools used 与 executions
 	toolsUsed := []string{toolName}
 	var toolExecs []ToolExecution
 	if agentResponse.Metadata != nil {
@@ -2385,6 +2564,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 					errStr, _ := m["error"].(string)
 					inputParams := m["tool_input"]
 					// Extract duration_ms from Python llm-service response
+					// 从 Python llm-service 响应中提取 duration_ms
 					var durationMs int64
 					if d, ok3 := m["duration_ms"].(float64); ok3 {
 						durationMs = int64(d)
@@ -2421,6 +2601,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 			}
 
 			// Case 1: Python already persisted — just collect the path
+			// 情况 1：Python 侧已落盘 —— 只收集路径
 			if pathVal, ok := outputMap["screenshot_path"].(string); ok && pathVal != "" {
 				screenshotPaths = append(screenshotPaths, pathVal)
 				if wfID != "" {
@@ -2439,6 +2620,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 			}
 
 			// Case 2: Direct tool path — base64 present, persist from Go
+			// 情况 2：直接 tool 路径 —— 有 base64，由 Go 侧持久化
 			b64, hasScreenshot := outputMap["screenshot"]
 			if !hasScreenshot {
 				continue
@@ -2473,6 +2655,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 	}
 
 	// Also scan metadata tool_execution_records for paths from Python agent loop
+	// 另外扫描 metadata 的 tool_execution_records，取 Python agent 循环写入的路径
 	if metaPaths := extractScreenshotPathsFromMetadata(agentResponse.Metadata); len(metaPaths) > 0 {
 		screenshotPaths = append(screenshotPaths, metaPaths...)
 	}
@@ -2499,6 +2682,7 @@ func ExecuteAgentWithForcedTools(ctx context.Context, input AgentExecutionInput)
 }
 
 // fetchAvailableTools queries Python LLM service for a list of non-dangerous tools.
+// fetchAvailableTools 向 Python LLM 服务查询非危险 tool 列表。
 func fetchAvailableTools(ctx context.Context) []string {
 	base := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/tools/list?exclude_dangerous=true", base)
@@ -2524,12 +2708,16 @@ func fetchAvailableTools(ctx context.Context) []string {
 
 // selectToolsForQuery queries Python LLM service to select appropriate tools for the given query
 // and returns structured tool calls that can be executed in parallel by agent-core.
+// selectToolsForQuery 向 Python LLM 服务请求为给定 query 选择合适 tool，
+// 并返回结构化 tool call，供 agent-core 并行执行。
 func selectToolsForQuery(ctx context.Context, query string, availableTools []string, logger *zap.Logger, parentWorkflowID string) []map[string]any {
 	base := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/tools/select", base)
 
 	// Prepare request payload compatible with llm-service ToolSelectRequest
 	// We pass the task (query), and limit max_tools to a small number to keep execution bounded.
+	// 构造与 llm-service ToolSelectRequest 兼容的请求载荷
+	// 传入任务（query），并把 max_tools 限制为较小值以约束执行规模。
 	payload := map[string]any{
 		"task":              query,
 		"context":           map[string]any{},
@@ -2550,6 +2738,7 @@ func selectToolsForQuery(ctx context.Context, query string, availableTools []str
 	}
 	req.Header.Set("Content-Type", "application/json")
 	// Prefer parent workflow ID when available for unified event streaming in llm-service
+	// 有父 workflow ID 时优先使用，以便 llm-service 统一事件流
 	if parentWorkflowID != "" {
 		req.Header.Set("X-Parent-Workflow-ID", parentWorkflowID)
 	}
@@ -2567,6 +2756,7 @@ func selectToolsForQuery(ctx context.Context, query string, availableTools []str
 	}
 
 	// Parse response: { selected_tools: [...], calls: [{tool_name, parameters}...] }
+	// 解析响应：{ selected_tools: [...], calls: [{tool_name, parameters}...] }
 	var sel struct {
 		SelectedTools []string         `json:"selected_tools"`
 		Calls         []map[string]any `json:"calls"`
@@ -2577,6 +2767,7 @@ func selectToolsForQuery(ctx context.Context, query string, availableTools []str
 	}
 
 	// Transform calls into agent-core format: [{"tool": name, "parameters": {...}}]
+	// 把 calls 转成 agent-core 格式：[{"tool": name, "parameters": {...}}]
 	out := make([]map[string]any, 0, len(sel.Calls))
 	allow := map[string]struct{}{}
 	for _, t := range availableTools {
@@ -2588,6 +2779,7 @@ func selectToolsForQuery(ctx context.Context, query string, availableTools []str
 			continue
 		}
 		// Enforce role/allowlist from orchestrator
+		// 落实 orchestrator 的 role/allowlist 限制
 		if len(allow) > 0 {
 			if _, ok := allow[name]; !ok {
 				continue
@@ -2608,6 +2800,7 @@ func selectToolsForQuery(ctx context.Context, query string, availableTools []str
 }
 
 // getenv returns env var or default
+// getenv 返回环境变量或默认值。
 func getenv(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -2616,6 +2809,7 @@ func getenv(key, def string) string {
 }
 
 // getenvInt returns integer env var or default
+// getenvInt 返回整型环境变量或默认值。
 func getenvInt(key string, def int) int {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
@@ -2626,9 +2820,11 @@ func getenvInt(key string, def int) int {
 }
 
 // emitAgentThinkingEvent emits a human-readable thinking event
+// emitAgentThinkingEvent 发出可读的 thinking 事件。
 func emitAgentThinkingEvent(ctx context.Context, input AgentExecutionInput) {
 	if info := activity.GetInfo(ctx); info.WorkflowExecution.ID != "" {
 		// Determine the correct workflow ID for streaming (prefer parent)
+		// 确定用于 streaming 的正确 workflow ID（优先父级）
 		wfID := ""
 		if input.ParentWorkflowID != "" {
 			wfID = input.ParentWorkflowID
@@ -2642,6 +2838,7 @@ func emitAgentThinkingEvent(ctx context.Context, input AgentExecutionInput) {
 		}
 
 		// Best-effort role extraction for observability
+		// 尽力提取 role，用于可观测性
 		role := roleFromContext(input.Context)
 
 		message := fmt.Sprintf("Thinking: %s", truncateQuery(input.Query, MaxThinkingChars))
@@ -2654,6 +2851,7 @@ func emitAgentThinkingEvent(ctx context.Context, input AgentExecutionInput) {
 		}
 		activity.RecordHeartbeat(ctx, eventData)
 		// Also publish to Redis Streams for SSE (use parent workflow ID when available)
+		// 同时发布到 Redis Streams 供 SSE 使用（有父 workflow ID 时用它）
 		streaming.Get().Publish(wfID, streaming.Event{
 			WorkflowID: eventData.WorkflowID,
 			Type:       string(eventData.EventType),
@@ -2668,9 +2866,11 @@ func emitAgentThinkingEvent(ctx context.Context, input AgentExecutionInput) {
 }
 
 // emitToolSelectionEvent emits events for selected tools
+// emitToolSelectionEvent 为选中的 tool 发出事件。
 func emitToolSelectionEvent(ctx context.Context, input AgentExecutionInput, toolCalls []map[string]any) {
 	if info := activity.GetInfo(ctx); info.WorkflowExecution.ID != "" {
 		// Determine the correct workflow ID for streaming (prefer parent)
+		// 确定用于 streaming 的正确 workflow ID（优先父级）
 		wfID := ""
 		if input.ParentWorkflowID != "" {
 			wfID = input.ParentWorkflowID
@@ -2684,6 +2884,7 @@ func emitToolSelectionEvent(ctx context.Context, input AgentExecutionInput, tool
 		}
 
 		// Best-effort role extraction for observability
+		// 尽力提取 role，用于可观测性
 		role := roleFromContext(input.Context)
 
 		for _, call := range toolCalls {
@@ -2701,6 +2902,7 @@ func emitToolSelectionEvent(ctx context.Context, input AgentExecutionInput, tool
 			}
 			activity.RecordHeartbeat(ctx, eventData)
 			// Also publish to Redis Streams for SSE (use parent workflow ID when available)
+			// 同时发布到 Redis Streams 供 SSE 使用（有父 workflow ID 时用它）
 			streaming.Get().Publish(wfID, streaming.Event{
 				WorkflowID: eventData.WorkflowID,
 				Type:       string(eventData.EventType),
@@ -2717,6 +2919,7 @@ func emitToolSelectionEvent(ctx context.Context, input AgentExecutionInput, tool
 }
 
 // humanizeToolCall creates a human-readable description of a tool invocation
+// humanizeToolCall 生成 tool 调用的可读描述。
 func humanizeToolCall(toolName string, params any) string {
 	paramsMap, _ := params.(map[string]any)
 
@@ -2759,6 +2962,7 @@ func humanizeToolCall(toolName string, params any) string {
 }
 
 // truncateQuery truncates a query to a specified length (UTF-8 safe)
+// truncateQuery 把 query 截断到指定长度（UTF-8 安全）。
 func truncateQuery(query string, maxLen int) string {
 	runes := []rune(query)
 	if len(runes) <= maxLen {
@@ -2768,12 +2972,14 @@ func truncateQuery(query string, maxLen int) string {
 }
 
 // truncateURL shortens a URL for display (UTF-8 safe)
+// truncateURL 缩短 URL 以便展示（UTF-8 安全）。
 func truncateURL(url string) string {
 	runes := []rune(url)
 	if len(runes) <= 50 {
 		return url
 	}
 	// Try to preserve domain by cutting at query parameter boundary
+	// 尝试在 query 参数边界处截断以保留域名
 	if idx := strings.Index(url, "?"); idx > 0 {
 		runesBeforeQuery := []rune(url[:idx])
 		if len(runesBeforeQuery) < 50 {
@@ -2781,11 +2987,14 @@ func truncateURL(url string) string {
 		}
 	}
 	// Otherwise truncate at character boundary
+	// 否则按字符边界截断
 	return string(runes[:47]) + "..."
 }
 
 // validateForcedToolParams checks that required parameters are present for a forced tool call.
 // Returns false if the tool has known required params that are missing or empty.
+// validateForcedToolParams 检查强制 tool 调用所需的参数是否齐备。
+// 若该 tool 有已知必需参数但缺失或为空，返回 false。
 func validateForcedToolParams(toolName string, params map[string]any) bool {
 	switch toolName {
 	case "web_search":
@@ -2804,6 +3013,8 @@ func validateForcedToolParams(toolName string, params map[string]any) bool {
 	default:
 		// Unknown tools: trust decomposition. The purpose of this function is to
 		// catch known tools with missing required params, not reject unknown tools.
+		// 未知 tool：信任分解阶段。本函数的目的是
+		// 捕获已知 tool 缺参的情况，而不是拒绝未知 tool。
 		return true
 	}
 }

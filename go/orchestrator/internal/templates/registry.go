@@ -50,6 +50,7 @@ type TemplateSummary struct {
 }
 
 // NewRegistry constructs an empty registry.
+// NewRegistry 构造空注册表。
 func NewRegistry() *Registry {
 	return &Registry{templates: make(map[string]Entry)}
 }
@@ -465,11 +466,13 @@ func cloneMetadata(m map[string]any) map[string]any {
 }
 
 // LoadError aggregates template loading failures.
+// LoadError 汇总模板加载失败。
 type LoadError struct {
 	Failures []string
 }
 
 // Error implements the error interface.
+// Error 实现 error 接口。
 func (e *LoadError) Error() string {
 	if len(e.Failures) == 0 {
 		return "template load failed"

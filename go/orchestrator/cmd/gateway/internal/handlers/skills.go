@@ -9,12 +9,14 @@ import (
 )
 
 // SkillHandler handles skill-related HTTP requests.
+// SkillHandler 处理 skill 相关的 HTTP 请求。
 type SkillHandler struct {
 	registry *skills.SkillRegistry
 	logger   *zap.Logger
 }
 
 // NewSkillHandler creates a new skill handler.
+// NewSkillHandler 创建新的 skill handler。
 func NewSkillHandler(registry *skills.SkillRegistry, logger *zap.Logger) *SkillHandler {
 	return &SkillHandler{
 		registry: registry,
@@ -23,6 +25,7 @@ func NewSkillHandler(registry *skills.SkillRegistry, logger *zap.Logger) *SkillH
 }
 
 // ListSkills handles GET /api/v1/skills
+// ListSkills 处理 GET /api/v1/skills
 func (h *SkillHandler) ListSkills(w http.ResponseWriter, r *http.Request) {
 	category := r.URL.Query().Get("category")
 
@@ -42,6 +45,7 @@ func (h *SkillHandler) ListSkills(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetSkill handles GET /api/v1/skills/{name}
+// GetSkill 处理 GET /api/v1/skills/{name}
 func (h *SkillHandler) GetSkill(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
@@ -67,6 +71,7 @@ func (h *SkillHandler) GetSkill(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetSkillVersions handles GET /api/v1/skills/{name}/versions
+// GetSkillVersions 处理 GET /api/v1/skills/{name}/versions
 func (h *SkillHandler) GetSkillVersions(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if name == "" {
@@ -104,6 +109,7 @@ func (h *SkillHandler) GetSkillVersions(w http.ResponseWriter, r *http.Request) 
 }
 
 // sendError sends an error response.
+// sendError 发送错误响应。
 func (h *SkillHandler) sendError(w http.ResponseWriter, message string, code int) {
 	writeJSON(w, code, map[string]string{"error": message})
 }

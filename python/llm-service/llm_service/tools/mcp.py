@@ -58,7 +58,7 @@ def create_mcp_tool_class(
     _tool_requests: Dict[str, deque] = defaultdict(deque)
     _rate_default = int(
         os.getenv("MCP_RATE_LIMIT_DEFAULT", "60")
-    )  # requests per minute
+    )  # requests per minute 注：每分钟请求数
 
     class _McpTool(Tool):  # type: ignore
         _client = HttpStatelessClient(name=name, url=url, headers=headers or {})

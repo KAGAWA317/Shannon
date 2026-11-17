@@ -419,7 +419,7 @@ class ToolPluginLoader:
         文件变更时启用插件热重载
         """
         if self.observer:
-            return  # Already enabled
+            return  # Already enabled 注：已启用
 
         self.observer = Observer()
         handler = PluginFileHandler(self)
@@ -500,7 +500,7 @@ class PluginFileHandler(FileSystemEventHandler):
         """Reload a plugin file
         重新加载插件文件"""
         # 短暂延迟，确保文件写入完成
-        await asyncio.sleep(0.5)  # Small delay to ensure file write is complete
+        await asyncio.sleep(0.5)  # Small delay to ensure file write is complete 注：短暂延迟，确保文件写入完成
 
         if file_path.endswith(".py"):
             self.loader._load_plugin_file(file_path)

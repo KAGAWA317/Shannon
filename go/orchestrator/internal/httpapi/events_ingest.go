@@ -54,6 +54,7 @@ func (h *IngestHandler) handleIngest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Accept single object or array
+// 支持单个对象或数组
 	var single ingestEvent
 	var arr []ingestEvent
 	if err := json.Unmarshal(body, &single); err == nil && single.WorkflowID != "" {
@@ -65,6 +66,7 @@ func (h *IngestHandler) handleIngest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// Publish
+// 发布
 	for _, e := range arr {
 		if e.WorkflowID == "" || e.Type == "" {
 			continue

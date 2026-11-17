@@ -43,7 +43,7 @@ type HumanInterventionActivities struct {
 	// 生产环境应接真实数据库与通知服务；
 	// 目前先用内存存储占位。
 	approvals map[string]*HumanApprovalResult
-	mu        sync.RWMutex // Protect concurrent access to approvals map
+	mu        sync.RWMutex // Protect concurrent access to approvals map 注：保护 approvals map 的并发访问
 	// mu 保护 approvals map 的并发访问。
 }
 

@@ -39,6 +39,7 @@ type ReviewHandler struct {
 }
 
 // NewReviewHandler creates a new ReviewHandler.
+// NewReviewHandler 创建新的 ReviewHandler。
 func NewReviewHandler(
 	orchClient orchpb.OrchestratorServiceClient,
 	redis *redis.Client,
@@ -52,12 +53,14 @@ func NewReviewHandler(
 }
 
 // reviewRequest is the HTTP request body for the review endpoint.
+// reviewRequest 是评审 endpoint 的 HTTP request body。
 type reviewRequest struct {
-	Action  string `json:"action"`  // "feedback" or "approve"
-	Message string `json:"message"` // User's feedback message (optional for approve)
+	Action  string `json:"action"`  // "feedback" or "approve" 注："feedback" 或 "approve"
+	Message string `json:"message"` // User's feedback message (optional for approve) 注：用户的反馈消息（approve 时可省略）
 }
 
 // reviewRound mirrors the activity type for Redis storage.
+// reviewRound 对应 Redis 存储使用的 activity 类型。
 type reviewRound struct {
 	Role      string `json:"role"`
 	Message   string `json:"message"`
@@ -65,6 +68,7 @@ type reviewRound struct {
 }
 
 // reviewState is the Redis-stored conversation state.
+// reviewState 是存放在 Redis 中的对话状态。
 type reviewState struct {
 	WorkflowID    string         `json:"workflow_id"`
 	Query         string         `json:"query"`
@@ -80,6 +84,7 @@ type reviewState struct {
 }
 
 // llmResearchPlanRequest is the request to the LLM service.
+// llmResearchPlanRequest 是发给 LLM 服务的 request。
 type llmResearchPlanRequest struct {
 	Query        string         `json:"query"`
 	Context      map[string]any `json:"context"`
@@ -90,6 +95,7 @@ type llmResearchPlanRequest struct {
 }
 
 // llmResearchPlanResponse is the response from the LLM service.
+// llmResearchPlanResponse 是 LLM 服务返回的 response。
 type llmResearchPlanResponse struct {
 	Message      string `json:"message"`
 	Intent       string `json:"intent"`
@@ -101,6 +107,7 @@ type llmResearchPlanResponse struct {
 }
 
 // HandleReview processes review feedback or approval.
+// HandleReview 处理评审反馈或批准。
 func (h *ReviewHandler) HandleReview(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	workflowID := r.PathValue("workflowID")
@@ -110,6 +117,7 @@ func (h *ReviewHandler) HandleReview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Auth check
+	// 鉴权校验
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok || userCtx == nil {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -117,6 +125,7 @@ func (h *ReviewHandler) HandleReview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse request
+	// 解析 request
 	var req reviewRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.sendError(w, "Invalid request body", http.StatusBadRequest)
@@ -128,6 +137,7 @@ func (h *ReviewHandler) HandleReview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load state from Redis
+	// 从 Redis 加载状态
 	key := fmt.Sprintf("review:%s", workflowID)
 	data, err := h.redis.Get(ctx, key).Result()
 	if err == redis.Nil {
@@ -176,6 +186,7 @@ func (h *ReviewHandler) handleFeedback(
 	}
 
 	// Optimistic concurrency check
+	// 乐观并发校验
 	if ifMatch := r.Header.Get("If-Match"); ifMatch != "" {
 		if ifMatch != strconv.Itoa(state.Version) {
 			h.sendError(w, "Conflict: state has been modified", http.StatusConflict)
@@ -188,7 +199,7 @@ func (h *ReviewHandler) handleFeedback(
 	// then clobber each other's state on write.
 	// 加分布式锁，避免长时间 LLM 调用期间的竞态：否则两个并发反馈 request 可能都通过版本校验，写入时互相覆盖。
 	lockKey := key + ":lock"
-	lockTTL := 90 * time.Second // longer than LLM timeout (60s) + buffer
+	lockTTL := 90 * time.Second // longer than LLM timeout (60s) + buffer 注：长于 LLM timeout（60s）加缓冲
 	// Use unique lock value to prevent accidental deletion of another request's lock
 	// if TTL expires and lock is re-acquired by another request.
 	// 锁值保持唯一，避免 TTL 过期后锁被他人获取时误删对方的锁。
@@ -228,13 +239,15 @@ func (h *ReviewHandler) handleFeedback(
 		return
 	}
 	// Limit message length to prevent excessively large payloads
-	const maxMessageLen = 10 * 1024 // 10KB
+	// 限制消息长度，避免 payload 过大
+	const maxMessageLen = 10 * 1024 // 10KB 注：10KB
 	if len(req.Message) > maxMessageLen {
 		h.sendError(w, "message exceeds maximum length (10KB)", http.StatusBadRequest)
 		return
 	}
 
 	// Round limit check: reject feedback beyond MaxReviewRounds
+	// 轮数上限校验：超过 MaxReviewRounds 的反馈直接拒绝
 	nextRound := state.Round + 1
 	if nextRound > MaxReviewRounds {
 		h.sendError(w, "Maximum review rounds reached. Please approve the plan.", http.StatusConflict)
@@ -243,6 +256,7 @@ func (h *ReviewHandler) handleFeedback(
 	isFinalRound := nextRound >= MaxReviewRounds
 
 	// Append user message
+	// 追加用户消息
 	state.Rounds = append(state.Rounds, reviewRound{
 		Role:      "user",
 		Message:   req.Message,
@@ -258,12 +272,14 @@ func (h *ReviewHandler) handleFeedback(
 	if err != nil {
 		h.logger.Error("Failed to generate research plan", zap.Error(err))
 		// Remove the user message we appended (don't persist bad state)
+		// 移除刚追加的用户消息（不把坏状态落盘）
 		state.Rounds = state.Rounds[:len(state.Rounds)-1]
 		h.sendError(w, "Failed to generate updated plan", http.StatusBadGateway)
 		return
 	}
 
 	// Record token usage (best-effort, non-blocking)
+	// 记录 token 用量（best-effort，不阻塞）
 	grpcCtx := withGRPCMetadata(context.Background(), r)
 	go func(grpcCtx context.Context) {
 		rCtx, cancel := context.WithTimeout(grpcCtx, 5*time.Second)
@@ -291,6 +307,7 @@ func (h *ReviewHandler) handleFeedback(
 	}
 
 	// Append assistant response (with [RESEARCH_BRIEF] already stripped)
+	// 追加 assistant response（[RESEARCH_BRIEF] 已剥离）
 	state.Rounds = append(state.Rounds, reviewRound{
 		Role:      "assistant",
 		Message:   plan.Message,
@@ -306,6 +323,7 @@ func (h *ReviewHandler) handleFeedback(
 	state.Version++
 
 	// Determine intent (default to "feedback" if LLM didn't provide one)
+	// 确定 intent（LLM 未给出时默认 "feedback"）
 	intent := plan.Intent
 	if intent == "" {
 		intent = "feedback"
@@ -316,6 +334,7 @@ func (h *ReviewHandler) handleFeedback(
 	if isFinalRound && intent == "feedback" {
 		intent = "ready"
 		// Also set CurrentPlan so Approve has a non-empty FinalPlan
+		// 同时设置 CurrentPlan，让批准时 FinalPlan 非空
 		state.CurrentPlan = plan.Message
 	}
 
@@ -324,7 +343,7 @@ func (h *ReviewHandler) handleFeedback(
 	stateBytes, _ := json.Marshal(state)
 	ttl, err := h.redis.TTL(ctx, key).Result()
 	if err != nil || ttl <= 0 {
-		ttl = 20 * time.Minute // fallback (15min review + 5min buffer)
+		ttl = 20 * time.Minute // fallback (15min review + 5min buffer) 注：兜底值（15 分钟评审 + 5 分钟缓冲）
 	}
 	if err := h.redis.Set(ctx, key, stateBytes, ttl).Err(); err != nil {
 		h.logger.Error("Failed to save review state to Redis", zap.Error(err), zap.String("workflow_id", workflowID))
@@ -341,6 +360,7 @@ func (h *ReviewHandler) handleFeedback(
 		map[string]any{"round": state.Round, "version": state.Version, "intent": intent})
 
 	// Response
+	// 响应
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("ETag", strconv.Itoa(state.Version))
 	json.NewEncoder(w).Encode(map[string]any{
@@ -381,7 +401,7 @@ func (h *ReviewHandler) handleApprove(
 	// If we acquire first, feedback will fail when it tries to acquire.
 	// 加锁避免与进行中的反馈 request 竞争：若反馈正在进行，它持有锁，这里快速失败；若先拿到锁，反馈 request 稍后会获取失败。
 	lockKey := key + ":lock"
-	lockTTL := 30 * time.Second // shorter than feedback (approve is fast)
+	lockTTL := 30 * time.Second // shorter than feedback (approve is fast) 注：比反馈路径短（批准很快）
 	lockBytes := make([]byte, 16)
 	if _, err := rand.Read(lockBytes); err != nil {
 		h.logger.Error("Failed to generate lock value", zap.Error(err))
@@ -422,9 +442,11 @@ func (h *ReviewHandler) handleApprove(
 	}
 
 	// Marshal conversation for gRPC
+	// 为 gRPC 序列化对话
 	convBytes, _ := json.Marshal(state.Rounds)
 
 	// Send via dedicated gRPC (Gateway → Orchestrator → Temporal Signal)
+	// 通过专用 gRPC 发送（Gateway → Orchestrator → Temporal Signal）
 	grpcCtx := withGRPCMetadata(ctx, r)
 	_, err = h.orchClient.SubmitReviewDecision(grpcCtx, &orchpb.SubmitReviewDecisionRequest{
 		WorkflowId:    workflowID,
@@ -496,6 +518,7 @@ func (h *ReviewHandler) callResearchPlan(
 
 	client := &http.Client{
 		// Timeout controlled by context (60s from callResearchPlan caller)
+		// timeout 由 context 控制（调用方 callResearchPlan 传 60s）
 		Transport: interceptors.NewWorkflowHTTPRoundTripper(nil),
 	}
 	resp, err := client.Do(httpReq)
@@ -506,8 +529,10 @@ func (h *ReviewHandler) callResearchPlan(
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		// Read body for logging but don't expose internal details to client
+		// 读取 body 用于日志，但不向客户端暴露内部细节
 		body, _ := io.ReadAll(resp.Body)
 		// Log detailed error for debugging (will be logged by caller)
+		// 记录详细错误便于排查（调用方也会记录）
 		return nil, fmt.Errorf("LLM service error (status %d, body: %s)", resp.StatusCode, truncateForLog(string(body), 500))
 	}
 
@@ -524,6 +549,7 @@ func (h *ReviewHandler) callResearchPlan(
 }
 
 // HandleGetReview returns the current review conversation state from Redis.
+// HandleGetReview 从 Redis 返回当前评审对话状态。
 func (h *ReviewHandler) HandleGetReview(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	workflowID := r.PathValue("workflowID")
@@ -533,6 +559,7 @@ func (h *ReviewHandler) HandleGetReview(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Auth check
+	// 鉴权校验
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok || userCtx == nil {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -540,6 +567,7 @@ func (h *ReviewHandler) HandleGetReview(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Load state from Redis
+	// 从 Redis 加载状态
 	key := fmt.Sprintf("review:%s", workflowID)
 	data, err := h.redis.Get(ctx, key).Result()
 	if err == redis.Nil {
@@ -560,6 +588,7 @@ func (h *ReviewHandler) HandleGetReview(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Owner check
+	// 归属校验
 	if state.OwnerUserID != "" && state.OwnerUserID != userCtx.UserID.String() {
 		h.sendError(w, "Forbidden: not the task owner", http.StatusForbidden)
 		return
@@ -636,6 +665,7 @@ func (h *ReviewHandler) sendError(w http.ResponseWriter, message string, code in
 }
 
 // truncateForLog truncates a string to maxLen for safe logging
+// truncateForLog 把字符串截断到 maxLen，便于安全记录日志
 func truncateForLog(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s

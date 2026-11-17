@@ -94,7 +94,7 @@ class TestModelLocking:
 
         当 tier 偏好只指定 provider 时，manager 不应设置 request.model。
         """
-        tier_prefs = ["openai", "anthropic"]  # No model specified
+        tier_prefs = ["openai", "anthropic"]  # No model specified 注：未指定 model
         provider_models = {
             "openai": ["gpt-5-nano-2025-08-07", "gpt-5-mini-2025-08-07"],
         }
@@ -152,8 +152,7 @@ class TestModelLocking:
         request = MockRequest(
             query="test",
             model_tier=ModelTier.MEDIUM,
-            model="gpt-5-nano-2025-08-07"  # Pre-set model
-            # 预先设置的 model
+            model="gpt-5-nano-2025-08-07"  # Pre-set model 注：预先设置的 model
         )
 
         original_model = request.model
@@ -209,10 +208,8 @@ class TestDeterministicModelSelection:
         第一个优先级不可用时应回退到第二个。
         """
         tier_prefs = [
-            "google:gemini-2.5-pro",  # Not available
-            # 不可用
-            "openai:gpt-5-2025-08-07",  # Available
-            # 可用
+            "google:gemini-2.5-pro",  # Not available 注：不可用
+            "openai:gpt-5-2025-08-07",  # Available 注：可用
         ]
         provider_models = {
             "openai": ["gpt-5-2025-08-07"],

@@ -77,7 +77,7 @@ async def compress_context(request: Request, body: CompressRequest) -> CompressR
         completion = (result.get("output_text") or "").strip()
         usage = result.get("usage", {})
         tokens = usage.get("total_tokens", 0)
-        est_original = max(tokens * 2, 1000)  # loose heuristic
+        est_original = max(tokens * 2, 1000)  # loose heuristic 注：粗略估算
         saved = max(0, est_original - tokens)
         return CompressResponse(
             summary=completion or "",

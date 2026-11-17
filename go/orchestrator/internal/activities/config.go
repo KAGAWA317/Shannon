@@ -14,28 +14,33 @@ import (
 // WorkflowConfig 保存各类 cognitive workflow 的配置。
 type WorkflowConfig struct {
 	// Exploratory workflow config
+	// 探索型 workflow 配置
 	ExploratoryMaxIterations       int     `json:"exploratory_max_iterations"`
 	ExploratoryConfidenceThreshold float64 `json:"exploratory_confidence_threshold"`
 	ExploratoryBranchFactor        int     `json:"exploratory_branch_factor"`
 	ExploratoryMaxConcurrentAgents int     `json:"exploratory_max_concurrent_agents"`
 
 	// React workflow config
+	// React workflow 配置
 	ReactMaxIterations     int `json:"react_max_iterations"`
 	ReactObservationWindow int `json:"react_observation_window"`
 
 	// Research workflow config
+	// 研究型 workflow 配置
 	ResearchDepth               int `json:"research_depth"`
 	ResearchSourcesPerRound     int `json:"research_sources_per_round"`
 	ResearchMinSources          int `json:"research_min_sources"`
 	ResearchMaxConcurrentAgents int `json:"research_max_concurrent_agents"`
 
 	// Scientific workflow config
+	// 科学型 workflow 配置
 	ScientificMaxHypotheses          int     `json:"scientific_max_hypotheses"`
 	ScientificMaxIterations          int     `json:"scientific_max_iterations"`
 	ScientificConfidenceThreshold    float64 `json:"scientific_confidence_threshold"`
 	ScientificContradictionThreshold float64 `json:"scientific_contradiction_threshold"`
 
 	// Reflection config
+	// 反思配置
 	ReflectionEnabled             bool     `json:"reflection_enabled"`
 	ReflectionMaxRetries          int      `json:"reflection_max_retries"`
 	ReflectionConfidenceThreshold float64  `json:"reflection_confidence_threshold"`
@@ -43,30 +48,35 @@ type WorkflowConfig struct {
 	ReflectionTimeoutMs           int      `json:"reflection_timeout_ms"`
 
 	// Router/DAG config
+	// 路由/DAG 配置
 	SimpleThreshold   float64 `json:"simple_threshold"`
 	MaxParallelAgents int     `json:"max_parallel_agents"`
 
 	// Complexity thresholds for model tier selection
 	// 用于选择 model tier 的复杂度阈值：低于 Simple 用 small，低于 Medium 用 medium，再往上用 large。
-	ComplexitySimpleThreshold float64 `json:"complexity_simple_threshold"` // < this = small model
-	ComplexityMediumThreshold float64 `json:"complexity_medium_threshold"` // < this = medium model, >= this = large model
+	ComplexitySimpleThreshold float64 `json:"complexity_simple_threshold"` // < this = small model 注：小于该值使用 small 模型
+	ComplexityMediumThreshold float64 `json:"complexity_medium_threshold"` // < this = medium model, >= this = large model 注：小于该值使用 medium 模型，大于等于该值使用 large 模型
 
 	// Approval config
+	// 审批配置
 	ApprovalEnabled             bool     `json:"approval_enabled"`
 	ApprovalComplexityThreshold float64  `json:"approval_complexity_threshold"`
 	ApprovalDangerousTools      []string `json:"approval_dangerous_tools"`
 
 	// Execution pattern config
+	// 执行模式配置
 	ParallelMaxConcurrency   int  `json:"parallel_max_concurrency"`
 	HybridDependencyTimeout  int  `json:"hybrid_dependency_timeout_seconds"`
 	SequentialPassResults    bool `json:"sequential_pass_results"`
 	SequentialExtractNumeric bool `json:"sequential_extract_numeric"`
 
 	// P2P Coordination config
+	// P2P 协同配置
 	P2PCoordinationEnabled bool `json:"p2p_coordination_enabled"`
 	P2PTimeoutSeconds      int  `json:"p2p_timeout_seconds"`
 
 	// Swarm Agent config
+	// Swarm Agent 配置
 	SwarmEnabled               bool `json:"swarm_enabled"`
 	SwarmMaxAgents             int  `json:"swarm_max_agents"`
 	SwarmMaxIterationsPerAgent int  `json:"swarm_max_iterations_per_agent"`
@@ -79,6 +89,7 @@ type WorkflowConfig struct {
 	SwarmMaxWallClockMinutes   int  `json:"swarm_max_wall_clock_minutes"`
 
 	// Templates
+	// 模板
 	TemplateFallbackEnabled bool `json:"template_fallback_enabled"`
 
 	// Learning router toggle (continuous learning)
@@ -113,7 +124,7 @@ func GetWorkflowConfig(ctx context.Context) (*WorkflowConfig, error) {
 		} else if _, err := os.Stat("../../config/features.yaml"); err == nil {
 			cfgPath = "../../config/features.yaml"
 		} else {
-			cfgPath = "/app/config/features.yaml" // Docker path
+			cfgPath = "/app/config/features.yaml" // Docker path 注：Docker 环境路径
 		}
 	}
 
@@ -124,28 +135,33 @@ func GetWorkflowConfig(ctx context.Context) (*WorkflowConfig, error) {
 
 	config := &WorkflowConfig{
 		// Exploratory defaults
+		// 探索型默认值
 		ExploratoryMaxIterations:       v.GetInt("cognitive_workflows.exploratory.max_iterations"),
 		ExploratoryConfidenceThreshold: v.GetFloat64("cognitive_workflows.exploratory.confidence_threshold"),
 		ExploratoryBranchFactor:        v.GetInt("cognitive_workflows.exploratory.branch_factor"),
 		ExploratoryMaxConcurrentAgents: v.GetInt("cognitive_workflows.exploratory.max_concurrent_agents"),
 
 		// React defaults
+		// React 默认值
 		ReactMaxIterations:     v.GetInt("cognitive_workflows.react.max_iterations"),
 		ReactObservationWindow: v.GetInt("cognitive_workflows.react.observation_window"),
 
 		// Research defaults
+		// 研究型默认值
 		ResearchDepth:               v.GetInt("cognitive_workflows.research.research_depth"),
 		ResearchSourcesPerRound:     v.GetInt("cognitive_workflows.research.sources_per_round"),
 		ResearchMinSources:          v.GetInt("cognitive_workflows.research.min_sources"),
 		ResearchMaxConcurrentAgents: v.GetInt("cognitive_workflows.research.max_concurrent_agents"),
 
 		// Scientific defaults
+		// 科学型默认值
 		ScientificMaxHypotheses:          v.GetInt("cognitive_workflows.scientific.max_hypotheses"),
 		ScientificMaxIterations:          v.GetInt("cognitive_workflows.scientific.max_iterations"),
 		ScientificConfidenceThreshold:    v.GetFloat64("cognitive_workflows.scientific.confidence_threshold"),
 		ScientificContradictionThreshold: v.GetFloat64("cognitive_workflows.scientific.contradiction_threshold"),
 
 		// Reflection defaults
+		// 反思默认值
 		ReflectionEnabled:             v.GetBool("workflows.reflection.enabled"),
 		ReflectionMaxRetries:          v.GetInt("workflows.reflection.max_retries"),
 		ReflectionConfidenceThreshold: v.GetFloat64("workflows.reflection.confidence_threshold"),
@@ -153,19 +169,23 @@ func GetWorkflowConfig(ctx context.Context) (*WorkflowConfig, error) {
 		ReflectionTimeoutMs:           v.GetInt("workflows.reflection.timeout_ms"),
 
 		// Router/DAG
+		// 路由/DAG
 		SimpleThreshold:   v.GetFloat64("workflows.dag.simple_threshold"),
 		MaxParallelAgents: v.GetInt("workflows.dag.max_parallel_agents"),
 
 		// Complexity thresholds
+		// 复杂度阈值
 		ComplexitySimpleThreshold: v.GetFloat64("workflows.complexity.simple_threshold"),
 		ComplexityMediumThreshold: v.GetFloat64("workflows.complexity.medium_threshold"),
 
 		// Approval
+		// 审批
 		ApprovalEnabled:             v.GetBool("workflows.approval.enabled"),
 		ApprovalComplexityThreshold: v.GetFloat64("workflows.approval.complexity_threshold"),
 		ApprovalDangerousTools:      v.GetStringSlice("workflows.approval.dangerous_tools"),
 
 		// Execution patterns
+		// 执行模式
 		ParallelMaxConcurrency:   v.GetInt("workflows.execution.parallel_max_concurrency"),
 		HybridDependencyTimeout:  v.GetInt("workflows.execution.hybrid_dependency_timeout_seconds"),
 		SequentialPassResults:    v.GetBool("workflows.execution.sequential_pass_results"),
@@ -221,6 +241,7 @@ func GetWorkflowConfig(ctx context.Context) (*WorkflowConfig, error) {
 	}
 
 	// Reflection defaults
+	// 反思默认值
 	if config.ReflectionMaxRetries == 0 {
 		config.ReflectionMaxRetries = 2
 	}
@@ -235,6 +256,7 @@ func GetWorkflowConfig(ctx context.Context) (*WorkflowConfig, error) {
 	}
 
 	// Router/DAG defaults
+	// 路由/DAG 默认值
 	if config.SimpleThreshold == 0 {
 		config.SimpleThreshold = 0.3
 	}
@@ -243,11 +265,12 @@ func GetWorkflowConfig(ctx context.Context) (*WorkflowConfig, error) {
 	}
 
 	// Complexity thresholds defaults
+	// 复杂度阈值默认值
 	if config.ComplexitySimpleThreshold == 0 {
 		config.ComplexitySimpleThreshold = 0.3
 	}
 	if config.ComplexityMediumThreshold == 0 {
-		config.ComplexityMediumThreshold = 0.5 // Changed from hardcoded 0.7
+		config.ComplexityMediumThreshold = 0.5 // Changed from hardcoded 0.7 注：由硬编码的 0.7 调整而来
 	}
 
 	// Approval defaults - check environment variables first
@@ -267,6 +290,7 @@ func GetWorkflowConfig(ctx context.Context) (*WorkflowConfig, error) {
 	}
 
 	// Apply defaults if not set
+	// 未设置时套用默认值
 	if config.ApprovalComplexityThreshold == 0 {
 		config.ApprovalComplexityThreshold = 0.8
 	}
@@ -275,11 +299,12 @@ func GetWorkflowConfig(ctx context.Context) (*WorkflowConfig, error) {
 	}
 
 	// Execution pattern defaults
+	// 执行模式默认值
 	if config.ParallelMaxConcurrency == 0 {
 		config.ParallelMaxConcurrency = 5
 	}
 	if config.HybridDependencyTimeout == 0 {
-		config.HybridDependencyTimeout = 360 // 6 minutes
+		config.HybridDependencyTimeout = 360 // 6 minutes 注：6 分钟
 	}
 	// SequentialPassResults defaults to true if not explicitly set to false
 	// SequentialPassResults 未显式设为 false 时默认为 true。
@@ -293,15 +318,17 @@ func GetWorkflowConfig(ctx context.Context) (*WorkflowConfig, error) {
 	}
 
 	// P2P Coordination defaults
+	// P2P 协同默认值
 	config.P2PCoordinationEnabled = v.GetBool("workflows.p2p.enabled")
 	if config.P2PTimeoutSeconds == 0 {
 		config.P2PTimeoutSeconds = v.GetInt("workflows.p2p.timeout_seconds")
 		if config.P2PTimeoutSeconds == 0 {
-			config.P2PTimeoutSeconds = 360 // 6 minutes default
+			config.P2PTimeoutSeconds = 360 // 6 minutes default 注：默认 6 分钟
 		}
 	}
 
 	// Swarm config
+	// Swarm 配置
 	config.SwarmEnabled = v.GetBool("workflows.swarm.enabled")
 	config.SwarmMaxAgents = v.GetInt("workflows.swarm.max_agents")
 	if config.SwarmMaxAgents == 0 {

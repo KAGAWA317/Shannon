@@ -15,7 +15,7 @@ type PatternMetricsInput struct {
 	AgentCount   int
 	TokensUsed   int
 	Duration     time.Duration
-	Improved     bool // For reflection pattern
+	Improved     bool // For reflection pattern 注：用于 reflection 模式
 	WorkflowType string
 }
 

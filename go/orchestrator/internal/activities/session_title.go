@@ -234,10 +234,8 @@ Query: %s`, query)
 
 	reqBody := map[string]any{
 		"query":      prompt,
-		"max_tokens": 9126, // Increased for long input queries + output
-		// 为长 query 输入加输出留出余量。
-		"temperature": 0.3, // Low temperature for consistency
-		// 低 temperature，保证输出稳定。
+		"max_tokens": 9126, // Increased for long input queries + output 注：为长 query 输入加输出留出余量。
+		"temperature": 0.3, // Low temperature for consistency 注：低 temperature，保证输出稳定。
 		"agent_id": "title_generator",
 		"context": map[string]any{
 			"system_prompt": "You are a multilingual title generator. Generate concise, descriptive titles for chat sessions in the SAME LANGUAGE as the user's input. For CJK languages (Chinese, Japanese, Korean), use 5-15 characters. For English and other Western languages, use 3-5 words in Title Case. No quotes, no trailing punctuation, no emojis. Output ONLY the title.",
@@ -301,8 +299,7 @@ Query: %s`, query)
 	if strings.Contains(title, "[Incomplete response:") ||
 		strings.Contains(title, "token limit") ||
 		strings.Contains(title, "truncated") ||
-		len(title) > 200 { // Titles should be short, if it's too long it's probably an error
-		// title 应当很短，过长多半是错误信息。
+		len(title) > 200 { // Titles should be short, if it's too long it's probably an error 注：title 应当很短，过长多半是错误信息。
 		return "", fmt.Errorf("LLM returned invalid title (likely an error message)")
 	}
 

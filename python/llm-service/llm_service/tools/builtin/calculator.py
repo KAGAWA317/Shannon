@@ -72,8 +72,7 @@ class CalculatorTool(Tool):
             category="calculation",
             author="Shannon",
             requires_auth=False,
-            rate_limit=self.settings.calculator_rate_limit,  # Configurable via CALCULATOR_RATE_LIMIT env var
-            # 可通过 CALCULATOR_RATE_LIMIT 环境变量配置
+            rate_limit=self.settings.calculator_rate_limit,  # Configurable via CALCULATOR_RATE_LIMIT env var 注：可通过 CALCULATOR_RATE_LIMIT 环境变量配置
             timeout_seconds=5,
             memory_limit_mb=64,
             sandboxed=True,
@@ -169,9 +168,9 @@ class CalculatorTool(Tool):
         Only allows safe operations.
         仅允许安全操作。
         """
-        if isinstance(node, ast.Constant):  # Python 3.8+
+        if isinstance(node, ast.Constant):  # Python 3.8+ 注：Python 3.8+
             return node.value
-        elif isinstance(node, ast.Num):  # For older Python versions
+        elif isinstance(node, ast.Num):  # For older Python versions 注：兼容更早的 Python 版本
             return node.n
         elif isinstance(node, ast.Name):
             # Allow only safe constants and functions

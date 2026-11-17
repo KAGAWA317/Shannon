@@ -48,16 +48,19 @@ class MockVendorAdapter:
             return body
 
         # Transform metrics
+        # 变换 metrics
         if "metrics" in body and isinstance(body["metrics"], list):
             body["metrics"] = [f"mock:{m}" for m in body["metrics"]]
 
         # Inject session params
+        # 注入 session 参数
         if prompt_params:
             for key, value in prompt_params.items():
                 if key not in body or not body[key]:
                     body[key] = value
 
         # Normalize time range
+        # 归一化时间范围
         if "timeRange" in body and isinstance(body["timeRange"], dict):
             tr = body["timeRange"]
             if "start" in tr and "startTime" not in tr:
@@ -133,23 +136,27 @@ class TestVendorAdapterInterface:
         adapter = MockVendorAdapter()
 
         # String body
+        # 字符串类型的 body
         result = adapter.transform_body("string_body", "operation")
         assert result == "string_body"
 
         # None body
+        # None 类型的 body
         result = adapter.transform_body(None, "operation")
         assert result is None
 
         # List body
+        # 列表类型的 body
         result = adapter.transform_body([1, 2, 3], "operation")
         assert result == [1, 2, 3]
 
     def test_adapter_handles_missing_fields(self):
         """Test adapter handles missing fields gracefully."""
         adapter = MockVendorAdapter()
-        body = {}  # Empty body
+        body = {}  # Empty body 注：空 body
 
         # Should not raise
+        # 不应抛出异常
         result = adapter.transform_body(body, "queryMetrics")
         assert isinstance(result, dict)
 
@@ -163,6 +170,7 @@ class TestVendorAdapterInterface:
         result2 = adapter.transform_body(body2, "getDimensionValues")
 
         # Both should have the transformation
+        # 两者都应有该变换
         assert result1["metrics"] == ["mock:users"]
         assert result2["metrics"] == ["mock:users"]
 
@@ -178,14 +186,17 @@ class TestComplexVendorAdapter:
                 return body
 
             # Field aliasing
+            # 字段别名
             if operation_id == "queryData":
                 self._alias_fields(body)
 
             # Sort normalization
+            # sort 归一化
             if "sort" in body:
                 body["sort"] = self._normalize_sort(body["sort"])
 
             # Filter normalization
+            # filter 归一化
             if "filters" in body:
                 body["filters"] = self._normalize_filters(body["filters"])
 
@@ -236,16 +247,19 @@ class TestComplexVendorAdapter:
         adapter = self.ComplexVendorAdapter()
 
         # Test dict sort with various field names
+        # 测试不同字段名下的 dict sort
         body1 = {"sort": {"field_name": "date", "sort_by": "asc"}}
         result1 = adapter.transform_body(body1, "queryData")
         assert result1["sort"] == {"field": "date", "order": "ASC"}
 
         # Test dict sort with different keys
+        # 测试不同 key 下的 dict sort
         body2 = {"sort": {"field": "revenue", "direction": "desc"}}
         result2 = adapter.transform_body(body2, "queryData")
         assert result2["sort"] == {"field": "revenue", "order": "DESC"}
 
         # Test list of sorts
+        # 测试 sort 列表
         body3 = {
             "sort": [
                 {"field": "date", "order": "ASC"},

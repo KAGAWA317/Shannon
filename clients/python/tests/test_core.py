@@ -44,6 +44,7 @@ from shannon.models import (
 
 def test_imports_and_enums():
     # Enums
+    # 枚举
     assert isinstance(EventType.WORKFLOW_STARTED, EventType)
     assert EventType.LLM_PARTIAL.value == "LLM_PARTIAL"
     assert TaskStatusEnum.COMPLETED.value == "COMPLETED"
@@ -102,6 +103,7 @@ def test_sync_client_init():
         "get_tool",
         "execute_tool",
         # Schedule methods (v0.5.0)
+        # Schedule 相关方法（v0.5.0）
         "create_schedule",
         "get_schedule",
         "list_schedules",
@@ -143,6 +145,7 @@ def test_conversation_message_export_and_creation():
 
 
 # --- Review model tests (v0.6.0) ---
+# --- Review 模型测试（v0.6.0）---
 
 
 def test_review_round_creation():
@@ -176,6 +179,7 @@ def test_review_state_creation():
 
 
 # --- Skill model tests (v0.6.0) ---
+# --- Skill 模型测试（v0.6.0）---
 
 
 def test_skill_creation():
@@ -355,6 +359,7 @@ def test_openai_models_creation():
 
 
 # --- Method existence tests (v0.6.0) ---
+# --- 方法存在性测试（v0.6.0）---
 
 
 def test_sync_client_has_review_methods():

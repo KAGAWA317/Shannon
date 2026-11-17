@@ -12,22 +12,22 @@ service:
   max_header_bytes: 2097152
 
 auth:
-  enabled: true  # Set to true to enable authentication
-  skip_auth: true  # true=local dev, MUST be false in production/AWS
+  enabled: true  # Set to true to enable authentication 注：设为 true 以启用认证
+  skip_auth: true  # true=local dev, MUST be false in production/AWS 注：true=本地开发，生产/AWS 环境必须为 false
   jwt_secret: "change-this-to-a-secure-32-char-minimum-secret"
   access_token_expiry: "1h"
-  refresh_token_expiry: "720h" # 30 days
+  refresh_token_expiry: "720h" # 30 days 注：30 天
   api_key_rate_limit: 1000
   default_tenant_limit: 10000
   enable_registration: true
   require_email_verification: false
 
 session:
-  max_history: 1000  # Maximum messages to keep in Redis per session
-  ttl: "720h"        # Session expiry time (30 days)
-  cache_size: 20000  # Max sessions to keep in local cache
-  token_budget_per_task: 10000000   # Token budget per task (10M)
-  token_budget_per_agent: 500000    # Token budget per agent (500K)
+  max_history: 1000  # Maximum messages to keep in Redis per session 注：每个 session 在 Redis 中保留的最大消息数
+  ttl: "720h"        # Session expiry time (30 days) 注：session 过期时间（30 天）
+  cache_size: 20000  # Max sessions to keep in local cache 注：本地缓存保留的最大 session 数
+  token_budget_per_task: 10000000   # Token budget per task (10M) 注：每个 task 的 token 预算（10M）
+  token_budget_per_agent: 500000    # Token budget per agent (500K) 注：每个 agent 的 token 预算（500K）
 
 circuit_breakers:
   redis:
@@ -107,6 +107,7 @@ openapi_tools:
   # 配置指南见 docs/openapi-tools.md。
 
   # Example: Swagger PetStore API (uncomment to use)
+  # 示例：Swagger PetStore API（取消注释即可使用）
   # petstore:
   #   enabled: true
   #   spec_url: "https://petstore3.swagger.io/api/v3/openapi.json"
@@ -134,6 +135,7 @@ openapi_tools:
   #   # base_url: "https://custom-petstore.example.com"
 
   # Example: Bearer token authentication
+  # 示例：Bearer token 认证
   # github:
   #   enabled: true
   #   spec_url: "https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json"
@@ -147,6 +149,7 @@ openapi_tools:
   #     - "repos/list-for-user"
 
   # Example: API key in query parameter
+  # 示例：查询参数中的 API key
   # weather:
   #   enabled: true
   #   spec_url: "https://api.openweathermap.org/data/3.0/openapi.json"
@@ -158,6 +161,7 @@ openapi_tools:
   #   category: "data"
 
   # Example: Basic authentication
+  # 示例：Basic 认证
   # custom_api:
   #   enabled: true
   #   spec_url: "https://api.example.com/openapi.json"
@@ -262,10 +266,10 @@ agents:
 
 policy:
   enabled: true
-  mode: "dry-run"  # off, dry-run, enforce  
+  mode: "dry-run"  # off, dry-run, enforce 注：可用值为 off、dry-run、enforce
   path: "/app/config/opa/policies"
-  fail_closed: false  # true = deny on policy failure, false = allow on failure
-  environment: "staging"  # policy context environment
+  fail_closed: false  # true = deny on policy failure, false = allow on failure 注：true = 策略失败时拒绝，false = 失败时放行
+  environment: "staging"  # policy context environment 注：policy context 的环境
   audit:
     enabled: true
     log_level: "info"
@@ -306,16 +310,17 @@ vector:
   timeout: "10s"
   default_model: "text-embedding-3-small"
   cache_ttl: "1h"
-  use_redis_cache: false  # Uses in-memory LRU cache (embeddings cache is not critical)
+  use_redis_cache: false  # Uses in-memory LRU cache (embeddings cache is not critical) 注：使用内存 LRU 缓存（embeddings 缓存不关键）
   # redis_addr: ""  # Not used when use_redis_cache: false
-  expected_embedding_dim: 1536  # OpenAI text-embedding-3-small dimension
+  expected_embedding_dim: 1536  # OpenAI text-embedding-3-small dimension 注：OpenAI text-embedding-3-small 的维度
   # MMR (Maximal Marginal Relevance) diversity settings
   # MMR（最大边际相关性）多样性设置
-  mmr_enabled: true              # Enable diversity re-ranking (set to true to activate)
-  mmr_lambda: 0.7                # Balance between relevance (1.0) and diversity (0.0)
-  mmr_pool_multiplier: 3         # Fetch 3x candidates for re-ranking
+  mmr_enabled: true              # Enable diversity re-ranking (set to true to activate) 注：启用多样性重排（设为 true 生效）
+  mmr_lambda: 0.7                # Balance between relevance (1.0) and diversity (0.0) 注：相关性（1.0）与多样性（0.0）之间的平衡
+  mmr_pool_multiplier: 3         # Fetch 3x candidates for re-ranking 注：抓取 3 倍候选用于重排
 
 # Embeddings configuration
+# Embeddings 配置
 embeddings:
   base_url: "http://llm-service:8000"
   default_model: "text-embedding-3-small"
@@ -326,44 +331,46 @@ embeddings:
   # 长文本的分块配置
   chunking:
     enabled: true
-    max_tokens: 4000       # Target chunk size in tokens
-    overlap_tokens: 400    # Overlap between chunks (10% of max_tokens)
-    min_chunk_tokens: 200  # Minimum size for a chunk
+    max_tokens: 4000       # Target chunk size in tokens 注：目标分块大小（token 数）
+    overlap_tokens: 400    # Overlap between chunks (10% of max_tokens) 注：分块之间的重叠（max_tokens 的 10%）
+    min_chunk_tokens: 200  # Minimum size for a chunk 注：分块的最小大小
 
 tracing:
-  enabled: false  # Enable for development/staging environments
+  enabled: false  # Enable for development/staging environments 注：在开发/staging 环境启用
   service_name: "shannon-orchestrator"
   otlp_endpoint: "otel-collector:4317"
 
 # Streaming configuration
+# Streaming 配置
 streaming:
-  ring_capacity: 512  # Number of recent events to retain per workflow for replay
+  ring_capacity: 512  # Number of recent events to retain per workflow for replay 注：每个 workflow 为重放保留的近期事件数
 
 # Workflow orchestration behavior
 # workflow 编排行为
 workflow:
-  bypass_single_result: true  # Skip synthesis for single successful results
+  bypass_single_result: true  # Skip synthesis for single successful results 注：单个成功结果时跳过 synthesis
 
 # Workflow configurations
+# workflow 配置
 workflows:
   # DAG workflow configuration
   # DAG workflow 配置
   dag:
-    simple_threshold: 0.3         # Complexity < this = simple task (single agent)
-    max_parallel_agents: 5        # Maximum concurrent agents in DAG execution
+    simple_threshold: 0.3         # Complexity < this = simple task (single agent) 注：复杂度低于此值为简单任务（单 agent）
+    max_parallel_agents: 5        # Maximum concurrent agents in DAG execution 注：DAG 执行中最大并发 agent 数
 
   # Complexity thresholds for model tier selection
   # 用于选择模型档位的复杂度阈值
   complexity:
-    simple_threshold: 0.3         # < 0.3 = small model tier
-    medium_threshold: 0.5         # 0.3-0.5 = medium model tier, > 0.5 = large model tier
+    simple_threshold: 0.3         # < 0.3 = small model tier 注：< 0.3 使用 small model 档位
+    medium_threshold: 0.5         # 0.3-0.5 = medium model tier, > 0.5 = large model tier 注：0.3-0.5 使用 medium model 档位，> 0.5 使用 large model 档位
 
   # Approval workflow configuration
   # 审批 workflow 配置
   approval:
-    enabled: false                # Enable human-in-the-loop approval
-    complexity_threshold: 0.5     # Complexity >= this triggers approval
-    dangerous_tools:              # Tools requiring approval
+    enabled: false                # Enable human-in-the-loop approval 注：启用 human-in-the-loop 审批
+    complexity_threshold: 0.5     # Complexity >= this triggers approval 注：复杂度达到此值即触发审批
+    dangerous_tools:              # Tools requiring approval 注：需要审批的工具
       - file_system
       - code_execution
 

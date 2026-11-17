@@ -58,6 +58,7 @@ func (h *Hub) SubscribeDispatches(ctx context.Context) {
 	rc := h.claims.rc
 
 	// Create consumer group (idempotent)
+// 创建 consumer group（幂等）
 	rc.XGroupCreateMkStream(ctx, dispatchStreamKey, dispatchGroup, "0")
 
 	consumerName := fmt.Sprintf("hub-%d", time.Now().UnixNano())
@@ -108,6 +109,7 @@ func (h *Hub) processDispatchMessage(ctx context.Context, rc redis.Cmdable, msg 
 	}
 
 	// Dispatch to local WS connections
+// 投递到本地的 WS 连接
 	err := h.Dispatch(ctx, req.TenantID, req.UserID, req.Payload, req.Meta)
 	if err != nil {
 		h.logger.Warn("dispatch from stream failed",

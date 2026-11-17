@@ -53,6 +53,7 @@ class TestTruncationLimitsInSource:
         """lead.py must truncate key_findings at 500 chars, not 200."""
         source = self._get_lead_decide_source()
         # Match the pattern: str(f)[:NNN] in the findings loop
+        # 匹配 findings 循环中的 str(f)[:NNN] 模式
         match = re.search(r'str\(f\)\[:(\d+)\]', source)
         assert match is not None, "Could not find str(f)[:N] pattern in lead.py"
         limit = int(match.group(1))

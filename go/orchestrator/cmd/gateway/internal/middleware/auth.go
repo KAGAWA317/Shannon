@@ -12,18 +12,21 @@ import (
 )
 
 // AuthMiddleware provides authentication middleware
+// AuthMiddleware 提供 authentication middleware。
 type AuthValidator interface {
 	ValidateAPIKey(ctx context.Context, apiKey string) (*authpkg.UserContext, error)
 	ValidateAccessToken(ctx context.Context, token string) (*authpkg.UserContext, error)
 }
 
 // AuthMiddleware provides authentication middleware
+// AuthMiddleware 提供 authentication middleware。
 type AuthMiddleware struct {
 	authService AuthValidator
 	logger      *zap.Logger
 }
 
 // NewAuthMiddleware creates a new authentication middleware
+// NewAuthMiddleware 创建新的 authentication middleware。
 func NewAuthMiddleware(authService AuthValidator, logger *zap.Logger) *AuthMiddleware {
 	return &AuthMiddleware{
 		authService: authService,
@@ -32,6 +35,7 @@ func NewAuthMiddleware(authService AuthValidator, logger *zap.Logger) *AuthMiddl
 }
 
 // Middleware returns the HTTP middleware function
+// Middleware 返回 HTTP middleware 函数。
 func (m *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check if auth should be skipped (DEVELOPMENT ONLY - NEVER USE IN PRODUCTION)
@@ -41,6 +45,7 @@ func (m *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 
 		if skipAuth == "1" {
 			// Only allow auth skip in development environment
+			// 仅允许在开发环境跳过 authentication。
 			if env != "development" && env != "dev" && env != "test" {
 				m.logger.Error("SECURITY WARNING: GATEWAY_SKIP_AUTH enabled in non-development environment",
 					zap.String("environment", env),
@@ -59,8 +64,8 @@ func (m *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 			// This allows testing ownership/tenancy isolation without real auth
 			// 开发 mode 下，若 request 带 x-user-id / x-tenant-id 头则予以采信，
 			// 以便在没有真实 authentication 的情况下测试归属与租户隔离。
-			userID := uuid.MustParse("00000000-0000-0000-0000-000000000002")   // default
-			tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001") // default
+			userID := uuid.MustParse("00000000-0000-0000-0000-000000000002")   // default 注：默认值
+			tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001") // default 注：默认值
 
 			if headerUserID := r.Header.Get("x-user-id"); headerUserID != "" {
 				if parsed, err := uuid.Parse(headerUserID); err == nil {
@@ -116,6 +121,7 @@ func (m *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), authpkg.UserContextKey, userCtx)
 
 		// Log successful authentication
+		// 记录 authentication 成功的日志。
 		m.logger.Debug("Request authenticated",
 			zap.String("user_id", userCtx.UserID.String()),
 			zap.String("tenant_id", userCtx.TenantID.String()),
@@ -123,6 +129,7 @@ func (m *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 		)
 
 		// Continue with authenticated request
+		// 继续处理已完成 authentication 的 request。
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -135,13 +142,16 @@ func (m *AuthMiddleware) validateToken(ctx context.Context, token string) (*auth
 }
 
 // extractToken extracts an auth token (JWT access token or API key) from the request.
+// extractToken 从 request 中提取 auth token（JWT access token 或 API key）。
 func (m *AuthMiddleware) extractToken(r *http.Request) string {
 	// Check X-API-Key header (preferred)
+	// 检查 X-API-Key 头（优先）。
 	if apiKey := r.Header.Get("X-API-Key"); apiKey != "" {
 		return normalizePotentialAPIKey(apiKey)
 	}
 
 	// Check Authorization header with Bearer token (preferred)
+	// 检查带 Bearer token 的 Authorization 头（优先）。
 	if auth := r.Header.Get("Authorization"); auth != "" {
 		parts := strings.Split(auth, " ")
 		if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
@@ -161,6 +171,7 @@ func (m *AuthMiddleware) extractToken(r *http.Request) string {
 
 	if isStreamingEndpoint {
 		// Try api_key query param first
+		// 优先尝试 api_key query 参数。
 		if apiKey := r.URL.Query().Get("api_key"); apiKey != "" {
 			m.logger.Warn("API key provided via query parameter (SSE endpoint)",
 				zap.String("path", path),
@@ -173,6 +184,7 @@ func (m *AuthMiddleware) extractToken(r *http.Request) string {
 		}
 
 		// Try token query param (JWT) for SSE endpoints
+		// 对 SSE 端点尝试 token query 参数（JWT）。
 		if token := r.URL.Query().Get("token"); token != "" {
 			m.logger.Warn("JWT token provided via query parameter (SSE endpoint)",
 				zap.String("path", path),
@@ -185,6 +197,7 @@ func (m *AuthMiddleware) extractToken(r *http.Request) string {
 		}
 	} else {
 		// Non-streaming endpoint - reject query param auth
+		// 非 streaming 端点 —— 拒绝 query 参数认证。
 		if apiKey := r.URL.Query().Get("api_key"); apiKey != "" {
 			m.logger.Warn("API key in query parameter rejected (non-SSE endpoint)",
 				zap.String("path", path),
@@ -218,6 +231,7 @@ func normalizePotentialAPIKey(token string) string {
 }
 
 // getTokenPrefix returns the first few characters of a token for logging.
+// getTokenPrefix 返回 token 的前几个字符，用于日志。
 func (m *AuthMiddleware) getTokenPrefix(token string) string {
 	if len(token) > 8 {
 		return token[:8] + "..."
@@ -226,6 +240,7 @@ func (m *AuthMiddleware) getTokenPrefix(token string) string {
 }
 
 // sendUnauthorized sends an unauthorized response
+// sendUnauthorized 发送未授权响应。
 func (m *AuthMiddleware) sendUnauthorized(w http.ResponseWriter, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("WWW-Authenticate", `Bearer realm="Shannon API"`)
@@ -234,6 +249,7 @@ func (m *AuthMiddleware) sendUnauthorized(w http.ResponseWriter, message string)
 }
 
 // ServeHTTP implements http.Handler interface for convenience
+// ServeHTTP 实现 http.Handler 接口，便于直接使用。
 func (m *AuthMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// This allows the middleware to be used directly as a handler
 	// It will reject all requests since there's no next handler

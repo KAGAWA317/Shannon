@@ -15,6 +15,7 @@ import (
 )
 
 // JWTManager handles JWT token operations
+// JWTManager 负责 JWT token 操作
 type JWTManager struct {
 	signingKey         []byte
 	accessTokenExpiry  time.Duration
@@ -23,6 +24,7 @@ type JWTManager struct {
 }
 
 // NewJWTManager creates a new JWT manager
+// NewJWTManager 创建新的 JWT manager
 func NewJWTManager(signingKey string, accessExpiry, refreshExpiry time.Duration) *JWTManager {
 	return &JWTManager{
 		signingKey:         []byte(signingKey),
@@ -33,6 +35,7 @@ func NewJWTManager(signingKey string, accessExpiry, refreshExpiry time.Duration)
 }
 
 // CustomClaims represents the custom JWT claims
+// CustomClaims 表示自定义 JWT claims
 type CustomClaims struct {
 	jwt.RegisteredClaims
 	TenantID string   `json:"tenant_id"`
@@ -46,6 +49,7 @@ type CustomClaims struct {
 // GenerateTokenPair 同时生成 access token 与 refresh token
 func (j *JWTManager) GenerateTokenPair(user *User) (*TokenPair, string, error) {
 	// Generate access token
+	// 生成 access token
 	accessToken, err := j.generateAccessToken(user)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to generate access token: %w", err)
@@ -72,6 +76,7 @@ func (j *JWTManager) generateAccessToken(user *User) (string, error) {
 	now := time.Now()
 
 	// Define scopes based on role
+	// 按 role 定义 scope
 	scopes := j.getScopesForRole(user.Role)
 
 	claims := CustomClaims{
@@ -99,6 +104,7 @@ func (j *JWTManager) generateAccessToken(user *User) (string, error) {
 func (j *JWTManager) ValidateAccessToken(tokenString string) (*UserContext, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (any, error) {
 		// Validate signing method
+		// 校验签名算法
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
@@ -119,11 +125,13 @@ func (j *JWTManager) ValidateAccessToken(tokenString string) (*UserContext, erro
 	}
 
 	// Validate issuer
+	// 校验 issuer
 	if claims.Issuer != j.issuer {
 		return nil, fmt.Errorf("invalid token issuer")
 	}
 
 	// Parse UUIDs
+	// 解析 UUID
 	userID, err := uuid.Parse(claims.Subject)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user ID in token: %w", err)
@@ -173,7 +181,7 @@ func (j *JWTManager) getScopesForRole(role string) []string {
 			ScopeAPIKeysManage,
 			ScopeUsersManage,
 		}
-	default: // RoleUser
+	default: // RoleUser 注：用户角色
 		return []string{
 			ScopeWorkflowsRead, ScopeWorkflowsWrite,
 			ScopeAgentsExecute,

@@ -56,6 +56,7 @@ func (w *WorkflowHTTPRoundTripper) RoundTrip(req *http.Request) (*http.Response,
 func WorkflowUnaryClientInterceptor() grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		// Add workflow metadata if available
+// 若可用则附加 workflow 元数据
 		info := activity.GetInfo(ctx)
 		if info.WorkflowExecution.ID != "" {
 			ctx = metadata.AppendToOutgoingContext(ctx, "x-workflow-id", info.WorkflowExecution.ID)
@@ -71,6 +72,7 @@ func WorkflowUnaryClientInterceptor() grpc.UnaryClientInterceptor {
 func WorkflowStreamClientInterceptor() grpc.StreamClientInterceptor {
 	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 		// Add workflow metadata if available
+// 若可用则附加 workflow 元数据
 		info := activity.GetInfo(ctx)
 		if info.WorkflowExecution.ID != "" {
 			ctx = metadata.AppendToOutgoingContext(ctx, "x-workflow-id", info.WorkflowExecution.ID)

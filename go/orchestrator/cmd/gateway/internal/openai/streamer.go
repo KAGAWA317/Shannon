@@ -27,9 +27,9 @@ type ShannonSSEEvent struct {
 	Message    string         `json:"message,omitempty"`
 	Seq        int64          `json:"seq"`
 	StreamID   string         `json:"stream_id,omitempty"`
-	Delta      string         `json:"delta,omitempty"`    // For LLM_PARTIAL events
-	Response   string         `json:"response,omitempty"` // For LLM_OUTPUT events
-	Payload    map[string]any `json:"payload,omitempty"`  // Additional event data
+	Delta      string         `json:"delta,omitempty"`    // For LLM_PARTIAL events 注：用于 LLM_PARTIAL event
+	Response   string         `json:"response,omitempty"` // For LLM_OUTPUT events 注：用于 LLM_OUTPUT event
+	Payload    map[string]any `json:"payload,omitempty"`  // Additional event data 注：附加的 event 数据
 	Metadata   *struct {
 		TokensUsed   int     `json:"tokens_used,omitempty"`
 		InputTokens  int     `json:"input_tokens,omitempty"`
@@ -41,6 +41,7 @@ type ShannonSSEEvent struct {
 }
 
 // Streamer transforms Shannon SSE events to OpenAI format.
+// Streamer 把 Shannon 的 SSE event 转换成 OpenAI 格式。
 type Streamer struct {
 	logger          *zap.Logger
 	completionID    string
@@ -52,10 +53,11 @@ type Streamer struct {
 	metrics         *MetricsRecorder
 	firstTokenSent  bool
 	sawFinalOutput  bool
-	lastClientWrite time.Time // Track last write to client for keepalive timing
+	lastClientWrite time.Time // Track last write to client for keepalive timing 注：记录最后一次写客户端的时间，用于 keepalive 计时
 }
 
 // NewStreamer creates a new response streamer.
+// NewStreamer 创建一个新的 response streamer。
 func NewStreamer(logger *zap.Logger, modelName string) *Streamer {
 	return &Streamer{
 		logger:          logger,
@@ -69,6 +71,7 @@ func NewStreamer(logger *zap.Logger, modelName string) *Streamer {
 }
 
 // NewStreamerWithMetrics creates a new response streamer with metrics recording.
+// NewStreamerWithMetrics 创建一个带 metrics 记录的 response streamer。
 func NewStreamerWithMetrics(logger *zap.Logger, modelName string, metrics *MetricsRecorder) *Streamer {
 	return &Streamer{
 		logger:          logger,
@@ -88,18 +91,21 @@ func NewStreamerWithMetrics(logger *zap.Logger, modelName string, metrics *Metri
 const HeartbeatInterval = 30 * time.Second
 
 // sseLineResult represents a line read from the SSE scanner.
+// sseLineResult 表示从 SSE scanner 读出的一行。
 type sseLineResult struct {
 	line string
 	err  error
 }
 
 // StreamResponse reads from Shannon SSE and writes OpenAI-format chunks.
+// StreamResponse 从 Shannon SSE 读取，并写出 OpenAI 格式的 chunk。
 func (s *Streamer) StreamResponse(ctx context.Context, sseReader io.Reader, w http.ResponseWriter, includeUsage bool) error {
 	// Set SSE headers
+	// 设置 SSE header
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering
+	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering 注：关闭 nginx 缓冲
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -134,6 +140,7 @@ func (s *Streamer) StreamResponse(ctx context.Context, sseReader io.Reader, w ht
 			case lineCh <- sseLineResult{line: scanner.Text()}:
 			case <-ctx.Done():
 				// Context canceled, stop reading
+				// context 已取消，停止读取
 				return
 			}
 		}
@@ -155,6 +162,7 @@ func (s *Streamer) StreamResponse(ctx context.Context, sseReader io.Reader, w ht
 		select {
 		case <-ctx.Done():
 			// Send final done message
+			// 发送最终的 done 消息
 			s.writeDone(w, flusher)
 			return ctx.Err()
 
@@ -170,6 +178,7 @@ func (s *Streamer) StreamResponse(ctx context.Context, sseReader io.Reader, w ht
 		case result, ok := <-lineCh:
 			if !ok {
 				// Channel closed, scanner finished
+				// channel 关闭，scanner 结束
 				goto done
 			}
 
@@ -191,12 +200,14 @@ func (s *Streamer) StreamResponse(ctx context.Context, sseReader io.Reader, w ht
 			}
 
 			// Parse SSE format
+			// 解析 SSE 格式
 			if after, ok0 := strings.CutPrefix(line, "event:"); ok0 {
 				eventType = strings.TrimSpace(after)
 			} else if after, ok0 := strings.CutPrefix(line, "data:"); ok0 {
 				eventData = strings.TrimSpace(after)
 			} else if line == "" && eventData != "" {
 				// End of event, process it
+				// event 结束，开始处理
 				if err := s.processEvent(eventType, eventData, w, flusher); err != nil {
 					if errors.Is(err, errStreamEnd) {
 						stoppedEarly = true
@@ -216,6 +227,7 @@ done:
 	}
 
 	// Send final chunk with finish_reason and done
+	// 发送带 finish_reason 和 done 的最终 chunk
 	s.writeFinalChunk(w, flusher, includeUsage)
 	s.writeDone(w, flusher)
 
@@ -225,10 +237,12 @@ done:
 var errStreamEnd = errors.New("stream ended")
 
 // processEvent handles a single Shannon event.
+// processEvent 处理单个 Shannon event。
 func (s *Streamer) processEvent(eventType, data string, w http.ResponseWriter, flusher http.Flusher) error {
 	var event ShannonSSEEvent
 	if err := json.Unmarshal([]byte(data), &event); err != nil {
 		// Try to use raw data as message
+		// 尝试直接拿原始数据当 message
 		event.Message = data
 	}
 
@@ -306,6 +320,7 @@ func (s *Streamer) processEvent(eventType, data string, w http.ResponseWriter, f
 
 	case isAgentEvent(effectiveType):
 		// Forward agent lifecycle and progress events
+		// 转发 agent 生命周期与进度 event
 		s.writeEventChunk(w, flusher, effectiveType, event)
 		return nil
 
@@ -353,6 +368,7 @@ func isFinalPhaseAgent(agentID string) bool {
 }
 
 // isAgentEvent returns true for agent lifecycle and progress events that should be forwarded.
+// isAgentEvent 判断是否为需要转发的 agent 生命周期与进度 event。
 func isAgentEvent(eventType string) bool {
 	switch eventType {
 	case "WORKFLOW_STARTED",
@@ -407,13 +423,14 @@ func (s *Streamer) captureUsage(meta *struct {
 // FinalOutputChunkSize is the size of chunks for streaming final output.
 // Smaller chunks give smoother streaming UX; larger chunks reduce overhead.
 // FinalOutputChunkSize 是最终输出 streaming 分块的大小；块越小越顺滑，越大开销越低。
-const FinalOutputChunkSize = 100 // ~100 chars per chunk for natural reading pace
+const FinalOutputChunkSize = 100 // ~100 chars per chunk for natural reading pace 注：每块约 100 字符，接近自然阅读节奏
 
 // writeContentChunked splits content into chunks for progressive streaming.
 // This gives OpenAI-compatible streaming UX while ensuring correctness.
 // writeContentChunked 把内容切块逐步发送，在保证正确性的同时提供 OpenAI 兼容的 streaming 体验。
 func (s *Streamer) writeContentChunked(w http.ResponseWriter, flusher http.Flusher, content string) {
 	// Split content into chunks for progressive display
+	// 把内容切块，便于逐步展示
 	runes := []rune(content)
 	for i := 0; i < len(runes); i += FinalOutputChunkSize {
 		end := min(i+FinalOutputChunkSize, len(runes))
@@ -423,6 +440,7 @@ func (s *Streamer) writeContentChunked(w http.ResponseWriter, flusher http.Flush
 }
 
 // writeContentChunk writes a content delta chunk.
+// writeContentChunk 写入一个 content delta chunk。
 func (s *Streamer) writeContentChunk(w http.ResponseWriter, flusher http.Flusher, content string) {
 	chunk := ChatCompletionChunk{
 		ID:      s.completionID,
@@ -438,12 +456,14 @@ func (s *Streamer) writeContentChunk(w http.ResponseWriter, flusher http.Flusher
 	}
 
 	// First chunk includes role
+	// 首个 chunk 带上 role
 	if !s.sentRole {
 		chunk.Choices[0].Delta.Role = "assistant"
 		s.sentRole = true
 	}
 
 	// Record time to first token
+	// 记录首个 token 的时间
 	if !s.firstTokenSent && s.metrics != nil {
 		s.metrics.RecordFirstToken()
 		s.firstTokenSent = true
@@ -454,12 +474,14 @@ func (s *Streamer) writeContentChunk(w http.ResponseWriter, flusher http.Flusher
 	s.writeChunk(w, flusher, chunk)
 
 	// Record chunk metric
+	// 记录 chunk metric
 	if s.metrics != nil {
 		s.metrics.RecordStreamChunk()
 	}
 }
 
 // writeFinalChunk writes the final chunk with finish_reason.
+// writeFinalChunk 写入带 finish_reason 的最终 chunk。
 func (s *Streamer) writeFinalChunk(w http.ResponseWriter, flusher http.Flusher, includeUsage bool) {
 	chunk := ChatCompletionChunk{
 		ID:      s.completionID,
@@ -476,6 +498,7 @@ func (s *Streamer) writeFinalChunk(w http.ResponseWriter, flusher http.Flusher, 
 	}
 
 	// Include usage in final chunk if requested
+	// 若请求了 usage，则写入最终 chunk
 	if includeUsage && (s.totalTokens.TotalTokens > 0 || s.totalTokens.PromptTokens > 0) {
 		chunk.Usage = s.totalTokens
 	}
@@ -484,6 +507,7 @@ func (s *Streamer) writeFinalChunk(w http.ResponseWriter, flusher http.Flusher, 
 }
 
 // writeErrorChunk writes an error as a final chunk.
+// writeErrorChunk 把错误作为最终 chunk 写出。
 func (s *Streamer) writeErrorChunk(w http.ResponseWriter, flusher http.Flusher, message string) {
 	chunk := ChatCompletionChunk{
 		ID:      s.completionID,
@@ -503,6 +527,7 @@ func (s *Streamer) writeErrorChunk(w http.ResponseWriter, flusher http.Flusher, 
 }
 
 // writeChunk writes a single chunk to the response.
+// writeChunk 向 response 写入单个 chunk。
 func (s *Streamer) writeChunk(w http.ResponseWriter, flusher http.Flusher, chunk ChatCompletionChunk) {
 	data, err := json.Marshal(chunk)
 	if err != nil {
@@ -516,6 +541,7 @@ func (s *Streamer) writeChunk(w http.ResponseWriter, flusher http.Flusher, chunk
 }
 
 // writeEventChunk writes an agent event chunk (no content, just shannon_events).
+// writeEventChunk 写入 agent event chunk（无 content，只有 shannon_events）。
 func (s *Streamer) writeEventChunk(w http.ResponseWriter, flusher http.Flusher, eventType string, event ShannonSSEEvent) {
 	chunk := ChatCompletionChunk{
 		ID:      s.completionID,
@@ -525,7 +551,7 @@ func (s *Streamer) writeEventChunk(w http.ResponseWriter, flusher http.Flusher, 
 		Choices: []Choice{
 			{
 				Index: 0,
-				Delta: &ChatDelta{}, // Empty delta for event-only chunks
+				Delta: &ChatDelta{}, // Empty delta for event-only chunks 注：仅 event 的 chunk 使用空 delta
 			},
 		},
 		ShannonEvents: []ShannonEvent{
@@ -540,6 +566,7 @@ func (s *Streamer) writeEventChunk(w http.ResponseWriter, flusher http.Flusher, 
 	}
 
 	// First chunk includes role (if not already sent)
+	// 首个 chunk 带上 role（若尚未发送）
 	if !s.sentRole {
 		chunk.Choices[0].Delta.Role = "assistant"
 		s.sentRole = true
@@ -559,17 +586,20 @@ func (s *Streamer) writeHeartbeat(w http.ResponseWriter, flusher http.Flusher) {
 }
 
 // writeDone writes the final [DONE] message.
+// writeDone 写入最终的 [DONE] 消息。
 func (s *Streamer) writeDone(w http.ResponseWriter, flusher http.Flusher) {
 	fmt.Fprintf(w, "data: [DONE]\n\n")
 	flusher.Flush()
 }
 
 // GetUsage returns the accumulated usage statistics.
+// GetUsage 返回累计的 usage 统计。
 func (s *Streamer) GetUsage() *Usage {
 	return s.totalTokens
 }
 
 // GetCompletionID returns the completion ID used for this stream.
+// GetCompletionID 返回本次 stream 使用的 completion ID。
 func (s *Streamer) GetCompletionID() string {
 	return s.completionID
 }

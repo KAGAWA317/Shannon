@@ -70,9 +70,11 @@ from shannon.errors import (
 
 __all__ = [
     # Client
+    # 客户端
     "AsyncShannonClient",
     "ShannonClient",
     # Models
+    # 模型
     "AgentExecution",
     "AgentInfo",
     "ConversationMessage",
@@ -115,6 +117,7 @@ __all__ = [
     "ToolUsage",
     "TokenUsage",
     # Errors
+    # 错误
     "AuthenticationError",
     "ConnectionError",
     "PermissionDeniedError",

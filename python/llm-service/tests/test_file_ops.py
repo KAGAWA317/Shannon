@@ -237,6 +237,7 @@ class TestFileReadTool:
                 clear=False,
             ):
                 # Remove the env var if it exists
+                # 如果存在则移除该环境变量
                 os.environ.pop("SHANNON_ALLOW_GLOBAL_TMP", None)
                 result = await tool._execute_impl(
                     session_context={"session_id": "test"},
@@ -425,6 +426,7 @@ class TestSessionIsolation:
             os.environ, {"SHANNON_SESSION_WORKSPACES_DIR": str(tmp_path)}
         ):
             # Write file in session A
+            # 在 session A 中写文件
             result_a = await write_tool._execute_impl(
                 session_context={"session_id": "session-a"},
                 path=str(tmp_path / "session-a" / "secret.txt"),
@@ -434,6 +436,7 @@ class TestSessionIsolation:
             assert result_a.success is True
 
             # Write file in session B
+            # 在 session B 中写文件
             result_b = await write_tool._execute_impl(
                 session_context={"session_id": "session-b"},
                 path=str(tmp_path / "session-b" / "secret.txt"),
@@ -443,6 +446,7 @@ class TestSessionIsolation:
             assert result_b.success is True
 
             # Verify workspaces are separate
+            # 校验两个工作区彼此隔离
             assert (tmp_path / "session-a" / "secret.txt").read_text() == "Session A secret"
             assert (tmp_path / "session-b" / "secret.txt").read_text() == "Session B secret"
 
@@ -555,6 +559,7 @@ class TestFileSearchTool:
         session_dir = tmp_path / "test-session"
         session_dir.mkdir()
         # Create file with many matching lines
+        # 创建包含大量匹配行的文件
         lines = "\n".join([f"match line {i}" for i in range(50)])
         (session_dir / "many.txt").write_text(lines)
 
@@ -673,6 +678,7 @@ class TestFileSearchTool:
         assert os.path.join("subdir", "nested.txt") in files
 
     # --- New: regex support ---
+    # --- 新增：regex 支持 ---
 
     @pytest.mark.asyncio
     async def test_search_regex_basic(self, tool, tmp_path):
@@ -714,7 +720,7 @@ class TestFileSearchTool:
             )
 
         assert result.success is True
-        assert len(result.output) == 1  # literal match
+        assert len(result.output) == 1  # literal match 注：字面量匹配
 
     @pytest.mark.asyncio
     async def test_search_invalid_regex_returns_error(self, tool, tmp_path):
@@ -736,6 +742,7 @@ class TestFileSearchTool:
         assert "regex" in result.error.lower() or "pattern" in result.error.lower()
 
     # --- New: include (glob filter) ---
+    # --- 新增：include（glob 过滤）---
 
     @pytest.mark.asyncio
     async def test_search_include_filters_by_extension(self, tool, tmp_path):
@@ -779,6 +786,7 @@ class TestFileSearchTool:
         assert len(result.output) == 2
 
     # --- New: context_lines ---
+    # --- 新增：context_lines ---
 
     @pytest.mark.asyncio
     async def test_search_context_lines(self, tool, tmp_path):
@@ -804,7 +812,7 @@ class TestFileSearchTool:
         # context should include before/after lines
         # context 只装命中行的上下游，不含整文件
         assert "context" in match
-        assert len(match["context"]) == 3  # 1 before + match + 1 after
+        assert len(match["context"]) == 3  # 1 before + match + 1 after 注：1 行前置 + 命中行 + 1 行后置
         assert match["context"][0]["content"] == "line2"
         assert match["context"][1]["content"] == "MATCH_HERE"
         assert match["context"][2]["content"] == "line4"
@@ -851,7 +859,7 @@ class TestFileSearchTool:
         # Should have match line + 1 after (no before since match is line 1)
         # match 在第 1 行，前面没有内容，只带 1 行 after
         assert match["context"][0]["content"] == "MATCH"
-        assert len(match["context"]) <= 3  # at most 2+1+0
+        assert len(match["context"]) <= 3  # at most 2+1+0 注：最多 2+1+0
 
 
 class TestFileReadOffsetLimit:
@@ -900,6 +908,7 @@ class TestFileReadOffsetLimit:
         assert "9\tLine 9" in result.output
         assert "10\tLine 10" in result.output
         # Line 7 should NOT appear
+        # 第 7 行不应出现
         assert "Line 7" not in result.output
         assert result.metadata["offset"] == 8
 

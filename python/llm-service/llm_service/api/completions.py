@@ -81,6 +81,7 @@ async def generate_completion(request: Request, body: CompletionRequest):
         pass
 
     # Convert tier string to enum
+    # 把 tier 字符串转为枚举
     tier = None
     if body.model_tier:
         try:
@@ -122,6 +123,7 @@ async def generate_completion(request: Request, body: CompletionRequest):
                 "x-agent-id"
             )
             # Generate completion
+            # 生成 completion
             result = await providers.generate_completion(
                 messages=body.messages,
                 tier=tier,
@@ -195,9 +197,11 @@ async def _stream_completion(request, body, providers, tier):
                 yield f"data: {json.dumps(event)}\n\n"
             elif isinstance(chunk, dict):
                 # Final metadata from provider (usage, model, function_calls)
+                # provider 返回的最终 metadata（usage、model、function_calls）
                 final_meta = chunk
 
         # Build the done event with full response
+        # 构造携带完整响应的 done 事件
         done_event = {
             "type": "done",
             "output_text": full_text,
@@ -218,6 +222,11 @@ async def _stream_completion(request, body, providers, tier):
             # blocks the same way non-stream complete() callers do. ShanClaw's
             # CompleteStream decodes the done event into CompletionResponse via
             # the existing json.Unmarshal — the new field auto-populates.
+            # 原样转发有序的 content_blocks 列表，
+            # 让 streaming 客户端（TUI、未来的 SSE 消费方）与非流式 complete() 调用方
+            # 一样地往返 thinking block。ShanClaw 的
+            # CompleteStream 通过现有 json.Unmarshal 把 done 事件解码为 CompletionResponse——
+            # 新字段会自动填充。
             if final_meta.get("content_blocks"):
                 done_event["content_blocks"] = final_meta["content_blocks"]
 
@@ -225,6 +234,7 @@ async def _stream_completion(request, body, providers, tier):
         yield "data: [DONE]\n\n"
 
         # Record metrics
+        # 记录 metrics
         duration = time.time() - start_time
         usage = (final_meta or {}).get("usage", {})
         metrics.record_llm_request(

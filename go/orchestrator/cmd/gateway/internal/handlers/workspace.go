@@ -21,6 +21,7 @@ import (
 )
 
 // WorkspaceHandler handles session workspace file operations
+// WorkspaceHandler 处理 session workspace 的文件操作。
 type WorkspaceHandler struct {
 	db               *sqlx.DB
 	logger           *zap.Logger
@@ -30,6 +31,7 @@ type WorkspaceHandler struct {
 }
 
 // NewWorkspaceHandler creates a new workspace handler
+// NewWorkspaceHandler 创建 workspace handler。
 func NewWorkspaceHandler(db *sqlx.DB, logger *zap.Logger) *WorkspaceHandler {
 	firecrackerURL := os.Getenv("FIRECRACKER_EXECUTOR_URL")
 	if firecrackerURL == "" {
@@ -39,6 +41,7 @@ func NewWorkspaceHandler(db *sqlx.DB, logger *zap.Logger) *WorkspaceHandler {
 	workspaceBaseDir := os.Getenv("SHANNON_SESSION_WORKSPACES_DIR")
 	if workspaceBaseDir == "" {
 		// Backwards-compat: allow older config name
+		// 向后兼容：允许使用旧的配置名。
 		workspaceBaseDir = os.Getenv("FIRECRACKER_EFS_MOUNT")
 	}
 	if workspaceBaseDir == "" {
@@ -65,6 +68,7 @@ type DownloadRequest struct {
 }
 
 // DownloadResponse matches the Firecracker executor's response format
+// DownloadResponse 与 Firecracker executor 的 response 格式一致。
 type DownloadResponse struct {
 	Success     bool    `json:"success"`
 	Content     *string `json:"content,omitempty"`
@@ -74,6 +78,7 @@ type DownloadResponse struct {
 }
 
 // ListFilesRequest matches the Firecracker executor's request format
+// ListFilesRequest 与 Firecracker executor 的 request 格式一致。
 type ListFilesRequest struct {
 	SessionID     string  `json:"session_id"`
 	WorkspacePath string  `json:"workspace_path"`
@@ -81,6 +86,7 @@ type ListFilesRequest struct {
 }
 
 // FileInfo represents a file in the workspace
+// FileInfo 表示 workspace 中的一个文件。
 type FileInfo struct {
 	Name      string `json:"name"`
 	Path      string `json:"path"`
@@ -89,6 +95,7 @@ type FileInfo struct {
 }
 
 // ListFilesResponse matches the Firecracker executor's response format
+// ListFilesResponse 与 Firecracker executor 的 response 格式一致。
 type ListFilesResponse struct {
 	Success bool       `json:"success"`
 	Files   []FileInfo `json:"files"`
@@ -101,6 +108,7 @@ type sessionMeta struct {
 }
 
 // DownloadFile handles GET /api/v1/sessions/{sessionId}/files/{path...}
+// DownloadFile 处理 GET /api/v1/sessions/{sessionId}/files/{path...} 请求。
 func (h *WorkspaceHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
@@ -123,6 +131,7 @@ func (h *WorkspaceHandler) DownloadFile(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Security: validate path doesn't escape workspace
+	// 安全：校验 path 不会逃逸出 workspace。
 	if strings.Contains(filePath, "..") || strings.HasPrefix(filePath, "/") {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid path: cannot contain '..'"})
 		return
@@ -160,6 +169,7 @@ func (h *WorkspaceHandler) DownloadFile(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Forward to Firecracker executor
+	// 转发给 Firecracker executor。
 	reqBody := DownloadRequest{
 		SessionID:     workspaceKey,
 		FilePath:      filePath,
@@ -183,6 +193,7 @@ func (h *WorkspaceHandler) DownloadFile(w http.ResponseWriter, r *http.Request) 
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
 		// Fallback to local filesystem when Firecracker is unavailable
+		// Firecracker 不可用时回退到本地文件系统。
 		h.logger.Info("Firecracker unavailable, falling back to local filesystem", zap.Error(err))
 		h.downloadFileLocal(w, workspacePath, filePath)
 		return
@@ -190,6 +201,7 @@ func (h *WorkspaceHandler) DownloadFile(w http.ResponseWriter, r *http.Request) 
 	defer resp.Body.Close()
 
 	// Forward response
+	// 透传 response。
 	if ct := resp.Header.Get("Content-Type"); ct != "" {
 		w.Header().Set("Content-Type", ct)
 	} else {
@@ -200,6 +212,7 @@ func (h *WorkspaceHandler) DownloadFile(w http.ResponseWriter, r *http.Request) 
 }
 
 // ListFiles handles GET /api/v1/sessions/{sessionId}/files
+// ListFiles 处理 GET /api/v1/sessions/{sessionId}/files 请求。
 func (h *WorkspaceHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
@@ -216,9 +229,11 @@ func (h *WorkspaceHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Optional subdirectory path from query param
+	// 可选：通过 query param 指定子目录 path。
 	subPath := r.URL.Query().Get("path")
 
 	// Security: validate path doesn't escape workspace
+	// 安全：校验 path 不会逃逸出 workspace。
 	if strings.Contains(subPath, "..") {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid path: cannot contain '..'"})
 		return
@@ -262,6 +277,7 @@ func (h *WorkspaceHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Directory doesn't exist — no workspace files for this session
+	// 目录不存在——该 session 没有 workspace 文件。
 	if subPath == "" {
 		writeJSON(w, http.StatusOK, ListFilesResponse{Success: true, Files: []FileInfo{}})
 		return
@@ -294,6 +310,7 @@ func (h *WorkspaceHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
 		// Fallback to local filesystem when Firecracker is unavailable
+		// Firecracker 不可用时回退到本地文件系统。
 		h.logger.Info("Firecracker unavailable, falling back to local filesystem", zap.Error(err))
 		h.listFilesLocal(w, workspacePath, subPath)
 		return
@@ -316,6 +333,7 @@ func (h *WorkspaceHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Non-200: forward as-is
+	// 非 200：原样透传。
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)
@@ -348,6 +366,7 @@ func (h *WorkspaceHandler) listFilesLocal(w http.ResponseWriter, workspacePath, 
 	}
 
 	// If workspace directory doesn't exist, return empty list
+	// workspace 目录不存在时返回空列表。
 	entries, err := os.ReadDir(absTarget)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -492,6 +511,7 @@ func detectContentType(filePath string) string {
 	}
 
 	// Fall back to stdlib
+	// 回退到标准库。
 	if ct := mime.TypeByExtension(ext); ct != "" {
 		return ct
 	}
@@ -560,6 +580,7 @@ func validateWorkspaceSessionID(sessionID string) error {
 		return fmt.Errorf("invalid session_id")
 	}
 	// Reject path traversal attempts
+	// 拒绝 path traversal 尝试。
 	if strings.Contains(sessionID, "..") || strings.HasPrefix(sessionID, ".") {
 		return fmt.Errorf("invalid session_id")
 	}

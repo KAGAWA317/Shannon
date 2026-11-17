@@ -7,6 +7,7 @@ import (
 )
 
 // ContainsString reports whether slice contains item.
+// ContainsString 报告 slice 是否包含 item。
 func ContainsString(slice []string, item string) bool {
 	return slices.Contains(slice, item)
 }
@@ -53,6 +54,7 @@ func TruncateString(s string, maxLen int, preserveWords bool) string {
 		return s
 	}
 	// Reserve space for ellipsis
+	// 为省略号预留空间
 	if maxLen <= 3 {
 		return "..."[:maxLen]
 	}
@@ -95,6 +97,7 @@ func GetContextBool(ctx map[string]any, key string) bool {
 		return false
 	}
 	// Handle bool type
+	// 处理 bool 类型
 	if b, ok := v.(bool); ok {
 		return b
 	}

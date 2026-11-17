@@ -50,7 +50,7 @@ type DomainAnalysisInput struct {
 	PrefetchSubpageLimit int
 	RequestedRegions     []string
 	PlanHints            []string
-	SubtaskDescription   string // Description from domain_analysis decompose subtask
+	SubtaskDescription   string // Description from domain_analysis decompose subtask 注：来自 domain_analysis decompose subtask 的描述
 	Context              map[string]any
 	UserID               string
 	SessionID            string
@@ -72,6 +72,7 @@ type DomainAnalysisStats struct {
 	FailureReasons    map[string]int
 	DigestTokensUsed  int
 	// Discovery phase status
+	// Discovery 阶段状态
 	DiscoveryFailed bool   `json:"discovery_failed,omitempty"`
 	DiscoveryError  string `json:"discovery_error,omitempty"`
 }
@@ -85,6 +86,7 @@ type DomainAnalysisResult struct {
 }
 
 // DomainAnalysisWorkflow runs official-domain discovery + prefetch and returns a compact digest.
+// DomainAnalysisWorkflow 执行官方域名发现 + 预取，并返回一份紧凑的 digest。
 func DomainAnalysisWorkflow(ctx workflow.Context, input DomainAnalysisInput) (DomainAnalysisResult, error) {
 	logger := workflow.GetLogger(ctx)
 
@@ -203,11 +205,13 @@ func DomainAnalysisWorkflow(ctx workflow.Context, input DomainAnalysisInput) (Do
 	var prefetchURLs []string
 	discoveredBySearch := make(map[string][]string)
 	// Track discovery phase failures for stats
+	// 记录 discovery 阶段的失败情况，用于统计。
 	var discoveryFailed bool
 	var discoveryError string
 
 	if prefetchDiscoverOnlyVersion >= 1 && domainDiscoveryVersion >= 1 {
 		// Discover-only mode: reset any refinement-provided domains.
+		// Discover-only 模式：清空 refinement 提供的域名。
 		delete(baseContext, "official_domains")
 		delete(baseContext, "official_domains_source")
 
@@ -359,6 +363,7 @@ func DomainAnalysisWorkflow(ctx workflow.Context, input DomainAnalysisInput) (Do
 			}
 			discoveryResult.Success = false
 			// Track failure for stats reporting
+			// 记录失败情况以便统计上报。
 			discoveryFailed = true
 			if discoveryErr != nil {
 				discoveryError = discoveryErr.Error()
@@ -407,6 +412,7 @@ func DomainAnalysisWorkflow(ctx workflow.Context, input DomainAnalysisInput) (Do
 					"search_domains_count", len(searchDomainsAll),
 				)
 				// Fallback: use domains extracted directly from web_search tool executions
+				// 兜底：直接使用从 web_search tool 执行记录中提取的域名。
 				seen := make(map[string]bool)
 				for _, d := range searchDomainsAll {
 					if !seen[d] {
@@ -445,6 +451,7 @@ func DomainAnalysisWorkflow(ctx workflow.Context, input DomainAnalysisInput) (Do
 				}
 
 				// Log grounding results for debugging
+				// 记录 grounding 结果，便于调试。
 				if len(filteredOut) > 0 {
 					logger.Warn("Domain grounding filtered out LLM domains",
 						"canonical_name", input.CanonicalName,
@@ -740,8 +747,8 @@ func DomainAnalysisWorkflow(ctx workflow.Context, input DomainAnalysisInput) (Do
 	digestQuery := buildDomainAnalysisDigestQuery(input.Query, input.CanonicalName, input.PlanHints)
 	digestContext := buildDomainAnalysisSynthesisContext(baseContext)
 	digestContext["synthesis_template"] = "domain_analysis_digest"
-	digestContext["model_tier"] = "large"       // Digest is user-facing quality; override agent tier
-	delete(digestContext, "parent_workflow_id") // Suppress SSE: synthesis.go fallback reads this from context
+	digestContext["model_tier"] = "large"       // Digest is user-facing quality; override agent tier 注：digest 直接影响用户可见质量，因此覆盖 agent tier
+	delete(digestContext, "parent_workflow_id") // Suppress SSE: synthesis.go fallback reads this from context 注：抑制 SSE：synthesis.go 的兜底逻辑会从 context 读取该字段
 
 	var digest activities.SynthesisResult
 	if len(digestAgentResults) > 0 {
@@ -751,7 +758,7 @@ func DomainAnalysisWorkflow(ctx workflow.Context, input DomainAnalysisInput) (Do
 				Query:            digestQuery,
 				AgentResults:     digestAgentResults,
 				Context:          digestContext,
-				ParentWorkflowID: "", // Empty: suppress SSE events (domain analysis is a child workflow, not the final answer)
+				ParentWorkflowID: "", // Empty: suppress SSE events (domain analysis is a child workflow, not the final answer) 注：置空以抑制 SSE 事件（domain analysis 是子 workflow，不是最终答案）
 			}).Get(ctx, &digest)
 		if err != nil {
 			logger.Warn("Domain analysis synthesis failed", "error", err)
@@ -1031,6 +1038,7 @@ func buildDomainAnalysisPlanHints(subtasks []activities.Subtask) []string {
 	for _, st := range subtasks {
 		desc := strings.TrimSpace(st.Description)
 		// Strip trailing "Tools:" clause - check both newline and space patterns
+		// 去掉结尾的 "Tools:" 子句 —— 同时检查换行和空格两种模式。
 		for _, pattern := range []string{"\nTools:", " Tools:"} {
 			if idx := strings.Index(desc, pattern); idx > 0 {
 				desc = strings.TrimSpace(desc[:idx])
@@ -1051,7 +1059,7 @@ func domainAnalysisDigestResult(result *DomainAnalysisResult) activities.AgentEx
 		return activities.AgentExecutionResult{}
 	}
 	return activities.AgentExecutionResult{
-		AgentID:  "domain_analysis_evidence", // NOT "synthesizer" to avoid (Synthesis) tag in upstream prompt
+		AgentID:  "domain_analysis_evidence", // NOT "synthesizer" to avoid (Synthesis) tag in upstream prompt 注：不用 "synthesizer"，以免上游 prompt 中出现 (Synthesis) 标记
 		Role:     "domain_analysis",
 		Response: result.DomainAnalysisDigest,
 		Success:  true,
@@ -1094,6 +1102,7 @@ func persistAgentExecutionSyncWithMeta(ctx workflow.Context, workflowID, agentID
 	actCtx := workflow.WithActivityOptions(ctx, activityOpts)
 
 	// Pre-generate agent execution ID using SideEffect for replay safety
+	// 用 SideEffect 预生成 agent execution ID，保证 replay 安全。
 	var agentExecutionID string
 	workflow.SideEffect(ctx, func(ctx workflow.Context) any {
 		return uuid.New().String()

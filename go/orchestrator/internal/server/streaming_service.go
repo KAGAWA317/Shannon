@@ -39,6 +39,7 @@ func (s *StreamingServiceServer) StreamTaskExecution(req *pb.StreamRequest, srv 
 		return nil
 	}
 	// Build type filter set
+	// 构建类型过滤集合
 	typeFilter := map[string]struct{}{}
 	for _, t := range req.GetTypes() {
 		if t != "" {
@@ -53,6 +54,7 @@ func (s *StreamingServiceServer) StreamTaskExecution(req *pb.StreamRequest, srv 
 	// 按 stream ID 或 seq 回放（优先 stream ID）
 	if req.GetLastStreamId() != "" {
 		// Resume from Redis stream ID
+		// 从 Redis stream ID 恢复
 		for _, ev := range s.mgr.ReplayFromStreamID(wf, req.GetLastStreamId()) {
 			// Mark that at least one event exists (even if filtered out)
 			// 标记至少存在一个 event（即使被过滤掉）
@@ -71,6 +73,7 @@ func (s *StreamingServiceServer) StreamTaskExecution(req *pb.StreamRequest, srv 
 		}
 	} else if req.GetLastEventId() > 0 {
 		// Backward compat: resume from numeric seq
+		// 向后兼容：从数字 seq 恢复
 		for _, ev := range s.mgr.ReplaySince(wf, req.GetLastEventId()) {
 			// Mark that at least one event exists (even if filtered out)
 			// 标记至少存在一个 event（即使被过滤掉）
@@ -90,12 +93,15 @@ func (s *StreamingServiceServer) StreamTaskExecution(req *pb.StreamRequest, srv 
 	}
 
 	// Subscribe to live events, avoiding gaps
-	startFrom := "$" // Default to new messages only
+	// 订阅实时 event，避免断层
+	startFrom := "$" // Default to new messages only 注：默认只接收新消息
 	if lastSentStreamID != "" {
 		// Continue from last replayed message
+		// 从最后一条回放的 message 继续
 		startFrom = lastSentStreamID
 	} else if req.GetLastStreamId() == "" && req.GetLastEventId() == 0 {
 		// No resume point, start from beginning
+		// 没有恢复点，从头开始
 		startFrom = "0-0"
 	}
 	ch := s.mgr.SubscribeFrom(wf, 256, startFrom)
@@ -107,6 +113,7 @@ func (s *StreamingServiceServer) StreamTaskExecution(req *pb.StreamRequest, srv 
 	defer firstEventTimer.Stop()
 
 	// Stream live events
+	// 流式推送实时 event
 	for {
 		select {
 		case <-srv.Context().Done():
@@ -135,6 +142,7 @@ func (s *StreamingServiceServer) StreamTaskExecution(req *pb.StreamRequest, srv 
 		case ev, ok := <-ch:
 			if !ok {
 				// Channel closed unexpectedly
+				// channel 意外关闭
 				return nil
 			}
 
@@ -149,6 +157,7 @@ func (s *StreamingServiceServer) StreamTaskExecution(req *pb.StreamRequest, srv 
 			}
 
 			// Apply type filter
+			// 应用类型过滤
 			if len(typeFilter) > 0 {
 				if _, ok := typeFilter[ev.Type]; !ok {
 					// Skip sending this event, but still close on completion
@@ -161,11 +170,13 @@ func (s *StreamingServiceServer) StreamTaskExecution(req *pb.StreamRequest, srv 
 			}
 
 			// Send event
+			// 发送 event
 			if err := srv.Send(toProto(ev)); err != nil {
 				return err
 			}
 
 			// Close stream after WORKFLOW_COMPLETED
+			// WORKFLOW_COMPLETED 之后关闭流
 			if isCompleted {
 				return nil
 			}

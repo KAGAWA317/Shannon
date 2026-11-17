@@ -45,6 +45,7 @@ func (c *Client) ValidateEmbeddingDimensions(ctx context.Context) error {
 		}
 
 		// Check if dimensions match configured expectations
+		// 检查维度是否与配置的期望一致
 		expectedDim := c.cfg.ExpectedEmbeddingDim
 		if expectedDim > 0 && info.VectorSize != expectedDim {
 			return DimensionMismatchError{
@@ -72,6 +73,7 @@ type CollectionInfo struct {
 }
 
 // getCollectionInfo retrieves collection information from Qdrant
+// getCollectionInfo 从 Qdrant 读取 collection 信息
 func (c *Client) getCollectionInfo(ctx context.Context, collection string) (*CollectionInfo, error) {
 	url := fmt.Sprintf("%s/collections/%s", c.base, collection)
 
@@ -129,6 +131,7 @@ func ValidateAndInitialize(cfg Config) error {
 	}
 
 	// Validate dimensions if configured
+	// 若已配置则校验维度
 	if cfg.ExpectedEmbeddingDim > 0 {
 		if err := client.ValidateEmbeddingDimensions(context.Background()); err != nil {
 			return fmt.Errorf("embedding dimension validation failed: %w", err)

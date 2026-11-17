@@ -319,8 +319,7 @@ _ROLE_PROTOCOL_MAP = {
     "critic": _REVIEW_WORK_PROTOCOL,
     "planner": _REVIEW_WORK_PROTOCOL,
     "generalist": _GENERAL_WORK_PROTOCOL,
-    "writer": _GENERAL_WORK_PROTOCOL,  # Technical writing — uses general workflow with writing-oriented role_prompt
-    # 技术写作 —— 使用通用 workflow 并配合面向写作的 role_prompt
+    "writer": _GENERAL_WORK_PROTOCOL,  # Technical writing — uses general workflow with writing-oriented role_prompt 注：技术写作 —— 使用通用 workflow 并配合面向写作的 role_prompt
 }
 
 

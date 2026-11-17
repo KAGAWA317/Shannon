@@ -13,9 +13,10 @@ import (
 )
 
 // CoverageEvaluationInput is the input for coverage evaluation
+// CoverageEvaluationInput 是 coverage 评估的入参
 type CoverageEvaluationInput struct {
 	Query               string                 `json:"query"`
-	ResearchDimensions  []ResearchDimension    `json:"research_dimensions,omitempty"` // From refinement (uses type from research_refine.go)
+	ResearchDimensions  []ResearchDimension    `json:"research_dimensions,omitempty"` // From refinement (uses type from research_refine.go) 注：来自 refinement（复用 research_refine.go 里的类型）
 	CurrentSynthesis    string                 `json:"current_synthesis"`
 	CoveredAreas        []string               `json:"covered_areas"`
 	KeyFindings         []string               `json:"key_findings"`
@@ -26,15 +27,16 @@ type CoverageEvaluationInput struct {
 }
 
 // CoverageEvaluationResult is the result of coverage evaluation
+// CoverageEvaluationResult 是 coverage 评估的结果
 type CoverageEvaluationResult struct {
-	OverallCoverage    float64           `json:"overall_coverage"`     // 0.0-1.0
-	DimensionCoverage  map[string]float64 `json:"dimension_coverage"`  // Per-dimension coverage
-	CriticalGaps       []CoverageGap     `json:"critical_gaps"`        // Must-fill gaps
-	OptionalGaps       []CoverageGap     `json:"optional_gaps"`        // Nice-to-have gaps
-	RecommendedAction  string            `json:"recommended_action"`   // "continue", "complete", "pivot"
-	ConfidenceLevel    string            `json:"confidence_level"`     // "high", "medium", "low"
-	ShouldContinue     bool              `json:"should_continue"`      // Whether to continue iterating
-	Reasoning          string            `json:"reasoning"`            // Explanation for decision
+	OverallCoverage    float64           `json:"overall_coverage"`     // 0.0-1.0 注：取值 0.0-1.0
+	DimensionCoverage  map[string]float64 `json:"dimension_coverage"`  // Per-dimension coverage 注：各维度覆盖度
+	CriticalGaps       []CoverageGap     `json:"critical_gaps"`        // Must-fill gaps 注：必须补齐的缺口
+	OptionalGaps       []CoverageGap     `json:"optional_gaps"`        // Nice-to-have gaps 注：可选优化的缺口
+	RecommendedAction  string            `json:"recommended_action"`   // "continue", "complete", "pivot" 注：取值 "continue"、"complete"、"pivot"
+	ConfidenceLevel    string            `json:"confidence_level"`     // "high", "medium", "low" 注：取值 "high"、"medium"、"low"
+	ShouldContinue     bool              `json:"should_continue"`      // Whether to continue iterating 注：是否继续迭代
+	Reasoning          string            `json:"reasoning"`            // Explanation for decision 注：决策说明
 	TokensUsed         int               `json:"tokens_used"`
 	ModelUsed          string            `json:"model_used"`
 	Provider           string            `json:"provider"`
@@ -43,11 +45,12 @@ type CoverageEvaluationResult struct {
 }
 
 // CoverageGap represents a gap in research coverage
+// CoverageGap 表示研究覆盖度上的一个缺口
 type CoverageGap struct {
-	Area        string   `json:"area"`         // What area is missing
-	Importance  string   `json:"importance"`   // "critical", "important", "minor"
-	Questions   []string `json:"questions"`    // Specific questions to answer
-	SourceTypes []string `json:"source_types"` // Suggested source types
+	Area        string   `json:"area"`         // What area is missing 注：缺失的是哪个方面
+	Importance  string   `json:"importance"`   // "critical", "important", "minor" 注：取值 "critical"、"important"、"minor"
+	Questions   []string `json:"questions"`    // Specific questions to answer 注：需要回答的具体问题
+	SourceTypes []string `json:"source_types"` // Suggested source types 注：建议的 source 类型
 }
 
 // EvaluateCoverage assesses research coverage and identifies gaps
@@ -62,17 +65,18 @@ func (a *Activities) EvaluateCoverage(ctx context.Context, input CoverageEvaluat
 	)
 
 	// Build evaluation prompt
+	// 构造评估 prompt
 	systemPrompt := buildCoverageEvaluationPrompt(input)
 	userContent := buildCoverageEvaluationContent(input)
 
 	// Call LLM service
+	// 调用 LLM service
 	llmServiceURL := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
 	reqBody := map[string]any{
 		"query":       userContent,
-		"max_tokens":  8192, // Extended for detailed coverage analysis JSON
-		// 加大到 8192，以容纳详细的 coverage 分析 JSON。
+		"max_tokens":  8192, // Extended for detailed coverage analysis JSON 注：加大到 8192，以容纳详细的 coverage 分析 JSON。
 		"temperature": 0.2,
 		"agent_id":    "coverage_evaluator",
 		"model_tier":  "small",
@@ -88,8 +92,7 @@ func (a *Activities) EvaluateCoverage(ctx context.Context, input CoverageEvaluat
 	}
 
 	client := &http.Client{
-		Timeout:   120 * time.Second, // Extended for LLM processing time
-		// 加长到 120s，覆盖 LLM 处理耗时。
+		Timeout:   120 * time.Second, // Extended for LLM processing time 注：加长到 120s，覆盖 LLM 处理耗时。
 		Transport: interceptors.NewWorkflowHTTPRoundTripper(nil),
 	}
 
@@ -114,6 +117,7 @@ func (a *Activities) EvaluateCoverage(ctx context.Context, input CoverageEvaluat
 	}
 
 	// Parse response
+	// 解析响应
 	var llmResp struct {
 		Success  bool   `json:"success"`
 		Response string `json:"response"`
@@ -140,6 +144,7 @@ func (a *Activities) EvaluateCoverage(ctx context.Context, input CoverageEvaluat
 	}
 
 	// Parse structured response
+	// 解析结构化响应
 	if err := parseCoverageEvaluationResponse(llmResp.Response, result); err != nil {
 		logger.Warn("EvaluateCoverage: failed to parse structured response",
 			"error", err,
@@ -215,6 +220,7 @@ func (a *Activities) EvaluateCoverage(ctx context.Context, input CoverageEvaluat
 	}
 
 	// Log if guardrails overrode LLM decision
+	// 记录护栏是否覆盖了 LLM 的决策
 	if originalShouldContinue != result.ShouldContinue {
 		logger.Info("Guardrail override applied",
 			"llm_decision", originalShouldContinue,
@@ -234,6 +240,7 @@ func (a *Activities) EvaluateCoverage(ctx context.Context, input CoverageEvaluat
 }
 
 // buildCoverageEvaluationPrompt creates the system prompt for coverage evaluation
+// buildCoverageEvaluationPrompt 生成 coverage 评估用的 system prompt
 func buildCoverageEvaluationPrompt(input CoverageEvaluationInput) string {
 	var sb strings.Builder
 
@@ -303,6 +310,7 @@ Return a JSON object:
 }
 
 // buildCoverageEvaluationContent builds user content for coverage evaluation
+// buildCoverageEvaluationContent 生成 coverage 评估用的 user content
 func buildCoverageEvaluationContent(input CoverageEvaluationInput) string {
 	var sb strings.Builder
 
@@ -349,8 +357,10 @@ func buildCoverageEvaluationContent(input CoverageEvaluationInput) string {
 }
 
 // parseCoverageEvaluationResponse parses the LLM response
+// parseCoverageEvaluationResponse 解析 LLM 的响应
 func parseCoverageEvaluationResponse(response string, result *CoverageEvaluationResult) error {
 	// Find JSON in response
+	// 在响应中定位 JSON
 	start := strings.Index(response, "{")
 	end := strings.LastIndex(response, "}")
 

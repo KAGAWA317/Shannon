@@ -332,6 +332,7 @@ class TestTimeoutHandling:
             )
 
         # Should timeout and fail
+        # 应当超时并失败
         assert result.success is False
         assert "timed out" in result.error.lower()
 
@@ -437,6 +438,7 @@ class TestOutputCapture:
             os.environ, {"SHANNON_SESSION_WORKSPACES_DIR": str(tmp_path)}
         ):
             # Successful command
+            # 成功的命令
             result = await tool._execute_impl(
                 session_context={"session_id": "test"},
                 command="echo ok",
@@ -444,6 +446,7 @@ class TestOutputCapture:
             assert result.output["exit_code"] == 0
 
             # Failing command
+            # 失败的命令
             result = await tool._execute_impl(
                 session_context={"session_id": "test"},
                 command="ls /nonexistent_xyz",

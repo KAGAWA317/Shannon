@@ -12,10 +12,13 @@ def test_browser_use_role_does_not_advertise_evaluate():
 
     preset = get_role_preset("browser_use")
     # Consolidated tool is in the allowlist
+    # 合并后的 tool 在 allowlist 中
     assert "browser" in preset.get("allowed_tools", [])
     # evaluate is not in the advertised safe actions enum
+    # evaluate 不在对外声明的 safe actions 枚举里
     assert "evaluate" not in SAFE_ACTIONS
     # evaluate should not appear as a documented action in the prompt
+    # evaluate 不应作为已记录的 action 出现在 prompt 中
     prompt = preset.get("system_prompt", "")
     assert 'action="evaluate"' not in prompt
 

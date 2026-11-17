@@ -28,10 +28,11 @@ const (
 type Middleware struct {
 	authService *Service
 	jwtManager  *JWTManager
-	skipAuth    bool // For development/testing
+	skipAuth    bool // For development/testing 注：供开发/测试使用
 }
 
 // NewMiddleware creates a new authentication middleware
+// NewMiddleware 创建新的 authentication middleware
 func NewMiddleware(authService *Service, jwtManager *JWTManager, skipAuth bool) *Middleware {
 	return &Middleware{
 		authService: authService,
@@ -41,11 +42,14 @@ func NewMiddleware(authService *Service, jwtManager *JWTManager, skipAuth bool) 
 }
 
 // HTTPMiddleware provides HTTP authentication middleware
+// HTTPMiddleware 提供 HTTP authentication middleware
 func (m *Middleware) HTTPMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Skip auth if configured (for development)
+		// 若配置了跳过 auth 则跳过（供开发使用）
 		if m.skipAuth {
 			// Use default dev user context
+			// 使用默认的 dev 用户上下文
 			ctx := context.WithValue(r.Context(), UserContextKey, &UserContext{
 				UserID:   uuid.MustParse("00000000-0000-0000-0000-000000000002"),
 				TenantID: uuid.MustParse("00000000-0000-0000-0000-000000000001"),
@@ -59,9 +63,11 @@ func (m *Middleware) HTTPMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Extract token from Authorization header
+		// 从 Authorization 头中提取 token
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
 			// Try API key header
+			// 尝试 API key 头
 			apiKey := r.Header.Get("X-API-Key")
 			if apiKey != "" {
 				userCtx, err := m.authService.ValidateAPIKey(r.Context(), apiKey)
@@ -79,6 +85,7 @@ func (m *Middleware) HTTPMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Extract bearer token
+		// 提取 bearer token
 		token, err := ExtractBearerToken(authHeader)
 		if err != nil {
 			http.Error(w, "Invalid authorization header", http.StatusUnauthorized)
@@ -86,6 +93,7 @@ func (m *Middleware) HTTPMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Validate JWT token
+		// 校验 JWT token
 		userCtx, err := m.jwtManager.ValidateAccessToken(token)
 		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
@@ -93,15 +101,18 @@ func (m *Middleware) HTTPMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Add user context to request
+		// 把用户上下文写入 request
 		ctx := context.WithValue(r.Context(), UserContextKey, userCtx)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
 // UnaryServerInterceptor provides gRPC authentication interceptor
+// UnaryServerInterceptor 提供 gRPC authentication 拦截器
 func (m *Middleware) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		// Skip auth for health check
+		// 健康检查跳过 auth
 		if strings.HasSuffix(info.FullMethod, "/Health") {
 			return handler(ctx, req)
 		}
@@ -140,6 +151,7 @@ func (m *Middleware) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 		}
 
 		// Extract metadata
+		// 提取 metadata
 		md, ok := metadata.FromIncomingContext(ctx)
 		if !ok {
 			return nil, status.Error(codes.Unauthenticated, "missing metadata")
@@ -172,11 +184,13 @@ func (m *Middleware) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 		}
 
 		// No valid authentication found
+		// 未找到有效的 authentication
 		if userCtx == nil {
 			return nil, status.Error(codes.Unauthenticated, "missing authentication")
 		}
 
 		// Add user context and proceed
+		// 写入用户上下文后继续
 		ctx = context.WithValue(ctx, UserContextKey, userCtx)
 		return handler(ctx, req)
 	}
@@ -203,6 +217,7 @@ func RequireScopes(ctx context.Context, requiredScopes ...string) error {
 }
 
 // GetUserContext extracts user context from context
+// GetUserContext 从 context 中取出用户上下文
 func GetUserContext(ctx context.Context) (*UserContext, error) {
 	userCtx, ok := ctx.Value(UserContextKey).(*UserContext)
 	if !ok {

@@ -18,6 +18,7 @@ type PersistenceActivities struct {
 }
 
 // NewPersistenceActivities creates a new persistence activities instance
+// NewPersistenceActivities 创建新的 persistence activities 实例
 func NewPersistenceActivities(dbClient *db.Client, logger *zap.Logger) *PersistenceActivities {
 	return &PersistenceActivities{
 		dbClient: dbClient,
@@ -26,8 +27,9 @@ func NewPersistenceActivities(dbClient *db.Client, logger *zap.Logger) *Persiste
 }
 
 // PersistAgentExecutionInput contains data to persist for an agent execution
+// PersistAgentExecutionInput 包含一次 agent 执行需要持久化的数据
 type PersistAgentExecutionInput struct {
-	ID         string         `json:"id,omitempty"` // Optional pre-generated ID for correlation with tool executions
+	ID         string         `json:"id,omitempty"` // Optional pre-generated ID for correlation with tool executions 注：可选，预生成的 ID，用于与 tool 执行关联
 	WorkflowID string         `json:"workflow_id"`
 	AgentID    string         `json:"agent_id"`
 	Input      string         `json:"input"`
@@ -49,6 +51,7 @@ func PersistAgentExecutionStandalone(ctx context.Context, input PersistAgentExec
 	dbClient := GetGlobalDBClient()
 	if dbClient == nil {
 		// Log when no dbClient available
+		// 没有 dbClient 时打日志
 		zap.L().Warn("No global dbClient available, skipping agent execution persistence")
 		return nil
 	}
@@ -69,6 +72,7 @@ func PersistToolExecutionStandalone(ctx context.Context, input PersistToolExecut
 	dbClient := GetGlobalDBClient()
 	if dbClient == nil {
 		// Log when no dbClient available
+		// 没有 dbClient 时打日志
 		zap.L().Warn("No global dbClient available, skipping tool execution persistence")
 		return nil
 	}
@@ -132,7 +136,7 @@ func (p *PersistenceActivities) PersistAgentExecution(ctx context.Context, input
 	agentExec := &db.AgentExecution{
 		ID:           agentID,
 		WorkflowID:   input.WorkflowID,
-		TaskID:       input.WorkflowID, // Use workflow ID as task ID
+		TaskID:       input.WorkflowID, // Use workflow ID as task ID 注：用 workflow ID 作为 task ID
 // 直接用 workflow ID 作为 task ID。
 		AgentID:      input.AgentID,
 		Input:        input.Input,
@@ -178,10 +182,11 @@ func (p *PersistenceActivities) PersistAgentExecution(ctx context.Context, input
 }
 
 // PersistToolExecutionInput contains data to persist for a tool execution
+// PersistToolExecutionInput 包含一次 tool 执行需要持久化的数据
 type PersistToolExecutionInput struct {
 	WorkflowID       string         `json:"workflow_id"`
 	AgentID          string         `json:"agent_id"`
-	AgentExecutionID string         `json:"agent_execution_id,omitempty"` // Links to agent_executions.id
+	AgentExecutionID string         `json:"agent_execution_id,omitempty"` // Links to agent_executions.id 注：关联到 agent_executions.id
 	ToolName         string         `json:"tool_name"`
 	InputParams      map[string]any `json:"input_params"`
 	Output           string         `json:"output"`

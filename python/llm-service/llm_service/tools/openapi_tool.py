@@ -80,7 +80,7 @@ class _SimpleBreaker:
         self.failures = 0
         self.open_until: float = 0.0
         self.half_open = False
-        self._lock = threading.Lock()  # Protect state from concurrent access
+        self._lock = threading.Lock()  # Protect state from concurrent access 注：保护状态，避免并发访问
         # 保护状态免受并发访问
 
     def allow(self, now: float) -> bool:
@@ -839,7 +839,7 @@ def _fetch_spec_from_url(url: str) -> Dict[str, Any]:
     # 默认 5MB
     max_size = int(
         os.getenv("OPENAPI_MAX_SPEC_SIZE", str(5 * 1024 * 1024))
-    )  # 5MB default
+    )  # 5MB default 注：默认 5MB
     timeout = float(os.getenv("OPENAPI_FETCH_TIMEOUT", "30"))
 
     try:

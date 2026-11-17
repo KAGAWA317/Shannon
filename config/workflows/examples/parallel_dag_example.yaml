@@ -9,6 +9,7 @@ defaults:
 
 nodes:
   # Initial understanding phase
+  # 初始理解阶段
   - id: understand
     type: simple
     strategy: react
@@ -24,6 +25,7 @@ nodes:
     metadata:
       tasks:
         # Root task in DAG
+        # DAG 的根任务
         - id: data_collection
           query: "Collect relevant data sources"
           tools: [web_search]
@@ -48,6 +50,7 @@ nodes:
           tools: []
 
   # Final synthesis
+  # 最终综合
   - id: report
     type: cognitive
     strategy: reflection

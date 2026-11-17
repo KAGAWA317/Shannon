@@ -278,7 +278,7 @@ class TestFunctionsToToolsConversion:
         already_wrapped = [{"type": "function", "function": self.SAMPLE_FUNCTIONS[0]}]
         tools = cls._functions_to_tools_param(already_wrapped)
         assert len(tools) == 1
-        assert tools[0] is already_wrapped[0]  # same object, not re-wrapped
+        assert tools[0] is already_wrapped[0]  # same object, not re-wrapped 注：同一对象，未重复包装
 
     def test_functions_to_tools_skips_non_dict(self):
         from llm_provider.openai_provider import OpenAIProvider as cls

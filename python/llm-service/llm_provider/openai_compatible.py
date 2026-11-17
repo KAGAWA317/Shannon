@@ -33,12 +33,10 @@ class OpenAICompatibleProvider(LLMProvider):
     def __init__(self, config: Dict[str, Any]):
         # Get API configuration
         # 获取 API 配置
-        self.api_key = config.get("api_key", "dummy")  # Some providers don't need keys
-        # 部分 provider 不需要 key
+        self.api_key = config.get("api_key", "dummy")  # Some providers don't need keys 注：部分 provider 不需要 key
         self.base_url = config.get(
             "base_url", "http://localhost:11434/v1"
-        )  # Default for Ollama
-        # Ollama 的默认值
+        )  # Default for Ollama 注：Ollama 的默认值
 
         # Initialize OpenAI client with custom base URL
         # 使用自定义 base URL 初始化 OpenAI 客户端
@@ -186,8 +184,7 @@ class OpenAICompatibleProvider(LLMProvider):
             tier=ModelTier.SMALL,
             max_tokens=4096,
             context_window=4096,
-            input_price_per_1k=0.0,  # Local models have no cost
-            # 本地 model 无成本
+            input_price_per_1k=0.0,  # Local models have no cost 注：本地 model 无成本
             output_price_per_1k=0.0,
         )
 
@@ -306,7 +303,7 @@ class OpenAICompatibleProvider(LLMProvider):
             tools = []
             for fn in request.functions:
                 if isinstance(fn, dict) and fn.get("type") == "function":
-                    tools.append(fn)  # Already in tools format
+                    tools.append(fn)  # Already in tools format 注：已经是 tools 格式
                 elif isinstance(fn, dict):
                     tools.append({"type": "function", "function": fn})
             if tools:
@@ -513,8 +510,7 @@ class OpenAICompatibleProvider(LLMProvider):
             "messages": messages,
             "temperature": request.temperature,
             "stream": True,
-            "stream_options": {"include_usage": True},  # Request usage statistics
-            # 请求返回 usage 统计
+            "stream_options": {"include_usage": True},  # Request usage statistics 注：请求返回 usage 统计
         }
 
         if request.max_tokens:

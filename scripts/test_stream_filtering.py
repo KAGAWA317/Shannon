@@ -37,6 +37,7 @@ def main():
     print("=" * 60)
 
     # Submit a test task
+    # 提交测试 task
     print("\n1. Submitting test task...")
     response = requests.post(f"{BASE_URL}/api/v1/tasks", json={"query": "What is 2+2?"})
     data = response.json()
@@ -44,10 +45,12 @@ def main():
     print(f"   Task ID: {task_id}")
 
     # Wait for completion
+    # 等待完成
     print("\n2. Waiting for task completion...")
     time.sleep(5)
 
     # Test 1: Unfiltered stream
+    # 测试 1：不过滤的 stream
     print("\n3. Testing SSE stream WITHOUT filter...")
     all_count, error = count_sse_events(task_id)
     print(f"   Received {all_count} events (unfiltered)")
@@ -60,6 +63,7 @@ def main():
     print("   ✅ PASS: Unfiltered stream works")
 
     # Test 2: LLM_OUTPUT filter
+    # 测试 2：LLM_OUTPUT 过滤
     print("\n4. Testing SSE stream WITH filter (LLM_OUTPUT)...")
     llm_count, error = count_sse_events(task_id, "LLM_OUTPUT")
     print(f"   Received {llm_count} LLM_OUTPUT events")
@@ -72,6 +76,7 @@ def main():
     print("   ✅ PASS: LLM_OUTPUT filter works")
 
     # Test 3: Multi-type filter
+    # 测试 3：多事件类型过滤
     print("\n5. Testing SSE stream WITH filter (LLM_OUTPUT,WORKFLOW_COMPLETED)...")
     multi_count, error = count_sse_events(task_id, "LLM_OUTPUT,WORKFLOW_COMPLETED")
     print(f"   Received {multi_count} filtered events")
@@ -84,6 +89,7 @@ def main():
     print("   ✅ PASS: Multi-type filter works")
 
     # Test 4: Gateway validation
+    # 测试 4：gateway 校验
     print("\n6. Testing gateway doesn't reject valid event types...")
     url = f"{BASE_URL}/api/v1/stream/sse"
     response = requests.get(url, params={
@@ -97,6 +103,7 @@ def main():
     print("   ✅ PASS: Gateway accepts event type filters")
 
     # Test 5: Redis stream ID
+    # 测试 5：Redis stream ID
     print("\n7. Testing Redis stream ID in last_event_id parameter...")
     try:
         response = requests.get(url, params={

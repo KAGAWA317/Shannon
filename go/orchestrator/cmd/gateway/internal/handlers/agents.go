@@ -21,12 +21,14 @@ import (
 )
 
 // AgentsHandler handles agent-related HTTP requests
+// AgentsHandler 处理 agent 相关的 HTTP 请求
 type AgentsHandler struct {
 	orchClient orchpb.OrchestratorServiceClient
 	logger     *zap.Logger
 }
 
 // NewAgentsHandler creates a new agents handler
+// NewAgentsHandler 创建 agents handler
 func NewAgentsHandler(
 	orchClient orchpb.OrchestratorServiceClient,
 	logger *zap.Logger,
@@ -38,6 +40,7 @@ func NewAgentsHandler(
 }
 
 // AgentInfo represents agent information for API responses
+// AgentInfo 表示 API 响应中的 agent 信息
 type AgentInfo struct {
 	ID          string         `json:"id"`
 	Name        string         `json:"name"`
@@ -49,6 +52,7 @@ type AgentInfo struct {
 }
 
 // AgentExecuteRequest represents a request to execute an agent
+// AgentExecuteRequest 表示执行 agent 的请求
 type AgentExecuteRequest struct {
 	Input     map[string]any `json:"input"`
 	SessionID string         `json:"session_id,omitempty"`
@@ -56,6 +60,7 @@ type AgentExecuteRequest struct {
 }
 
 // AgentExecuteResponse represents an agent execution response
+// AgentExecuteResponse 表示 agent 执行响应
 type AgentExecuteResponse struct {
 	TaskID        string    `json:"task_id"`
 	AgentID       string    `json:"agent_id"`
@@ -69,14 +74,17 @@ type AgentExecuteResponse struct {
 }
 
 // ListAgents handles GET /api/v1/agents
+// ListAgents 处理 GET /api/v1/agents
 func (h *AgentsHandler) ListAgents(w http.ResponseWriter, r *http.Request) {
 	// Get user context from auth middleware
+	// 从 auth 中间件获取用户上下文
 	if _, ok := r.Context().Value(auth.UserContextKey).(*auth.UserContext); !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	// Load agents config
+	// 加载 agents 配置
 	cfg, err := activities.LoadAgentsYAMLConfig()
 	if err != nil {
 		h.sendError(w, fmt.Sprintf("Failed to load agents config: %v", err), http.StatusInternalServerError)
@@ -84,6 +92,7 @@ func (h *AgentsHandler) ListAgents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build response
+	// 构造响应
 	ids := make([]string, 0, len(cfg.Agents))
 	for id := range cfg.Agents {
 		ids = append(ids, id)
@@ -112,14 +121,17 @@ func (h *AgentsHandler) ListAgents(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetAgent handles GET /api/v1/agents/{id}
+// GetAgent 处理 GET /api/v1/agents/{id}
 func (h *AgentsHandler) GetAgent(w http.ResponseWriter, r *http.Request) {
 	// Get user context from auth middleware
+	// 从 auth 中间件获取用户上下文
 	if _, ok := r.Context().Value(auth.UserContextKey).(*auth.UserContext); !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	// Extract agent ID from path
+	// 从路径中取出 agent ID
 	agentID := r.PathValue("id")
 	if agentID == "" {
 		h.sendError(w, "Agent ID is required", http.StatusBadRequest)
@@ -127,6 +139,7 @@ func (h *AgentsHandler) GetAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get agent definition
+	// 获取 agent 定义
 	agent, err := activities.GetAgentDefinition(agentID)
 	if err != nil {
 		h.sendError(w, fmt.Sprintf("Agent not found: %s", agentID), http.StatusNotFound)
@@ -148,10 +161,12 @@ func (h *AgentsHandler) GetAgent(w http.ResponseWriter, r *http.Request) {
 }
 
 // ExecuteAgent handles POST /api/v1/agents/{id}
+// ExecuteAgent 处理 POST /api/v1/agents/{id}
 func (h *AgentsHandler) ExecuteAgent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user context from auth middleware
+	// 从 auth 中间件获取用户上下文
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -159,6 +174,7 @@ func (h *AgentsHandler) ExecuteAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract agent ID from path
+	// 从路径中取出 agent ID
 	agentID := r.PathValue("id")
 	if agentID == "" {
 		h.sendError(w, "Agent ID is required", http.StatusBadRequest)
@@ -166,6 +182,7 @@ func (h *AgentsHandler) ExecuteAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate agent exists
+	// 校验 agent 是否存在
 	agent, err := activities.GetAgentDefinition(agentID)
 	if err != nil {
 		h.sendError(w, fmt.Sprintf("Agent not found: %s", agentID), http.StatusNotFound)
@@ -173,6 +190,7 @@ func (h *AgentsHandler) ExecuteAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse request body
+	// 解析请求体
 	var req AgentExecuteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.sendError(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
@@ -180,17 +198,20 @@ func (h *AgentsHandler) ExecuteAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate input against agent's schema
+	// 按 agent 的 schema 校验输入
 	if err := ValidateAgentInput(agent, req.Input); err != nil {
 		h.sendError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	// Generate session ID if not provided
+	// 未提供时生成 session ID
 	if req.SessionID == "" {
 		req.SessionID = uuid.New().String()
 	}
 
 	// Build context with agent and input
+	// 用 agent 与 input 构造 context
 	ctxMap := map[string]any{
 		"agent":       agentID,
 		"agent_input": req.Input,
@@ -203,6 +224,7 @@ func (h *AgentsHandler) ExecuteAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build gRPC request
+	// 构造 gRPC 请求
 	grpcReq := &orchpb.SubmitTaskRequest{
 		Metadata: &commonpb.TaskMetadata{
 			UserId:    userCtx.UserID.String(),
@@ -217,9 +239,11 @@ func (h *AgentsHandler) ExecuteAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Propagate auth/tracing headers to gRPC metadata
+	// 把 auth/tracing header 传递到 gRPC metadata
 	ctx = withGRPCMetadata(ctx, r)
 
 	// Submit task to orchestrator
+	// 把 task 提交给 orchestrator
 	resp, err := h.orchClient.SubmitTask(ctx, grpcReq)
 	if err != nil {
 		if st, ok := status.FromError(err); ok {
@@ -245,6 +269,7 @@ func (h *AgentsHandler) ExecuteAgent(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Return response
+	// 返回响应
 	execResp := AgentExecuteResponse{
 		TaskID:    resp.TaskId,
 		AgentID:   agentID,
@@ -253,6 +278,7 @@ func (h *AgentsHandler) ExecuteAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add workflow ID header for tracing
+	// 加上 workflow ID header，便于链路追踪
 	w.Header().Set("X-Workflow-ID", resp.WorkflowId)
 	w.Header().Set("X-Session-ID", req.SessionID)
 	w.Header().Set("Content-Type", "application/json")
@@ -261,6 +287,7 @@ func (h *AgentsHandler) ExecuteAgent(w http.ResponseWriter, r *http.Request) {
 }
 
 // sendError sends an error response
+// sendError 发送错误响应
 func (h *AgentsHandler) sendError(w http.ResponseWriter, message string, code int) {
 	writeJSON(w, code, map[string]string{"error": message})
 }
@@ -270,7 +297,7 @@ func (h *AgentsHandler) sendError(w http.ResponseWriter, message string, code in
 // ValidateAgentInput 依据 agent 的 InputSchema 校验输入：合法返回 nil，否则返回描述校验失败原因的错误。
 func ValidateAgentInput(agent *activities.AgentDefinition, input map[string]any) error {
 	if agent.InputSchema == nil {
-		return nil // No schema defined, allow any input
+		return nil // No schema defined, allow any input 注：未定义 schema，允许任意输入
 	}
 
 	var errors []string
@@ -291,6 +318,7 @@ func ValidateAgentInput(agent *activities.AgentDefinition, input map[string]any)
 	}
 
 	// Validate provided fields against properties schema
+	// 按 properties schema 校验已提供的字段
 	if properties, ok := agent.InputSchema["properties"].(map[string]any); ok {
 		for fieldName, value := range input {
 			propSchema, exists := properties[fieldName].(map[string]any)
@@ -302,6 +330,7 @@ func ValidateAgentInput(agent *activities.AgentDefinition, input map[string]any)
 			}
 
 			// Type validation
+			// 类型校验
 			if expectedType, ok := propSchema["type"].(string); ok {
 				if err := validateFieldType(fieldName, value, expectedType); err != nil {
 					errors = append(errors, err.Error())
@@ -309,6 +338,7 @@ func ValidateAgentInput(agent *activities.AgentDefinition, input map[string]any)
 			}
 
 			// Enum validation
+			// 枚举校验
 			if enumValues, ok := propSchema["enum"].([]any); ok {
 				if !isValueInEnum(value, enumValues) {
 					errors = append(errors, fmt.Sprintf("field %s: value %v not in allowed values %v", fieldName, value, enumValues))
@@ -327,7 +357,7 @@ func ValidateAgentInput(agent *activities.AgentDefinition, input map[string]any)
 // validateFieldType 判断值是否符合 JSON schema 声明的类型。
 func validateFieldType(fieldName string, value any, expectedType string) error {
 	if value == nil {
-		return nil // nil is acceptable for any type (will be caught by required check)
+		return nil // nil is acceptable for any type (will be caught by required check) 注：任意类型都接受 nil（必填校验会捕获）
 	}
 
 	actualType := reflect.TypeOf(value)
@@ -359,7 +389,7 @@ func validateFieldType(fieldName string, value any, expectedType string) error {
 	case "object":
 		_, valid = value.(map[string]any)
 	default:
-		valid = true // Unknown type, allow
+		valid = true // Unknown type, allow 注：未知类型，放行
 	}
 
 	if !valid {

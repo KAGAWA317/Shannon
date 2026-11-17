@@ -35,9 +35,10 @@ type ToolError struct {
 }
 
 // ResponseMetadata contains execution metadata
+// ResponseMetadata 包含执行 metadata
 type ResponseMetadata struct {
-	Model           string   `json:"model,omitempty"`  // Single agent
-	Models          []string `json:"models,omitempty"` // Multi-agent (when > 1)
+	Model           string   `json:"model,omitempty"`  // Single agent 注：单 agent
+	Models          []string `json:"models,omitempty"` // Multi-agent (when > 1) 注：多 agent（数量 > 1 时）
 	ExecutionMode   string   `json:"execution_mode"`
 	ComplexityScore float64  `json:"complexity_score"`
 	ServiceTier     string   `json:"service_tier"`
@@ -45,6 +46,7 @@ type ResponseMetadata struct {
 }
 
 // ResponseUsage contains token and cost information
+// ResponseUsage 包含 token 与成本信息
 type ResponseUsage struct {
 	InputTokens         int     `json:"input_tokens"`
 	OutputTokens        int     `json:"output_tokens"`
@@ -56,6 +58,7 @@ type ResponseUsage struct {
 }
 
 // ResponsePerformance contains timing metrics
+// ResponsePerformance 包含耗时指标
 type ResponsePerformance struct {
 	ExecutionTimeMs int64 `json:"execution_time_ms"`
 	LatencyMs       int64 `json:"latency_ms,omitempty"`
@@ -71,13 +74,16 @@ func TransformToUnifiedResponse(result workflows.TaskResult, sessionID string, e
 	}
 
 	// Extract metadata from result
+	// 从 result 中提取 metadata
 	metadata := extractMetadata(result)
 	usage := extractUsage(result)
 
 	// Determine stop reason
+	// 判断停止原因
 	stopReason := determineStopReason(result)
 
 	// Handle error
+	// 处理错误
 	var errorPtr *string
 	if result.ErrorMessage != "" {
 		errorPtr = &result.ErrorMessage
@@ -117,6 +123,7 @@ func extractToolErrors(result workflows.TaskResult) []ToolError {
 
 	out := make([]ToolError, 0)
 	// Try typed []map[string]string first
+	// 先尝试带类型的 []map[string]string
 	if arr, ok := raw.([]map[string]string); ok {
 		for _, m := range arr {
 			out = append(out, ToolError{
@@ -128,6 +135,7 @@ func extractToolErrors(result workflows.TaskResult) []ToolError {
 		return out
 	}
 	// Fallback to []interface{} of maps
+	// 兜底走 []interface{} 的 map
 	if arr, ok := raw.([]any); ok {
 		for _, v := range arr {
 			if m, ok := v.(map[string]any); ok {
@@ -164,11 +172,12 @@ func truncateError(msg string) string {
 
 func extractMetadata(result workflows.TaskResult) ResponseMetadata {
 	meta := ResponseMetadata{
-		ExecutionMode: "standard", // Default
-		ServiceTier:   "medium",   // Default
+		ExecutionMode: "standard", // Default 注：默认值
+		ServiceTier:   "medium",   // Default 注：默认值
 	}
 
 	// Guard against nil metadata
+	// 防御 nil metadata
 	if result.Metadata == nil {
 		return meta
 	}
@@ -186,11 +195,13 @@ func extractMetadata(result workflows.TaskResult) ResponseMetadata {
 	}
 
 	// Extract complexity score with fallbacks
+	// 提取复杂度分数，带兜底
 	if complexity, ok := result.Metadata["complexity"].(float64); ok {
 		meta.ComplexityScore = complexity
 		meta.ServiceTier = determineServiceTier(complexity)
 	} else if complexity, ok := result.Metadata["complexity_score"].(float64); ok {
 		// Fallback: workflows use "complexity_score"
+		// 兜底：workflow 使用 "complexity_score"
 		meta.ComplexityScore = complexity
 		meta.ServiceTier = determineServiceTier(complexity)
 	}
@@ -203,40 +214,47 @@ func extractMetadata(result workflows.TaskResult) ResponseMetadata {
 		meta.AgentsUsed = int(agents)
 	} else if agents, ok := result.Metadata["num_agents"].(int); ok {
 		// Fallback: simple_workflow uses "num_agents"
+		// 兜底：simple_workflow 使用 "num_agents"
 		meta.AgentsUsed = agents
 	} else if agents, ok := result.Metadata["num_agents"].(float64); ok {
 		meta.AgentsUsed = int(agents)
 	} else if agents, ok := result.Metadata["num_children"].(int); ok {
 		// Fallback: supervisor_workflow uses "num_children"
+		// 兜底：supervisor_workflow 使用 "num_children"
 		meta.AgentsUsed = agents
 	} else if agents, ok := result.Metadata["num_children"].(float64); ok {
 		meta.AgentsUsed = int(agents)
 	} else if agents, ok := result.Metadata["num_streams"].(int); ok {
 		// Fallback: streaming_workflow uses "num_streams"
+		// 兜底：streaming_workflow 使用 "num_streams"
 		meta.AgentsUsed = agents
 	} else if agents, ok := result.Metadata["num_streams"].(float64); ok {
 		meta.AgentsUsed = int(agents)
 	}
 
 	// Extract models used with fallbacks
+	// 提取所使用的模型，带兜底
 	if models, ok := result.Metadata["models"].([]string); ok && len(models) > 1 {
 		meta.Models = models
 	} else if model, ok := result.Metadata["model"].(string); ok {
 		meta.Model = model
 	} else if modelUsed, ok := result.Metadata["model_used"].(string); ok {
 		// Fallback for legacy field
+		// 兜底处理遗留字段
 		meta.Model = modelUsed
 	} else if modelUsed, ok := result.Metadata["ModelUsed"].(string); ok {
 		// Fallback for Go-style field naming
+		// 兜底处理 Go 风格的字段命名
 		meta.Model = modelUsed
 	}
 
 	// Handle multi-agent results
+	// 处理多 agent 结果
 	if agentResults, ok := result.Metadata["agent_results"].([]activities.AgentExecutionResult); ok {
 		models := extractUniqueModels(agentResults)
 		if len(models) > 1 {
 			meta.Models = models
-			meta.Model = "" // Clear single model field
+			meta.Model = "" // Clear single model field 注：清空单模型字段
 		} else if len(models) == 1 {
 			meta.Model = models[0]
 		}
@@ -290,6 +308,7 @@ func extractUsage(result workflows.TaskResult) ResponseUsage {
 		}
 
 		// Calculate cost with fallbacks
+		// 计算成本，带兜底
 		if cost, ok := result.Metadata["cost_usd"].(float64); ok {
 			usage.CostUSD = cost
 		} else if cost, ok := result.Metadata["total_cost"].(float64); ok {
@@ -419,6 +438,7 @@ func extractTaskID(result workflows.TaskResult) string {
 
 func extractUniqueModels(results []activities.AgentExecutionResult) []string {
 	// Validate input
+	// 校验输入
 	if len(results) == 0 {
 		return nil
 	}
@@ -438,6 +458,7 @@ func extractUniqueModels(results []activities.AgentExecutionResult) []string {
 
 func extractUniqueModelsFromUsages(usages []activities.AgentUsage) []string {
 	// Validate input
+	// 校验输入
 	if len(usages) == 0 {
 		return nil
 	}

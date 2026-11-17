@@ -79,13 +79,11 @@ class PythonWasiExecutorTool(Tool):
     _interpreter_cache: Optional[bytes] = None
     _cache_hash: Optional[str] = None
     _sessions: Dict[str, ExecutionSession] = {}
-    _session_lock: asyncio.Lock = asyncio.Lock()  # Thread-safe session access
-    # 线程安全的 session 访问
+    _session_lock: asyncio.Lock = asyncio.Lock()  # Thread-safe session access 注：线程安全的 session 访问
     _max_sessions: int = 100
     _session_timeout: int = int(
         os.getenv("PYTHON_WASI_SESSION_TIMEOUT", "3600")
-    )  # Default 1 hour
-    # 默认 1 小时
+    )  # Default 1 hour 注：默认 1 小时
 
     def __init__(self):
         # Initialize settings before calling super().__init__()
@@ -122,17 +120,13 @@ class PythonWasiExecutorTool(Tool):
             category="code",
             author="Shannon",
             requires_auth=False,
-            rate_limit=self.settings.python_executor_rate_limit,  # Configurable via PYTHON_EXECUTOR_RATE_LIMIT env var
-            # 可通过 PYTHON_EXECUTOR_RATE_LIMIT 环境变量配置
+            rate_limit=self.settings.python_executor_rate_limit,  # Configurable via PYTHON_EXECUTOR_RATE_LIMIT env var 注：可通过 PYTHON_EXECUTOR_RATE_LIMIT 环境变量配置
             timeout_seconds=30,
             memory_limit_mb=256,
             sandboxed=True,
-            dangerous=False,  # Safe due to WASI isolation
-            # 因 WASI 隔离而安全
-            cost_per_use=0.001,  # Minimal cost for compute
-            # 计算资源的最低成本
-            session_aware=True,  # Required for Firecracker workspace isolation
-            # Firecracker 的 workspace 隔离所必需
+            dangerous=False,  # Safe due to WASI isolation 注：因 WASI 隔离而安全
+            cost_per_use=0.001,  # Minimal cost for compute 注：计算资源的最低成本
+            session_aware=True,  # Required for Firecracker workspace isolation 注：Firecracker 的 workspace 隔离所必需
         )
 
     def _get_parameters(self) -> List[ToolParameter]:
@@ -355,8 +349,7 @@ print("__SESSION_STATE__", json.dumps({
             logger.info(f"python_executor: session_id={session_id} (from {'kwargs' if kwargs.get('session_id') else 'session_context'})")
         else:
             logger.warning("python_executor: no session_id available - workspace isolation disabled")
-        timeout = min(kwargs.get("timeout_seconds", 30), 60)  # Max 60 seconds
-        # 最长 60 秒
+        timeout = min(kwargs.get("timeout_seconds", 30), 60)  # Max 60 seconds 注：最长 60 秒
         # stdin = kwargs.get("stdin", "")  # Not used currently, but kept for future use
 
         if not code:
@@ -404,17 +397,14 @@ print("__SESSION_STATE__", json.dumps({
                 # Python WASM needs argv[0] to be program name, then -c flag to execute stdin
                 # Python WASM 需要 argv[0] 作为程序名，再用 -c 参数执行 stdin
                 tool_params = {
-                    "tool": "code_executor",  # Required field for agent-core
-                    # agent-core 必填字段
-                    "wasm_path": self.interpreter_path,  # Use file path (Python.wasm is 20MB)
-                    # 使用文件路径（Python.wasm 为 20MB）
-                    "stdin": code,  # Pass Python code as stdin
-                    # 将 Python 代码作为 stdin 传入
+                    "tool": "code_executor",  # Required field for agent-core 注：agent-core 必填字段
+                    "wasm_path": self.interpreter_path,  # Use file path (Python.wasm is 20MB) 注：使用文件路径（Python.wasm 为 20MB）
+                    "stdin": code,  # Pass Python code as stdin 注：将 Python 代码作为 stdin 传入
                     "argv": [
                         "python",
                         "-c",
                         "import sys; exec(sys.stdin.read())",
-                    ],  # Python argv format
+                    ],  # Python argv format 注：Python argv 格式
                 }
 
             # Build gRPC request - agent-core expects tool_parameters directly in context

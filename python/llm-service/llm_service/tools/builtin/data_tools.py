@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 # --- Safety limits ---
 # --- 安全限制 ---
-_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
+_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB 注：10MB
 _MAX_DIFF_OUTPUT_LINES = 500
 _MAX_JSON_RESULTS = 1000
 
@@ -80,6 +80,7 @@ def _resolve_and_check(
 # ---------------------------------------------------------------------------
 # diff_files
 # ---------------------------------------------------------------------------
+# diff_files（文件差异对比）
 
 
 class DiffFilesTool(Tool):
@@ -213,6 +214,7 @@ class DiffFilesTool(Tool):
 # ---------------------------------------------------------------------------
 # json_query
 # ---------------------------------------------------------------------------
+# json_query（JSON 路径查询）
 
 # Regex for parsing dot-path expressions like ".results[0].name" or ".data[].id"
 # 用于解析 dot-path 表达式的正则，如 ".results[0].name" 或 ".data[].id"
@@ -257,10 +259,10 @@ def _json_extract(data: Any, expression: str, max_results: int) -> list:
     # Allow leading dot or not
     # 允许或省略前导点
     if expr.startswith("."):
-        pass  # will be consumed by regex
+        pass  # will be consumed by regex 注：将被正则消费
         # 将由正则消费
     else:
-        expr = "." + expr  # normalise
+        expr = "." + expr  # normalise 注：归一化
         # 规范化
 
     for m in _PATH_TOKEN_RE.finditer(expr):

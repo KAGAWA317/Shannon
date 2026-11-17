@@ -24,6 +24,7 @@ import (
 const maxBase64FieldSize = 500 * 1024
 
 // base64FieldsToStore are the field names that may contain large base64 data
+// base64FieldsToStore 是可能包含大块 base64 数据的字段名
 var base64FieldsToStore = []string{
 	"screenshot_b64",
 	"popup_screenshot_b64",
@@ -48,29 +49,35 @@ func storeOversizedBase64Fields(ctx context.Context, workflowID string, output a
 		result := make(map[string]any, len(v))
 		for key, val := range v {
 			// Build the path for nested fields
+			// 为嵌套字段构造路径
 			fieldPath := key
 			if path != "" {
 				fieldPath = path + "." + key
 			}
 
 			// Check if this is a known base64 field
+			// 判断这是否是已知的 base64 字段
 			isBase64Field := slices.Contains(base64FieldsToStore, key)
 
 			if isBase64Field {
 				if strVal, ok := val.(string); ok && len(strVal) > maxBase64FieldSize {
 					// Store in Redis and replace with reference key
+					// 存入 Redis 并替换为引用键
 					refKey, err := streaming.Get().StoreBlob(ctx, workflowID, fieldPath, strVal)
 					if err != nil {
 						// If storage fails, use a placeholder
+						// 存储失败时使用占位符
 						result[key] = fmt.Sprintf("[STORAGE_FAILED: %d bytes - %v]", len(strVal), err)
 					} else {
 						// Replace with reference object containing key and size
+						// 替换为包含 key 与 size 的引用对象
 						result[key+"_ref"] = map[string]any{
 							"redis_key": refKey,
 							"size":      len(strVal),
 							"ttl_days":  7,
 						}
 						// Remove original field (don't copy it)
+						// 移除原字段（不再复制）
 						result[key] = nil
 					}
 					stored = true
@@ -79,6 +86,7 @@ func storeOversizedBase64Fields(ctx context.Context, workflowID string, output a
 			}
 
 			// Recursively process nested structures
+			// 递归处理嵌套结构
 			newVal, childStored := storeOversizedBase64Fields(ctx, workflowID, val, fieldPath)
 			result[key] = newVal
 			if childStored {
@@ -106,6 +114,7 @@ func storeOversizedBase64Fields(ctx context.Context, workflowID string, output a
 }
 
 // AgentDefinition represents the configuration for a single agent
+// AgentDefinition 表示单个 agent 的配置
 type AgentDefinition struct {
 	Name         string         `yaml:"name"`
 	Description  string         `yaml:"description"`
@@ -118,6 +127,7 @@ type AgentDefinition struct {
 }
 
 // AgentsYAMLConfig represents the full agents.yaml configuration
+// AgentsYAMLConfig 表示完整的 agents.yaml 配置
 type AgentsYAMLConfig struct {
 	Version  string                     `yaml:"version"`
 	Agents   map[string]AgentDefinition `yaml:"agents"`
@@ -131,6 +141,7 @@ var (
 )
 
 // LoadAgentsYAMLConfig loads the agents configuration from YAML
+// LoadAgentsYAMLConfig 从 YAML 加载 agents 配置
 func LoadAgentsYAMLConfig() (*AgentsYAMLConfig, error) {
 	agentsYAMLConfigOnce.Do(func() {
 		paths := []string{
@@ -160,6 +171,7 @@ func LoadAgentsYAMLConfig() (*AgentsYAMLConfig, error) {
 }
 
 // GetAgentDefinition retrieves configuration for a specific agent
+// GetAgentDefinition 获取指定 agent 的配置
 func GetAgentDefinition(agentID string) (*AgentDefinition, error) {
 	cfg, err := LoadAgentsYAMLConfig()
 	if err != nil {
@@ -173,6 +185,7 @@ func GetAgentDefinition(agentID string) (*AgentDefinition, error) {
 }
 
 // ListAgentIDs returns all available agent IDs
+// ListAgentIDs 返回所有可用的 agent ID
 func ListAgentIDs() ([]string, error) {
 	cfg, err := LoadAgentsYAMLConfig()
 	if err != nil {
@@ -186,6 +199,7 @@ func ListAgentIDs() ([]string, error) {
 }
 
 // ExecuteAgentInput is the input for ExecuteAgentActivity
+// ExecuteAgentInput 是 ExecuteAgentActivity 的输入
 type ExecuteAgentInput struct {
 	AgentID    string         `json:"agent_id"`
 	Input      map[string]any `json:"input"`
@@ -195,6 +209,7 @@ type ExecuteAgentInput struct {
 }
 
 // ExecuteAgentOutput is the output from ExecuteAgentActivity
+// ExecuteAgentOutput 是 ExecuteAgentActivity 的输出
 type ExecuteAgentOutput struct {
 	Success       bool           `json:"success"`
 	Output        any            `json:"output"`
@@ -208,11 +223,13 @@ type ExecuteAgentOutput struct {
 }
 
 // ExecuteAgentActivity executes a single agent by calling its underlying tool
+// ExecuteAgentActivity 通过调用底层 tool 执行单个 agent
 func ExecuteAgentActivity(ctx context.Context, input ExecuteAgentInput) (*ExecuteAgentOutput, error) {
 	startTime := time.Now()
 	logger := activity.GetLogger(ctx)
 
 	// Log context deadline for debugging timeout issues
+	// 为排查 timeout 问题记录 context deadline
 	if deadline, ok := ctx.Deadline(); ok {
 		remaining := time.Until(deadline)
 		logger.Info("ExecuteAgentActivity started",
@@ -228,6 +245,7 @@ func ExecuteAgentActivity(ctx context.Context, input ExecuteAgentInput) (*Execut
 	}
 
 	// Load agent configuration
+	// 加载 agent 配置
 	agentDef, err := GetAgentDefinition(input.AgentID)
 	if err != nil {
 		return &ExecuteAgentOutput{
@@ -238,6 +256,7 @@ func ExecuteAgentActivity(ctx context.Context, input ExecuteAgentInput) (*Execut
 	}
 
 	// Determine timeout
+	// 确定 timeout
 	timeout := 120 * time.Second
 	if agentDef.TimeoutSecs > 0 {
 		timeout = time.Duration(agentDef.TimeoutSecs) * time.Second
@@ -249,22 +268,27 @@ func ExecuteAgentActivity(ctx context.Context, input ExecuteAgentInput) (*Execut
 	}
 
 	// Special handling for keyword_extract (uses LLM activity directly)
+	// keyword_extract 的特殊处理（直接使用 LLM activity）
 	if agentDef.Tool == "keyword_extract" {
 		return executeKeywordExtractAgent(ctx, input, agentDef, startTime)
 	}
 
 	// Special handling for browser-screenshot agent (navigate + screenshot + close)
+	// browser-screenshot agent 的特殊处理（navigate + screenshot + close）
 	// Dispatch by agent config key, not tool field, since tool is now "browser"
+	// 按 agent 配置键而非 tool 字段分发，因为 tool 现在统一为 "browser"
 	if input.AgentID == "browser-screenshot" {
 		return executeBrowserScreenshotAgent(ctx, input, agentDef, startTime, timeout)
 	}
 
 	// Special handling for ads_transparency_search (multi-platform fan-out)
+	// ads_transparency_search 的特殊处理（多平台并行 fan-out）
 	if agentDef.Tool == "ads_transparency_search" {
 		return executeMultiPlatformTransparency(ctx, input, agentDef, startTime)
 	}
 
 	// Call the underlying tool with heartbeat support for long-running tools
+	// 调用底层 tool，并为长耗时 tool 提供心跳支持
 	result, err := callToolWithHeartbeat(ctx, agentDef.Tool, params, timeout, input.AgentID)
 	if err != nil {
 		logger.Warn("Tool call failed", "tool", agentDef.Tool, "error", err, "elapsed", time.Since(startTime).String())
@@ -283,11 +307,13 @@ func ExecuteAgentActivity(ctx context.Context, input ExecuteAgentInput) (*Execut
 		"result_has_output", result.Output != nil)
 
 	// Check context before processing result
+	// 处理结果前检查 context
 	if ctx.Err() != nil {
 		logger.Warn("Context error after tool call", "error", ctx.Err())
 	}
 
 	// Extract cost from result metadata if available
+	// 若存在则从结果 metadata 中提取 cost
 	costUSD := agentDef.CostPerCall
 	tokensUsed := result.TokensUsed
 	if result.Metadata != nil {
@@ -299,6 +325,7 @@ func ExecuteAgentActivity(ctx context.Context, input ExecuteAgentInput) (*Execut
 		}
 	}
 	// Also check output for cost
+	// 再在 output 中查找 cost
 	if outputMap, ok := result.Output.(map[string]any); ok {
 		if cost, ok := outputMap["api_cost_usd"].(float64); ok {
 			costUSD = cost
@@ -325,7 +352,7 @@ func ExecuteAgentActivity(ctx context.Context, input ExecuteAgentInput) (*Execut
 	// This catches cases where many small base64 fields collectively exceed the Temporal limit.
 	// 兜底：若整体序列化输出仍超过 1.5MB，则把整个输出存入 Redis，
 	// 覆盖多个小 base64 字段叠加后超限的情况（1.5MB 为 2MB 上限留出余量）。
-	const maxOutputSize = 1500 * 1024 // 1.5MB - leaves headroom for Temporal's 2MB limit
+	const maxOutputSize = 1500 * 1024 // 1.5MB - leaves headroom for Temporal's 2MB limit 注：1.5MB，为 Temporal 的 2MB 上限留出余量
 	if serialized, err := json.Marshal(sanitizedOutput); err == nil && len(serialized) > maxOutputSize {
 		logger.Warn("Agent output exceeds safe size, storing entire output in Redis",
 			"agent_id", input.AgentID,
@@ -370,8 +397,10 @@ func ExecuteAgentActivity(ctx context.Context, input ExecuteAgentInput) (*Execut
 }
 
 // executeKeywordExtractAgent handles the special keyword extraction agent
+// executeKeywordExtractAgent 处理特殊的 keyword extraction agent
 func executeKeywordExtractAgent(ctx context.Context, input ExecuteAgentInput, agentDef *AgentDefinition, startTime time.Time) (*ExecuteAgentOutput, error) {
 	// Extract parameters
+	// 提取参数
 	params := input.Input
 	if params == nil {
 		params = map[string]any{}
@@ -395,6 +424,7 @@ func executeKeywordExtractAgent(ctx context.Context, input ExecuteAgentInput, ag
 	}
 
 	// Call the existing keyword extraction function
+	// 调用已有的 keyword extraction 函数
 	extractInput := ExtractKeywordsInput{
 		Query:    query,
 		Country:  country,
@@ -413,8 +443,9 @@ func executeKeywordExtractAgent(ctx context.Context, input ExecuteAgentInput, ag
 	}
 
 	// Calculate total tokens and estimate cost (small model: ~$0.001 per 1K tokens)
+	// 计算总 tokens 并估算 cost（small model 约 $0.001 / 1K tokens）
 	totalTokens := extractOutput.InputTokens + extractOutput.OutputTokens
-	estimatedCost := float64(totalTokens) * 0.000001 // Rough estimate
+	estimatedCost := float64(totalTokens) * 0.000001 // Rough estimate 注：粗略估算
 
 	output := map[string]any{
 		"keywords":          extractOutput.Keywords,
@@ -465,6 +496,7 @@ func executeBrowserScreenshotAgent(ctx context.Context, input ExecuteAgentInput,
 	}
 
 	// Validate URL scheme - only allow http/https for security
+	// 校验 URL scheme —— 出于安全考虑只允许 http/https
 	if err := validateBrowserURL(url); err != nil {
 		return &ExecuteAgentOutput{
 			Success:       false,
@@ -479,6 +511,7 @@ func executeBrowserScreenshotAgent(ctx context.Context, input ExecuteAgentInput,
 		"session_id": fmt.Sprintf("agent-%s-%s", input.WorkflowID, input.AgentID),
 	}
 	// Use context.Background() for cleanup to ensure browser is closed even if parent context is cancelled
+	// 清理时使用 context.Background()，确保父 context 被取消也能关闭浏览器
 	defer func() {
 		_, _ = callToolForAgentExec(context.Background(), "browser", map[string]any{"action": "close"}, sessionCtx, 10*time.Second)
 	}()
@@ -527,6 +560,8 @@ func executeBrowserScreenshotAgent(ctx context.Context, input ExecuteAgentInput,
 
 // callToolForAgentExec is a helper that calls the LLM service tool endpoint.
 // It only adds session_context; everything else goes through callToolExecute.
+// callToolForAgentExec 是调用 LLM service tool 端点的辅助函数。
+// 它只额外附加 session_context，其余都走 callToolExecute。
 func callToolForAgentExec(ctx context.Context, toolName string, params map[string]any, sessionContext map[string]any, timeout time.Duration) (*ToolExecuteResponse, error) {
 	if params == nil {
 		params = map[string]any{}
@@ -573,6 +608,7 @@ func callToolWithHeartbeat(ctx context.Context, toolName string, params map[stri
 	startTime := time.Now()
 
 	// Run tool call in goroutine
+	// 在 goroutine 中运行 tool 调用
 	go func() {
 		logger.Info("Tool goroutine starting HTTP call", "tool", toolName)
 		resp, err := callToolWithTimeout(ctx, toolName, params, timeout)
@@ -581,6 +617,7 @@ func callToolWithHeartbeat(ctx context.Context, toolName string, params map[stri
 	}()
 
 	// Send heartbeats every 30 seconds while waiting for the tool
+	// 等待 tool 期间每 30 秒发送一次心跳
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -591,6 +628,7 @@ func callToolWithHeartbeat(ctx context.Context, toolName string, params map[stri
 			return r.resp, r.err
 		case <-ticker.C:
 			// Record heartbeat to prevent Temporal heartbeat timeout
+			// 记录心跳，避免 Temporal 心跳 timeout
 			logger.Info("Sending heartbeat", "tool", toolName, "elapsed", time.Since(startTime).String())
 			activity.RecordHeartbeat(ctx, map[string]any{
 				"agent_id": agentID,
@@ -606,6 +644,7 @@ func callToolWithHeartbeat(ctx context.Context, toolName string, params map[stri
 }
 
 // determinePlatforms decides which ad platforms to query based on country and explicit overrides.
+// determinePlatforms 依据 country 与显式 override 决定查询哪些广告平台。
 func determinePlatforms(country string, platforms []string) (google, yahoo, meta bool) {
 	if len(platforms) > 0 {
 		for _, p := range platforms {
@@ -627,6 +666,7 @@ func determinePlatforms(country string, platforms []string) (google, yahoo, meta
 }
 
 // executeMultiPlatformTransparency fans out to Google Transparency + Yahoo JP + Meta Ad Library in parallel.
+// executeMultiPlatformTransparency 并行分发到 Google Transparency + Yahoo JP + Meta Ad Library。
 func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInput, agentDef *AgentDefinition, startTime time.Time) (*ExecuteAgentOutput, error) {
 	logger := activity.GetLogger(ctx)
 	params := input.Input
@@ -635,6 +675,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 	}
 
 	// Apply agent-level timeout as overall deadline
+	// 以 agent 级 timeout 作为整体 deadline
 	if agentDef.TimeoutSecs > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(agentDef.TimeoutSecs)*time.Second)
@@ -664,6 +705,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 	runGoogle, runYahoo, runMeta := determinePlatforms(country, platformsList)
 
 	// If no platforms are selected (e.g. invalid override like ["tiktok"]), fail fast
+	// 若没有任何平台被选中（例如 override 为 ["tiktok"] 这类非法值），立即失败
 	if !runGoogle && !runYahoo && !runMeta {
 		return &ExecuteAgentOutput{
 			Success:       false,
@@ -709,6 +751,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 	}
 
 	// --- Google Transparency ---
+	// --- Google Transparency（谷歌透明度报告）---
 	if runGoogle {
 		wg.Add(1)
 		go func() {
@@ -742,6 +785,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 	}
 
 	// --- Yahoo JP ---
+	// --- Yahoo JP（日本 Yahoo）---
 	if runYahoo {
 		wg.Add(1)
 		go func() {
@@ -766,6 +810,7 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 	}
 
 	// --- Meta Ad Library ---
+	// --- Meta Ad Library（Meta 广告库）---
 	if runMeta {
 		wg.Add(1)
 		go func() {
@@ -851,6 +896,8 @@ func executeMultiPlatformTransparency(ctx context.Context, input ExecuteAgentInp
 
 // extractCostFromResult extracts cost from tool result metadata or output body.
 // Checks Metadata["api_cost_usd"], Metadata["cost_usd"], then Output["cost_usd"].
+// extractCostFromResult 从 tool 结果的 metadata 或 output body 中提取 cost。
+// 依次检查 Metadata["api_cost_usd"]、Metadata["cost_usd"]，再看 Output["cost_usd"]。
 func extractCostFromResult(result *ToolExecuteResponse) float64 {
 	if result.Metadata != nil {
 		if c, ok := result.Metadata["api_cost_usd"].(float64); ok {

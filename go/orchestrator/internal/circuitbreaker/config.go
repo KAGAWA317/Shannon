@@ -85,11 +85,12 @@ func (cbc CircuitBreakerConfig) ToConfig() Config {
 		Timeout:          cbc.Timeout,
 		FailureThreshold: cbc.FailureThreshold,
 		SuccessThreshold: cbc.SuccessThreshold,
-		OnStateChange:    nil, // Will be set by wrapper
+		OnStateChange:    nil, // Will be set by wrapper 注：将由 wrapper 设置
 	}
 }
 
 // Helper functions for environment variable parsing
+// 解析环境变量的辅助函数
 
 func getEnvUint32(key string, defaultValue uint32) uint32 {
 	if val := os.Getenv(key); val != "" {

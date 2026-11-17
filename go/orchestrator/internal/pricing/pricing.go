@@ -57,12 +57,13 @@ var (
 )
 
 // default locations inside containers / local dev
+// 容器内 / 本地开发环境的默认位置
 var defaultPaths = []string{
 	os.Getenv("MODELS_CONFIG_PATH"),
 	"/app/config/models.yaml",
 	"./config/models.yaml",
-	"../../config/models.yaml",    // from go/orchestrator
-	"../../../config/models.yaml", // from go/orchestrator/internal/*
+	"../../config/models.yaml",    // from go/orchestrator 注：相对 go/orchestrator 目录
+	"../../../config/models.yaml", // from go/orchestrator/internal/* 注：相对 go/orchestrator/internal/* 目录
 }
 
 // findUpConfig searches parent directories for config/models.yaml starting at CWD.
@@ -91,6 +92,7 @@ func findUpConfig() (string, bool) {
 func loadLocked() {
 	var cfg config
 	// 1) Try explicit and common defaults
+	// 1) 先试显式指定与常见默认路径
 	for _, p := range defaultPaths {
 		if p == "" {
 			continue
@@ -140,8 +142,9 @@ func get() *config {
 	mu.Lock()
 	defer mu.Unlock()
 	// Double-check after acquiring write lock
+	// 获取写锁后再次检查
 	if !initialized {
-		loadLocked() // Call the version that doesn't lock
+		loadLocked() // Call the version that doesn't lock 注：调用不加锁的版本
 	}
 	return loaded
 }
@@ -169,8 +172,10 @@ func Reload() {
 	defer mu.Unlock()
 
 	// Mark as uninitialized to force reload
+	// 标记为未初始化以强制重新加载
 	initialized = false
 	// Load new configuration
+	// 加载新配置
 	loadLocked()
 }
 
@@ -212,9 +217,9 @@ func PricePerTokenForModel(model string) (float64, bool) {
 // CostForTokens 返回总 token 的美元成本，可选指定模型
 func CostForTokens(model string, tokens int) float64 {
 	// Validate token count
+	// 校验 token 数量
 	if tokens < 0 {
-		tokens = 0 // Treat negative as zero to avoid negative costs
-		// 负数按 0 处理，避免负成本
+		tokens = 0 // Treat negative as zero to avoid negative costs 注：负数按 0 处理，避免负成本
 	}
 
 	if price, ok := PricePerTokenForModel(model); ok {
@@ -234,6 +239,7 @@ func CostForTokens(model string, tokens int) float64 {
 // 模型未找到时回退到合计价或默认价。
 func CostForSplit(model string, inputTokens, outputTokens int) float64 {
 	// Validate token counts
+	// 校验输入/输出 token 数量
 	if inputTokens < 0 {
 		inputTokens = 0
 	}
@@ -243,6 +249,7 @@ func CostForSplit(model string, inputTokens, outputTokens int) float64 {
 
 	cfg := get()
 	// Find model pricing
+	// 查找模型定价
 	for _, models := range cfg.Pricing.Models {
 		if m, ok := models[model]; ok {
 			in := m.InputPer1K
@@ -256,6 +263,7 @@ func CostForSplit(model string, inputTokens, outputTokens int) float64 {
 				return (float64(inputTokens)/1000.0)*in + (float64(outputTokens)/1000.0)*out
 			}
 			// If only combined provided, approximate
+			// 若只提供了合计值，则估算拆分
 			if m.CombinedPer1K > 0 {
 				return (float64(inputTokens+outputTokens) / 1000.0) * m.CombinedPer1K
 			}
@@ -270,6 +278,7 @@ func CostForSplit(model string, inputTokens, outputTokens int) float64 {
 	}
 
 	// Unknown or missing model -> fallback
+	// 未知或缺失的模型 -> 走兜底
 	if model == "" {
 		pmetrics.PricingFallbacks.WithLabelValues("missing_model").Inc()
 	} else {
@@ -297,6 +306,7 @@ func CostForSplitWithCache(model string, inputTokens, outputTokens, cacheReadTok
 	}
 
 	// Find input price for this model
+	// 查找该模型的输入价格
 	cfg := get()
 	var inputPer1K float64
 	for _, models := range cfg.Pricing.Models {
@@ -409,6 +419,7 @@ func GetPriorityOneProvider(tier string) string {
 	}
 
 	// Find provider with priority == 1
+	// 查找 priority == 1 的 provider
 	for _, p := range providers {
 		if p.Priority == 1 {
 			return p.Provider
@@ -460,7 +471,7 @@ func GetPriorityModelForProvider(tier, provider string) string {
 	}
 
 	bestModel := ""
-	bestPriority := int(^uint(0) >> 1) // max int
+	bestPriority := int(^uint(0) >> 1) // max int 注：最大 int
 	for _, p := range providers {
 		if strings.ToLower(p.Provider) == provider {
 			if p.Priority > 0 && p.Priority < bestPriority && p.Model != "" {

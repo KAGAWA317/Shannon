@@ -13,12 +13,14 @@ import (
 )
 
 // HealthHandler handles health check requests
+// HealthHandler 处理健康检查请求
 type HealthHandler struct {
 	orchClient orchpb.OrchestratorServiceClient
 	logger     *zap.Logger
 }
 
 // NewHealthHandler creates a new health handler
+// NewHealthHandler 创建新的健康检查 handler
 func NewHealthHandler(orchClient orchpb.OrchestratorServiceClient, logger *zap.Logger) *HealthHandler {
 	return &HealthHandler{
 		orchClient: orchClient,
@@ -27,6 +29,7 @@ func NewHealthHandler(orchClient orchpb.OrchestratorServiceClient, logger *zap.L
 }
 
 // HealthResponse represents a health check response
+// HealthResponse 表示健康检查响应
 type HealthResponse struct {
 	Status  string            `json:"status"`
 	Version string            `json:"version"`
@@ -35,6 +38,7 @@ type HealthResponse struct {
 }
 
 // Health handles GET /health
+// Health 处理 GET /health
 func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 	response := HealthResponse{
 		Status:  "healthy",
@@ -44,6 +48,7 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Basic health check - gateway is up
+	// 基础健康检查 —— gateway 已启动
 	response.Checks["gateway"] = "ok"
 
 	w.Header().Set("Content-Type", "application/json")
@@ -52,6 +57,7 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 }
 
 // Readiness handles GET /readiness
+// Readiness 处理 GET /readiness
 func (h *HealthHandler) Readiness(w http.ResponseWriter, r *http.Request) {
 	response := HealthResponse{
 		Status:  "ready",
@@ -61,6 +67,7 @@ func (h *HealthHandler) Readiness(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check orchestrator connection
+	// 检查 orchestrator 连接
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
@@ -90,6 +97,7 @@ func (h *HealthHandler) Readiness(w http.ResponseWriter, r *http.Request) {
 	response.Checks["orchestrator"] = "ok"
 
 	// All checks passed
+	// 所有检查通过
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)

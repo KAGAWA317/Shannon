@@ -71,8 +71,7 @@ func GenerateResearchPlan(ctx context.Context, in ResearchPlanInput) (ResearchPl
 	reqBody := researchPlanLLMRequest{
 		Query:        in.Query,
 		Context:      in.Context,
-		Conversation: nil, // First round: no conversation
-		// 首轮没有对话历史。
+		Conversation: nil, // First round: no conversation 注：首轮没有对话历史。
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
@@ -183,10 +182,9 @@ func GenerateResearchPlan(ctx context.Context, in ResearchPlanInput) (ResearchPl
 
 		ttl := in.TTL
 		if ttl == 0 {
-			ttl = 20 * time.Minute // default 15min + 5min buffer
-// 默认 15min 加 5min buffer。
+			ttl = 20 * time.Minute // default 15min + 5min buffer 注：默认 15min 加 5min buffer。
 		} else {
-			ttl += 5 * time.Minute // add buffer
+			ttl += 5 * time.Minute // add buffer 注：加缓冲
 // 追加 buffer。
 		}
 		key := fmt.Sprintf("review:%s", in.WorkflowID)

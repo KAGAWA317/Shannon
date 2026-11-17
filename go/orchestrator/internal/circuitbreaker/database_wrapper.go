@@ -9,6 +9,7 @@ import (
 )
 
 // DatabaseWrapper wraps database operations with circuit breaker
+// DatabaseWrapper 为数据库操作包上 circuit breaker 保护。
 type DatabaseWrapper struct {
 	db     *sql.DB
 	cb     *CircuitBreaker
@@ -16,11 +17,13 @@ type DatabaseWrapper struct {
 }
 
 // NewDatabaseWrapper creates a database wrapper with circuit breaker
+// NewDatabaseWrapper 创建一个带 circuit breaker 的数据库 wrapper。
 func NewDatabaseWrapper(db *sql.DB, logger *zap.Logger) *DatabaseWrapper {
 	config := GetDatabaseConfig().ToConfig()
 	cb := NewCircuitBreaker("postgresql", config, logger)
 
 	// Register with metrics collector
+	// 注册到 metrics collector。
 	GlobalMetricsCollector.RegisterCircuitBreaker("postgresql", "database-client", cb)
 
 	return &DatabaseWrapper{
@@ -54,6 +57,7 @@ func runErr(cb *CircuitBreaker, ctx context.Context, fn func() error) error {
 }
 
 // PingContext wraps database ping with circuit breaker
+// PingContext 为数据库 ping 包上 circuit breaker。
 func (dw *DatabaseWrapper) PingContext(ctx context.Context) error {
 	return runErr(dw.cb, ctx, func() error {
 		return dw.db.PingContext(ctx)
@@ -61,6 +65,7 @@ func (dw *DatabaseWrapper) PingContext(ctx context.Context) error {
 }
 
 // QueryContext wraps database query with circuit breaker
+// QueryContext 为数据库 query 包上 circuit breaker。
 func (dw *DatabaseWrapper) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	return run(dw.cb, ctx, func() (*sql.Rows, error) {
 		return dw.db.QueryContext(ctx, query, args...)
@@ -68,7 +73,9 @@ func (dw *DatabaseWrapper) QueryContext(ctx context.Context, query string, args 
 }
 
 // QueryRowContext wraps database query row with circuit breaker
+// QueryRowContext 为数据库 query row 包上 circuit breaker。
 // Returns (*sql.Row, error) to properly propagate circuit breaker errors
+// 返回 (*sql.Row, error)，以便正确传递 circuit breaker 错误。
 func (dw *DatabaseWrapper) QueryRowContextCB(ctx context.Context, query string, args ...any) (*sql.Row, error) {
 	// Record metrics - assume success for QueryRow since errors are deferred
 	// 记录指标：QueryRow 的错误被延后，此处按成功计
@@ -82,6 +89,8 @@ func (dw *DatabaseWrapper) QueryRowContextCB(ctx context.Context, query string, 
 
 // QueryRowContext wraps database query row with circuit breaker (legacy API)
 // Deprecated: Use QueryRowContextCB for proper error handling
+// QueryRowContext 为数据库 query row 包上 circuit breaker（legacy API）。
+// Deprecated: 请改用 QueryRowContextCB 以获得正确的错误处理。
 func (dw *DatabaseWrapper) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	row, err := dw.QueryRowContextCB(ctx, query, args...)
 	if err != nil {
@@ -94,6 +103,7 @@ func (dw *DatabaseWrapper) QueryRowContext(ctx context.Context, query string, ar
 }
 
 // ExecContext wraps database exec with circuit breaker
+// ExecContext 为数据库 exec 包上 circuit breaker。
 func (dw *DatabaseWrapper) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	return run(dw.cb, ctx, func() (sql.Result, error) {
 		return dw.db.ExecContext(ctx, query, args...)
@@ -101,6 +111,7 @@ func (dw *DatabaseWrapper) ExecContext(ctx context.Context, query string, args .
 }
 
 // TxWrapper wraps sql.Tx with circuit breaker protection
+// TxWrapper 为 sql.Tx 提供 circuit breaker 保护。
 type TxWrapper struct {
 	tx     *sql.Tx
 	cb     *CircuitBreaker
@@ -108,6 +119,7 @@ type TxWrapper struct {
 }
 
 // BeginTx wraps database transaction begin with circuit breaker
+// BeginTx 为开启数据库事务包上 circuit breaker。
 func (dw *DatabaseWrapper) BeginTx(ctx context.Context, opts *sql.TxOptions) (*TxWrapper, error) {
 	tx, err := run(dw.cb, ctx, func() (*sql.Tx, error) {
 		return dw.db.BeginTx(ctx, opts)
@@ -124,6 +136,7 @@ func (dw *DatabaseWrapper) BeginTx(ctx context.Context, opts *sql.TxOptions) (*T
 }
 
 // Transaction wrapper methods
+// 事务 wrapper 的方法。
 func (tw *TxWrapper) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	return run(tw.cb, ctx, func() (sql.Result, error) {
 		return tw.tx.ExecContext(ctx, query, args...)
@@ -170,6 +183,7 @@ func (tw *TxWrapper) Rollback() error {
 }
 
 // StmtWrapper wraps sql.Stmt with circuit breaker protection
+// StmtWrapper 为 sql.Stmt 提供 circuit breaker 保护。
 type StmtWrapper struct {
 	stmt   *sql.Stmt
 	cb     *CircuitBreaker
@@ -177,6 +191,7 @@ type StmtWrapper struct {
 }
 
 // PrepareContext wraps database prepare with circuit breaker
+// PrepareContext 为数据库 prepare 包上 circuit breaker。
 func (dw *DatabaseWrapper) PrepareContext(ctx context.Context, query string) (*StmtWrapper, error) {
 	stmt, err := run(dw.cb, ctx, func() (*sql.Stmt, error) {
 		return dw.db.PrepareContext(ctx, query)
@@ -193,6 +208,7 @@ func (dw *DatabaseWrapper) PrepareContext(ctx context.Context, query string) (*S
 }
 
 // Statement wrapper methods
+// statement wrapper 的方法。
 func (sw *StmtWrapper) ExecContext(ctx context.Context, args ...any) (sql.Result, error) {
 	return run(sw.cb, ctx, func() (sql.Result, error) {
 		return sw.stmt.ExecContext(ctx, args...)
@@ -218,36 +234,43 @@ func (sw *StmtWrapper) Close() error {
 }
 
 // Stats returns database stats
+// Stats 返回数据库统计信息。
 func (dw *DatabaseWrapper) Stats() sql.DBStats {
 	return dw.db.Stats()
 }
 
 // Close closes the database connection
+// Close 关闭数据库连接。
 func (dw *DatabaseWrapper) Close() error {
 	return dw.db.Close()
 }
 
 // SetMaxOpenConns sets the maximum number of open connections
+// SetMaxOpenConns 设置最大打开连接数。
 func (dw *DatabaseWrapper) SetMaxOpenConns(n int) {
 	dw.db.SetMaxOpenConns(n)
 }
 
 // SetMaxIdleConns sets the maximum number of idle connections
+// SetMaxIdleConns 设置最大空闲连接数。
 func (dw *DatabaseWrapper) SetMaxIdleConns(n int) {
 	dw.db.SetMaxIdleConns(n)
 }
 
 // SetConnMaxLifetime sets the maximum connection lifetime
+// SetConnMaxLifetime 设置连接的最大存活时间。
 func (dw *DatabaseWrapper) SetConnMaxLifetime(d time.Duration) {
 	dw.db.SetConnMaxLifetime(d)
 }
 
 // GetDB returns the underlying database connection for operations not covered by wrapper
+// GetDB 返回底层数据库连接，供 wrapper 未覆盖的操作使用。
 func (dw *DatabaseWrapper) GetDB() *sql.DB {
 	return dw.db
 }
 
 // IsCircuitBreakerOpen returns true if the circuit breaker is open
+// IsCircuitBreakerOpen 在 circuit breaker 打开时返回 true。
 func (dw *DatabaseWrapper) IsCircuitBreakerOpen() bool {
 	return dw.cb.State() == StateOpen
 }

@@ -15,6 +15,7 @@ import (
 )
 
 // EmbeddingCache defines cache operations
+// EmbeddingCache 定义 cache 操作
 type EmbeddingCache interface {
 	Get(ctx context.Context, key string) ([]float32, bool)
 	Set(ctx context.Context, key string, v []float32, ttl time.Duration)
@@ -25,8 +26,8 @@ type EmbeddingCache interface {
 type LocalLRU struct {
 	mu   sync.Mutex
 	cap  int
-	list *list.List               // front = most recent
-	m    map[string]*list.Element // key -> element
+	list *list.List               // front = most recent 注：front = 最新
+	m    map[string]*list.Element // key -> element 注：key -> element
 }
 
 type lruEntry struct {
@@ -52,6 +53,7 @@ func (l *LocalLRU) Get(_ context.Context, key string) ([]float32, bool) {
 			return ent.vec, true
 		}
 		// expired: remove
+		// 已过期：移除
 		l.list.Remove(el)
 		delete(l.m, key)
 	}
@@ -79,6 +81,7 @@ func (l *LocalLRU) Set(_ context.Context, key string, v []float32, ttl time.Dura
 }
 
 // RedisCache uses circuit-breaker wrapped Redis
+// RedisCache 使用带 circuit breaker 的 Redis
 type RedisCache struct {
 	cli *circuitbreaker.RedisWrapper
 }
@@ -86,8 +89,10 @@ type RedisCache struct {
 func NewRedisCache(addr string) (*RedisCache, error) {
 	rc := redis.NewClient(&redis.Options{Addr: addr})
 	// Wrap with circuit breaker
+	// 用 circuit breaker 包装
 	wrapper := circuitbreaker.NewRedisWrapper(rc, nil)
 	// Ping once
+	// Ping 一次
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := wrapper.Ping(ctx).Err(); err != nil {
@@ -116,6 +121,7 @@ func (r *RedisCache) Get(ctx context.Context, key string) ([]float32, bool) {
 
 func (r *RedisCache) Set(ctx context.Context, key string, v []float32, ttl time.Duration) {
 	// encode float32 slice into bytes
+	// 把 float32 切片编码为字节
 	b := make([]byte, len(v)*4)
 	for i, f := range v {
 		u := math.Float32bits(f)
@@ -125,6 +131,7 @@ func (r *RedisCache) Set(ctx context.Context, key string, v []float32, ttl time.
 }
 
 // Key helpers
+// key 辅助函数
 func MakeKey(model, text string) string {
 	h := md5.Sum([]byte(model + "|" + text))
 	return "emb:" + hex.EncodeToString(h[:])

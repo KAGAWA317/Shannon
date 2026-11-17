@@ -9,6 +9,7 @@ import (
 )
 
 // ExecuteSimpleTaskInput contains everything needed for a simple task
+// ExecuteSimpleTaskInput 包含简单任务执行所需的全部字段
 type ExecuteSimpleTaskInput struct {
 	Query          string         `json:"query"`
 	UserID         string         `json:"user_id"`
@@ -25,6 +26,7 @@ type ExecuteSimpleTaskInput struct {
 }
 
 // ExecuteSimpleTaskResult contains the complete result
+// ExecuteSimpleTaskResult 包含完整结果
 type ExecuteSimpleTaskResult struct {
 	Response        string          `json:"response"`
 	TokensUsed      int             `json:"tokens_used"`

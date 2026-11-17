@@ -41,7 +41,7 @@ type CheckResult struct {
 	Duration  time.Duration  `json:"duration"`
 	Timestamp time.Time      `json:"timestamp"`
 	Component string         `json:"component"`
-	Critical  bool           `json:"critical"` // Whether failure affects service availability
+	Critical  bool           `json:"critical"` // Whether failure affects service availability 注：失败是否影响服务可用性
 }
 
 // Checker defines the interface for health checks
@@ -68,21 +68,27 @@ type Checker interface {
 // Registrar 允许各组件注册健康检查
 type Registrar interface {
 	// RegisterChecker registers a health check
+	// RegisterChecker 注册一个健康检查
 	RegisterChecker(checker Checker) error
 
 	// UnregisterChecker removes a health check
+	// UnregisterChecker 移除一个健康检查
 	UnregisterChecker(name string) error
 
 	// GetCheckers returns all registered checkers
+	// GetCheckers 返回所有已注册的检查器
 	GetCheckers() map[string]Checker
 }
 
 // Reporter provides health status reporting
+// Reporter 提供健康状态上报
 type Reporter interface {
 	// GetOverallHealth returns the overall health status
+	// GetOverallHealth 返回整体健康状态
 	GetOverallHealth(ctx context.Context) OverallHealth
 
 	// GetDetailedHealth returns detailed health information
+	// GetDetailedHealth 返回详细的健康信息
 	GetDetailedHealth(ctx context.Context) DetailedHealth
 
 	// IsReady returns true if the service is ready to serve requests
@@ -95,6 +101,7 @@ type Reporter interface {
 }
 
 // OverallHealth represents the overall service health
+// OverallHealth 表示服务整体的健康状况
 type OverallHealth struct {
 	Status    CheckStatus   `json:"status"`
 	Message   string        `json:"message,omitempty"`
@@ -106,6 +113,7 @@ type OverallHealth struct {
 }
 
 // DetailedHealth provides detailed health information
+// DetailedHealth 提供详细的健康信息
 type DetailedHealth struct {
 	Overall    OverallHealth          `json:"overall"`
 	Components map[string]CheckResult `json:"components"`
@@ -114,6 +122,7 @@ type DetailedHealth struct {
 }
 
 // HealthSummary provides summary statistics
+// HealthSummary 提供汇总统计
 type HealthSummary struct {
 	Total       int `json:"total"`
 	Healthy     int `json:"healthy"`
@@ -124,13 +133,16 @@ type HealthSummary struct {
 }
 
 // HealthManager combines registration and reporting functionality
+// HealthManager 组合注册与上报功能
 type HealthManager interface {
 	Registrar
 	Reporter
 
 	// Start begins background health checking
+	// Start 启动后台健康检查
 	Start(ctx context.Context) error
 
 	// Stop stops background health checking
+	// Stop 停止后台健康检查
 	Stop() error
 }

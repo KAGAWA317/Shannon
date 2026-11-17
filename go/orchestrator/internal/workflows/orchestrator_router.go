@@ -23,6 +23,7 @@ import (
 
 const (
 	// DefaultReviewTimeout is how long the workflow waits for human review before timing out.
+	// DefaultReviewTimeout 指定 workflow 等待人工审核的时长，超时即放弃。
 	DefaultReviewTimeout         = 15 * time.Minute
 	ResearchChildWorkflowTimeout = 45 * time.Minute
 )
@@ -42,12 +43,14 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	)
 
 	// Emit workflow started event with task context
+	// 携带 task context 发送 workflow 已开始事件
 	emitCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Second,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
 	})
 
 	// Initialize control signal handler for pause/resume/cancel
+	// 初始化用于 pause/resume/cancel 的 control 信号处理器
 	controlHandler := &ControlSignalHandler{
 		WorkflowID: workflowID,
 		AgentID:    "orchestrator",
@@ -63,7 +66,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 		Message:    activities.MsgWorkflowStarted(),
 		Timestamp:  workflow.Now(ctx),
 		Payload: map[string]any{
-			"task_context": input.Context, // Include context for frontend
+			"task_context": input.Context, // Include context for frontend 注：把 context 带给前端
 		},
 	}).Get(ctx, nil); err != nil {
 		logger.Warn("Failed to emit workflow started event", "error", err)
@@ -72,10 +75,14 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	// Start async title generation only if session doesn't have a title yet (non-blocking)
 	// Title is generated from query, doesn't need task result, so start early for better UX
 	// v2: Check SessionCtx for existing title - more reliable than history length
+	// 仅在 session 尚无标题时启动异步标题生成（非阻塞）
+	// 标题由 query 生成、不依赖 task 结果，因此尽早启动以改善体验
+	// v2：改为检查 SessionCtx 中是否已有标题，比按 history 长度判断更可靠
 	titleGateVersion := workflow.GetVersion(ctx, "title_gate_v2", workflow.DefaultVersion, 1)
 	needsTitle := true
 	if titleGateVersion >= 1 {
 		// New behavior: check SessionCtx for existing title
+		// 新行为：检查 SessionCtx 中是否已有标题
 		if input.SessionCtx != nil {
 			if existingTitle, ok := input.SessionCtx["title"].(string); ok && existingTitle != "" {
 				needsTitle = false
@@ -83,6 +90,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 		}
 	} else {
 		// Old behavior: check history length (kept for replay compatibility)
+		// 旧行为：按 history 长度判断（为兼容重放而保留）
 		if len(input.History) > 0 {
 			needsTitle = false
 		}
@@ -92,15 +100,18 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	}
 
 	// Conservative activity options for fast planning
+	// 快速规划用的保守 activity 选项
 	actx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 60 * time.Second,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 3},
 	})
 
 	// (Optional) Load router/approval config
+	// （可选）加载 router/approval 配置
 	var cfg activities.WorkflowConfig
 	if err := workflow.ExecuteActivity(actx, activities.GetWorkflowConfig).Get(ctx, &cfg); err != nil {
 		// Continue with defaults on failure
+		// 失败时继续使用默认值
 	}
 	simpleThreshold := cfg.SimpleThreshold
 	if simpleThreshold == 0 {
@@ -171,11 +182,13 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	}
 
 	// Check pause/cancel before routing to child workflow
+	// 路由到子 workflow 之前检查 pause/cancel
 	if err := controlHandler.CheckPausePoint(ctx, "pre_routing"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
 
 	// 1) Decompose the task (planning + complexity)
+	// 1) 分解 task（规划 + 复杂度）
 	if templateFound {
 		input.TemplateName = templateEntry.Template.Name
 		input.TemplateVersion = templateEntry.Template.Version
@@ -212,6 +225,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 				ometrics.TemplateFallbackTriggered.WithLabelValues("error").Inc()
 				ometrics.TemplateFallbackSuccess.WithLabelValues("error").Inc()
 				// Allow router to proceed to decomposition path below
+				// 允许 router 继续走下方的分解路径
 				templateFound = false
 			} else {
 				result = AddTaskContextToMetadata(result, input.Context)
@@ -371,11 +385,13 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 				}
 			}
 			// Safety clamp: keep review wait bounded (docs specify max 15 minutes).
+			// 安全兜底：限制审核等待时长上限（文档规定最多 15 分钟）。
 			if reviewTimeout > DefaultReviewTimeout {
 				reviewTimeout = DefaultReviewTimeout
 			}
 
 			// 1) Generate initial research plan via LLM + initialize Redis state
+			// 1) 通过 LLM 生成初始 research plan，并初始化 Redis 状态
 			var plan activities.ResearchPlanResult
 			planInput := activities.ResearchPlanInput{
 				Query:      input.Query,
@@ -395,6 +411,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			}
 
 			// 2) Emit SSE: plan ready (message already stripped of [RESEARCH_BRIEF] and [INTENT:...])
+			// 2) 发送 SSE：plan ready（message 已剥离 [RESEARCH_BRIEF] 与 [INTENT:...]）
 			_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 				WorkflowID: workflow.GetInfo(ctx).WorkflowExecution.ID,
 				EventType:  activities.StreamEventResearchPlanReady,
@@ -405,6 +422,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			}).Get(ctx, nil)
 
 			// 3) Wait for user approval Signal or timeout
+			// 3) 等待用户批准的 Signal 或超时
 			sigName := "research-plan-approved-" + workflow.GetInfo(ctx).WorkflowExecution.ID
 			ch := workflow.GetSignalChannel(ctx, sigName)
 			timerCtx, cancelTimer := workflow.WithCancel(ctx)
@@ -416,7 +434,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			sel := workflow.NewSelector(ctx)
 			sel.AddReceive(ch, func(c workflow.ReceiveChannel, more bool) {
 				c.Receive(ctx, &reviewResult)
-				cancelTimer() // Cancel the timer so it doesn't linger in Temporal UI
+				cancelTimer() // Cancel the timer so it doesn't linger in Temporal UI 注：取消 timer，避免它一直留在 Temporal UI 上
 			})
 			sel.AddFuture(timer, func(f workflow.Future) {
 				timedOut = true
@@ -434,6 +452,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 					Timestamp:  workflow.Now(ctx),
 				}).Get(ctx, nil)
 				// Emit WORKFLOW_COMPLETED so frontend/SSE can transition out of "running"
+				// 发送 WORKFLOW_COMPLETED，使前端/SSE 能从 "running" 状态切换出去
 				_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 					WorkflowID: wfID,
 					EventType:  activities.StreamEventWorkflowCompleted,
@@ -445,6 +464,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			}
 
 			// 4) Inject confirmed plan and research brief into context
+			// 4) 把确认后的 plan 与 research brief 注入 context
 			input.Context["confirmed_plan"] = reviewResult.FinalPlan
 			input.Context["review_conversation"] = reviewResult.Conversation
 			if reviewResult.ResearchBrief != "" {
@@ -452,6 +472,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			}
 
 			// 5) Emit SSE: plan approved
+			// 5) 发送 SSE：plan approved
 			_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 				WorkflowID: workflow.GetInfo(ctx).WorkflowExecution.ID,
 				EventType:  activities.StreamEventResearchPlanApproved,
@@ -490,6 +511,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 				}
 				input.Context["budget_remaining"] = res.RemainingTaskBudget
 				// ResearchWorkflow distributes budget internally; pass full remaining.
+				// ResearchWorkflow 内部自行分配 budget，这里传入全部剩余额度。
 				agentMax := res.RemainingTaskBudget
 				if v := os.Getenv("TOKEN_BUDGET_PER_AGENT"); v != "" {
 					if n, err := strconv.Atoi(v); err == nil && n > 0 && n < agentMax {
@@ -503,16 +525,19 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 					agentMax = int(capv)
 				}
 				// Cap at remaining quota for free-tier users
+				// 对免费额度用户按剩余配额封顶
 				agentMax = CapBudgetAtQuotaRemaining(ctx, input.TenantID, agentMax)
 				input.Context["budget_agent_max"] = agentMax
 			}
 		}
 
 		// Set parent workflow ID for unified event streaming (must be set before routing)
+		// 设置 parent workflow ID 以便统一事件流（必须在路由之前设置）
 		parentWorkflowID := workflow.GetInfo(ctx).WorkflowExecution.ID
 		input.ParentWorkflowID = parentWorkflowID
 
 		// Emit delegation event
+		// 发送 delegation 事件
 		_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: parentWorkflowID,
 			EventType:  activities.StreamEventDelegation,
@@ -547,6 +572,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 		if execErr != nil {
 			controlHandler.EmitCancelledIfNeeded(ctx, execErr.Error())
 			// Preserve child's failure metadata (e.g. partial_result, phase, token counts)
+			// 保留子 workflow 的失败元数据（如 partial_result、phase、token 计数）
 			result := convertFromStrategiesResult(strategiesResult)
 			result = AddTaskContextToMetadata(result, input.Context)
 			return result, execErr
@@ -561,29 +587,41 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	// handled by the existing force_research + post-decomposition paths.
 	// Enterprise strategies removed in OSS
 	// are not available in the OSS version.
+	// 早路由：research_strategy 的 context 取值。
+	// 通用 research 深度提示（quick/standard/deep/academic）由既有的
+	// force_research 与分解后路径处理。
+	// 企业版策略在 OSS 中已被移除，
+	// 在 OSS 版本中不提供。
 	earlyStrategyRouteVersion := workflow.GetVersion(ctx, "research_strategy_early_route_v1", workflow.DefaultVersion, 1)
-	_ = earlyStrategyRouteVersion // Preserved for Temporal replay compatibility
+	_ = earlyStrategyRouteVersion // Preserved for Temporal replay compatibility 注：为兼容 Temporal 重放而保留
 
 	// 1) Decompose the task (planning + complexity)
 	// Add history to context for decomposition to be context-aware
+	// 1) 分解 task（规划 + 复杂度）
+	// 把 history 加入 context，使分解具备上下文感知
 	decompContext := make(map[string]any)
 	if input.Context != nil {
 		maps.Copy(decompContext, input.Context)
 	}
 	// Inject current date for time awareness (use workflow.Now for Temporal determinism)
 	// Only inject if not already provided (allow user override)
+	// 注入当前日期以提供时间感知（用 workflow.Now 保证 Temporal 确定性）
+	// 仅在尚未提供时才注入（允许用户覆盖）
 	if _, hasDate := decompContext["current_date"]; !hasDate {
 		workflowTime := workflow.Now(ctx)
 		decompContext["current_date"] = workflowTime.UTC().Format("2006-01-02")
 		decompContext["current_date_human"] = workflowTime.UTC().Format("January 2, 2006")
 	}
 	// Inject P2P flag so decomposition prompt can include produces/consumes fields
+	// 注入 P2P 开关，使分解 prompt 能带上 produces/consumes 字段
 	if cfg.P2PCoordinationEnabled {
 		decompContext["p2p_enabled"] = true
 	}
 	// Add history for context awareness in decomposition
+	// 为分解的上下文感知加入 history
 	if len(input.History) > 0 {
 		// Convert history to a single string for the decompose endpoint
+		// 把 history 拼成单个字符串供 decompose 接口使用
 		historyLines := convertHistoryForAgent(input.History)
 		decompContext["history"] = strings.Join(historyLines, "\n")
 	}
@@ -592,6 +630,8 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 
 	// If a single-purpose agent is specified, bypass LLM decomposition entirely.
 	// AgentWorkflow is already fully deterministic and self-contained.
+	// 若指定了单一用途的 agent，则完全跳过 LLM 分解。
+	// AgentWorkflow 本身已完全确定且自包含。
 	agentPresent := false
 	if input.Context != nil {
 		if agentID, ok := input.Context["agent"].(string); ok && agentID != "" {
@@ -600,6 +640,8 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 
 			// Pass through suggested_tools from API context (e.g., Sagasu sends ["web_search"]
 			// for setup conversations so the agent can resolve company names to URLs).
+			// 透传 API context 中的 suggested_tools（例如 Sagasu 会传 ["web_search"]
+			// 用于 setup 会话，让 agent 能把公司名解析成 URL）。
 			var agentTools []string
 			if toolsVal, ok := input.Context["suggested_tools"]; ok {
 				if arr, ok := toolsVal.([]any); ok {
@@ -637,6 +679,9 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	// Check if a role is specified - if so, bypass LLM decomposition and create simple plan.
 	// Role-specific agents have their own internal multi-step logic, so orchestrator-level
 	// decomposition is unnecessary and can conflict with role-specific output contracts.
+	// 检查是否指定了 role：若有则跳过 LLM 分解，直接生成简单的 plan。
+	// role 专属 agent 自带内部多步逻辑，因此 orchestrator 这一层的
+	// 分解是多余的，还可能与 role 专属的输出契约冲突。
 	rolePresent := false
 	if !agentPresent && input.Context != nil {
 		if role, ok := input.Context["role"].(string); ok && role != "" {
@@ -645,6 +690,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			logger.Info("Role specified - bypassing LLM decomposition", "role", role, "tool_count", len(roleTools))
 
 			// Emit ROLE_ASSIGNED event
+			// 发送 ROLE_ASSIGNED 事件
 			_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 				WorkflowID: workflow.GetInfo(ctx).WorkflowExecution.ID,
 				EventType:  activities.StreamEventRoleAssigned,
@@ -659,6 +705,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			}).Get(ctx, nil)
 
 			// Create a simple single-subtask plan
+			// 生成只含单个 subtask 的简单 plan
 			decomp = activities.DecompositionResult{
 				Mode:              "simple",
 				ComplexityScore:   0.5,
@@ -671,16 +718,17 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 						Dependencies:    []string{},
 						EstimatedTokens: 5000,
 						SuggestedTools:  append([]string(nil), roleTools...),
-						ToolParameters:  map[string]any{}, // Agent constructs from context
+						ToolParameters:  map[string]any{}, // Agent constructs from context 注：由 agent 从 context 构造
 					},
 				},
 				TotalEstimatedTokens: 5000,
-				TokensUsed:           0, // No LLM call for decomposition
+				TokensUsed:           0, // No LLM call for decomposition 注：分解不调用 LLM
 				InputTokens:          0,
 				OutputTokens:         0,
 			}
 
 			// Check pause/cancel after role assignment - signal may have arrived during setup
+			// role 分配后检查 pause/cancel —— 信号可能在 setup 期间就已到达
 			if err := controlHandler.CheckPausePoint(ctx, "post_role_assignment"); err != nil {
 				return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 			}
@@ -688,8 +736,10 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	}
 
 	// If no role, proceed with normal LLM decomposition
+	// 若无 role，则走正常的 LLM 分解
 	if !rolePresent && !agentPresent {
 		// Emit "Understanding your request" before decomposition
+		// 在分解前发送 "Understanding your request"
 		_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: workflow.GetInfo(ctx).WorkflowExecution.ID,
 			EventType:  activities.StreamEventProgress,
@@ -701,10 +751,11 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 		if err := workflow.ExecuteActivity(actx, constants.DecomposeTaskActivity, activities.DecompositionInput{
 			Query:          input.Query,
 			Context:        decompContext,
-			AvailableTools: nil, // Let llm-service derive tools from registry + role preset
+			AvailableTools: nil, // Let llm-service derive tools from registry + role preset 注：由 llm-service 根据 registry 与 role 预设推导 tool
 		}).Get(ctx, &decomp); err != nil {
 			logger.Warn("Task decomposition failed, falling back to SimpleTaskWorkflow", "error", err)
 			// Emit warning event
+			// 发送 warning 事件
 			_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 				WorkflowID: workflow.GetInfo(ctx).WorkflowExecution.ID,
 				EventType:  activities.StreamEventProgress,
@@ -714,9 +765,10 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			}).Get(ctx, nil)
 
 			// Create fallback decomposition for SimpleTaskWorkflow
+			// 为 SimpleTaskWorkflow 构造兜底分解结果
 			decomp = activities.DecompositionResult{
 				Mode:              "simple",
-				ComplexityScore:   0.1, // Low complexity to trigger SimpleTaskWorkflow
+				ComplexityScore:   0.1, // Low complexity to trigger SimpleTaskWorkflow 注：低复杂度以触发 SimpleTaskWorkflow
 				ExecutionStrategy: "sequential",
 				CognitiveStrategy: "",
 				Subtasks: []activities.Subtask{
@@ -728,7 +780,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 					},
 				},
 				TotalEstimatedTokens: 5000,
-				TokensUsed:           0, // No LLM call for fallback decomposition
+				TokensUsed:           0, // No LLM call for fallback decomposition 注：兜底分解不调用 LLM
 				InputTokens:          0,
 				OutputTokens:         0,
 			}
@@ -736,12 +788,14 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 		}
 
 		// Check pause/cancel after decomposition - signal may have arrived during the activity
+		// 分解后检查 pause/cancel —— 信号可能在 activity 执行期间到达
 		if err := controlHandler.CheckPausePoint(ctx, "post_decomposition"); err != nil {
 			return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 		}
 	}
 
 	// Record decomposition usage if provided
+	// 若分解结果带用量信息则记录之
 	if decomp.TokensUsed > 0 || decomp.InputTokens > 0 || decomp.OutputTokens > 0 {
 		inTok := decomp.InputTokens
 		outTok := decomp.OutputTokens
@@ -774,6 +828,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	)
 
 	// Emit a human-friendly plan summary with payload (steps + deps)
+	// 发送便于人阅读的 plan 摘要，payload 含步骤与依赖
 	{
 		steps := make([]map[string]any, 0, len(decomp.Subtasks))
 		deps := make([]map[string]string, 0, 4)
@@ -798,24 +853,29 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	}
 
 	// Propagate the plan to child workflows to avoid a second decompose
+	// 把 plan 传给子 workflow，避免二次分解
 	input.PreplannedDecomposition = &decomp
 
 	// 1.5) Budget preflight (estimate based on plan)
-	if input.UserID != "" { // Only check when we have a user scope
+	// 1.5) budget 预检（按 plan 估算）
+	if input.UserID != "" { // Only check when we have a user scope 注：仅在存在 user 作用域时才检查
 		est := EstimateTokensWithConfig(decomp, &cfg)
 		if res, err := BudgetPreflight(ctx, input, est); err == nil && res != nil {
 			if !res.CanProceed {
 				// Best-effort title generation even when budget preflight blocks execution
+				// 即使 budget 预检拦截执行，也尽力生成标题
 				scheduleStreamEnd(ctx)
 				out := TaskResult{Success: false, ErrorMessage: res.Reason, Metadata: map[string]any{"budget_blocked": true}}
 				out = AddTaskContextToMetadata(out, input.Context)
 				return out, nil
 			}
 			// Pass budget info to child workflows via context
+			// 通过 context 把 budget 信息传给子 workflow
 			if input.Context == nil {
 				input.Context = map[string]any{}
 			}
 			// Propagate current_date to all child workflows (if not already set)
+			// 把 current_date 传给所有子 workflow（若尚未设置）
 			if _, hasDate := input.Context["current_date"]; !hasDate {
 				workflowTime := workflow.Now(ctx)
 				input.Context["current_date"] = workflowTime.UTC().Format("2006-01-02")
@@ -828,6 +888,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			}
 			agentMax := res.RemainingTaskBudget / n
 			// Optional clamp: environment or request context can cap per-agent budget
+			// 可选封顶：环境变量或请求 context 可限制单 agent 的 budget
 			if v := os.Getenv("TOKEN_BUDGET_PER_AGENT"); v != "" {
 				if n, err := strconv.Atoi(v); err == nil && n > 0 && n < agentMax {
 					agentMax = n
@@ -840,18 +901,23 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 				agentMax = int(capv)
 			}
 			// Cap at remaining quota for free-tier users
+			// 对免费额度用户按剩余配额封顶
 			agentMax = CapBudgetAtQuotaRemaining(ctx, input.TenantID, agentMax)
 			input.Context["budget_agent_max"] = agentMax
 		}
 	}
 
 	// 1.6) Approval gate (optional, config-driven or explicit request)
+	// 1.6) 审批闸门（可选，由配置或显式请求触发）
 	if cfg.ApprovalEnabled {
 		// Override policy thresholds via config if provided
 		// Note: current CheckApprovalPolicy uses default thresholds; we gate invocation here
+		// 若提供了配置，则用它覆盖策略阈值
+		// 注意：当前 CheckApprovalPolicy 使用默认阈值，这里由我们决定是否调用
 	}
 	if cfg.ApprovalEnabled || input.RequireApproval {
 		// Build policy from config
+		// 按配置构造 policy
 		pol := activities.ApprovalPolicy{
 			ComplexityThreshold: cfg.ApprovalComplexityThreshold,
 			TokenBudgetExceeded: false,
@@ -860,6 +926,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 		if need, reason := CheckApprovalPolicyWith(pol, input, decomp); need {
 			if ar, err := RequestAndWaitApproval(ctx, input, reason); err != nil {
 				// Best-effort title generation even on approval flow errors
+				// 即使审批流程出错也尽力生成标题
 				scheduleStreamEnd(ctx)
 				out := TaskResult{Success: false, ErrorMessage: fmt.Sprintf("approval request failed: %v", err)}
 				out = AddTaskContextToMetadata(out, input.Context)
@@ -870,6 +937,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 					msg = ar.Feedback
 				}
 				// Best-effort title generation even when approval is denied
+				// 即使审批被拒也尽力生成标题
 				scheduleStreamEnd(ctx)
 				out := TaskResult{Success: false, ErrorMessage: fmt.Sprintf("approval denied: %s", msg)}
 				out = AddTaskContextToMetadata(out, input.Context)
@@ -900,15 +968,19 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 
 	// Set parent workflow ID for child workflows to use for unified event streaming
 	// MUST be set BEFORE any strategy workflow routing to ensure events go to parent
+	// 设置 parent workflow ID，供子 workflow 统一事件流使用
+	// 必须在任何 strategy workflow 路由之前设置，确保事件发往 parent
 	parentWorkflowID := workflow.GetInfo(ctx).WorkflowExecution.ID
 	input.ParentWorkflowID = parentWorkflowID
 
 	// Route to AgentWorkflow if context.agent is present (single-purpose deterministic agents)
+	// context.agent 存在时路由到 AgentWorkflow（单一用途的确定性 agent）
 	if input.Context != nil {
 		if agentID, ok := input.Context["agent"].(string); ok && agentID != "" {
 			logger.Info("Routing to AgentWorkflow based on context.agent", "agent_id", agentID)
 
 			// Convert to agent workflow input
+			// 转换为 agent workflow 的输入
 			agentInput, err := ConvertAgentInputFromTask(input)
 			if err != nil {
 				logger.Error("Failed to convert agent input", "error", err)
@@ -916,6 +988,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 			}
 
 			// Execute AgentWorkflow as child
+			// 以子 workflow 形式执行 AgentWorkflow
 			childCtx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
 				ParentClosePolicy: enums.PARENT_CLOSE_POLICY_REQUEST_CANCEL,
 			})
@@ -931,13 +1004,17 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 
 	// NOTE: force_research is handled in early routing (before decomposition) to avoid
 	// redundant LLM calls. See "Early route: Force ResearchWorkflow" block above.
+	// 注意：force_research 已在早路由（分解之前）处理，以避免
+	// 多余的 LLM 调用；见上方 "Early route: Force ResearchWorkflow" 代码块。
 
 	// Route to BrowserUseWorkflow if browser_use role is present (unified agent loop)
+	// 若存在 browser_use role，则路由到 BrowserUseWorkflow（统一的 agent 循环）
 	browserUseVersion := workflow.GetVersion(ctx, "browser_use_routing_v1", workflow.DefaultVersion, 2)
 	if browserUseVersion >= 2 && rolePresent && input.Context != nil {
 		if role, ok := input.Context["role"].(string); ok && role == "browser_use" {
 			logger.Info("Routing to BrowserUseWorkflow based on browser_use role")
 			// Force LLM to use browser tools (prevents hallucinating completion without tool calls)
+			// 强制 LLM 使用浏览器工具（防止未调用工具就谎称完成）
 			input.Context["force_tools"] = true
 			if result, handled, err := routeStrategyWorkflow(ctx, input, "browser_use", decomp.Mode, emitCtx, controlHandler); handled {
 				return result, err
@@ -945,6 +1022,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 		}
 	} else if browserUseVersion == 1 && rolePresent && input.Context != nil {
 		// Legacy: v1 used ReactWorkflow
+		// 兼容旧版：v1 使用 ReactWorkflow
 		if role, ok := input.Context["role"].(string); ok && role == "browser_use" {
 			logger.Info("Routing to ReactWorkflow based on browser_use role (legacy v1)")
 			input.Context["force_tools"] = true
@@ -968,9 +1046,11 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 		input.Context["role"] = "browser_use"
 		input.Context["role_auto_detected"] = true
 		// Force LLM to use browser tools (prevents hallucinating completion without tool calls)
+		// 强制 LLM 使用浏览器工具（防止未调用工具就谎称完成）
 		input.Context["force_tools"] = true
 
 		// Emit role assignment event
+		// 发送 role 分配事件
 		_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: workflow.GetInfo(ctx).WorkflowExecution.ID,
 			EventType:  activities.StreamEventRoleAssigned,
@@ -984,6 +1064,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 		}).Get(ctx, nil)
 
 		// Use BrowserUseWorkflow for v2+, ReactWorkflow for legacy v1
+		// v2+ 使用 BrowserUseWorkflow，旧版 v1 使用 ReactWorkflow
 		strategy := "browser_use"
 		if browserUseVersion == 1 {
 			strategy = "react"
@@ -994,6 +1075,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	}
 
 	// Cognitive program takes precedence if specified
+	// 若指定了 cognitive program，则优先使用
 	if decomp.CognitiveStrategy != "" && decomp.CognitiveStrategy != "direct" && decomp.CognitiveStrategy != "decompose" {
 		if result, handled, err := routeStrategyWorkflow(ctx, input, decomp.CognitiveStrategy, decomp.Mode, emitCtx, controlHandler); handled {
 			return result, err
@@ -1003,6 +1085,8 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 
 	// Force ResearchWorkflow via context flag (user-facing via CLI and scheduled tasks)
 	// Uses GetContextBool to handle both bool and string "true" (proto map<string,string> converts to string)
+	// 通过 context 开关强制走 ResearchWorkflow（CLI 与定时任务对用户可见）
+	// 用 GetContextBool 兼容 bool 与字符串 "true"（proto 的 map<string,string> 会转成字符串）
 	if GetContextBool(input.Context, "force_research") {
 		logger.Info("Forcing ResearchWorkflow via context flag")
 		if result, handled, err := routeStrategyWorkflow(ctx, input, "research", decomp.Mode, emitCtx, controlHandler); handled {
@@ -1011,6 +1095,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 	}
 
 	// Check if P2P is forced via context
+	// 检查是否通过 context 强制启用 P2P
 	forceP2P := GetContextBool(input.Context, "force_p2p")
 	if forceP2P {
 		logger.Info("P2P coordination forced via context flag")
@@ -1018,17 +1103,22 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 
 	// NOTE: force_swarm is handled in early routing (before decomposition) to avoid
 	// redundant LLM calls. See "Early route: Force SwarmWorkflow" block above.
+	// 注意：force_swarm 已在早路由（分解之前）处理，以避免
+	// 多余的 LLM 调用；见上方 "Early route: Force SwarmWorkflow" 代码块。
 
 	switch {
 	case isSimple && !forceP2P:
 		// Check pause/cancel before starting child workflow
+		// 启动子 workflow 前检查 pause/cancel
 		if err := controlHandler.CheckPausePoint(ctx, "pre_simple_workflow"); err != nil {
 			return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 		}
 		// Keep simple path lightweight as a child for isolation (unless P2P is forced)
+		// simple 路径仍以子 workflow 形式保持轻量以便隔离（除非强制启用 P2P）
 		var result TaskResult
 		ometrics.WorkflowsStarted.WithLabelValues("SimpleTaskWorkflow", "simple").Inc()
 		// Emit delegation event
+		// 发送 delegation 事件
 		_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: parentWorkflowID,
 			EventType:  activities.StreamEventDelegation,
@@ -1038,6 +1128,7 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 		}).Get(ctx, nil)
 
 		// Pass suggested tools from decomposition to SimpleTaskWorkflow
+		// 把分解结果中的 suggested tools 传给 SimpleTaskWorkflow
 		if len(decomp.Subtasks) > 0 && len(decomp.Subtasks[0].SuggestedTools) > 0 {
 			input.SuggestedTools = decomp.Subtasks[0].SuggestedTools
 			input.ToolParameters = decomp.Subtasks[0].ToolParameters
@@ -1056,26 +1147,32 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 		controlHandler.UnregisterChildWorkflow(childExec.ID)
 
 		// Generate title regardless of success/failure (best-effort)
+		// 无论成功与否都生成标题（尽力而为）
 		scheduleStreamEnd(ctx)
 
 		if execErr != nil {
 			// Emit workflow.cancelled if this was a cancellation (child skipped emission due to SkipSSEEmit)
+			// 若本次是取消，则发送 workflow.cancelled（子 workflow 因 SkipSSEEmit 跳过了发送）
 			controlHandler.EmitCancelledIfNeeded(ctx, execErr.Error())
 			result = AddTaskContextToMetadata(result, input.Context)
 			return result, execErr
 		}
 		// Add task context to metadata for API exposure
+		// 把 task context 写入 metadata 以便 API 暴露
 		result = AddTaskContextToMetadata(result, input.Context)
 		return result, nil
 
 	default:
 		// Check pause/cancel before starting child workflow
+		// 启动子 workflow 前检查 pause/cancel
 		if err := controlHandler.CheckPausePoint(ctx, "pre_dag_workflow"); err != nil {
 			return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 		}
 		// Standard DAG strategy (fan-out/fan-in)
+		// 标准 DAG 策略（fan-out/fan-in）
 		ometrics.WorkflowsStarted.WithLabelValues("DAGWorkflow", "standard").Inc()
 		// Emit delegation event
+		// 发送 delegation 事件
 		_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: parentWorkflowID,
 			EventType:  activities.StreamEventDelegation,
@@ -1098,15 +1195,18 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 		controlHandler.UnregisterChildWorkflow(dagExec.ID)
 
 		// Generate title regardless of success/failure (best-effort)
+		// 无论成功与否都生成标题（尽力而为）
 		scheduleStreamEnd(ctx)
 
 		if execErr != nil {
 			// Emit workflow.cancelled if this was a cancellation (child skipped emission due to SkipSSEEmit)
+			// 若本次是取消，则发送 workflow.cancelled（子 workflow 因 SkipSSEEmit 跳过了发送）
 			controlHandler.EmitCancelledIfNeeded(ctx, execErr.Error())
 			out := AddTaskContextToMetadata(TaskResult{Success: false, ErrorMessage: execErr.Error()}, input.Context)
 			return out, execErr
 		}
 		// Add task context to metadata for API exposure
+		// 把 task context 写入 metadata 以便 API 暴露
 		result := convertFromStrategiesResult(strategiesResult)
 		result = AddTaskContextToMetadata(result, input.Context)
 		return result, nil
@@ -1119,26 +1219,30 @@ func OrchestratorWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, er
 // workflow 启动时并行触发标题生成（非阻塞），让用户尽快看到标题；该 activity 尽力而为，timeout 短、无 retry。
 func startAsyncTitleGeneration(ctx workflow.Context, sessionID, query string) {
 	// Version gate for deterministic replay - new version for async behavior
+	// 为确定性重放设版本闸门 —— 异步行为使用新的版本号
 	titleVersion := workflow.GetVersion(ctx, "session_title_async_v1", workflow.DefaultVersion, 1)
 	if titleVersion < 1 {
 		return
 	}
 	// Skip when sessionID is empty
+	// sessionID 为空时跳过
 	if sessionID == "" {
 		return
 	}
 
 	// Fire-and-forget: run title generation in background goroutine
+	// fire-and-forget：在后台 goroutine 中执行标题生成
 	workflow.Go(ctx, func(gCtx workflow.Context) {
 		titleOpts := workflow.ActivityOptions{
 			StartToCloseTimeout: 15 * time.Second,
 			RetryPolicy: &temporal.RetryPolicy{
-				MaximumAttempts: 1, // Best-effort, don't retry on failure
+				MaximumAttempts: 1, // Best-effort, don't retry on failure 注：尽力而为，失败不重试
 			},
 		}
 		titleCtx := workflow.WithActivityOptions(gCtx, titleOpts)
 
 		// Execute title generation - errors are ignored (best-effort)
+		// 执行标题生成 —— 错误直接忽略（尽力而为）
 		_ = workflow.ExecuteActivity(titleCtx, "GenerateSessionTitle", activities.GenerateSessionTitleInput{
 			SessionID: sessionID,
 			Query:     query,
@@ -1148,8 +1252,11 @@ func startAsyncTitleGeneration(ctx workflow.Context, sessionID, query string) {
 
 // scheduleStreamEnd emits the STREAM_END event to signal end of workflow processing.
 // This should be called at the end of each workflow path.
+// scheduleStreamEnd 发送 STREAM_END 事件，标志 workflow 处理结束。
+// 应在每条 workflow 路径结束时调用。
 func scheduleStreamEnd(ctx workflow.Context) {
 	// Version gate for deterministic replay
+	// 为确定性重放设版本闸门
 	streamEndVersion := workflow.GetVersion(ctx, "stream_end_v1", workflow.DefaultVersion, 1)
 	if streamEndVersion < 1 {
 		return
@@ -1169,8 +1276,10 @@ func scheduleStreamEnd(ctx workflow.Context) {
 }
 
 // convertToStrategiesInput converts workflows.TaskInput to strategies.TaskInput
+// convertToStrategiesInput 把 workflows.TaskInput 转换为 strategies.TaskInput
 func convertToStrategiesInput(input TaskInput) strategies.TaskInput {
 	// Convert History messages
+	// 转换 History 消息
 	history := make([]strategies.Message, len(input.History))
 	for i, msg := range input.History {
 		history[i] = strategies.Message{
@@ -1201,6 +1310,7 @@ func convertToStrategiesInput(input TaskInput) strategies.TaskInput {
 }
 
 // convertFromStrategiesResult converts strategies.TaskResult to workflows.TaskResult
+// convertFromStrategiesResult 把 strategies.TaskResult 转换为 workflows.TaskResult
 func convertFromStrategiesResult(result strategies.TaskResult) TaskResult {
 	return TaskResult{
 		Result:       result.Result,
@@ -1220,6 +1330,7 @@ func extractTemplateRequest(input TaskInput) (string, string) {
 			name = strings.TrimSpace(v)
 		}
 		// Accept legacy/alias key: template_name
+		// 兼容旧版/别名 key：template_name
 		if name == "" {
 			if v2, ok2 := input.Context["template_name"].(string); ok2 {
 				name = strings.TrimSpace(v2)
@@ -1243,6 +1354,7 @@ func routeStrategyWorkflow(ctx workflow.Context, input TaskInput, strategy strin
 	switch strategyLower {
 	case "simple":
 		// Check pause/cancel before starting child workflow
+		// 启动子 workflow 前检查 pause/cancel
 		if controlHandler != nil {
 			if err := controlHandler.CheckPausePoint(ctx, "pre_simple_strategy"); err != nil {
 				return TaskResult{Success: false, ErrorMessage: err.Error()}, true, err
@@ -1276,10 +1388,12 @@ func routeStrategyWorkflow(ctx workflow.Context, input TaskInput, strategy strin
 		}
 
 		// Generate title regardless of success/failure (best-effort)
+		// 无论成功与否都生成标题（尽力而为）
 		scheduleStreamEnd(ctx)
 
 		if execErr != nil {
 			// Emit workflow.cancelled if this was a cancellation (child skipped emission due to SkipSSEEmit)
+			// 若本次是取消，则发送 workflow.cancelled（子 workflow 因 SkipSSEEmit 跳过了发送）
 			if controlHandler != nil {
 				controlHandler.EmitCancelledIfNeeded(ctx, execErr.Error())
 			}
@@ -1287,10 +1401,12 @@ func routeStrategyWorkflow(ctx workflow.Context, input TaskInput, strategy strin
 			return result, true, execErr
 		}
 		// Add task context to metadata for API exposure
+		// 把 task context 写入 metadata 以便 API 暴露
 		result = AddTaskContextToMetadata(result, input.Context)
 		return result, true, nil
 	case "react", "exploratory", "research", "scientific", "browser_use":
 		// Check pause/cancel before starting child workflow
+		// 启动子 workflow 前检查 pause/cancel
 		if controlHandler != nil {
 			if err := controlHandler.CheckPausePoint(ctx, "pre_"+strategyLower+"_workflow"); err != nil {
 				return TaskResult{Success: false, ErrorMessage: err.Error()}, true, err
@@ -1352,19 +1468,23 @@ func routeStrategyWorkflow(ctx workflow.Context, input TaskInput, strategy strin
 		}
 
 		// Generate title regardless of success/failure (best-effort)
+		// 无论成功与否都生成标题（尽力而为）
 		scheduleStreamEnd(ctx)
 
 		if execErr != nil {
 			// Emit workflow.cancelled if this was a cancellation (child skipped emission due to SkipSSEEmit)
+			// 若本次是取消，则发送 workflow.cancelled（子 workflow 因 SkipSSEEmit 跳过了发送）
 			if controlHandler != nil {
 				controlHandler.EmitCancelledIfNeeded(ctx, execErr.Error())
 			}
 			// Preserve child's failure metadata (e.g. partial_result, phase, token counts)
+			// 保留子 workflow 的失败元数据（如 partial_result、phase、token 计数）
 			res := convertFromStrategiesResult(strategiesResult)
 			res = AddTaskContextToMetadata(res, input.Context)
 			return res, true, execErr
 		}
 		// Add task context to metadata for API exposure
+		// 把 task context 写入 metadata 以便 API 暴露
 		result := convertFromStrategiesResult(strategiesResult)
 		result = AddTaskContextToMetadata(result, input.Context)
 		return result, true, nil
@@ -1392,6 +1512,7 @@ func recommendStrategy(ctx workflow.Context, input TaskInput) (*activities.Recom
 	}).Get(ctx, &rec)
 
 	// Record metrics (fire-and-forget)
+	// 记录 metrics（fire-and-forget）
 	metricsCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 2 * time.Second,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
@@ -1439,10 +1560,13 @@ func detectBrowserIntent(query string) bool {
 
 	// Sites that REQUIRE browser automation (JavaScript rendering)
 	// These sites cannot be fetched with simple HTTP - they need a real browser
+	// 必须使用浏览器自动化（JavaScript 渲染）的站点
+	// 这些站点无法用普通 HTTP 抓取 —— 需要真实浏览器
 	jsRequiredDomains := []string{
-		"weixin.qq.com",    // WeChat articles (heavy JS)
-		"mp.weixin.qq.com", // WeChat public accounts
+		"weixin.qq.com",    // WeChat articles (heavy JS) 注：微信文章（JS 很重）
+		"mp.weixin.qq.com", // WeChat public accounts 注：微信公众号
 		// Add other JS-required domains as discovered
+		// 后续发现其他必需 JS 的域名可在此追加
 	}
 	for _, domain := range jsRequiredDomains {
 		if strings.Contains(q, domain) {
@@ -1453,5 +1577,8 @@ func detectBrowserIntent(query string) bool {
 	// All other URLs (including http://, https://, .com, .io, etc.)
 	// go through normal decomposition which will choose appropriate tools
 	// (web_fetch, web_search, research workflow, etc.)
+	// 其余所有 URL（包括 http://、https://、.com、.io 等）
+	// 都走正常分解流程，由它挑选合适的 tool
+	// （web_fetch、web_search、research workflow 等）
 	return false
 }

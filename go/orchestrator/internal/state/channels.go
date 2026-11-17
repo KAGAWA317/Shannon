@@ -31,6 +31,7 @@ type ChannelMetadata struct {
 }
 
 // Checkpoint represents a saved state snapshot
+// Checkpoint 表示已保存的状态快照
 type Checkpoint struct {
 	ID        string          `json:"id"`
 	Timestamp time.Time       `json:"timestamp"`
@@ -49,6 +50,7 @@ type Validatable interface {
 }
 
 // NewStateChannel creates a new state channel
+// NewStateChannel 创建新的状态通道
 func NewStateChannel(name string) *StateChannel {
 	return &StateChannel{
 		Name:    name,
@@ -71,11 +73,13 @@ func (sc *StateChannel) AddValidator(v Validator) {
 }
 
 // Set updates the state with validation
+// Set 带校验地更新状态
 func (sc *StateChannel) Set(data any) error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
 	// Validate if data implements Validatable
+	// 若数据实现了 Validatable 则校验
 	if v, ok := data.(Validatable); ok {
 		if err := v.Validate(); err != nil {
 			return fmt.Errorf("validation failed: %w", err)
@@ -83,6 +87,7 @@ func (sc *StateChannel) Set(data any) error {
 	}
 
 	// Run custom validators
+	// 执行自定义校验器
 	for _, validator := range sc.validators {
 		if err := validator(data); err != nil {
 			return fmt.Errorf("custom validation failed: %w", err)
@@ -90,6 +95,7 @@ func (sc *StateChannel) Set(data any) error {
 	}
 
 	// Update state
+	// 更新状态
 	sc.Data = data
 	sc.Metadata.UpdatedAt = time.Now()
 	sc.Metadata.UpdateCount++
@@ -98,6 +104,7 @@ func (sc *StateChannel) Set(data any) error {
 }
 
 // Get retrieves the current state
+// Get 取回当前状态
 func (sc *StateChannel) Get() any {
 	sc.mu.RLock()
 	defer sc.mu.RUnlock()
@@ -105,6 +112,7 @@ func (sc *StateChannel) Get() any {
 }
 
 // Checkpoint saves the current state
+// Checkpoint 保存当前状态
 func (sc *StateChannel) Checkpoint(metadata map[string]any) (string, error) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
@@ -129,6 +137,7 @@ func (sc *StateChannel) Checkpoint(metadata map[string]any) (string, error) {
 }
 
 // Restore restores state from a checkpoint
+// Restore 从 checkpoint 恢复状态
 func (sc *StateChannel) Restore(checkpointID string, target any) error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
@@ -143,6 +152,7 @@ func (sc *StateChannel) Restore(checkpointID string, target any) error {
 	}
 
 	// Validate restored state
+	// 校验恢复后的状态
 	if v, ok := target.(Validatable); ok {
 		if err := v.Validate(); err != nil {
 			return fmt.Errorf("restored state validation failed: %w", err)
@@ -157,6 +167,7 @@ func (sc *StateChannel) Restore(checkpointID string, target any) error {
 }
 
 // ListCheckpoints returns all checkpoint IDs
+// ListCheckpoints 返回所有 checkpoint ID
 func (sc *StateChannel) ListCheckpoints() []string {
 	sc.mu.RLock()
 	defer sc.mu.RUnlock()
@@ -169,6 +180,7 @@ func (sc *StateChannel) ListCheckpoints() []string {
 }
 
 // GetCheckpoint retrieves a specific checkpoint
+// GetCheckpoint 取回指定的 checkpoint
 func (sc *StateChannel) GetCheckpoint(checkpointID string) (Checkpoint, bool) {
 	sc.mu.RLock()
 	defer sc.mu.RUnlock()
@@ -188,6 +200,7 @@ func (sc *StateChannel) Clear(keepRecent int) {
 	}
 
 	// Sort checkpoints by timestamp
+	// 按 timestamp 排序 checkpoint
 	type checkpointPair struct {
 		id        string
 		timestamp time.Time
@@ -199,6 +212,7 @@ func (sc *StateChannel) Clear(keepRecent int) {
 	}
 
 	// Sort by timestamp (newest first)
+	// 按 timestamp 排序（最新在前）
 	for i := 0; i < len(pairs)-1; i++ {
 		for j := i + 1; j < len(pairs); j++ {
 			if pairs[j].timestamp.After(pairs[i].timestamp) {
@@ -208,6 +222,7 @@ func (sc *StateChannel) Clear(keepRecent int) {
 	}
 
 	// Keep only the most recent N
+	// 只保留最近 N 个
 	newCheckpoints := make(map[string]Checkpoint)
 	for i := 0; i < keepRecent && i < len(pairs); i++ {
 		id := pairs[i].id

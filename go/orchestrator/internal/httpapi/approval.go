@@ -22,6 +22,7 @@ type ApprovalHandler struct {
 }
 
 // NewApprovalHandler creates a new handler.
+// NewApprovalHandler 创建新的 handler。
 func NewApprovalHandler(t client.Client, logger *zap.Logger, authToken string) *ApprovalHandler {
 	return &ApprovalHandler{temporal: t, logger: logger, authToken: authToken}
 }
@@ -51,6 +52,7 @@ func (h *ApprovalHandler) handleDecision(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Auth: Bearer token
+	// 鉴权：Bearer token
 	if h.authToken != "" {
 		auth := r.Header.Get("Authorization")
 		if !strings.HasPrefix(auth, "Bearer ") || strings.TrimPrefix(auth, "Bearer ") != h.authToken {
@@ -73,6 +75,7 @@ func (h *ApprovalHandler) handleDecision(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Build result payload for signal
+	// 构造用于 signal 的结果 payload
 	payload := activities.HumanApprovalResult{
 		ApprovalID:     req.ApprovalID,
 		Approved:       req.Approved,
@@ -85,6 +88,7 @@ func (h *ApprovalHandler) handleDecision(w http.ResponseWriter, r *http.Request)
 	signalName := fmt.Sprintf("human-approval-%s", req.ApprovalID)
 
 	// Send signal with timeout
+	// 带超时地发送 signal
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 	if err := h.temporal.SignalWorkflow(ctx, req.WorkflowID, req.RunID, signalName, payload); err != nil {

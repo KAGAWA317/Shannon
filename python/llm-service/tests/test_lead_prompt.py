@@ -77,10 +77,8 @@ class TestBuildLeadUserPrompt:
         )
         prompt = _build_lead_user_prompt(body)
         assert "## Workspace Files (50 files)" in prompt
-        assert "file_029.md" in prompt  # 30th file (index 29) should be shown
-        # 第 30 个文件（索引 29）应被展示
-        assert "file_030.md" not in prompt  # 31st file should be hidden
-        # 第 31 个文件应被隐藏
+        assert "file_029.md" in prompt  # 30th file (index 29) should be shown 注：第 30 个文件（索引 29）应被展示
+        assert "file_030.md" not in prompt  # 31st file should be hidden 注：第 31 个文件应被隐藏
         assert "... and 20 more" in prompt
 
     def test_budget_section_always_present(self):

@@ -19,7 +19,9 @@ import (
 )
 
 // ReactWorkflow uses the extracted React pattern for step-by-step problem solving.
+// ReactWorkflow 使用抽出的 React 模式，逐步拆解问题。
 // It leverages the Reason-Act-Observe loop with optional reflection.
+// 借助 Reason-Act-Observe 循环，并可选地做 reflection。
 func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting ReactWorkflow with pattern",
@@ -29,12 +31,14 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	)
 
 	// Determine workflow ID for event streaming
+	// 确定用于事件流式推送的 workflow ID
 	workflowID := input.ParentWorkflowID
 	if workflowID == "" {
 		workflowID = workflow.GetInfo(ctx).WorkflowExecution.ID
 	}
 
 	// Configure activity options
+	// 配置 activity 选项
 	activityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: 3 * time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -44,11 +48,13 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
 	// Initialize control signal handler for pause/resume/cancel
+	// 初始化用于 pause/resume/cancel 的控制信号处理器
 	emitCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Second,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
 	})
 	// Skip SSE emissions when running as child workflow (parent already emits)
+	// 作为子 workflow 运行时跳过 SSE 推送（父 workflow 已经在推送）
 	controlHandler := &control.SignalHandler{
 		WorkflowID:  workflowID,
 		AgentID:     "react",
@@ -59,6 +65,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	controlHandler.Setup(ctx)
 
 	// Load configuration
+	// 加载配置
 	var config activities.WorkflowConfig
 	configActivity := workflow.ExecuteActivity(ctx,
 		activities.GetWorkflowConfig,
@@ -72,6 +79,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Prepare base context
+	// 准备基础 context
 	baseContext := make(map[string]any)
 	maps.Copy(baseContext, input.Context)
 	maps.Copy(baseContext, input.SessionCtx)
@@ -80,20 +88,22 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Memory retrieval with gate precedence (hierarchical > simple session)
+	// 记忆检索的开关优先级（hierarchical > simple session）
 	hierarchicalVersion := workflow.GetVersion(ctx, "memory_retrieval_v1", workflow.DefaultVersion, 1)
 	sessionVersion := workflow.GetVersion(ctx, "session_memory_v1", workflow.DefaultVersion, 1)
 
 	if hierarchicalVersion >= 1 && input.SessionID != "" {
 		// Use hierarchical memory (combines recent + semantic)
+		// 使用分层记忆（组合 recent + semantic）
 		var hierMemory activities.FetchHierarchicalMemoryResult
 		_ = workflow.ExecuteActivity(ctx, activities.FetchHierarchicalMemory,
 			activities.FetchHierarchicalMemoryInput{
 				Query:        input.Query,
 				SessionID:    input.SessionID,
 				TenantID:     input.TenantID,
-				RecentTopK:   5,    // Fixed for determinism
-				SemanticTopK: 5,    // Fixed for determinism
-				Threshold:    0.75, // Fixed semantic threshold
+				RecentTopK:   5,    // Fixed for determinism 注：为保确定性固定取值
+				SemanticTopK: 5,    // Fixed for determinism 注：为保确定性固定取值
+				Threshold:    0.75, // Fixed semantic threshold 注：固定的语义阈值
 			}).Get(ctx, &hierMemory)
 
 		if len(hierMemory.Items) > 0 {
@@ -106,12 +116,13 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		}
 	} else if sessionVersion >= 1 && input.SessionID != "" {
 		// Fallback to simple session memory if hierarchical not enabled
+		// 未启用分层记忆时回退到简单 session 记忆
 		var sessionMemory activities.FetchSessionMemoryResult
 		_ = workflow.ExecuteActivity(ctx, activities.FetchSessionMemory,
 			activities.FetchSessionMemoryInput{
 				SessionID: input.SessionID,
 				TenantID:  input.TenantID,
-				TopK:      20, // Fixed for determinism
+				TopK:      20, // Fixed for determinism 注：为保确定性固定取值
 			}).Get(ctx, &sessionMemory)
 
 		if len(sessionMemory.Items) > 0 {
@@ -124,9 +135,11 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Context compression (version-gated for determinism)
+	// context 压缩（按版本开关控制，保证确定性）
 	compressionVersion := workflow.GetVersion(ctx, "context_compress_v1", workflow.DefaultVersion, 1)
 	if compressionVersion >= 1 && input.SessionID != "" && len(input.History) > 20 {
 		// Check if compression is needed with rate limiting
+		// 带限流地检查是否需要压缩
 		estimatedTokens := activities.EstimateTokens(convertHistoryForAgent(input.History))
 		tierForCompression := "medium"
 
@@ -147,6 +160,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			)
 
 			// Compress context via activity
+			// 通过 activity 压缩 context
 			var compressResult activities.CompressContextResult
 			err = workflow.ExecuteActivity(ctx, activities.CompressAndStoreContext,
 				activities.CompressContextInput{
@@ -163,6 +177,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 				)
 
 				// Update compression state in session
+				// 更新 session 中的压缩状态
 				var updateResult activities.UpdateCompressionStateResult
 				_ = workflow.ExecuteActivity(ctx, "UpdateCompressionStateActivity",
 					activities.UpdateCompressionStateInput{
@@ -174,11 +189,14 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Check for budget configuration
+	// 检查 budget 配置
 	agentMaxTokens := getBudgetMax(baseContext)
 
 	// Determine model tier based on query complexity
-	modelTier := "medium" // Default for React tasks
+	// 根据 query 复杂度确定 model tier
+	modelTier := "medium" // Default for React tasks 注：React 任务的默认值
 	// Resolve an approximate concrete model for pricing/metadata; prefer provider override from context
+	// 为计费/metadata 解析一个近似具体的 model；优先采用 context 中的 provider override
 	providerOverride := ""
 	if v, ok := baseContext["provider_override"].(string); ok && strings.TrimSpace(v) != "" {
 		providerOverride = strings.ToLower(strings.TrimSpace(v))
@@ -199,13 +217,14 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Configure React pattern
+	// 配置 React 模式
 	reactConfig := patterns.ReactConfig{
 		MaxIterations:     config.ReactMaxIterations,
 		MinIterations:     1,
 		ObservationWindow: config.ReactObservationWindow,
-		MaxObservations:   100, // Safety limit
-		MaxThoughts:       50,  // Safety limit
-		MaxActions:        50,  // Safety limit
+		MaxObservations:   100, // Safety limit 注：安全上限
+		MaxThoughts:       50,  // Safety limit 注：安全上限
+		MaxActions:        50,  // Safety limit 注：安全上限
 	}
 
 	reactOpts := patterns.Options{
@@ -218,11 +237,13 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Check pause/cancel before React loop execution
+	// 执行 React 循环前检查 pause/cancel
 	if err := controlHandler.CheckPausePoint(ctx, "pre_execution"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
 
 	// Execute React loop
+	// 执行 React 循环
 	logger.Info("Executing React loop pattern",
 		"max_iterations", reactConfig.MaxIterations,
 		"observation_window", reactConfig.ObservationWindow,
@@ -247,24 +268,26 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Check pause/cancel before reflection
+	// reflection 前检查 pause/cancel
 	if err := controlHandler.CheckPausePoint(ctx, "pre_reflection"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
 
 	// Optional: Apply reflection for quality improvement on complex results
+	// 可选：对复杂结果应用 reflection 以提升质量
 	finalResult := reactResult.FinalResult
 	qualityScore := 0.5
 	totalTokens := reactResult.TotalTokens
 	reflectionTokens := 0
 
-	if reactResult.Iterations > 5 { // Complex task that needed many iterations
+	if reactResult.Iterations > 5 { // Complex task that needed many iterations 注：需要多轮迭代的复杂任务
 		logger.Info("Applying reflection for quality improvement",
 			"iterations", reactResult.Iterations,
 		)
 
 		reflectionConfig := patterns.ReflectionConfig{
 			Enabled:             true,
-			MaxRetries:          1, // Single reflection pass for React
+			MaxRetries:          1, // Single reflection pass for React 注：React 只做一次 reflection
 			ConfidenceThreshold: 0.7,
 			Criteria:            []string{"completeness", "correctness", "clarity"},
 			TimeoutMs:           30000,
@@ -278,6 +301,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		}
 
 		// Convert React result to agent result for reflection
+		// 把 React 结果转成 agent 结果，供 reflection 使用
 		approxModelRefl := pricing.GetPriorityOneModel(modelTier)
 		if approxModelRefl == "" {
 			approxModelRefl = modelTier
@@ -317,6 +341,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Optional: collect citations and append Sources section when enabled
+	// 可选：启用时收集引用并追加 Sources 段落
 	var collectedCitations []metadata.Citation
 	if v, ok := baseContext["enable_citations"].(bool); ok && v {
 		var resultsForCitations []any
@@ -361,9 +386,11 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Update session with results (include per-agent usage for accurate cost)
+	// 用结果更新 session（带上每个 agent 的用量，以便准确计算成本）
 	if input.SessionID != "" {
 		var updRes activities.SessionUpdateResult
 		// Build per-agent usage from pattern loop results
+		// 从 pattern 循环结果构造每个 agent 的用量
 		usages := make([]activities.AgentUsage, 0, len(reactResult.AgentResults))
 		for _, ar := range reactResult.AgentResults {
 			usages = append(usages, activities.AgentUsage{Model: ar.ModelUsed, Tokens: ar.TokensUsed, InputTokens: ar.InputTokens, OutputTokens: ar.OutputTokens})
@@ -374,7 +401,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 				SessionID:  input.SessionID,
 				Result:     finalResult,
 				TokensUsed: totalTokens,
-				AgentsUsed: reactResult.Iterations * 2, // Reasoner + Actor per iteration
+				AgentsUsed: reactResult.Iterations * 2, // Reasoner + Actor per iteration 注：每轮 Reasoner + Actor 两个 agent
 				AgentUsage: usages,
 			}).Get(ctx, &updRes)
 
@@ -383,6 +410,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 		}
 
 		// Persist to vector store (await result to prevent race condition)
+		// 持久化到向量库（等待结果以避免竞态）
 		_ = workflow.ExecuteActivity(ctx,
 			activities.RecordQuery,
 			activities.RecordQueryInput{
@@ -411,18 +439,20 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	)
 
 	// Record pattern metrics (fire-and-forget)
+	// 记录 pattern 指标（fire-and-forget）
 	metricsCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Second,
 	})
 	_ = workflow.ExecuteActivity(metricsCtx, "RecordPatternMetrics", activities.PatternMetricsInput{
 		Pattern:      "react",
 		Version:      "v2",
-		AgentCount:   reactResult.Iterations * 2, // Reasoner + Actor per iteration
+		AgentCount:   reactResult.Iterations * 2, // Reasoner + Actor per iteration 注：每轮 Reasoner + Actor 两个 agent
 		TokensUsed:   totalTokens,
 		WorkflowType: "react",
 	}).Get(ctx, nil)
 
 	// Aggregate tool errors from React agent results
+	// 汇总 React agent 结果中的工具错误
 	var toolErrors []map[string]string
 	for _, ar := range reactResult.AgentResults {
 		if len(ar.ToolExecutions) == 0 {
@@ -465,6 +495,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Aggregate agent metadata (model, provider, tokens, cost)
+	// 汇总 agent metadata（model、provider、tokens、cost）
 	// Note: ReactResult doesn't track per-iteration models; use tier's priority-1 model
 	// ReactResult 不跟踪每轮使用的 model，这里取该档位 priority-1 的 model。
 	agentResults := []activities.AgentExecutionResult{
@@ -472,7 +503,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 			AgentID:      "react-agent",
 			ModelUsed:    approxModel,
 			TokensUsed:   reactResult.TotalTokens,
-			InputTokens:  reactResult.TotalTokens * 6 / 10, // Estimate 60/40 split
+			InputTokens:  reactResult.TotalTokens * 6 / 10, // Estimate 60/40 split 注：按 60/40 估算拆分
 			OutputTokens: reactResult.TotalTokens * 4 / 10,
 			Success:      true,
 		},
@@ -481,17 +512,21 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	maps.Copy(meta, agentMeta)
 
 	// Align: compute and include estimated cost using centralized pricing
+	// 对齐：使用集中式 pricing 计算并写入预估成本
 	if totalTokens > 0 {
 		meta["cost_usd"] = pricing.CostForTokens(approxModel, totalTokens)
 	}
 
 	// Check pause/cancel before completion
+	// 完成前检查 pause/cancel
 	if err := controlHandler.CheckPausePoint(ctx, "pre_completion"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
 
 	// Emit final clean LLM_OUTPUT for OpenAI-compatible streaming.
+	// 为 OpenAI 兼容流式输出推送最终干净的 LLM_OUTPUT。
 	// Agent ID "final_output" signals the streamer to always show this content.
+	// Agent ID "final_output" 会提示 streamer 始终展示这段内容。
 	if finalResult != "" {
 		_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: workflowID,
@@ -507,6 +542,7 @@ func ReactWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	}
 
 	// Emit WORKFLOW_COMPLETED before returning
+	// 返回前推送 WORKFLOW_COMPLETED
 	_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 		WorkflowID: workflowID,
 		EventType:  activities.StreamEventWorkflowCompleted,

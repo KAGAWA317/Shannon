@@ -50,6 +50,7 @@ func CompileTemplate(tpl *Template) (*ExecutablePlan, error) {
 	}
 
 	// Collect node definitions
+// 收集 node 定义
 	ids := make([]string, 0, len(tpl.Nodes))
 	for _, node := range tpl.Nodes {
 		ids = append(ids, node.ID)

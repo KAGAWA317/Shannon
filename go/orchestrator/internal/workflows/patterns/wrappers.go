@@ -12,6 +12,7 @@ import (
 )
 
 // reactPattern wraps ReactLoop to satisfy the Pattern interface
+// reactPattern 包装 ReactLoop 以适配 Pattern 接口
 type reactPattern struct{}
 
 func (reactPattern) GetType() PatternType { return PatternReact }
@@ -31,6 +32,7 @@ func (reactPattern) EstimateTokens(input PatternInput) int {
 
 func (reactPattern) Execute(ctx workflow.Context, input PatternInput) (*PatternResult, error) {
 	// Config from input.Config when provided
+	// 若提供 input.Config 则使用其配置
 	cfg := ReactConfig{MaxIterations: 8, MinIterations: 1, ObservationWindow: 3, MaxObservations: 100, MaxThoughts: 50, MaxActions: 50}
 	if v, ok := input.Config.(ReactConfig); ok {
 		cfg = v
@@ -52,6 +54,7 @@ func (reactPattern) Execute(ctx workflow.Context, input PatternInput) (*PatternR
 }
 
 // chainOfThoughtPattern wraps ChainOfThought
+// chainOfThoughtPattern 包装 ChainOfThought
 type chainOfThoughtPattern struct{}
 
 func (chainOfThoughtPattern) GetType() PatternType { return PatternChainOfThought }
@@ -82,6 +85,7 @@ func (chainOfThoughtPattern) Execute(ctx workflow.Context, input PatternInput) (
 }
 
 // debatePattern wraps Debate
+// debatePattern 包装 Debate
 type debatePattern struct{}
 
 func (debatePattern) GetType() PatternType { return PatternDebate }
@@ -112,6 +116,7 @@ func (debatePattern) Execute(ctx workflow.Context, input PatternInput) (*Pattern
 }
 
 // treeOfThoughtsPattern wraps TreeOfThoughts
+// treeOfThoughtsPattern 包装 TreeOfThoughts
 type treeOfThoughtsPattern struct{}
 
 func (treeOfThoughtsPattern) GetType() PatternType { return PatternTreeOfThoughts }
@@ -142,6 +147,7 @@ func (treeOfThoughtsPattern) Execute(ctx workflow.Context, input PatternInput) (
 }
 
 // reflectionPattern wraps a single-pass answer and optional reflection improvement
+// reflectionPattern 包装单轮回答，并可选做 reflection 改进
 type reflectionPattern struct{}
 
 func (reflectionPattern) GetType() PatternType { return PatternReflection }
@@ -159,6 +165,7 @@ func (reflectionPattern) EstimateTokens(input PatternInput) int {
 
 func (reflectionPattern) Execute(ctx workflow.Context, input PatternInput) (*PatternResult, error) {
 	// Get initial result via a single agent call
+	// 通过一次 agent 调用得到初始结果
 	var initial activities.AgentExecutionResult
 	if input.BudgetMax > 0 {
 		wid := workflow.GetInfo(ctx).WorkflowExecution.ID
@@ -253,6 +260,7 @@ func (reflectionPattern) Execute(ctx workflow.Context, input PatternInput) (*Pat
 	}
 
 	// Apply reflection with defaults
+	// 用默认配置应用 reflection
 	rcfg := ReflectionConfig{Enabled: true, MaxRetries: 1, ConfidenceThreshold: 0.7, Criteria: []string{"completeness", "correctness", "clarity"}, TimeoutMs: 30000}
 	if v, ok := input.Config.(ReflectionConfig); ok {
 		rcfg = v

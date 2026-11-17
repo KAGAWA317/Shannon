@@ -39,20 +39,21 @@ import (
 var ErrWorkspaceQuotaExceeded = errors.New("workspace quota exceeded")
 
 // TaskHandler handles task-related HTTP requests
+// TaskHandler 处理与 task 相关的 HTTP 请求。
 type TaskHandler struct {
 	orchClient orchpb.OrchestratorServiceClient
 	db         *sqlx.DB
 	redis      *redis.Client
 	skills     *skills.SkillRegistry
 	logger     *zap.Logger
-	sessionMgr *session.Manager // For persisting HITL messages to session history
+	sessionMgr *session.Manager // For persisting HITL messages to session history 注：用于把 HITL 消息持久化到 session history
 }
 
 // ResearchStrategiesConfig represents research strategy presets loaded from YAML
 // ResearchStrategiesConfig 表示从 YAML 加载的 research strategy preset。
 type ResearchStrategiesConfig struct {
 	Strategies map[string]struct {
-		MaxIterations            int    `yaml:"max_iterations"` // deprecated
+		MaxIterations            int    `yaml:"max_iterations"` // deprecated 注：已废弃
 		VerificationEnabled      bool   `yaml:"verification_enabled"`
 		MaxConcurrentAgents      int    `yaml:"max_concurrent_agents"`
 		ReactMaxIterations       int    `yaml:"react_max_iterations"`
@@ -61,9 +62,9 @@ type ResearchStrategiesConfig struct {
 		GapFillingMaxGaps        int    `yaml:"gap_filling_max_gaps"`
 		GapFillingMaxIterations  int    `yaml:"gap_filling_max_iterations"`
 		GapFillingCheckCitations bool   `yaml:"gap_filling_check_citations"`
-		AgentModelTier           string `yaml:"agent_model_tier"`           // small/medium/large for agent execution
-		IterativeMaxIterations   int    `yaml:"iterative_max_iterations"`   // coverage evaluation iterations (1-5)
-		IterativeResearchEnabled *bool  `yaml:"iterative_research_enabled"` // DR 2.0 iterative loop (nil = use default true)
+		AgentModelTier           string `yaml:"agent_model_tier"`           // small/medium/large for agent execution 注：agent 执行时使用的 small/medium/large 档位
+		IterativeMaxIterations   int    `yaml:"iterative_max_iterations"`   // coverage evaluation iterations (1-5) 注：覆盖率评估的迭代次数（1-5）
+		IterativeResearchEnabled *bool  `yaml:"iterative_research_enabled"` // DR 2.0 iterative loop (nil = use default true) 注：DR 2.0 迭代循环（nil 表示使用默认值 true）
 	} `yaml:"strategies"`
 }
 
@@ -153,6 +154,7 @@ func applyStrategyPreset(ctxMap map[string]any, strategy string) {
 		ctxMap["react_max_iterations"] = preset.ReactMaxIterations
 	}
 	// Seed max_concurrent_agents
+	// 填充 max_concurrent_agents。
 	if _, ok := ctxMap["max_concurrent_agents"]; !ok && preset.MaxConcurrentAgents >= 1 && preset.MaxConcurrentAgents <= 20 {
 		ctxMap["max_concurrent_agents"] = preset.MaxConcurrentAgents
 	}
@@ -162,6 +164,7 @@ func applyStrategyPreset(ctxMap map[string]any, strategy string) {
 		ctxMap["budget_agent_min"] = preset.BudgetAgentMin
 	}
 	// Seed enable_verification
+	// 填充 enable_verification。
 	if _, ok := ctxMap["enable_verification"]; !ok {
 		ctxMap["enable_verification"] = preset.VerificationEnabled
 	}
@@ -203,6 +206,7 @@ func applyStrategyPreset(ctxMap map[string]any, strategy string) {
 // 若已向客户端返回校验错误则返回 false。
 func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchpb.SubmitTaskRequest, w http.ResponseWriter, r *http.Request) bool {
 	// Ensure context map exists so we can inject optional fields safely
+	// 确保 context map 存在，以便安全注入可选字段。
 	ctxMap := map[string]any{}
 	if len(req.Context) > 0 {
 		maps.Copy(ctxMap, req.Context)
@@ -219,6 +223,7 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 	}
 
 	// Expand skill into context if specified
+	// 若指定了 skill，则把它展开到 context 中。
 	if skillName := strings.TrimSpace(req.Skill); skillName != "" && h.skills != nil {
 		entry, ok := h.skills.Get(skillName)
 		if !ok {
@@ -228,6 +233,7 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 		skill := entry.Skill
 
 		// Check if skill is enabled
+		// 检查该 skill 是否已启用。
 		if !skill.Enabled {
 			h.sendError(w, fmt.Sprintf("Skill %s is disabled", skillName), http.StatusBadRequest)
 			return false
@@ -238,14 +244,17 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 		// 安全：校验危险 skill 的授权——需要 admin/owner 角色，或显式拥有 skills:dangerous scope。
 		if skill.Dangerous {
 			// Get userCtx from request context (already validated in SubmitTask)
+			// 从 request context 中取 userCtx（在 SubmitTask 中已校验）。
 			userCtx, _ := r.Context().Value(auth.UserContextKey).(*auth.UserContext)
 			authorized := false
 			if userCtx != nil {
 				// Admin and owner roles can use dangerous skills
+				// admin 与 owner 角色可以使用危险 skill。
 				if userCtx.Role == auth.RoleAdmin || userCtx.Role == auth.RoleOwner {
 					authorized = true
 				}
 				// Check for explicit skills:dangerous scope
+				// 检查是否显式拥有 skills:dangerous scope。
 				if slices.Contains(userCtx.Scopes, auth.ScopeSkillsDangerous) {
 					authorized = true
 				}
@@ -263,6 +272,7 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 		}
 
 		// Skill content becomes the system prompt override
+		// skill 内容会作为 system prompt 的覆盖值。
 		ctxMap["system_prompt"] = skill.Content
 
 		// If skill declares a role, set it (bypasses decomposition)
@@ -272,10 +282,12 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 		}
 
 		// Echo skill metadata into context for observability
+		// 把 skill metadata 回写进 context，便于观测。
 		ctxMap["skill"] = skill.Name
 		ctxMap["skill_version"] = skill.Version
 
 		// Apply budget_max if specified and not already set
+		// 若指定了 budget_max 且尚未设置，则应用它。
 		if skill.BudgetMax > 0 {
 			if _, exists := ctxMap["budget_max"]; !exists {
 				ctxMap["budget_max"] = skill.BudgetMax
@@ -291,6 +303,7 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 	}
 
 	// Validate and inject model_tier from top-level (top-level wins)
+	// 校验并写入顶层的 model_tier（顶层优先）。
 	if mt := strings.TrimSpace(strings.ToLower(req.ModelTier)); mt != "" {
 		switch mt {
 		case "small", "medium", "large":
@@ -303,14 +316,17 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 	}
 
 	// Inject top-level model_override when provided
+	// 提供顶层 model_override 时写入 context。
 	if mo := strings.TrimSpace(req.ModelOverride); mo != "" {
 		ctxMap["model_override"] = mo
 		h.logger.Debug("Applied top-level model_override", zap.String("model_override", mo))
 	}
 
 	// Inject top-level provider_override when provided
+	// 提供顶层 provider_override 时写入 context。
 	if po := strings.TrimSpace(strings.ToLower(req.ProviderOverride)); po != "" {
 		// Validate provider exists
+		// 校验该 provider 是否存在。
 		validProviders := []string{"openai", "anthropic", "google", "groq", "xai", "deepseek", "qwen", "zai", "kimi", "minimax", "ollama", "mistral", "cohere"}
 		isValid := slices.Contains(validProviders, po)
 		if !isValid {
@@ -322,6 +338,7 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 	}
 
 	// Map research strategy controls into context
+	// 把 research strategy 相关控制项映射到 context 中。
 	if rs := strings.TrimSpace(strings.ToLower(req.ResearchStrategy)); rs != "" {
 		switch rs {
 		case "quick", "standard", "deep", "academic":
@@ -381,11 +398,13 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 	}
 	if disableAI {
 		// top-level conflicts
+		// 顶层字段冲突
 		if req.ModelTier != "" || req.ModelOverride != "" || req.ProviderOverride != "" {
 			h.sendError(w, "disable_ai=true conflicts with model_tier/model_override", http.StatusBadRequest)
 			return false
 		}
 		// context conflicts
+		// context 字段冲突
 		if vt, ok := ctxMap["model_tier"].(string); ok && strings.TrimSpace(vt) != "" {
 			h.sendError(w, "disable_ai=true conflicts with model_tier/model_override", http.StatusBadRequest)
 			return false
@@ -401,6 +420,7 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 	}
 
 	// Add context if present
+	// 存在 context 时附加到 request 上。
 	if len(ctxMap) > 0 {
 		st, err := structpb.NewStruct(ctxMap)
 		if err != nil {
@@ -429,6 +449,7 @@ func (h *TaskHandler) applyTaskContextAndLabels(req *TaskRequest, grpcReq *orchp
 }
 
 // NewTaskHandler creates a new task handler
+// NewTaskHandler 创建一个新的 task handler。
 func NewTaskHandler(
 	orchClient orchpb.OrchestratorServiceClient,
 	db *sqlx.DB,
@@ -448,6 +469,7 @@ func NewTaskHandler(
 }
 
 // TaskRequest represents a task submission request
+// TaskRequest 表示一次 task 提交 request。
 type TaskRequest struct {
 	Query     string         `json:"query"`
 	SessionID string         `json:"session_id,omitempty"`
@@ -470,13 +492,15 @@ type TaskRequest struct {
 	ModelOverride    string `json:"model_override,omitempty"`
 	ProviderOverride string `json:"provider_override,omitempty"`
 	// Phase 6: Strategy presets (mapped into context)
-	ResearchStrategy    string `json:"research_strategy,omitempty"`     // quick|standard|deep|academic
-	MaxIterations       *int   `json:"max_iterations,omitempty"`        // Optional override
-	MaxConcurrentAgents *int   `json:"max_concurrent_agents,omitempty"` // Optional override
-	EnableVerification  *bool  `json:"enable_verification,omitempty"`   // Optional flag
+	// Phase 6：strategy preset（映射到 context 中）。
+	ResearchStrategy    string `json:"research_strategy,omitempty"`     // quick|standard|deep|academic 注：取值 quick|standard|deep|academic
+	MaxIterations       *int   `json:"max_iterations,omitempty"`        // Optional override 注：可选覆盖值
+	MaxConcurrentAgents *int   `json:"max_concurrent_agents,omitempty"` // Optional override 注：可选覆盖值
+	EnableVerification  *bool  `json:"enable_verification,omitempty"`   // Optional flag 注：可选的开关
 }
 
 // TaskResponse represents a task submission response
+// TaskResponse 表示一次 task 提交的 response。
 type TaskResponse struct {
 	TaskID    string    `json:"task_id"`
 	Status    string    `json:"status"`
@@ -485,35 +509,40 @@ type TaskResponse struct {
 }
 
 // TaskStatusResponse represents a task status response
+// TaskStatusResponse 表示 task 状态查询的 response。
 type TaskStatusResponse struct {
 	TaskID     string         `json:"task_id"`
-	WorkflowID string         `json:"workflow_id,omitempty"` // Same as task_id, for clarity
+	WorkflowID string         `json:"workflow_id,omitempty"` // Same as task_id, for clarity 注：与 task_id 相同，仅为清晰起见
 	Status     string         `json:"status"`
-	Result     string         `json:"result,omitempty"`   // Raw result from LLM (plain text or JSON)
-	Response   map[string]any `json:"response,omitempty"` // Parsed JSON (backward compatibility)
+	Result     string         `json:"result,omitempty"`   // Raw result from LLM (plain text or JSON) 注：LLM 返回的原始结果（纯文本或 JSON）
+	Response   map[string]any `json:"response,omitempty"` // Parsed JSON (backward compatibility) 注：解析后的 JSON（向后兼容）
 	Error      string         `json:"error,omitempty"`
 	CreatedAt  time.Time      `json:"created_at"`
 	UpdatedAt  time.Time      `json:"updated_at"`
 	// Extra metadata to enable "reply" UX
+	// 用于支撑 "reply" 交互的额外 metadata。
 	Query     string         `json:"query,omitempty"`
 	SessionID string         `json:"session_id,omitempty"`
 	Mode      string         `json:"mode,omitempty"`
-	Context   map[string]any `json:"context,omitempty"` // Task context (force_research, research_strategy, etc.)
+	Context   map[string]any `json:"context,omitempty"` // Task context (force_research, research_strategy, etc.) 注：task context（force_research、research_strategy 等）
 	// Usage metadata
+	// 用量 metadata。
 	ModelUsed string         `json:"model_used,omitempty"`
 	Provider  string         `json:"provider,omitempty"`
 	Usage     map[string]any `json:"usage,omitempty"`
-	Metadata  map[string]any `json:"metadata,omitempty"`         // Task metadata (citations, etc.)
-	Unified   map[string]any `json:"unified_response,omitempty"` // Structured unified response
+	Metadata  map[string]any `json:"metadata,omitempty"`         // Task metadata (citations, etc.) 注：task metadata（citations 等）
+	Unified   map[string]any `json:"unified_response,omitempty"` // Structured unified response 注：结构化的 unified response
 }
 
 // ListTasksResponse represents the list tasks response
+// ListTasksResponse 表示 task 列表查询的 response。
 type ListTasksResponse struct {
 	Tasks      []TaskSummary `json:"tasks"`
 	TotalCount int32         `json:"total_count"`
 }
 
 // TaskSummary represents a single task in listing
+// TaskSummary 表示列表中的单条 task。
 type TaskSummary struct {
 	TaskID          string         `json:"task_id"`
 	Query           string         `json:"query,omitempty"`
@@ -525,10 +554,12 @@ type TaskSummary struct {
 }
 
 // SubmitTask handles POST /api/v1/tasks
+// SubmitTask 处理 POST /api/v1/tasks。
 func (h *TaskHandler) SubmitTask(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user context from auth middleware
+	// 从 auth middleware 取 user context。
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -540,6 +571,7 @@ func (h *TaskHandler) SubmitTask(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, attachments.MaxMultimodalBodyBytes)
 
 	// Parse request body
+	// 解析 request body。
 	var req TaskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.sendError(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
@@ -565,6 +597,7 @@ func (h *TaskHandler) SubmitTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate session ID if not provided
+	// 未提供 session ID 时生成一个。
 	if req.SessionID == "" {
 		req.SessionID = uuid.New().String()
 	}
@@ -582,6 +615,7 @@ func (h *TaskHandler) SubmitTask(w http.ResponseWriter, r *http.Request) {
 	// 注意：workspace 配额检查推迟到 Phase 2；当前基于数量的做法过于粗糙，会拦住所有 task 而不只是使用 workspace 的 task。
 
 	// Build gRPC request
+	// 构造 gRPC request。
 	grpcReq := &orchpb.SubmitTaskRequest{
 		Metadata: &commonpb.TaskMetadata{
 			UserId:    userCtx.UserID.String(),
@@ -593,14 +627,17 @@ func (h *TaskHandler) SubmitTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Apply context, model controls, and mode labels
+	// 应用 context、model 控制项与 mode labels。
 	if !h.applyTaskContextAndLabels(&req, grpcReq, w, r) {
 		return
 	}
 
 	// Propagate auth/tracing headers to gRPC metadata
+	// 把 auth/tracing header 透传到 gRPC metadata。
 	ctx = withGRPCMetadata(ctx, r)
 
 	// Submit task to orchestrator
+	// 把 task 提交给 orchestrator。
 	resp, err := h.orchClient.SubmitTask(ctx, grpcReq)
 	if err != nil {
 		if st, ok := status.FromError(err); ok {
@@ -619,6 +656,7 @@ func (h *TaskHandler) SubmitTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log task submission
+	// 记录 task 提交日志。
 	h.logger.Info("Task submitted",
 		zap.String("task_id", resp.TaskId),
 		zap.String("user_id", userCtx.UserID.String()),
@@ -626,6 +664,7 @@ func (h *TaskHandler) SubmitTask(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Prepare response
+	// 准备 response。
 	taskResp := TaskResponse{
 		TaskID:    resp.TaskId,
 		Status:    resp.Status.String(),
@@ -634,10 +673,12 @@ func (h *TaskHandler) SubmitTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add workflow ID header for tracing
+	// 添加 workflow ID header，便于链路追踪。
 	w.Header().Set("X-Workflow-ID", resp.WorkflowId)
 	w.Header().Set("X-Session-ID", req.SessionID)
 
 	// Send response
+	// 发送 response。
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(taskResp)
@@ -650,6 +691,7 @@ func (h *TaskHandler) SubmitTaskAndGetStreamURL(w http.ResponseWriter, r *http.R
 	ctx := r.Context()
 
 	// Get user context from auth middleware
+	// 从 auth middleware 取 user context。
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -657,9 +699,11 @@ func (h *TaskHandler) SubmitTaskAndGetStreamURL(w http.ResponseWriter, r *http.R
 	}
 
 	// Limit request body size to accommodate multimodal payloads.
+	// 限制 request body 大小，以容纳多模态 payload。
 	r.Body = http.MaxBytesReader(w, r.Body, attachments.MaxMultimodalBodyBytes)
 
 	// Parse request body
+	// 解析 request body。
 	var req TaskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.sendError(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
@@ -667,6 +711,7 @@ func (h *TaskHandler) SubmitTaskAndGetStreamURL(w http.ResponseWriter, r *http.R
 	}
 
 	// Validate request — allow empty query when attachments are present
+	// 校验 request——存在附件时允许 query 为空。
 	hasAtts := false
 	if req.Context != nil {
 		if atts, ok := req.Context["attachments"]; ok {
@@ -684,19 +729,23 @@ func (h *TaskHandler) SubmitTaskAndGetStreamURL(w http.ResponseWriter, r *http.R
 	}
 
 	// Generate session ID if not provided
+	// 未提供 session ID 时生成一个。
 	if req.SessionID == "" {
 		req.SessionID = uuid.New().String()
 	}
 
 	// Extract and store inline base64 attachments from context.attachments.
+	// 从 context.attachments 中取出内联 base64 附件并存储。
 	if err := h.extractAndStoreContextAttachments(ctx, req.SessionID, req.Context); err != nil {
 		h.sendError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	// NOTE: Workspace quota check deferred to Phase 2.
+	// 注意：workspace 配额检查推迟到 Phase 2。
 
 	// Build gRPC request (reuse same shape as SubmitTask)
+	// 构造 gRPC request（沿用与 SubmitTask 相同的结构）。
 	grpcReq := &orchpb.SubmitTaskRequest{
 		Metadata: &commonpb.TaskMetadata{
 			UserId:    userCtx.UserID.String(),
@@ -708,14 +757,17 @@ func (h *TaskHandler) SubmitTaskAndGetStreamURL(w http.ResponseWriter, r *http.R
 	}
 
 	// Apply context, model controls, and mode labels
+	// 应用 context、model 控制项与 mode labels。
 	if !h.applyTaskContextAndLabels(&req, grpcReq, w, r) {
 		return
 	}
 
 	// Propagate auth/tracing headers to gRPC metadata
+	// 把 auth/tracing header 透传到 gRPC metadata。
 	ctx = withGRPCMetadata(ctx, r)
 
 	// Submit task to orchestrator
+	// 把 task 提交给 orchestrator。
 	resp, err := h.orchClient.SubmitTask(ctx, grpcReq)
 	if err != nil {
 		if st, ok := status.FromError(err); ok {
@@ -734,6 +786,7 @@ func (h *TaskHandler) SubmitTaskAndGetStreamURL(w http.ResponseWriter, r *http.R
 	}
 
 	// Log task submission
+	// 记录 task 提交日志。
 	h.logger.Info("Task submitted with stream URL",
 		zap.String("task_id", resp.TaskId),
 		zap.String("user_id", userCtx.UserID.String()),
@@ -745,12 +798,14 @@ func (h *TaskHandler) SubmitTaskAndGetStreamURL(w http.ResponseWriter, r *http.R
 	streamURL := fmt.Sprintf("/api/v1/stream/sse?workflow_id=%s", resp.WorkflowId)
 
 	// Headers for discoverability
+	// 便于发现该接口的 header。
 	w.Header().Set("X-Workflow-ID", resp.WorkflowId)
 	w.Header().Set("X-Session-ID", req.SessionID)
 	w.Header().Set("Link", fmt.Sprintf("<%s>; rel=stream", streamURL))
 	w.Header().Set("Content-Type", "application/json")
 
 	// Body with stream URL
+	// 包含 stream URL 的 body。
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"workflow_id": resp.WorkflowId,
@@ -760,10 +815,12 @@ func (h *TaskHandler) SubmitTaskAndGetStreamURL(w http.ResponseWriter, r *http.R
 }
 
 // GetTaskStatus handles GET /api/v1/tasks/{id}
+// GetTaskStatus 处理 GET /api/v1/tasks/{id}。
 func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user context
+	// 取 user context。
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -771,6 +828,7 @@ func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract task ID from path
+	// 从 path 中取出 task ID。
 	taskID := r.PathValue("id")
 	if taskID == "" {
 		h.sendError(w, "Task ID is required", http.StatusBadRequest)
@@ -778,9 +836,11 @@ func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Propagate auth/tracing headers to gRPC metadata
+	// 把 auth/tracing header 透传到 gRPC metadata。
 	ctx = withGRPCMetadata(ctx, r)
 
 	// Get task status from orchestrator
+	// 从 orchestrator 查询 task 状态。
 	grpcReq := &orchpb.GetTaskStatusRequest{
 		TaskId: taskID,
 	}
@@ -800,11 +860,12 @@ func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Prepare response with raw result
+	// 准备带原始结果的 response。
 	statusResp := TaskStatusResponse{
 		TaskID:     resp.TaskId,
-		WorkflowID: resp.TaskId, // Same as task_id
+		WorkflowID: resp.TaskId, // Same as task_id 注：与 task_id 相同
 		Status:     resp.Status.String(),
-		Result:     resp.Result, // Always include raw result (plain text or JSON string)
+		Result:     resp.Result, // Always include raw result (plain text or JSON string) 注：始终包含原始结果（纯文本或 JSON 字符串）
 		Error:      resp.ErrorMessage,
 	}
 
@@ -859,6 +920,7 @@ func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 	statusResp.Mode = mode.String
 
 	// Populate model and provider if available
+	// 若存在则填充 model 与 provider。
 	if modelUsed.Valid && modelUsed.String != "" {
 		statusResp.ModelUsed = modelUsed.String
 	}
@@ -867,6 +929,7 @@ func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Populate usage metadata if available
+	// 若存在则填充用量 metadata。
 	if totalTokens.Valid || totalCost.Valid {
 		statusResp.Usage = map[string]any{}
 		if totalTokens.Valid && totalTokens.Int32 > 0 {
@@ -884,6 +947,7 @@ func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse and populate unified response if available
+	// 若存在则解析并填充 unified response。
 	if len(responseJSON) > 0 {
 		var unified map[string]any
 		if err := json.Unmarshal(responseJSON, &unified); err == nil && len(unified) > 0 {
@@ -892,6 +956,7 @@ func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse and populate metadata (citations, etc.) if available
+	// 若存在则解析并填充 metadata（citations 等）。
 	if len(metadataJSON) > 0 {
 		var metadata map[string]any
 		if err := json.Unmarshal(metadataJSON, &metadata); err == nil {
@@ -906,6 +971,7 @@ func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add model_breakdown from token_usage table for transparency
+	// 从 token_usage 表补充 model_breakdown，便于看清用量构成。
 	if statusResp.Metadata == nil {
 		statusResp.Metadata = make(map[string]any)
 	}
@@ -914,6 +980,7 @@ func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set timestamps to current time since they're not in the proto
+	// proto 中没有时间戳字段，这里设为当前时间。
 	statusResp.CreatedAt = time.Now()
 	statusResp.UpdatedAt = time.Now()
 
@@ -924,6 +991,7 @@ func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Send response
+	// 发送 response。
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Workflow-ID", taskID)
 	w.WriteHeader(http.StatusOK)
@@ -931,6 +999,7 @@ func (h *TaskHandler) GetTaskStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListTasks handles GET /api/v1/tasks
+// ListTasks 处理 GET /api/v1/tasks。
 func (h *TaskHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -941,6 +1010,7 @@ func (h *TaskHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse query params
+	// 解析 query 参数。
 	q := r.URL.Query()
 	limit := parseIntDefault(q.Get("limit"), 20)
 	if limit <= 0 || limit > 100 {
@@ -951,6 +1021,7 @@ func (h *TaskHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
 	statusStr := q.Get("status")
 
 	// Map status to proto
+	// 把 status 映射为 proto 取值。
 	var statusFilter orchpb.TaskStatus
 	switch strings.ToUpper(statusStr) {
 	case "QUEUED":
@@ -978,6 +1049,7 @@ func (h *TaskHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Propagate auth/tracing headers to gRPC metadata
+	// 把 auth/tracing header 透传到 gRPC metadata。
 	ctx = withGRPCMetadata(ctx, r)
 
 	resp, err := h.orchClient.ListTasks(ctx, req)
@@ -991,6 +1063,7 @@ func (h *TaskHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Map to HTTP response shape
+	// 映射为 HTTP response 结构。
 	out := ListTasksResponse{Tasks: make([]TaskSummary, 0, len(resp.Tasks)), TotalCount: resp.TotalCount}
 	for _, t := range resp.Tasks {
 		var createdAt, completedAt *time.Time
@@ -1028,6 +1101,7 @@ func (h *TaskHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetTaskEvents handles GET /api/v1/tasks/{id}/events
+// GetTaskEvents 处理 GET /api/v1/tasks/{id}/events。
 func (h *TaskHandler) GetTaskEvents(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -1105,8 +1179,10 @@ func parseIntDefault(s string, def int) int {
 }
 
 // StreamTask handles GET /api/v1/tasks/{id}/stream
+// StreamTask 处理 GET /api/v1/tasks/{id}/stream。
 func (h *TaskHandler) StreamTask(w http.ResponseWriter, r *http.Request) {
 	// Extract task ID from path
+	// 从 path 中取出 task ID。
 	taskID := r.PathValue("id")
 	if taskID == "" {
 		h.sendError(w, "Task ID is required", http.StatusBadRequest)
@@ -1120,6 +1196,7 @@ func (h *TaskHandler) StreamTask(w http.ResponseWriter, r *http.Request) {
 	redirectURL := fmt.Sprintf("/api/v1/stream/sse?workflow_id=%s", taskID)
 
 	// Copy any additional query parameters
+	// 复制其余 query 参数。
 	if types := r.URL.Query().Get("types"); types != "" {
 		redirectURL += "&types=" + types
 	}
@@ -1131,10 +1208,12 @@ func (h *TaskHandler) StreamTask(w http.ResponseWriter, r *http.Request) {
 }
 
 // CancelTask handles POST /api/v1/tasks/{id}/cancel
+// CancelTask 处理 POST /api/v1/tasks/{id}/cancel。
 func (h *TaskHandler) CancelTask(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user context
+	// 取 user context。
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -1142,6 +1221,7 @@ func (h *TaskHandler) CancelTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract task ID from path
+	// 从 path 中取出 task ID。
 	taskID := r.PathValue("id")
 	if taskID == "" {
 		h.sendError(w, "Task ID is required", http.StatusBadRequest)
@@ -1149,6 +1229,7 @@ func (h *TaskHandler) CancelTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse optional request body for reason
+	// 解析可选的 request body，取出 reason。
 	type cancelRequest struct {
 		Reason string `json:"reason,omitempty"`
 	}
@@ -1158,6 +1239,7 @@ func (h *TaskHandler) CancelTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Propagate auth/tracing headers to gRPC metadata
+	// 把 auth/tracing header 透传到 gRPC metadata。
 	ctx = withGRPCMetadata(ctx, r)
 
 	// Call CancelTask gRPC
@@ -1187,6 +1269,7 @@ func (h *TaskHandler) CancelTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log cancellation
+	// 记录取消日志。
 	h.logger.Info("Task cancelled",
 		zap.String("task_id", taskID),
 		zap.String("user_id", userCtx.UserID.String()),
@@ -1194,6 +1277,7 @@ func (h *TaskHandler) CancelTask(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Return 202 Accepted
+	// 返回 202 Accepted。
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]any{
@@ -1203,10 +1287,12 @@ func (h *TaskHandler) CancelTask(w http.ResponseWriter, r *http.Request) {
 }
 
 // PauseTask handles POST /api/v1/tasks/{id}/pause
+// PauseTask 处理 POST /api/v1/tasks/{id}/pause。
 func (h *TaskHandler) PauseTask(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user context
+	// 取 user context。
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -1214,6 +1300,7 @@ func (h *TaskHandler) PauseTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract task ID from path
+	// 从 path 中取出 task ID。
 	taskID := r.PathValue("id")
 	if taskID == "" {
 		h.sendError(w, "Task ID is required", http.StatusBadRequest)
@@ -1221,6 +1308,7 @@ func (h *TaskHandler) PauseTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse optional request body for reason
+	// 解析可选的 request body，取出 reason。
 	var req struct {
 		Reason string `json:"reason,omitempty"`
 	}
@@ -1229,9 +1317,11 @@ func (h *TaskHandler) PauseTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Propagate auth/tracing headers to gRPC metadata
+	// 把 auth/tracing header 透传到 gRPC metadata。
 	ctx = withGRPCMetadata(ctx, r)
 
 	// Call PauseTask gRPC (service layer enforces ownership)
+	// 调用 PauseTask gRPC（归属校验由 service 层负责）。
 	pauseReq := &orchpb.PauseTaskRequest{
 		TaskId: taskID,
 		Reason: req.Reason,
@@ -1256,6 +1346,7 @@ func (h *TaskHandler) PauseTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log for audit trail
+	// 记录审计日志。
 	h.logger.Info("Task pause requested",
 		zap.String("task_id", taskID),
 		zap.String("user_id", userCtx.UserID.String()),
@@ -1272,10 +1363,12 @@ func (h *TaskHandler) PauseTask(w http.ResponseWriter, r *http.Request) {
 }
 
 // ResumeTask handles POST /api/v1/tasks/{id}/resume
+// ResumeTask 处理 POST /api/v1/tasks/{id}/resume。
 func (h *TaskHandler) ResumeTask(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user context
+	// 取 user context。
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -1283,6 +1376,7 @@ func (h *TaskHandler) ResumeTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract task ID from path
+	// 从 path 中取出 task ID。
 	taskID := r.PathValue("id")
 	if taskID == "" {
 		h.sendError(w, "Task ID is required", http.StatusBadRequest)
@@ -1290,6 +1384,7 @@ func (h *TaskHandler) ResumeTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse optional request body for reason
+	// 解析可选的 request body，取出 reason。
 	var req struct {
 		Reason string `json:"reason,omitempty"`
 	}
@@ -1298,9 +1393,11 @@ func (h *TaskHandler) ResumeTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Propagate auth/tracing headers to gRPC metadata
+	// 把 auth/tracing header 透传到 gRPC metadata。
 	ctx = withGRPCMetadata(ctx, r)
 
 	// Call ResumeTask gRPC (service layer enforces ownership)
+	// 调用 ResumeTask gRPC（归属校验由 service 层负责）。
 	resumeReq := &orchpb.ResumeTaskRequest{
 		TaskId: taskID,
 		Reason: req.Reason,
@@ -1325,6 +1422,7 @@ func (h *TaskHandler) ResumeTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log for audit trail
+	// 记录审计日志。
 	h.logger.Info("Task resume requested",
 		zap.String("task_id", taskID),
 		zap.String("user_id", userCtx.UserID.String()),
@@ -1341,10 +1439,12 @@ func (h *TaskHandler) ResumeTask(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetControlState handles GET /api/v1/tasks/{id}/control-state
+// GetControlState 处理 GET /api/v1/tasks/{id}/control-state。
 func (h *TaskHandler) GetControlState(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user context (auth required)
+	// 取 user context（需要认证）。
 	_, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -1352,6 +1452,7 @@ func (h *TaskHandler) GetControlState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract task ID from path
+	// 从 path 中取出 task ID。
 	taskID := r.PathValue("id")
 	if taskID == "" {
 		h.sendError(w, "Task ID is required", http.StatusBadRequest)
@@ -1359,9 +1460,11 @@ func (h *TaskHandler) GetControlState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Propagate auth/tracing headers to gRPC metadata
+	// 把 auth/tracing header 透传到 gRPC metadata。
 	ctx = withGRPCMetadata(ctx, r)
 
 	// Call GetControlState gRPC (service layer enforces ownership)
+	// 调用 GetControlState gRPC（归属校验由 service 层负责）。
 	stateReq := &orchpb.GetControlStateRequest{TaskId: taskID}
 	stateResp, err := h.orchClient.GetControlState(ctx, stateReq)
 	if err != nil {
@@ -1398,6 +1501,7 @@ func (h *TaskHandler) GetControlState(w http.ResponseWriter, r *http.Request) {
 // buildModelBreakdown 查询 token_usage 表，构建按 model 拆分的用量明细。
 func (h *TaskHandler) buildModelBreakdown(ctx context.Context, workflowID string) []map[string]any {
 	// Query token_usage table grouped by model
+	// 按 model 分组查询 token_usage 表。
 	query := `
 		SELECT
 			provider,
@@ -1427,6 +1531,7 @@ func (h *TaskHandler) buildModelBreakdown(ctx context.Context, workflowID string
 	var totalTokens int64
 
 	// First pass: collect data and calculate totals
+	// 第一轮：收集数据并计算总量。
 	type modelData struct {
 		Provider            string
 		Model               string
@@ -1451,6 +1556,7 @@ func (h *TaskHandler) buildModelBreakdown(ctx context.Context, workflowID string
 	}
 
 	// Second pass: build breakdown with percentages
+	// 第二轮：计算占比，构建明细。
 	for _, m := range models {
 		percentage := 0
 		if totalCost > 0 {
@@ -1478,6 +1584,7 @@ func (h *TaskHandler) buildModelBreakdown(ctx context.Context, workflowID string
 }
 
 // sendError sends an error response
+// sendError 发送一个错误 response。
 func (h *TaskHandler) sendError(w http.ResponseWriter, message string, code int) {
 	writeJSON(w, code, map[string]string{"error": message})
 }
@@ -1548,6 +1655,7 @@ func (h *TaskHandler) extractAndStoreContextAttachments(ctx context.Context, ses
 		decoded, err := base64.StdEncoding.DecodeString(dataStr)
 		if err != nil {
 			// Try raw (no-padding) variant.
+			// 尝试无 padding 的原始变体。
 			decoded, err = base64.RawStdEncoding.DecodeString(dataStr)
 			if err != nil {
 				return fmt.Errorf("attachment base64 decode failed: %w", err)
@@ -1625,11 +1733,13 @@ func sanitizeAttachmentThumbnail(raw any) (string, bool) {
 // （假设每个 workspace 约占 1GB），与 workspace_max_size_gb 比较。
 func (h *TaskHandler) checkWorkspaceQuota(ctx context.Context, tenantID uuid.UUID) error {
 	// Skip quota check if db is not configured (e.g., in tests)
+	// 未配置 db 时跳过配额检查（如测试环境）。
 	if h.db == nil {
 		return nil
 	}
 
 	// Get tenant's workspace quota
+	// 获取该 tenant 的 workspace 配额。
 	var tenant struct {
 		WorkspaceMaxSizeGB sql.NullInt32 `db:"workspace_max_size_gb"`
 	}
@@ -1645,10 +1755,12 @@ func (h *TaskHandler) checkWorkspaceQuota(ctx context.Context, tenantID uuid.UUI
 		}
 		h.logger.Warn("Failed to query tenant workspace quota", zap.Error(err))
 		// Don't block on quota check failure
+		// 配额检查失败时不阻塞主流程。
 		return nil
 	}
 
 	// If workspace_max_size_gb is not set, use default (5GB)
+	// 未设置 workspace_max_size_gb 时使用默认值（5GB）。
 	maxWorkspaces := 5
 	if tenant.WorkspaceMaxSizeGB.Valid && tenant.WorkspaceMaxSizeGB.Int32 > 0 {
 		maxWorkspaces = int(tenant.WorkspaceMaxSizeGB.Int32)
@@ -1664,6 +1776,7 @@ func (h *TaskHandler) checkWorkspaceQuota(ctx context.Context, tenantID uuid.UUI
 	if err != nil {
 		h.logger.Warn("Failed to count tenant sessions", zap.Error(err))
 		// Don't block on count failure
+		// 统计失败时不阻塞主流程。
 		return nil
 	}
 
@@ -1683,6 +1796,7 @@ func (h *TaskHandler) checkWorkspaceQuota(ctx context.Context, tenantID uuid.UUI
 // SendSwarmMessage 处理 POST /api/v1/swarm/{workflowID}/message：向运行中的 SwarmWorkflow 的 Lead agent 发送人工消息。
 func (h *TaskHandler) SendSwarmMessage(w http.ResponseWriter, r *http.Request) {
 	// Verify tenant ownership
+	// 校验 tenant 归属。
 	userCtx, ok := r.Context().Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -1728,7 +1842,7 @@ func (h *TaskHandler) SendSwarmMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	const maxMessageLen = 32 * 1024 // 32KB per message
+	const maxMessageLen = 32 * 1024 // 32KB per message 注：每条消息 32KB
 	if len(req.Message) > maxMessageLen {
 		h.sendError(w, fmt.Sprintf("message too long (%d bytes, max %d)", len(req.Message), maxMessageLen), http.StatusBadRequest)
 		return

@@ -21,6 +21,7 @@ type AuthHTTPHandler struct {
 }
 
 // NewAuthHTTPHandler constructs a new handler.
+// NewAuthHTTPHandler 构造新的 handler。
 func NewAuthHTTPHandler(svc *auth.Service, logger *zap.Logger) *AuthHTTPHandler {
 	return &AuthHTTPHandler{svc: svc, logger: logger}
 }
@@ -45,6 +46,7 @@ func (h *AuthHTTPHandler) handleRegister(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	// Minimal validation
+	// 最小化校验
 	if req.Email == "" || req.Username == "" || req.Password == "" || req.FullName == "" {
 		http.Error(w, `{"error":"missing required fields"}`, http.StatusBadRequest)
 		return
@@ -58,6 +60,7 @@ func (h *AuthHTTPHandler) handleRegister(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Respond with a safe user view
+	// 返回脱敏后的用户视图
 	resp := map[string]any{
 		"user": map[string]any{
 			"id":        user.ID,
@@ -136,6 +139,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 // sanitizeErr 截断错误信息以便安全返回给客户端（UTF-8 安全）。
 func sanitizeErr(s string) string {
 	// Keep it simple: don't leak internals
+	// 保持简单：不要泄露内部细节
 	runes := []rune(s)
 	if len(runes) > 200 {
 		return string(runes[:200])

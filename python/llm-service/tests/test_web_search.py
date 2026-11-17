@@ -66,6 +66,7 @@ class TestSerpAPISearchProvider:
         provider = SerpAPISearchProvider(api_key=VALID_TEST_API_KEY, engine="google")
 
         # Mock the aiohttp session
+        # mock 掉 aiohttp session
         mock_response = AsyncMock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"organic_results": []})
@@ -73,14 +74,17 @@ class TestSerpAPISearchProvider:
         with _mock_aiohttp_session(mock_response) as mock_session:
 
             # Call search with different engine than instance
+            # 用与实例不同的 engine 调用 search
             await provider.search("test query", max_results=5, engine="bing")
 
             # Verify the request used "bing" engine
+            # 校验请求确实用了 "bing" engine
             call_args = mock_session.get.call_args
             params = call_args.kwargs.get("params", {})
             assert params.get("engine") == "bing"
 
             # Instance engine should remain unchanged (no mutation)
+            # 实例上的 engine 应保持不变（未被改写）
             assert provider.engine == "google"
 
     @pytest.mark.asyncio
@@ -95,9 +99,11 @@ class TestSerpAPISearchProvider:
         with _mock_aiohttp_session(mock_response) as mock_session:
 
             # Call search without engine parameter
+            # 不传 engine 参数调用 search
             await provider.search("test query", max_results=5)
 
             # Verify the request used instance engine
+            # 校验请求用的是实例上的 engine
             call_args = mock_session.get.call_args
             params = call_args.kwargs.get("params", {})
             assert params.get("engine") == "baidu"
@@ -129,6 +135,7 @@ class TestSerpAPISearchProvider:
             results = await provider.search("AAPL:NASDAQ", max_results=5, engine="google_finance")
 
             # Should have stock quote result
+            # 应包含一条股票行情结果
             assert len(results) >= 1
             assert results[0]["type"] == "stock_quote"
             assert "Apple Inc" in results[0]["title"]
@@ -374,6 +381,7 @@ class TestWebSearchToolValidation:
             "youtube", "google_news", "google_finance", "google_finance_markets"
         }
         # These are the engines we support
+        # 这些是我们支持的 engine
         assert len(valid_engines) == 8
         assert "google" in valid_engines
         assert "baidu" in valid_engines
@@ -407,14 +415,15 @@ class TestWebSearchToolMetadata:
     def test_tool_has_engine_parameter(self):
         """Test that tool schema includes engine parameter"""
         # Import tool metadata
+        # 导入 tool metadata
         tool = WebSearchTool()
         params = tool.parameters
 
         # Find engine parameter
+        # 查找 engine 参数
         engine_param = next((p for p in params if p.name == "engine"), None)
         assert engine_param is not None
-        assert engine_param.required is False  # Optional with default
-        # 可选参数，有默认值
+        assert engine_param.required is False  # Optional with default 注：可选参数，有默认值
 
     def test_tool_has_localization_parameters(self):
         """Test that tool schema includes localization parameters"""
@@ -423,6 +432,7 @@ class TestWebSearchToolMetadata:
         param_names = [p.name for p in params]
 
         # Check localization params exist
+        # 检查本地化参数是否存在
         assert "gl" in param_names
         assert "hl" in param_names
         assert "location" in param_names

@@ -25,6 +25,7 @@ import (
 )
 
 // stripMarkdownJSONWrapper removes a leading markdown code fence when it wraps JSON.
+// stripMarkdownJSONWrapper 去掉包裹 JSON 时开头的 markdown 代码围栏。
 func stripMarkdownJSONWrapper(s string) string {
 	trimmed := strings.TrimSpace(s)
 	if !strings.HasPrefix(trimmed, "```") {
@@ -32,6 +33,7 @@ func stripMarkdownJSONWrapper(s string) string {
 	}
 
 	// Find end of first line (```json or ```)
+	// 找到第一行的结束位置（```json 或 ```）
 	before, after, ok := strings.Cut(trimmed, "\n")
 	if !ok {
 		return s
@@ -58,6 +60,7 @@ func stripMarkdownJSONWrapper(s string) string {
 }
 
 // TemplateWorkflowInput carries data required to execute a compiled template.
+// TemplateWorkflowInput 携带执行已编译模板所需的数据。
 type TemplateWorkflowInput struct {
 	Task         TaskInput
 	TemplateKey  string
@@ -65,6 +68,7 @@ type TemplateWorkflowInput struct {
 }
 
 // TemplateWorkflow executes a pre-defined template plan deterministically.
+// TemplateWorkflow 以确定性方式执行预定义的模板计划。
 func TemplateWorkflow(ctx workflow.Context, input TemplateWorkflowInput) (TaskResult, error) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting TemplateWorkflow",
@@ -73,12 +77,14 @@ func TemplateWorkflow(ctx workflow.Context, input TemplateWorkflowInput) (TaskRe
 	)
 
 	// Determine workflow ID for event streaming
+	// 确定用于 event 流的 workflow ID
 	workflowID := input.Task.ParentWorkflowID
 	if workflowID == "" {
 		workflowID = workflow.GetInfo(ctx).WorkflowExecution.ID
 	}
 
 	// Initialize control signal handler for pause/resume/cancel
+	// 初始化用于暂停/恢复/取消的控制 signal handler
 	emitCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Second,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
@@ -139,6 +145,7 @@ func TemplateWorkflow(ctx workflow.Context, input TemplateWorkflowInput) (TaskRe
 	}
 
 	// Check pause/cancel before execution
+	// 执行前检查暂停/取消
 	if err := controlHandler.CheckPausePoint(ctx, "pre_execution"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
@@ -163,11 +170,13 @@ func TemplateWorkflow(ctx workflow.Context, input TemplateWorkflowInput) (TaskRe
 	resultMetadata := runtime.summaryMetadata()
 
 	// Aggregate agent metadata (model, provider, tokens, cost) from template node executions
+	// 汇总各模板节点执行产生的 agent 元数据（model、provider、token、cost）
 	if len(runtime.AgentResults) > 0 {
 		agentMeta := metadata.AggregateAgentMetadata(runtime.AgentResults, 0)
 		maps.Copy(resultMetadata, agentMeta)
 
 		// Compute cost estimate if tokens available
+		// 有 token 数据时估算成本
 		if runtime.TotalTokens > 0 {
 			model := ""
 			if m, ok := resultMetadata["model"].(string); ok && m != "" {
@@ -184,12 +193,15 @@ func TemplateWorkflow(ctx workflow.Context, input TemplateWorkflowInput) (TaskRe
 	}
 
 	// Check pause/cancel before completion
+	// 完成前检查暂停/取消
 	if err := controlHandler.CheckPausePoint(ctx, "pre_completion"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
 
 	// Emit final clean LLM_OUTPUT for OpenAI-compatible streaming.
+	// 发送最终干净的 LLM_OUTPUT，供 OpenAI 兼容的流式输出使用。
 	// Agent ID "final_output" signals the streamer to always show this content.
+	// Agent ID "final_output" 提示 streamer 始终展示这段内容。
 	if finalResult != "" {
 		_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: workflowID,
@@ -204,6 +216,7 @@ func TemplateWorkflow(ctx workflow.Context, input TemplateWorkflowInput) (TaskRe
 	}
 
 	// Emit WORKFLOW_COMPLETED before returning
+	// 返回前发送 WORKFLOW_COMPLETED
 	_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 		WorkflowID: workflowID,
 		EventType:  activities.StreamEventWorkflowCompleted,
@@ -221,6 +234,7 @@ func TemplateWorkflow(ctx workflow.Context, input TemplateWorkflowInput) (TaskRe
 }
 
 // TemplateNodeResult captures per-node execution details.
+// TemplateNodeResult 记录每个节点的执行细节。
 type TemplateNodeResult struct {
 	Result   string
 	Success  bool
@@ -425,6 +439,7 @@ func expandParallelByTasks(nodeContext map[string]any, metadata map[string]any, 
 	}
 
 	// Get the array from context
+	// 从 context 中取出数组
 	rawItems := nodeContext[parallelBy]
 	if rawItems == nil {
 		return nil
@@ -449,6 +464,7 @@ func expandParallelByTasks(nodeContext map[string]any, metadata map[string]any, 
 	}
 
 	// Get prompt template from metadata
+	// 从 metadata 中取出 prompt 模板
 	promptTemplate := stringValue(metadata["prompt_template"])
 	if promptTemplate == "" {
 		promptTemplate = "Process {item}"
@@ -461,7 +477,7 @@ func expandParallelByTasks(nodeContext map[string]any, metadata map[string]any, 
 	relevantKeys := make([]string, 0, len(keys))
 	for _, key := range keys {
 		if key == "template_results" {
-			continue // Skip to avoid non-determinism on replay
+			continue // Skip to avoid non-determinism on replay 注：跳过以避免 replay 时的非确定性
 		}
 		placeholder := fmt.Sprintf("{%s}", key)
 		if strings.Contains(promptTemplate, placeholder) {
@@ -472,6 +488,7 @@ func expandParallelByTasks(nodeContext map[string]any, metadata map[string]any, 
 	tasks := make([]execution.HybridTask, 0, len(items))
 	for i, item := range items {
 		// Build replacements only for placeholders that exist
+		// 只为实际存在的占位符构造替换值
 		replacements := make([]string, 0, 4+2*len(relevantKeys))
 		replacements = append(replacements, "{ticker}", item, "{item}", item)
 		for _, key := range relevantKeys {
@@ -480,6 +497,7 @@ func expandParallelByTasks(nodeContext map[string]any, metadata map[string]any, 
 		description := strings.NewReplacer(replacements...).Replace(promptTemplate)
 
 		// Include index to prevent ID collisions from duplicates or sanitization
+		// 带上索引，避免重复项或清洗后产生 ID 冲突
 		tasks = append(tasks, execution.HybridTask{
 			ID:          fmt.Sprintf("%s_%d_%s", parallelBy, i, sanitizeID(item)),
 			Description: description,
@@ -498,6 +516,7 @@ func executeDAGTemplateNode(ctx workflow.Context, rt *templateRuntime, node temp
 	}
 
 	// Check for parallel_by expansion (e.g., parallel_by: "tickers" expands context["tickers"] into tasks)
+	// 检查 parallel_by 展开（例如 parallel_by: "tickers" 会把 context["tickers"] 展开成多个 task）
 	if len(tasks) == 0 {
 		if parallelBy := stringValue(node.Metadata["parallel_by"]); parallelBy != "" {
 			tasks = expandParallelByTasks(nodeContext, node.Metadata, parallelBy)
@@ -665,6 +684,7 @@ func determineNodeQuery(defaultQuery string, metadata map[string]any, nodeOutput
 
 	if metadata != nil {
 		// Check prompt_template first, then query
+		// 先看 prompt_template，再看 query
 		if v, ok := metadata["prompt_template"].(string); ok {
 			if trimmed := strings.TrimSpace(v); trimmed != "" {
 				query = trimmed
@@ -846,6 +866,7 @@ func preferValue(primary, fallback any) any {
 }
 
 // idSanitizer replaces non-alphanumeric characters (except underscore/hyphen) with underscore
+// idSanitizer 把非字母数字字符（下划线与连字符除外）替换为下划线
 var idSanitizer = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
 
 func sanitizeID(s string) string {
@@ -989,6 +1010,7 @@ func summariseHybridResult(rt *templateRuntime, node templates.ExecutableNode, r
 
 func updateTemplateSession(ctx workflow.Context, task TaskInput, plan *templates.ExecutablePlan, result string, tokens int, agentResults []activities.AgentExecutionResult) error {
 	// Create activity context with proper timeout
+	// 创建带合适超时的 activity context
 	activityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -1023,6 +1045,7 @@ func updateTemplateSession(ctx workflow.Context, task TaskInput, plan *templates
 
 func recordTemplateToVectorStore(ctx workflow.Context, task TaskInput, plan *templates.ExecutablePlan, answer string) {
 	// Await result to prevent race condition
+	// 等待结果，避免竞态
 	activityOpts := workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
 		RetryPolicy: &temporal.RetryPolicy{

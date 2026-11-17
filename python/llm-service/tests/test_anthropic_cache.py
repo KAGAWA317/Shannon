@@ -702,8 +702,7 @@ class TestPrevRollingPreservation:
         session 的第一轮：只有 [-2] 获得滚动标记，没有需要保留的 prev。
         """
         from llm_provider import anthropic_provider as ap
-        ap._prev_rolling.clear()  # isolate test
-        # 隔离测试
+        ap._prev_rolling.clear()  # isolate test 注：隔离测试
         provider = self._make_provider()
         messages = [
             {"role": "user", "content": "first"},
@@ -1120,6 +1119,7 @@ class TestToolReferencePreserved:
         ]
         _, claude_msgs = provider._convert_messages_to_claude_format(messages)
         # Find the tool_result block
+        # 找到 tool_result 块
         found = None
         for m in claude_msgs:
             if m["role"] != "user" or not isinstance(m["content"], list):

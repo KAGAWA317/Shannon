@@ -24,17 +24,19 @@ type rateLimitEntry struct {
 }
 
 // AuthHandler handles authentication-related HTTP requests
+// AuthHandler 处理与认证相关的 HTTP request
 type AuthHandler struct {
 	authService     *auth.Service
 	oauthVerifier   *auth.GoogleOAuthVerifier
 	db              *sqlx.DB
 	logger          *zap.Logger
 	rateLimitConfig *middleware.RateLimitConfig
-	rateLimiter     map[string]*rateLimitEntry // IP -> request timestamps (sliding window)
+	rateLimiter     map[string]*rateLimitEntry // IP -> request timestamps (sliding window) 注：IP -> request 时间戳（滑动窗口）
 	rateLimiterLock sync.RWMutex
 }
 
 // NewAuthHandler creates a new auth handler
+// NewAuthHandler 创建新的 auth handler
 func NewAuthHandler(authService *auth.Service, oauthVerifier *auth.GoogleOAuthVerifier, db *sqlx.DB, logger *zap.Logger, rateLimitConfig *middleware.RateLimitConfig) *AuthHandler {
 	h := &AuthHandler{
 		authService:     authService,
@@ -59,6 +61,7 @@ func (h *AuthHandler) cleanupRateLimiter() {
 		now := time.Now()
 		for ip, entry := range h.rateLimiter {
 			// Remove entries with no recent requests
+			// 移除近期无 request 的记录
 			if len(entry.requests) == 0 || now.Sub(entry.requests[len(entry.requests)-1]) > 5*time.Minute {
 				delete(h.rateLimiter, ip)
 			}
@@ -68,28 +71,31 @@ func (h *AuthHandler) cleanupRateLimiter() {
 }
 
 // RegisterRequest represents the OAuth registration request
+// RegisterRequest 表示 OAuth 注册 request
 type RegisterRequest struct {
-	Provider    string `json:"provider"`     // "google"
-	Token       string `json:"token"`        // ID token (web flow)
-	Code        string `json:"code"`         // Auth code (desktop flow)
-	RedirectURI string `json:"redirect_uri"` // Required for code exchange
+	Provider    string `json:"provider"`     // "google" 注：provider 字段取值
+	Token       string `json:"token"`        // ID token (web flow) 注：ID token（web 流程）
+	Code        string `json:"code"`         // Auth code (desktop flow) 注：auth code（桌面端流程）
+	RedirectURI string `json:"redirect_uri"` // Required for code exchange 注：code 换取 token 时必填
 }
 
 // RegisterResponse represents the successful registration/login response
+// RegisterResponse 表示注册/登录成功的 response
 type RegisterResponse struct {
 	UserID       string         `json:"user_id"`
 	TenantID     string         `json:"tenant_id"`
-	AccessToken  string         `json:"access_token"`  // JWT for web session
-	RefreshToken string         `json:"refresh_token"` // For token refresh
-	ExpiresIn    int            `json:"expires_in"`    // Access token expiry in seconds
-	APIKey       string         `json:"api_key"`       // Only for NEW registrations (empty for existing users)
+	AccessToken  string         `json:"access_token"`  // JWT for web session 注：web session 使用的 JWT
+	RefreshToken string         `json:"refresh_token"` // For token refresh 注：用于刷新 token
+	ExpiresIn    int            `json:"expires_in"`    // Access token expiry in seconds 注：access token 过期时间（秒）
+	APIKey       string         `json:"api_key"`       // Only for NEW registrations (empty for existing users) 注：仅新注册时返回（老用户为空）
 	Tier         string         `json:"tier"`
-	IsNewUser    bool           `json:"is_new_user"` // True if user was just created
+	IsNewUser    bool           `json:"is_new_user"` // True if user was just created 注：用户为刚创建时置 true
 	Quotas       map[string]any `json:"quotas"`
 	User         UserInfo       `json:"user"`
 }
 
 // UserInfo represents user profile information
+// UserInfo 表示用户资料信息
 type UserInfo struct {
 	Email    string  `json:"email"`
 	Username string  `json:"username"`
@@ -98,6 +104,7 @@ type UserInfo struct {
 }
 
 // MeResponse represents the /auth/me response
+// MeResponse 表示 /auth/me 的 response
 type MeResponse struct {
 	UserID     string         `json:"user_id"`
 	TenantID   string         `json:"tenant_id"`
@@ -111,11 +118,13 @@ type MeResponse struct {
 }
 
 // RefreshRequest represents the token refresh request
+// RefreshRequest 表示 token 刷新 request
 type RefreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
 // RefreshResponse represents the token refresh response
+// RefreshResponse 表示 token 刷新 response
 type RefreshResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
@@ -123,16 +132,18 @@ type RefreshResponse struct {
 }
 
 // RefreshKeyResponse represents the API key refresh response
+// RefreshKeyResponse 表示 API key 刷新 response
 type RefreshKeyResponse struct {
 	APIKey             string `json:"api_key"`
 	PreviousKeyRevoked bool   `json:"previous_key_revoked"`
 }
 
 // APIKeyInfo represents an API key's metadata (not the full key for security)
+// APIKeyInfo 表示 API key 的元数据（出于安全不含完整 key）
 type APIKeyInfo struct {
 	ID          string  `json:"id"`
 	Name        string  `json:"name"`
-	KeyPrefix   string  `json:"key_prefix"` // First 8 chars for identification
+	KeyPrefix   string  `json:"key_prefix"` // First 8 chars for identification 注：前 8 个字符，用于识别
 	Description *string `json:"description,omitempty"`
 	CreatedAt   string  `json:"created_at"`
 	LastUsedAt  *string `json:"last_used_at,omitempty"`
@@ -140,34 +151,39 @@ type APIKeyInfo struct {
 }
 
 // ListAPIKeysResponse represents the list of API keys
+// ListAPIKeysResponse 表示 API key 列表
 type ListAPIKeysResponse struct {
 	Keys  []APIKeyInfo `json:"keys"`
 	Total int          `json:"total"`
 }
 
 // CreateAPIKeyRequest represents the request to create a new API key
+// CreateAPIKeyRequest 表示创建新 API key 的 request
 type CreateAPIKeyRequest struct {
 	Name        string  `json:"name"`
 	Description *string `json:"description,omitempty"`
 }
 
 // CreateAPIKeyResponse represents the response after creating an API key
+// CreateAPIKeyResponse 表示创建 API key 之后的 response
 type CreateAPIKeyResponse struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
-	APIKey    string `json:"api_key"` // Full key - only returned once!
+	APIKey    string `json:"api_key"` // Full key - only returned once! 注：完整 key——仅返回一次！
 	KeyPrefix string `json:"key_prefix"`
 	CreatedAt string `json:"created_at"`
-	Warning   string `json:"warning"` // Remind user to save the key
+	Warning   string `json:"warning"` // Remind user to save the key 注：提醒用户保存该 key
 }
 
 // ErrorResponse represents an error response
+// ErrorResponse 表示错误 response
 type ErrorResponse struct {
 	Error   string `json:"error"`
 	Message string `json:"message,omitempty"`
 }
 
 // Register handles POST /api/v1/auth/register
+// Register 处理 POST /api/v1/auth/register
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -185,20 +201,24 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate provider
+	// 校验 provider
 	if req.Provider != "google" {
 		h.sendError(w, http.StatusBadRequest, "unsupported_provider", "Only 'google' provider is supported")
 		return
 	}
 
 	// Verify OAuth token and get user info
+	// 校验 OAuth token 并获取用户信息
 	var googleUser *auth.GoogleUser
 	var err error
 
 	if req.Token != "" {
 		// Web flow: ID token provided
+		// Web 流程：提供了 ID token
 		googleUser, err = h.oauthVerifier.VerifyIDToken(ctx, req.Token)
 	} else if req.Code != "" && req.RedirectURI != "" {
 		// Desktop flow: Auth code provided
+		// 桌面端流程：提供了 auth code
 		googleUser, err = h.oauthVerifier.ExchangeAuthCode(ctx, req.Code, req.RedirectURI)
 	} else {
 		h.sendError(w, http.StatusBadRequest, "invalid_request", "Either 'token' (web) or 'code'+'redirect_uri' (desktop) must be provided")
@@ -228,6 +248,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get tenant info for quotas
+	// 获取 tenant 信息以计算配额
 	var tenant auth.Tenant
 	err = h.db.GetContext(ctx, &tenant,
 		"SELECT * FROM auth.tenants WHERE id = $1", result.User.TenantID)
@@ -240,6 +261,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build response with JWT tokens
+	// 用 JWT token 构建 response
 	rpm, rph := h.rateLimitsForPlan(tenant.Plan)
 	resp := RegisterResponse{
 		UserID:       result.User.ID.String(),
@@ -247,7 +269,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		AccessToken:  result.Tokens.AccessToken,
 		RefreshToken: result.Tokens.RefreshToken,
 		ExpiresIn:    result.Tokens.ExpiresIn,
-		APIKey:       result.APIKey, // Only set for new users
+		APIKey:       result.APIKey, // Only set for new users 注：仅对新用户设置
 		Tier:         tenant.Plan,
 		IsNewUser:    result.IsNewUser,
 		Quotas: map[string]any{
@@ -275,6 +297,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 // Refresh handles POST /api/v1/auth/refresh
+// Refresh 处理 POST /api/v1/auth/refresh
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -313,10 +336,12 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 }
 
 // Me handles GET /api/v1/auth/me
+// Me 处理 GET /api/v1/auth/me
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Extract user context from auth middleware
+	// 从 auth 中间件中取出用户上下文
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
@@ -324,6 +349,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get full user info
+	// 获取完整的用户信息
 	var user auth.User
 	err := h.db.GetContext(ctx, &user,
 		"SELECT * FROM auth.users WHERE id = $1", userCtx.UserID)
@@ -334,6 +360,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get tenant info
+	// 获取 tenant 信息
 	var tenant auth.Tenant
 	err = h.db.GetContext(ctx, &tenant,
 		"SELECT * FROM auth.tenants WHERE id = $1", user.TenantID)
@@ -344,6 +371,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build response
+	// 构建 response
 	rpm, rph := h.rateLimitsForPlan(tenant.Plan)
 
 	resp := MeResponse{
@@ -363,7 +391,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		RateLimits: map[string]any{
 			"minute": map[string]any{
 				"limit":     rpm,
-				"remaining": rpm, // TODO: Get actual values from Redis
+				"remaining": rpm, // TODO: Get actual values from Redis 注：TODO: 从 Redis 获取实际值
 			},
 			"hour": map[string]any{
 				"limit":     rph,
@@ -377,10 +405,12 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 }
 
 // RefreshKey handles POST /api/v1/auth/refresh-key
+// RefreshKey 处理 POST /api/v1/auth/refresh-key
 func (h *AuthHandler) RefreshKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Extract user context from auth middleware
+	// 从 auth 中间件中取出用户上下文
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
@@ -393,6 +423,7 @@ func (h *AuthHandler) RefreshKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Revoke old API key
+	// 吊销旧的 API key
 	previousKeyRevoked := false
 	result, err := h.db.ExecContext(ctx,
 		"UPDATE auth.api_keys SET is_active = false WHERE id = $1 AND is_active = true",
@@ -406,6 +437,7 @@ func (h *AuthHandler) RefreshKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create new API key
+	// 创建新的 API key
 	newAPIKey, _, err := h.authService.CreateAPIKey(ctx, userCtx.UserID, &auth.CreateAPIKeyRequest{
 		Name:        "Refreshed API Key",
 		Description: fmt.Sprintf("Regenerated on %s", time.Now().Format("2006-01-02 15:04:05")),
@@ -430,10 +462,12 @@ func (h *AuthHandler) RefreshKey(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListAPIKeys handles GET /api/v1/auth/api-keys
+// ListAPIKeys 处理 GET /api/v1/auth/api-keys
 func (h *AuthHandler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Extract user context from auth middleware
+	// 从 auth 中间件中取出用户上下文
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
@@ -441,6 +475,7 @@ func (h *AuthHandler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Query API keys for this user (only metadata, not the hashed key)
+	// 查询该用户的 API key（仅元数据，不含已 hash 的 key）
 	type apiKeyRow struct {
 		ID          uuid.UUID  `db:"id"`
 		Name        string     `db:"name"`
@@ -465,6 +500,7 @@ func (h *AuthHandler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Convert to response format
+	// 转换为 response 格式
 	keyInfos := make([]APIKeyInfo, len(keys))
 	for i, k := range keys {
 		keyInfos[i] = APIKeyInfo{
@@ -491,10 +527,12 @@ func (h *AuthHandler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateKey handles POST /api/v1/auth/api-keys
+// CreateKey 处理 POST /api/v1/auth/api-keys
 func (h *AuthHandler) CreateKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Extract user context from auth middleware
+	// 从 auth 中间件中取出用户上下文
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
@@ -508,6 +546,7 @@ func (h *AuthHandler) CreateKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate name
+	// 校验 name
 	if req.Name == "" {
 		h.sendError(w, http.StatusBadRequest, "invalid_request", "Name is required")
 		return
@@ -518,6 +557,7 @@ func (h *AuthHandler) CreateKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create the API key
+	// 创建 API key
 	var desc string
 	if req.Description != nil {
 		desc = *req.Description
@@ -552,10 +592,12 @@ func (h *AuthHandler) CreateKey(w http.ResponseWriter, r *http.Request) {
 }
 
 // RevokeKey handles DELETE /api/v1/auth/api-keys/{id}
+// RevokeKey 处理 DELETE /api/v1/auth/api-keys/{id}
 func (h *AuthHandler) RevokeKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Extract user context from auth middleware
+	// 从 auth 中间件中取出用户上下文
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
@@ -575,6 +617,7 @@ func (h *AuthHandler) RevokeKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify the key belongs to this user and deactivate it
+	// 校验该 key 属于此用户并将其停用
 	result, err := h.db.ExecContext(ctx, `
 		UPDATE auth.api_keys
 		SET is_active = false
@@ -604,6 +647,7 @@ func (h *AuthHandler) RevokeKey(w http.ResponseWriter, r *http.Request) {
 }
 
 // Helper functions
+// 辅助函数
 
 func (h *AuthHandler) sendError(w http.ResponseWriter, statusCode int, errorCode, message string) {
 	w.Header().Set("Content-Type", "application/json")
@@ -623,6 +667,7 @@ func (h *AuthHandler) sendError(w http.ResponseWriter, statusCode int, errorCode
 // ALB 会把真实 IP 追加到最右端，因此最右侧的 IP 可信，可防止客户端伪造 X-Forwarded-For。
 func getClientIP(r *http.Request) string {
 	// Check X-Forwarded-For header (set by ALB/proxies)
+	// 检查 X-Forwarded-For 头（由 ALB/代理设置）
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		// Take the rightmost non-empty IP (added by ALB, not spoofable)
 		// 取最右侧的非空 IP（由 ALB 追加，不可伪造）。
@@ -639,7 +684,7 @@ func getClientIP(r *http.Request) string {
 	// 回退到 RemoteAddr——net.SplitHostPort 能正确处理 IPv6 的 [::1]:port。
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr // already bare IP or unparseable, return as-is
+		return r.RemoteAddr // already bare IP or unparseable, return as-is 注：已是裸 IP 或无法解析，原样返回
 	}
 	return host
 }
@@ -660,16 +705,19 @@ func (h *AuthHandler) checkRateLimit(ip string, maxRequests int) bool {
 	}
 
 	// Remove requests outside the window
+	// 移除窗口之外的 request
 	entry.requests = slices.DeleteFunc(entry.requests, func(t time.Time) bool {
 		return !t.After(windowStart)
 	})
 
 	// Check if limit exceeded
+	// 检查是否超过限制
 	if len(entry.requests) >= maxRequests {
 		return false
 	}
 
 	// Add current request
+	// 记录当前 request
 	entry.requests = append(entry.requests, now)
 	return true
 }
@@ -683,6 +731,7 @@ func (h *AuthHandler) rateLimitsForPlan(plan string) (int, int) {
 		}
 	}
 	// Fallback: free tier defaults
+	// 兜底：free tier 的默认值
 	return 60, 1000
 }
 

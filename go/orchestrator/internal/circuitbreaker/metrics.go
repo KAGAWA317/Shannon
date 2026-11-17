@@ -52,12 +52,14 @@ var (
 )
 
 // MetricsCollector collects and exports circuit breaker metrics
+// MetricsCollector 采集并导出 circuit breaker 指标
 type MetricsCollector struct {
 	breakers map[string]*CircuitBreaker
 	mutex    sync.RWMutex
 }
 
 // NewMetricsCollector creates a new metrics collector
+// NewMetricsCollector 创建一个新的指标采集器
 func NewMetricsCollector() *MetricsCollector {
 	return &MetricsCollector{
 		breakers: make(map[string]*CircuitBreaker),
@@ -65,6 +67,7 @@ func NewMetricsCollector() *MetricsCollector {
 }
 
 // RegisterCircuitBreaker registers a circuit breaker for metrics collection
+// RegisterCircuitBreaker 注册一个 circuit breaker 以采集其指标
 func (mc *MetricsCollector) RegisterCircuitBreaker(name, service string, cb *CircuitBreaker) {
 	mc.mutex.Lock()
 	defer mc.mutex.Unlock()
@@ -73,18 +76,22 @@ func (mc *MetricsCollector) RegisterCircuitBreaker(name, service string, cb *Cir
 	mc.breakers[key] = cb
 
 	// Set up state change callback
+	// 设置状态变更回调
 	originalCallback := cb.config.OnStateChange
 	cb.config.OnStateChange = func(cbName string, from State, to State) {
 		// Call original callback if exists
+		// 存在原回调时先调用它
 		if originalCallback != nil {
 			originalCallback(cbName, from, to)
 		}
 
 		// Record metrics
+		// 记录指标
 		circuitBreakerStateChanges.WithLabelValues(name, service, from.String(), to.String()).Inc()
 		circuitBreakerState.WithLabelValues(name, service).Set(float64(to))
 
 		// Track open time
+		// 跟踪进入 open 的时间
 		if to == StateOpen {
 			circuitBreakerOpenSince.WithLabelValues(name, service).SetToCurrentTime()
 		} else if from == StateOpen {
@@ -94,6 +101,7 @@ func (mc *MetricsCollector) RegisterCircuitBreaker(name, service string, cb *Cir
 }
 
 // RecordRequest records a request attempt
+// RecordRequest 记录一次 request 尝试
 func (mc *MetricsCollector) RecordRequest(name, service string, state State, success bool) {
 	result := "success"
 	if !success {
@@ -105,6 +113,7 @@ func (mc *MetricsCollector) RecordRequest(name, service string, state State, suc
 }
 
 // UpdateMetrics updates all circuit breaker metrics
+// UpdateMetrics 刷新所有 circuit breaker 指标
 func (mc *MetricsCollector) UpdateMetrics() {
 	mc.mutex.RLock()
 	defer mc.mutex.RUnlock()
@@ -125,9 +134,11 @@ func (mc *MetricsCollector) UpdateMetrics() {
 }
 
 // Global metrics collector instance
+// 全局指标采集器实例
 var GlobalMetricsCollector = NewMetricsCollector()
 
 // StartMetricsCollection starts background metrics collection
+// StartMetricsCollection 启动后台指标采集
 func StartMetricsCollection() {
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)

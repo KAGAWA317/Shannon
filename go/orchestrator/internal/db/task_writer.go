@@ -89,7 +89,7 @@ func (c *Client) SaveTaskExecution(ctx context.Context, task *TaskExecution) err
 	} else {
 		tenantID = nil
 	}
-	sessionID := task.SessionID // VARCHAR in task_executions
+	sessionID := task.SessionID // VARCHAR in task_executions 注：task_executions 中的 VARCHAR 列
 
 	// Deep copy metadata via JSON round-trip to avoid "concurrent map iteration and map write" panic
 	// The original task.Metadata may be modified by other goroutines
@@ -260,6 +260,7 @@ func (c *Client) BatchSaveTaskExecutions(ctx context.Context, tasks []*TaskExecu
 			}
 
 			// Prepare args for task_executions
+			// 为 task_executions 准备参数
 			var userID any
 			if task.UserID != nil {
 				userID = task.UserID
@@ -319,6 +320,7 @@ func (c *Client) BatchSaveTaskExecutions(ctx context.Context, tasks []*TaskExecu
 }
 
 // SaveAgentExecution saves an agent execution record
+// SaveAgentExecution 保存一条 agent 执行记录
 func (c *Client) SaveAgentExecution(ctx context.Context, agent *AgentExecution) error {
 	if agent.ID == "" {
 		agent.ID = uuid.New().String()
@@ -357,6 +359,7 @@ func (c *Client) SaveAgentExecution(ctx context.Context, agent *AgentExecution) 
 }
 
 // BatchSaveAgentExecutions saves multiple agent executions
+// BatchSaveAgentExecutions 批量保存多条 agent 执行记录
 func (c *Client) BatchSaveAgentExecutions(ctx context.Context, agents []*AgentExecution) error {
 	if len(agents) == 0 {
 		return nil
@@ -412,6 +415,7 @@ func (c *Client) BatchSaveAgentExecutions(ctx context.Context, agents []*AgentEx
 }
 
 // SaveToolExecution saves a tool execution record
+// SaveToolExecution 保存一条 tool 执行记录
 func (c *Client) SaveToolExecution(ctx context.Context, tool *ToolExecution) error {
 	if tool.ID == "" {
 		tool.ID = uuid.New().String()
@@ -449,6 +453,7 @@ func (c *Client) SaveToolExecution(ctx context.Context, tool *ToolExecution) err
 }
 
 // BatchSaveToolExecutions saves multiple tool executions
+// BatchSaveToolExecutions 批量保存多条 tool 执行记录
 func (c *Client) BatchSaveToolExecutions(ctx context.Context, tools []*ToolExecution) error {
 	if len(tools) == 0 {
 		return nil
@@ -502,6 +507,7 @@ func (c *Client) BatchSaveToolExecutions(ctx context.Context, tools []*ToolExecu
 // sessionContext 为 nil 时使用最小的默认 context
 func (c *Client) CreateSession(ctx context.Context, sessionID string, userID string, tenantID string, sessionContext map[string]any) error {
 	// Parse tenant ID once for reuse
+	// tenant ID 只解析一次以便复用
 	var tid *uuid.UUID
 	if tenantID != "" {
 		if parsed, err := uuid.Parse(tenantID); err == nil {
@@ -595,6 +601,7 @@ func (c *Client) CreateSession(ctx context.Context, sessionID string, userID str
 }
 
 // SaveSessionArchive saves a session snapshot
+// SaveSessionArchive 保存 session 快照
 func (c *Client) SaveSessionArchive(ctx context.Context, archive *SessionArchive) error {
 	if archive.ID == uuid.Nil {
 		archive.ID = uuid.New()
@@ -626,6 +633,7 @@ func (c *Client) SaveSessionArchive(ctx context.Context, archive *SessionArchive
 }
 
 // SaveAuditLog saves an audit log entry
+// SaveAuditLog 保存一条审计日志
 func (c *Client) SaveAuditLog(ctx context.Context, audit *AuditLog) error {
 	if audit.ID == uuid.Nil {
 		audit.ID = uuid.New()

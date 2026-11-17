@@ -15,10 +15,12 @@ import (
 )
 
 // ScheduledTaskWorkflow wraps existing workflows for scheduled execution
+// ScheduledTaskWorkflow 为定时执行包装已有的 workflow
 func ScheduledTaskWorkflow(ctx workflow.Context, input schedules.ScheduledTaskInput) error {
 	logger := workflow.GetLogger(ctx)
 
 	// Validate and parse UUIDs
+	// 校验并解析 UUID
 	scheduleID, err := uuid.Parse(input.ScheduleID)
 	if err != nil {
 		return fmt.Errorf("invalid schedule_id: %w", err)
@@ -38,19 +40,22 @@ func ScheduledTaskWorkflow(ctx workflow.Context, input schedules.ScheduledTaskIn
 	)
 
 	// Activity context for recording
+	// 用于记录执行结果的 activity context
 	activityCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
 	})
 
 	// Generate unique child workflow ID - this is the task_id for unified tracking
+	// 生成唯一的子 workflow ID —— 这也是用于统一追踪的 task_id
 	parentWorkflowID := workflow.GetInfo(ctx).WorkflowExecution.ID
 	childWorkflowID := fmt.Sprintf("%s-exec", parentWorkflowID)
 
 	// 1. Record execution start with task_executions persistence
+	// 1. 记录执行开始，并持久化到 task_executions
 	err = workflow.ExecuteActivity(activityCtx, "RecordScheduleExecutionStart",
 		activities.RecordScheduleExecutionInput{
 			ScheduleID: scheduleID,
-			TaskID:     childWorkflowID, // Use child workflow ID for task_executions
+			TaskID:     childWorkflowID, // Use child workflow ID for task_executions 注：使用子 workflow ID 作为 task_executions 的 task_id
 			Query:      input.TaskQuery,
 			UserID:     input.UserID,
 			TenantID:   input.TenantID,
@@ -59,6 +64,7 @@ func ScheduledTaskWorkflow(ctx workflow.Context, input schedules.ScheduledTaskIn
 	if err != nil {
 		logger.Error("Failed to record execution start", "error", err)
 		// Continue anyway - don't block execution
+		// 仍然继续 —— 不阻塞执行
 	}
 
 	// 1b. Daemon dispatch path — if execution_target is "daemon", dispatch to
@@ -75,6 +81,7 @@ func ScheduledTaskWorkflow(ctx workflow.Context, input schedules.ScheduledTaskIn
 	}
 
 	// 2. Prepare task input for existing workflow
+	// 2. 为已有 workflow 准备 task input
 	taskInput := workflows.TaskInput{
 		Query:    input.TaskQuery,
 		Context:  input.TaskContext,
@@ -83,6 +90,7 @@ func ScheduledTaskWorkflow(ctx workflow.Context, input schedules.ScheduledTaskIn
 	}
 
 	// Ensure context map exists for scheduled task metadata
+	// 确保 context map 存在，以便存放定时任务的 metadata
 	if taskInput.Context == nil {
 		taskInput.Context = make(map[string]any)
 	}
@@ -94,15 +102,17 @@ func ScheduledTaskWorkflow(ctx workflow.Context, input schedules.ScheduledTaskIn
 	taskInput.Context["schedule_id"] = input.ScheduleID
 
 	// Add budget to context if specified
+	// 若指定了预算，则写入 context
 	if input.MaxBudgetPerRunUSD > 0 {
 		taskInput.Context["max_budget_usd"] = input.MaxBudgetPerRunUSD
 	}
 
 	// 3. Execute main workflow (use orchestrator router to select appropriate workflow type)
+	// 3. 执行主 workflow（用 orchestrator router 选择合适的 workflow 类型）
 	childWorkflowOptions := workflow.ChildWorkflowOptions{
 		WorkflowID:          childWorkflowID,
 		TaskQueue:           "shannon-tasks",
-		WorkflowRunTimeout:  workflow.GetInfo(ctx).WorkflowRunTimeout, // Inherit timeout
+		WorkflowRunTimeout:  workflow.GetInfo(ctx).WorkflowRunTimeout, // Inherit timeout 注：继承 timeout
 		WorkflowTaskTimeout: 10 * time.Second,
 		Memo: map[string]any{
 			"schedule_id":  input.ScheduleID,
@@ -118,12 +128,14 @@ func ScheduledTaskWorkflow(ctx workflow.Context, input schedules.ScheduledTaskIn
 	err = workflow.ExecuteChildWorkflow(childCtx, workflows.OrchestratorWorkflow, taskInput).Get(ctx, &result)
 
 	// 4. Record execution result with task_executions persistence
+	// 4. 记录执行结果，并持久化到 task_executions
 	status := "COMPLETED"
 	errorMsg := ""
 	totalCost := 0.0
 	resultText := ""
 
 	// Metadata fields to extract from child workflow (Option A: unified model)
+	// 从子 workflow 提取的 metadata 字段（Option A：统一模型）
 	var modelUsed, provider string
 	var totalTokens, promptTokens, completionTokens int
 
@@ -140,8 +152,10 @@ func ScheduledTaskWorkflow(ctx workflow.Context, input schedules.ScheduledTaskIn
 		resultText = result.Result
 
 		// Extract all metadata from child workflow result for unified task_executions
+		// 从子 workflow 结果中提取全部 metadata，用于统一的 task_executions
 		if result.Metadata != nil {
 			// Cost: try total_cost_usd first, then cost_usd
+			// Cost：先取 total_cost_usd，再退回到 cost_usd
 			if cost, ok := result.Metadata["total_cost_usd"].(float64); ok {
 				totalCost = cost
 			}
@@ -150,6 +164,7 @@ func ScheduledTaskWorkflow(ctx workflow.Context, input schedules.ScheduledTaskIn
 			}
 
 			// Model: try model_used first, then model
+			// Model：先取 model_used，再退回到 model
 			if m, ok := result.Metadata["model_used"].(string); ok && m != "" {
 				modelUsed = m
 			} else if m, ok := result.Metadata["model"].(string); ok && m != "" {
@@ -157,11 +172,13 @@ func ScheduledTaskWorkflow(ctx workflow.Context, input schedules.ScheduledTaskIn
 			}
 
 			// Provider
+			// Provider（提供方）
 			if p, ok := result.Metadata["provider"].(string); ok {
 				provider = p
 			}
 
 			// Tokens: handle both int and float64 (JSON unmarshals numbers as float64)
+			// Tokens：同时兼容 int 与 float64（JSON 反序列化会把数字解析成 float64）
 			if t, ok := result.Metadata["total_tokens"].(int); ok {
 				totalTokens = t
 			} else if t, ok := result.Metadata["total_tokens"].(float64); ok {
@@ -219,6 +236,7 @@ func ScheduledTaskWorkflow(ctx workflow.Context, input schedules.ScheduledTaskIn
 	}
 
 	// 5. Return error if task failed (for Temporal's built-in retry/failure handling)
+	// 5. 任务失败时返回 error（交给 Temporal 内置的重试/失败处理）
 	if status == "FAILED" {
 		return fmt.Errorf("scheduled task failed: %s", errorMsg)
 	}
@@ -242,9 +260,11 @@ func executeDaemonPath(
 	wfInfo := workflow.GetInfo(ctx)
 
 	// Extract agent_name from task context if present.
+	// 如果存在，从 task context 中提取 agent_name。
 	agentName, _ := input.TaskContext["agent_name"].(string)
 
 	// Dispatch to daemon (fast activity, <1s).
+	// 派发给 daemon（快速 activity，<1s）。
 	dispatchInput := DaemonDispatchInput{
 		TenantID:      input.TenantID,
 		UserID:        input.UserID,
@@ -269,6 +289,7 @@ func executeDaemonPath(
 	}
 
 	// Wait for daemon reply via Temporal signal, with timeout.
+	// 通过 Temporal signal 等待 daemon 回复，并带 timeout。
 	signalCh := workflow.GetSignalChannel(ctx, SignalDaemonReply)
 
 	timerCtx, timerCancel := workflow.WithCancel(ctx)
@@ -301,6 +322,7 @@ func executeDaemonPath(
 	)
 
 	// Record successful daemon execution.
+	// 记录成功的 daemon 执行。
 	_ = workflow.ExecuteActivity(activityCtx, "RecordScheduleExecutionComplete",
 		activities.RecordScheduleExecutionCompleteInput{
 			ScheduleID: scheduleID,
@@ -315,6 +337,7 @@ func executeDaemonPath(
 }
 
 // recordDaemonFailure records a FAILED execution for the daemon path.
+// recordDaemonFailure 为 daemon 路径记录一次 FAILED 执行。
 func recordDaemonFailure(
 	ctx workflow.Context,
 	activityCtx workflow.Context,

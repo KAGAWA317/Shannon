@@ -34,8 +34,7 @@ from urllib.parse import urlparse
 
 from ..base import Tool, ToolMetadata, ToolParameter, ToolParameterType, ToolResult
 from ..openapi_parser import _is_private_ip
-from .web_fetch import detect_blocked_reason, clean_markdown_noise, apply_extraction, apply_research_truncation, EXTRACTION_INTERNAL_MAX  # P0-A: Reuse blocked detection and noise cleaning logic
-# P0-A：复用拦截检测与噪声清理逻辑
+from .web_fetch import detect_blocked_reason, clean_markdown_noise, apply_extraction, apply_research_truncation, EXTRACTION_INTERNAL_MAX  # P0-A: Reuse blocked detection and noise cleaning logic 注：P0-A：复用拦截检测与噪声清理逻辑
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +45,7 @@ logger = logging.getLogger(__name__)
 # MAX_LIMIT 是单次 web_subpage_fetch 调用可获取页面的上限。与
 # web_crawl 的 MAX_LIMIT 是平行对应关系——请保持两者一致。理由见 web_crawl.py。
 MAX_LIMIT = 100
-MAP_URL_LIMIT = 200  # Max URLs from map API
-# map API 返回的最大 URL 数
+MAP_URL_LIMIT = 200  # Max URLs from map API 注：map API 返回的最大 URL 数
 DEFAULT_LIMIT = 5
 DEFAULT_MAX_LENGTH = 10000
 BATCH_CONCURRENCY = int(os.getenv("WEB_FETCH_BATCH_CONCURRENCY", "3"))  
@@ -57,16 +55,11 @@ MAP_TIMEOUT = int(os.getenv("WEB_FETCH_MAP_TIMEOUT", "45"))
 # Retry configuration
 # retry 配置
 RETRY_CONFIG = {
-    408: {"max_retries": 3, "delays": [2, 4, 8]},      # Timeout: exponential backoff
-    # timeout：指数退避
-    429: {"max_retries": 2, "delays": [5, 10]},       # Rate limit: reduced retries
-    # rate limit：减少 retry 次数
-    500: {"max_retries": 2, "delays": [1, 2]},         # Server error: quick retry
-    # 服务端错误：快速 retry
-    502: {"max_retries": 2, "delays": [2, 4]},         # Bad gateway
-    # 网关错误
-    503: {"max_retries": 2, "delays": [3, 6]},         # Service unavailable
-    # 服务不可用
+    408: {"max_retries": 3, "delays": [2, 4, 8]},      # Timeout: exponential backoff 注：timeout：指数退避
+    429: {"max_retries": 2, "delays": [5, 10]},       # Rate limit: reduced retries 注：rate limit：减少 retry 次数
+    500: {"max_retries": 2, "delays": [1, 2]},         # Server error: quick retry 注：服务端错误：快速 retry
+    502: {"max_retries": 2, "delays": [2, 4]},         # Bad gateway 注：网关错误
+    503: {"max_retries": 2, "delays": [3, 6]},         # Service unavailable 注：服务不可用
 }
 
 # Base keywords for relevance scoring (always applied)
@@ -169,8 +162,7 @@ class WebSubpageFetchTool(Tool):
             memory_limit_mb=256,
             sandboxed=False,
             dangerous=False,
-            cost_per_use=0.005,  # Multiple pages
-            # 多个页面
+            cost_per_use=0.005,  # Multiple pages 注：多个页面
         )
 
     def _get_parameters(self) -> List[ToolParameter]:
@@ -249,8 +241,7 @@ class WebSubpageFetchTool(Tool):
             target_paths = []
         target_paths = [p for p in target_paths if isinstance(p, str)]
         max_length = kwargs.get("max_length", DEFAULT_MAX_LENGTH)
-        extract_prompt = kwargs.get("extract_prompt")  # Optional: targeted extraction query
-        # 可选：定向提取查询
+        extract_prompt = kwargs.get("extract_prompt")  # Optional: targeted extraction query 注：可选：定向提取查询
 
         # Skip ALL LLM extraction in research mode (issue #43): OODA loop does many
         # fast fetches; extraction adds ~40-60s latency per call and 40%+ of total cost.
@@ -565,6 +556,9 @@ class WebSubpageFetchTool(Tool):
         # Pattern 1: Common error page indicators
         # Note: Removed "coming soon" and "under construction" - too common in normal websites
         # (product announcements, feature previews, etc.) causing false positives
+        # 模式 1：常见的错误页特征
+        # 注意：已移除 "coming soon" 与 "under construction" —— 它们在正常网站里太常见
+        # （产品公告、功能预览等）会导致误报
         error_indicators = [
             ("whitelabel error", "spring/java error page"),
             ("404 not found", "404 error"),
@@ -580,11 +574,14 @@ class WebSubpageFetchTool(Tool):
         for pattern, reason in error_indicators:
             if pattern in content_lower:
                 # For short pages, any error indicator is enough
+                # 对短页面来说，任意一个错误特征就足够
                 if content_len < 3000:
                     return True, reason
                 # For longer pages, be more strict (might be docs about errors)
+                # 对较长页面则更严格（内容可能本身就是讲错误的文档）
 
         # Pattern 2: Very short content with error keywords
+        # 模式 2：内容极短且带错误关键词
         if content_len < 1000:
             error_keywords = ["error", "404", "not found", "forbidden", "unavailable"]
             if any(kw in content_lower for kw in error_keywords):
@@ -605,8 +602,13 @@ class WebSubpageFetchTool(Tool):
         Hybrid selection strategy:
         1. Keyword-matched URLs get priority (up to 60% of limit)
         2. Remaining quota filled by score-ranked URLs
+
+        混合筛选策略：
+        1. 关键词匹配的 URL 优先（最多占 limit 的 60%）
+        2. 剩余配额由按分数排序的 URL 填充
         """
         # Step 1: Map to get all URLs
+        # 步骤 1：调用 Map 获取所有 URL
         all_urls = await self._map(url)
         if not all_urls:
             raise Exception("Map API returned no URLs")
@@ -614,14 +616,15 @@ class WebSubpageFetchTool(Tool):
         logger.info(f"Map returned {len(all_urls)} URLs for {url}")
 
         # Step 1.5: Filter out technical/low-value URLs
+        # 步骤 1.5：过滤掉技术类/低价值 URL
         skip_patterns = [
             'sitemap.xml', 'sitemap-', 'robots.txt', 'feed.xml', 'rss.xml',
             '.xml', '.json', '.css', '.js', '.png', '.jpg', '.gif', '.svg',
             '/wp-admin/', '/wp-includes/', '/wp-content/uploads/',
             '/cart', '/checkout', '/login', '/register', '/search',
             '/tag/', '/category/', '/page/', '/attachment/',
-            '/thank-you', '/thanks', '/thankyou',  # Thank you pages
-            '/unsubscribe', '/confirm', '/subscribe',  # Action confirmation pages
+            '/thank-you', '/thanks', '/thankyou',  # Thank you pages 注：感谢页面
+            '/unsubscribe', '/confirm', '/subscribe',  # Action confirmation pages 注：操作确认页面
         ]
         filtered_urls = []
         skipped_count = 0
@@ -637,6 +640,7 @@ class WebSubpageFetchTool(Tool):
         all_urls = filtered_urls
 
         # Step 1.6: Expand keywords and normalize target paths for matching
+        # 步骤 1.6：扩展关键词并规范化目标路径，便于匹配
         expanded_keywords = self._expand_keywords(target_keywords) if target_keywords else set()
         if expanded_keywords:
             logger.info(f"target_keywords: '{target_keywords}' -> expanded to {len(expanded_keywords)} terms: {list(expanded_keywords)[:10]}...")
@@ -646,9 +650,10 @@ class WebSubpageFetchTool(Tool):
             logger.info(f"target_paths normalized: {normalized_target_paths}")
 
         # Step 2: Hybrid selection - separate path matches, keyword matches, and others
-        path_matched = []     # URLs matching explicit target paths
-        keyword_matched = []  # URLs directly matching keywords
-        other_urls = []       # All other URLs
+        # 步骤 2：混合筛选——区分路径匹配、关键词匹配与其他
+        path_matched = []     # URLs matching explicit target paths 注：匹配显式目标路径的 URL
+        keyword_matched = []  # URLs directly matching keywords 注：直接匹配关键词的 URL
+        other_urls = []       # All other URLs 注：其余所有 URL
 
         for u in all_urls:
             path_lower = urlparse(u).path.lower().rstrip("/")
@@ -673,11 +678,13 @@ class WebSubpageFetchTool(Tool):
                 other_urls.append((u, score))
 
         # Sort groups by score
+        # 按分数对各分组排序
         path_matched.sort(key=lambda x: x[1], reverse=True)
         keyword_matched.sort(key=lambda x: x[1], reverse=True)
         other_urls.sort(key=lambda x: x[1], reverse=True)
 
         # Step 3: Hybrid quota allocation (paths first; then 60/40 keyword/other)
+        # 步骤 3：混合配额分配（路径优先，其后关键词/其他按 60/40）
         selected_from_paths = [u for u, _ in path_matched]
         selected_from_keywords = []
         selected_from_others = []
@@ -709,6 +716,7 @@ class WebSubpageFetchTool(Tool):
             )
 
         # Always include the base URL if not already present
+        # 若尚未包含，始终把 base URL 纳入
         base_url = url.rstrip("/")
         normalized_selected = [u.rstrip("/") for u in selected_urls]
         if base_url not in normalized_selected:
@@ -719,6 +727,7 @@ class WebSubpageFetchTool(Tool):
         logger.info(f"Selected {len(selected_urls)} URLs for scraping: {selected_urls}")
 
         # Step 3.5: Pre-check main page - fast fail if site is error/down
+        # 步骤 3.5：预检主页面——站点出错或宕机时快速失败
         main_result = await self._scrape_with_retry(base_url, max_length)
         if main_result:
             main_content = main_result.get("content", "")
@@ -727,6 +736,7 @@ class WebSubpageFetchTool(Tool):
             if is_error:
                 logger.warning(f"Main page is error page ({error_reason}), skipping subpage fetch: {base_url}")
                 # Return early with error info - don't waste quota on subpages
+                # 提前返回错误信息——不要在 subpage 上浪费配额
                 return {
                     "url": base_url,
                     "title": main_result.get("title", ""),
@@ -744,9 +754,11 @@ class WebSubpageFetchTool(Tool):
                 }
 
             # Main page OK, remove from selected_urls (already fetched)
+            # 主页面正常，从 selected_urls 中移除（已抓取）
             selected_urls = [u for u in selected_urls if u.rstrip("/") != base_url]
             if not selected_urls:
                 # Only main page needed
+                # 只需主页面
                 return {
                     "url": base_url,
                     "title": main_result.get("title", ""),
@@ -764,9 +776,11 @@ class WebSubpageFetchTool(Tool):
             logger.warning(f"Main page fetch failed: {base_url}")
 
         # Step 4: Batch scrape remaining subpages
+        # 步骤 4：批量 scrape 剩余 subpage
         results, scrape_meta = await self._batch_scrape(selected_urls, max_length)
 
         # Prepend main page result if we have it
+        # 若有主页面结果则放到最前面
         if main_result:
             results = [main_result] + (results if results else [])
             scrape_meta["urls_succeeded"] = [base_url] + scrape_meta.get("urls_succeeded", [])
@@ -786,7 +800,8 @@ class WebSubpageFetchTool(Tool):
         return merged, scrape_meta
 
     async def _map(self, url: str) -> List[str]:
-        """Use Firecrawl Map API to get all URLs on a website."""
+        """Use Firecrawl Map API to get all URLs on a website.
+        使用 Firecrawl Map API 获取网站上的所有 URL。"""
         timeout = aiohttp.ClientTimeout(total=MAP_TIMEOUT)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             headers = {
@@ -808,6 +823,8 @@ class WebSubpageFetchTool(Tool):
                 links = data.get("links", [])
                 # V2 Map API returns list of dicts with 'url' and 'title' keys
                 # Extract URL strings for compatibility
+                # V2 Map API 返回带 'url' 与 'title' 键的 dict 列表
+                # 为兼容性提取 URL 字符串
                 return [
                     link.get("url") if isinstance(link, dict) else link
                     for link in links
@@ -822,6 +839,13 @@ class WebSubpageFetchTool(Tool):
             (results, meta):
                 results: successful scrape dicts
                 meta: {"urls_attempted", "urls_succeeded", "urls_failed"}
+
+        批量 scrape 多个 URL，带并发控制与 retry。
+
+        返回：
+            (results, meta)：
+                results：成功 scrape 的 dict 列表
+                meta：{"urls_attempted", "urls_succeeded", "urls_failed"}
         """
         semaphore = asyncio.Semaphore(BATCH_CONCURRENCY)
 
@@ -834,13 +858,16 @@ class WebSubpageFetchTool(Tool):
 
         # Filter out failures and deduplicate by returned URL
         # This prevents duplicate content when pages redirect to the same destination
+        # 过滤掉失败项，并按返回的 URL 去重
+        # 这样可避免页面重定向到同一目标时产生重复内容
         valid_results = []
         urls_succeeded: List[str] = []
         urls_failed: List[Dict] = []
-        seen_returned_urls: set = set()  # Track returned URLs to deduplicate
+        seen_returned_urls: set = set()  # Track returned URLs to deduplicate 注：记录返回的 URL 用于去重
 
         for url, r in zip(urls, results):
             # Detailed logging for each URL's scrape outcome (P0: Debug leadership content missing)
+            # 逐个 URL 详细记录 scrape 结果（P0：排查 leadership 内容缺失）
             if isinstance(r, Exception):
                 reason = str(r)
                 logger.warning(f"Scrape exception for {url}: {type(r).__name__}: {reason[:100]}")
@@ -864,9 +891,11 @@ class WebSubpageFetchTool(Tool):
                 continue
 
             # Log successful scrape with content length (P0: Visibility into what was fetched)
+            # 记录 scrape 成功及内容长度（P0：便于看清抓到了什么）
             logger.info(f"Scrape success for {url}: content_len={content_len}, returned_url={returned_url}")
 
             # Deduplicate by the URL Firecrawl actually returned (after redirects)
+            # 按 Firecrawl 实际返回的 URL 去重（重定向之后）
             normalized_returned_url = returned_url.rstrip("/").lower()
             if normalized_returned_url in seen_returned_urls:
                 logger.info(f"Skipping duplicate result for {url} (redirected to {normalized_returned_url})")
@@ -884,6 +913,7 @@ class WebSubpageFetchTool(Tool):
         }
 
         # P0: Batch completion summary for debugging content pipeline
+        # P0：批量完成情况汇总，便于排查内容管线
         logger.info(f"Batch scrape summary: attempted={len(urls)}, succeeded={len(urls_succeeded)}, failed={len(urls_failed)}")
         if urls_succeeded:
             logger.info(f"Succeeded URLs: {urls_succeeded}")
@@ -894,10 +924,11 @@ class WebSubpageFetchTool(Tool):
         return valid_results, meta
 
     async def _scrape_with_retry(self, url: str, max_length: int) -> Optional[Dict]:
-        """Scrape a single URL with retry logic."""
+        """Scrape a single URL with retry logic.
+        带 retry 逻辑 scrape 单个 URL。"""
         last_error = None
 
-        for attempt in range(3):  # Max 3 attempts
+        for attempt in range(3):  # Max 3 attempts 注：最多 3 次尝试
             try:
                 return await self._scrape(url, max_length)
             except Exception as e:
@@ -905,6 +936,7 @@ class WebSubpageFetchTool(Tool):
                 error_str = str(e)
 
                 # Check if retryable
+                # 判断是否可 retry
                 status_code = None
                 for code in RETRY_CONFIG.keys():
                     if str(code) in error_str:
@@ -922,7 +954,8 @@ class WebSubpageFetchTool(Tool):
         return None
 
     async def _scrape(self, url: str, max_length: int) -> Dict:
-        """Scrape a single URL using Firecrawl."""
+        """Scrape a single URL using Firecrawl.
+        使用 Firecrawl scrape 单个 URL。"""
         timeout = aiohttp.ClientTimeout(total=SCRAPE_TIMEOUT)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             headers = {
@@ -935,6 +968,7 @@ class WebSubpageFetchTool(Tool):
                 "parsers": ["pdf"],
                 "onlyMainContent": True,
                 # Note: 'form' removed - some sites wrap main content in form tags
+                # 注意：已移除 'form' —— 有些站点会用 form 标签包裹正文
                 "excludeTags": ["nav", "footer", "aside", "svg", "script", "style", "noscript"],
                 "removeBase64Images": True,
                 "blockAds": True,
@@ -954,7 +988,7 @@ class WebSubpageFetchTool(Tool):
                 result_data = data.get("data", {})
 
                 content = result_data.get("markdown", "")
-                content = clean_markdown_noise(content)  # Clean noise before truncation
+                content = clean_markdown_noise(content)  # Clean noise before truncation 注：截断前先清理噪声
                 if len(content) > max_length:
                     content = content[:max_length]
 
@@ -965,11 +999,13 @@ class WebSubpageFetchTool(Tool):
                 }
 
     def _merge_results(self, results: List[Dict], original_url: str) -> Dict:
-        """Merge multiple page results into a single output."""
+        """Merge multiple page results into a single output.
+        把多个页面结果合并为单一输出。"""
         if len(results) == 1:
             r = results[0]
             content = r.get("content", "")
             # P0-A: Detect blocked content for Citation V2 filtering
+            # P0-A：检测被拦截的内容，供 Citation V2 过滤使用
             blocked_reason = detect_blocked_reason(content, 200)
             return {
                 "url": r.get("url", original_url),
@@ -979,12 +1015,13 @@ class WebSubpageFetchTool(Tool):
                 "pages_fetched": 1,
                 "word_count": len(content.split()),
                 "char_count": len(content),
-                "tool_source": "fetch",  # Citation V2: mark as fetch-origin
-                "status_code": 200,  # P0-A: Firecrawl scrape success = 200
-                "blocked_reason": blocked_reason,  # P0-A: Content-based detection
+                "tool_source": "fetch",  # Citation V2: mark as fetch-origin 注：Citation V2：标记为 fetch 来源
+                "status_code": 200,  # P0-A: Firecrawl scrape success = 200 注：P0-A：Firecrawl 成功 = 200
+                "blocked_reason": blocked_reason,  # P0-A: Content-based detection 注：P0-A：基于内容检测
             }
 
         # Multiple pages - merge with markdown separators
+        # 多页面——用 markdown 分隔符合并
         merged_content = []
         total_chars = 0
 
@@ -1007,6 +1044,7 @@ class WebSubpageFetchTool(Tool):
 
         final_content = "".join(merged_content)
         # P0-A: Detect blocked content in merged result
+        # P0-A：检测合并结果中被拦截的内容
         blocked_reason = detect_blocked_reason(final_content, 200)
 
         return {
@@ -1017,9 +1055,9 @@ class WebSubpageFetchTool(Tool):
             "pages_fetched": len(results),
             "word_count": len(final_content.split()),
             "char_count": total_chars,
-            "tool_source": "fetch",  # Citation V2: mark as fetch-origin
-            "status_code": 200,  # P0-A: Firecrawl scrape success = 200
-            "blocked_reason": blocked_reason,  # P0-A: Content-based detection
+            "tool_source": "fetch",  # Citation V2: mark as fetch-origin 注：Citation V2：标记为 fetch 来源
+            "status_code": 200,  # P0-A: Firecrawl scrape success = 200 注：P0-A：Firecrawl 成功 = 200
+            "blocked_reason": blocked_reason,  # P0-A: Content-based detection 注：P0-A：基于内容检测
             "metadata": {
                 "urls": [r.get("url") for r in results]
             }
@@ -1033,7 +1071,8 @@ class WebSubpageFetchTool(Tool):
         target_paths: List[str],
         max_length: int
     ) -> Dict[str, Any]:
-        """Fallback: Use Exa with subpages feature."""
+        """Fallback: Use Exa with subpages feature.
+        回退：使用 Exa 的 subpages 特性。"""
         timeout = aiohttp.ClientTimeout(total=60)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             headers = {
@@ -1042,6 +1081,7 @@ class WebSubpageFetchTool(Tool):
             }
 
             # Use target keywords and target paths as subpage_target
+            # 把目标关键词与目标路径用作 subpage_target
             subpage_target = target_keywords.strip() if target_keywords else ""
             if target_paths:
                 normalized_paths = self._normalize_target_paths(target_paths)
@@ -1085,6 +1125,7 @@ class WebSubpageFetchTool(Tool):
                 result_ids = [r.get("id") for r in results if r.get("id")]
 
             # Get full content
+            # 获取完整内容
             content_payload = {
                 "ids": result_ids,
                 "text": {"maxCharacters": max_length, "includeHtmlTags": False}
@@ -1105,6 +1146,7 @@ class WebSubpageFetchTool(Tool):
                     r = content_results[0]
                     content = r.get("text", "")
                     # P0-A: Detect blocked content for Citation V2 filtering
+                    # P0-A：检测被拦截的内容，供 Citation V2 过滤使用
                     blocked_reason = detect_blocked_reason(content, 200)
                     return {
                         "url": r.get("url", url),
@@ -1114,15 +1156,16 @@ class WebSubpageFetchTool(Tool):
                         "pages_fetched": 1,
                         "word_count": len(content.split()),
                         "char_count": len(content),
-                        "tool_source": "fetch",  # Citation V2: mark as fetch-origin
-                        "status_code": 200,  # P0-A: Exa success = 200
-                        "blocked_reason": blocked_reason,  # P0-A: Content-based detection
+                        "tool_source": "fetch",  # Citation V2: mark as fetch-origin 注：Citation V2：标记为 fetch 来源
+                        "status_code": 200,  # P0-A: Exa success = 200 注：P0-A：Exa 成功 = 200
+                        "blocked_reason": blocked_reason,  # P0-A: Content-based detection 注：P0-A：基于内容检测
                     }
 
                 return self._merge_exa_results(content_results, url)
 
     def _merge_exa_results(self, results: List[Dict], original_url: str) -> Dict:
-        """Merge Exa results into single output."""
+        """Merge Exa results into single output.
+        把 Exa 的结果合并为单一输出。"""
         merged_content = []
         total_chars = 0
 
@@ -1145,6 +1188,7 @@ class WebSubpageFetchTool(Tool):
 
         final_content = "\n".join(merged_content)
         # P0-A: Detect blocked content in merged result
+        # P0-A：检测合并结果中被拦截的内容
         blocked_reason = detect_blocked_reason(final_content, 200)
 
         return {
@@ -1155,7 +1199,7 @@ class WebSubpageFetchTool(Tool):
             "pages_fetched": len(results),
             "word_count": len(final_content.split()),
             "char_count": total_chars,
-            "tool_source": "fetch",  # Citation V2: mark as fetch-origin
-            "status_code": 200,  # P0-A: Exa success = 200
-            "blocked_reason": blocked_reason,  # P0-A: Content-based detection
+            "tool_source": "fetch",  # Citation V2: mark as fetch-origin 注：Citation V2：标记为 fetch 来源
+            "status_code": 200,  # P0-A: Exa success = 200 注：P0-A：Exa 成功 = 200
+            "blocked_reason": blocked_reason,  # P0-A: Content-based detection 注：P0-A：基于内容检测
         }

@@ -17,6 +17,7 @@ import (
 )
 
 // MemoryExtractInput is the input for the ExtractMemoryActivity.
+// MemoryExtractInput 是 ExtractMemoryActivity 的输入。
 type MemoryExtractInput struct {
 	UserID           string `json:"user_id"`
 	TenantID         string `json:"tenant_id"`
@@ -27,6 +28,7 @@ type MemoryExtractInput struct {
 }
 
 // MemoryExtractResult is the output of the ExtractMemoryActivity.
+// MemoryExtractResult 是 ExtractMemoryActivity 的输出。
 type MemoryExtractResult struct {
 	Extracted  bool   `json:"extracted"`
 	FilePath   string `json:"file_path,omitempty"`
@@ -93,11 +95,13 @@ func ExtractMemoryActivity(ctx context.Context, input MemoryExtractInput) (*Memo
 	}
 
 	// Guard: feature gate
+	// 前置校验：功能开关
 	if os.Getenv("USER_MEMORY_ENABLED") != "1" {
 		return skip("disabled")
 	}
 
 	// Guard: no user or short result
+	// 前置校验：无 user 或结果过短
 	if input.UserID == "" {
 		return skip("no_user_id")
 	}
@@ -110,6 +114,7 @@ func ExtractMemoryActivity(ctx context.Context, input MemoryExtractInput) (*Memo
 	}
 
 	// Call LLM service /memory/extract
+	// 调用 LLM service 的 /memory/extract
 	llmServiceURL := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	extractURL := fmt.Sprintf("%s/memory/extract", llmServiceURL)
 
@@ -171,6 +176,7 @@ func ExtractMemoryActivity(ctx context.Context, input MemoryExtractInput) (*Memo
 	}
 
 	// Quality gate
+	// 质量门禁
 	if len(extraction.Summary) < 20 || len(extraction.Content) < 100 {
 		return skip("low_quality")
 	}
@@ -190,10 +196,12 @@ func ExtractMemoryActivity(ctx context.Context, input MemoryExtractInput) (*Memo
 	}
 
 	// Resolve base memory directory
+	// 解析 memory 根目录
 	memDir := getenv("SHANNON_USER_MEMORY_DIR", "/tmp/shannon-users")
 	userMemDir := filepath.Join(memDir, input.UserID, "memory")
 
 	// Write the extracted content file
+	// 写入抽取出的内容文件
 	targetPath := filepath.Join(userMemDir, cleanPath)
 
 	// Final safety: ensure resolved path is inside userMemDir
@@ -221,6 +229,7 @@ func ExtractMemoryActivity(ctx context.Context, input MemoryExtractInput) (*Memo
 	}
 
 	// Update MEMORY.md index
+	// 更新 MEMORY.md index
 	if err := updateMemoryIndex(userMemDir, cleanPath, extraction.Summary); err != nil {
 		logger.Warn("memory.extraction.index_error", "error", err)
 		// File was written, just index failed — still count as extracted
@@ -294,14 +303,17 @@ func validateMemoryPath(suggestedPath string) (string, error) {
 	}
 
 	// Reject absolute paths
+	// 拒绝绝对路径
 	if filepath.IsAbs(suggestedPath) {
 		return "", fmt.Errorf("absolute path not allowed")
 	}
 
 	// Clean the path
+	// 清洗路径
 	cleaned := filepath.Clean(suggestedPath)
 
 	// Reject traversal after clean
+	// 清洗后仍拒绝路径穿越
 	if strings.Contains(cleaned, "..") {
 		return "", fmt.Errorf("path traversal not allowed")
 	}
@@ -313,16 +325,19 @@ func validateMemoryPath(suggestedPath string) (string, error) {
 	}
 
 	// Must end in .md
+	// 必须以 .md 结尾
 	if !strings.HasSuffix(cleaned, ".md") {
 		return "", fmt.Errorf("must end in .md")
 	}
 
 	// Reject empty segment names or hidden files
+	// 拒绝空段名与隐藏文件
 	if strings.HasPrefix(cleaned, ".") {
 		return "", fmt.Errorf("hidden files not allowed")
 	}
 
 	// Only safe characters
+	// 只允许安全字符
 	if !safePathRe.MatchString(cleaned) {
 		return "", fmt.Errorf("unsafe characters in path: %s", cleaned)
 	}
@@ -341,8 +356,8 @@ const maxMemoryIndexEntries = 50
 // memoryEntry represents a single parsed section from MEMORY.md.
 // memoryEntry 表示从 MEMORY.md 解析出的单个 section。
 type memoryEntry struct {
-	Path      string // filename from ## heading
-	Summary   string // description text
+	Path      string // filename from ## heading 注：## 标题中的文件名
+	Summary   string // description text 注：描述文本
 	UpdatedAt time.Time
 }
 
@@ -356,6 +371,7 @@ type memoryEntry struct {
 //	Summary text here
 func parseMemoryIndex(content string) (header string, entries []memoryEntry) {
 	// Split on ## headings
+	// 按 ## 标题切分
 	sections := strings.Split(content, "\n## ")
 	if len(sections) == 0 {
 		return "# User Memory\n", nil
@@ -396,6 +412,7 @@ func parseMemoryIndex(content string) (header string, entries []memoryEntry) {
 }
 
 // extractTimestamp parses <!-- updated:RFC3339 --> from a block of text.
+// extractTimestamp 从一段文本中解析出 <!-- updated:RFC3339 -->。
 func extractTimestamp(body string) time.Time {
 	const prefix = "<!-- updated:"
 	const suffix = " -->"
@@ -416,6 +433,7 @@ func extractTimestamp(body string) time.Time {
 }
 
 // stripTimestampComment removes the <!-- updated:... --> line from body text.
+// stripTimestampComment 从正文中移除 <!-- updated:... --> 行。
 func stripTimestampComment(body string) string {
 	var lines []string
 	for line := range strings.SplitSeq(body, "\n") {
@@ -428,6 +446,7 @@ func stripTimestampComment(body string) string {
 }
 
 // renderMemoryIndex renders the header + entries back into MEMORY.md format.
+// renderMemoryIndex 把 header 与 entries 重新渲染为 MEMORY.md 格式。
 func renderMemoryIndex(header string, entries []memoryEntry) string {
 	var b strings.Builder
 	b.WriteString(strings.TrimRight(header, "\n"))
@@ -460,6 +479,7 @@ func updateMemoryIndex(memoryDir, canonicalPath, summary string) error {
 	indexPath := filepath.Join(memoryDir, "MEMORY.md")
 
 	// Read existing or create skeleton
+	// 读取已有文件，不存在则创建骨架
 	data, err := os.ReadFile(indexPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -472,6 +492,7 @@ func updateMemoryIndex(memoryDir, canonicalPath, summary string) error {
 	now := time.Now().UTC()
 
 	// Check if entry already exists — update in place
+	// 条目已存在则原地更新
 	found := false
 	for i := range entries {
 		if entries[i].Path == canonicalPath {

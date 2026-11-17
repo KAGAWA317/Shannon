@@ -25,6 +25,7 @@ def _parse_timestamp(ts_str: str) -> datetime:
         raise ValueError("empty timestamp")
 
     # Replace Z with +00:00
+    # 把 Z 替换为 +00:00
     ts_str = ts_str.replace("Z", "+00:00")
 
     try:
@@ -36,10 +37,11 @@ def _parse_timestamp(ts_str: str) -> datetime:
         # Python 的 fromisoformat 只接受 0-6 位小数
         if "." in ts_str:
             # Split into parts
+            # 拆成各部分
             if "+" in ts_str:
                 date_time, tz = ts_str.rsplit("+", 1)
                 tz = "+" + tz
-            elif ts_str.count("-") > 2:  # Has timezone with -
+            elif ts_str.count("-") > 2:  # Has timezone with - 注：带 - 的时区
                 date_time, tz = ts_str.rsplit("-", 1)
                 tz = "-" + tz
             else:
@@ -190,6 +192,7 @@ class AsyncShannonClient:
             )
 
     # ===== Task Operations =====
+    # ===== Task 操作 =====
 
     async def submit_task(
         self,
@@ -415,6 +418,7 @@ class AsyncShannonClient:
             data = response.json()
 
             # Parse status
+            # 解析 status
             status_str = data.get("status", "").replace("TASK_STATUS_", "")
             try:
                 status = TaskStatusEnum[status_str]
@@ -437,6 +441,7 @@ class AsyncShannonClient:
                     result = data["response"]
 
             # Parse timestamps
+            # 解析 timestamp
             created_at = None
             if data.get("created_at"):
                 try:
@@ -927,6 +932,7 @@ class AsyncShannonClient:
             )
 
     # ===== HITL Review Operations =====
+    # ===== HITL 评审操作 =====
 
     def _parse_review_state(self, data: Dict[str, Any]) -> ReviewState:
         """把 /review 响应体解析成 ReviewState（get/submit-feedback 共用）。"""
@@ -1119,6 +1125,7 @@ class AsyncShannonClient:
             )
 
     # ===== Session Management (HTTP Gateway) =====
+    # ===== Session 管理（HTTP Gateway） =====
 
     async def list_sessions(
         self,
@@ -1162,6 +1169,7 @@ class AsyncShannonClient:
             for session_data in data.get("sessions", []):
                 context = session_data.get("context")
                 # Parse timestamps
+                # 解析 timestamp
                 created_at = _parse_timestamp(session_data["created_at"])
                 updated_at = None
                 if session_data.get("updated_at"):
@@ -1253,6 +1261,7 @@ class AsyncShannonClient:
             data = response.json()
 
             # Parse timestamps
+            # 解析 timestamp
             created_at = _parse_timestamp(data["created_at"])
             updated_at = created_at
             if data.get("updated_at"):
@@ -1494,6 +1503,7 @@ class AsyncShannonClient:
             )
 
     # ===== File Access =====
+    # ===== 文件访问 =====
 
     async def list_session_files(
         self,
@@ -1679,6 +1689,7 @@ class AsyncShannonClient:
             )
 
     # ===== Agents =====
+    # ===== Agent 管理 =====
 
     async def list_agents(
         self, *, timeout: Optional[float] = None
@@ -1848,6 +1859,7 @@ class AsyncShannonClient:
             )
 
     # ===== OpenAI-Compatible API =====
+    # ===== OpenAI 兼容 API =====
 
     def _serialize_openai_message(
         self, message: Union[OpenAIChatMessage, Dict[str, Any]]
@@ -2365,6 +2377,7 @@ class AsyncShannonClient:
                 yield {"data": data_str}
 
     # ===== Tools =====
+    # ===== Tool 管理 =====
 
     async def list_tools(
         self,
@@ -2523,6 +2536,7 @@ class AsyncShannonClient:
             )
 
     # ===== Skills =====
+    # ===== Skill 管理 =====
 
     async def list_skills(
         self,
@@ -2689,6 +2703,7 @@ class AsyncShannonClient:
             )
 
     # ===== Schedule Management =====
+    # ===== 定时任务管理 =====
 
     async def create_schedule(
         self,
@@ -3150,6 +3165,7 @@ class AsyncShannonClient:
             )
 
     # ===== Health & Discovery =====
+    # ===== 健康检查与发现 =====
 
     async def health(self, timeout: Optional[float] = None) -> Dict[str, Any]:
         """
@@ -3245,6 +3261,7 @@ class AsyncShannonClient:
             )
 
     # ===== Streaming (SSE and WebSocket) =====
+    # ===== Streaming（SSE 与 WebSocket） =====
 
     async def stream(
         self,
@@ -3275,11 +3292,13 @@ class AsyncShannonClient:
             ConnectionError: Failed to connect after retries
         """
         # Convert EventType enums to strings
+        # 把 EventType 枚举转成字符串
         type_filters = None
         if types:
             type_filters = [t.value if isinstance(t, EventType) else t for t in types]
 
         # Validate timeouts
+        # 校验 timeout
         if timeout is not None and timeout < 0:
             raise errors.ValidationError("timeout must be >= 0", code="400")
         if total_timeout is not None and total_timeout < 0:
@@ -3319,10 +3338,12 @@ class AsyncShannonClient:
         while True:
             try:
                 # Check absolute timeout
+                # 检查绝对 timeout
                 if total_timeout is not None and (time.time() - start_time) >= total_timeout:
                     raise errors.ConnectionError("SSE stream timed out", code="TIMEOUT")
 
                 # Build query params
+                # 构造 query 参数
                 params = {"workflow_id": workflow_id}
                 if types:
                     params["types"] = ",".join(types)
@@ -3330,6 +3351,7 @@ class AsyncShannonClient:
                     params["last_event_id"] = last_resume_id
 
                 # Build headers
+                # 构造 header
                 headers = {}
                 if self.bearer_token:
                     headers["Authorization"] = f"Bearer {self.bearer_token}"
@@ -3357,6 +3379,7 @@ class AsyncShannonClient:
                             )
 
                         # Parse SSE stream
+                        # 解析 SSE stream
                         event_data: List[str] = []
                         event_id: Optional[str] = None
                         event_name: Optional[str] = None
@@ -3402,6 +3425,7 @@ class AsyncShannonClient:
                                 continue
 
                             # Parse SSE line
+                            # 解析 SSE 行
                             if line.startswith("id:"):
                                 event_id = line[3:].strip()
                             elif line.startswith("event:"):
@@ -3461,6 +3485,7 @@ class AsyncShannonClient:
     def _parse_sse_event(self, data: Dict[str, Any], event_id: Optional[str] = None) -> Event:
         """Parse SSE event data into Event model."""
         # Parse timestamp
+        # 解析 timestamp
         ts = datetime.now()
         if "timestamp" in data:
             try:
@@ -3502,6 +3527,7 @@ class AsyncShannonClient:
             )
 
         # Build ws url
+        # 构造 ws url
         base = self.base_url.replace("https://", "wss://").replace("http://", "ws://")
         params: List[str] = [f"workflow_id={workflow_id}"]
         if types:
@@ -3513,6 +3539,7 @@ class AsyncShannonClient:
         uri = f"{base}/api/v1/stream/ws?{qs}"
 
         # Headers
+        # 请求头（header）
         headers: List[tuple[str, str]] = []
         if self.bearer_token:
             headers.append(("Authorization", f"Bearer {self.bearer_token}"))
@@ -3588,6 +3615,7 @@ class ShannonClient:
         return loop.run_until_complete(coro)
 
     # Task operations
+    # Task 操作
     def submit_task(
         self,
         query: str,
@@ -3739,6 +3767,7 @@ class ShannonClient:
         )
 
     # HITL Review operations
+    # HITL 评审操作
     def get_review_state(
         self, workflow_id: str, *, timeout: Optional[float] = None
     ) -> ReviewState:
@@ -3773,6 +3802,7 @@ class ShannonClient:
         )
 
     # Session operations
+    # Session 操作
     def list_sessions(
         self,
         *,
@@ -3825,6 +3855,7 @@ class ShannonClient:
         return self._run(self._async_client.delete_session(session_id, timeout))
 
     # File operations
+    # 文件操作
     def list_session_files(
         self,
         session_id: str,
@@ -3866,6 +3897,7 @@ class ShannonClient:
         return self._run(self._async_client.download_memory_file(path, timeout=timeout))
 
     # Agent operations
+    # Agent 操作
     def list_agents(
         self, *, timeout: Optional[float] = None
     ) -> List[AgentInfo]:
@@ -4048,6 +4080,7 @@ class ShannonClient:
             loop.run_until_complete(async_gen.aclose())
 
     # Tool operations
+    # Tool 操作
     def list_tools(
         self,
         *,
@@ -4082,6 +4115,7 @@ class ShannonClient:
         )
 
     # Skills operations
+    # Skill 操作
     def list_skills(
         self,
         *,
@@ -4104,6 +4138,7 @@ class ShannonClient:
         return self._run(self._async_client.get_skill_versions(name, timeout=timeout))
 
     # Schedule operations
+    # 定时任务操作
     def create_schedule(
         self,
         name: str,
@@ -4219,6 +4254,7 @@ class ShannonClient:
         )
 
     # Health & Discovery
+    # 健康检查与发现
     def health(self, timeout: Optional[float] = None) -> Dict[str, Any]:
         """Get health status (blocking)."""
         return self._run(self._async_client.health(timeout))
@@ -4232,6 +4268,7 @@ class ShannonClient:
         return self._run(self._async_client.get_openapi_spec(timeout))
 
     # Streaming
+    # Streaming（流式）
     def stream(
         self,
         workflow_id: str,

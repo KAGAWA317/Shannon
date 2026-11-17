@@ -47,6 +47,7 @@ class TestSimpleWorkflow:
             assert status.provider is not None
 
             # Check metadata contains execution info
+            # 检查 metadata 中包含执行信息
             if status.metadata:
                 print(f"  Metadata keys: {list(status.metadata.keys())}")
                 if "mode" in status.metadata:
@@ -195,6 +196,7 @@ class TestSSEStreaming:
 
         try:
             # Submit task
+            # 提交 task
             handle = client.submit_task(
                 "Count from 1 to 5",
                 session_id="sdk-test-sse-stream",
@@ -210,16 +212,19 @@ class TestSSEStreaming:
             last_event = None
 
             # Stream events
+            # 流式读取事件
             for event in client.stream(handle.workflow_id, timeout=60, total_timeout=120):
                 event_count += 1
                 event_types_seen.add(event.type)
                 last_event = event
 
                 # Print first few events in detail
+                # 详细打印前几条事件
                 if event_count <= 10:
                     print(f"    [{event_count}] {event.type}: {event.message[:80] if event.message else '(no message)'}...")
 
                 # Check for completion
+                # 检查是否已完成
                 if event.type == "WORKFLOW_COMPLETED":
                     print(f"    ... workflow completed")
                     break
@@ -228,11 +233,13 @@ class TestSSEStreaming:
             print(f"  Event types seen: {sorted(event_types_seen)}")
 
             # Verify key event types
+            # 校验关键事件类型
             expected_types = {"WORKFLOW_STARTED", "WORKFLOW_COMPLETED"}
             assert "WORKFLOW_COMPLETED" in event_types_seen or event_count > 0, \
                 "Should receive workflow events"
 
             # Verify event structure
+            # 校验事件结构
             if last_event:
                 print(f"\n  Last event structure:")
                 print(f"    type: {last_event.type}")
@@ -417,6 +424,7 @@ class TestMetadataBreakdown:
                 print(f"    Total cost: ${total_cost:.6f}")
 
                 # Compare with usage field
+                # 与 usage 字段对比
                 if status.usage:
                     usage_tokens = status.usage.get("total_tokens", 0)
                     usage_cost = status.usage.get("cost_usd", status.usage.get("estimated_cost", 0))
@@ -443,6 +451,7 @@ class TestTaskListMetadata:
 
         try:
             # First create a task
+            # 先创建一个 task
             handle = client.submit_task(
                 "Quick test for listing",
                 session_id="sdk-test-list-usage",
@@ -451,6 +460,7 @@ class TestTaskListMetadata:
             client.wait(handle.task_id, timeout=60)
 
             # Now list tasks
+            # 再列出 task
             tasks, total = client.list_tasks(limit=5)
 
             print(f"\n  Total tasks: {total}")

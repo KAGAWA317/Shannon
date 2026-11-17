@@ -10,8 +10,7 @@ def test_should_use_source_format_by_role():
     assert should_use_source_format("deep_research_agent") is True
     assert should_use_source_format("research") is True
     assert should_use_source_format("generalist") is False
-    assert should_use_source_format("research_supervisor") is False  # Not in the list
-    # 白名单只有这两个：research_supervisor 名字里带 research，但不在列表内
+    assert should_use_source_format("research_supervisor") is False  # Not in the list 注：白名单只有这两个：research_supervisor 名字里带 research，但不在列表内
     assert should_use_source_format(None) is False
     assert should_use_source_format("") is False
 
@@ -89,6 +88,7 @@ def test_validate_interpretation_output_source_accepts_part_format():
 
 
 # --- OODA pattern detection tests ---
+# --- OODA 模式检测测试 ---
 
 
 def test_validate_interpretation_output_rejects_ooda_pattern():
@@ -162,6 +162,7 @@ def test_validate_interpretation_output_allows_single_observe_mention():
 
 
 # --- build_interpretation_messages tests ---
+# --- build_interpretation_messages 测试 ---
 
 
 def test_build_interpretation_messages_uses_interpretation_system_prompt():
@@ -224,6 +225,7 @@ def test_build_interpretation_messages_user_message_structure():
 
 
 # --- Preset contract tests ---
+# --- preset 契约测试 ---
 
 
 def test_deep_research_preset_has_interpretation_system_prompt():
@@ -239,8 +241,7 @@ def test_deep_research_preset_has_interpretation_system_prompt():
     assert "interpretation_system_prompt" in DEEP_RESEARCH_AGENT_PRESET
     interp_sys = DEEP_RESEARCH_AGENT_PRESET["interpretation_system_prompt"]
     assert isinstance(interp_sys, str)
-    assert len(interp_sys) > 100  # Non-trivial content
-    # 长度下限用来排除空串 / 占位符
+    assert len(interp_sys) > 100  # Non-trivial content 注：长度下限用来排除空串 / 占位符
 
 
 def test_deep_research_interpretation_system_prompt_has_no_ooda():
@@ -257,8 +258,7 @@ def test_deep_research_interpretation_system_prompt_has_no_ooda():
     interp_sys = DEEP_RESEARCH_AGENT_PRESET["interpretation_system_prompt"]
     forbidden_patterns = [
         "OODA",
-        "Observe",  # as section header concept
-        # 作为 section header 出现即视为污染
+        "Observe",  # as section header concept 注：作为 section header 出现即视为污染
         "Orient",
         "web_search",
         "web_fetch",
@@ -283,5 +283,4 @@ def test_deep_research_tool_loop_prompt_has_ooda():
 
     sys_prompt = DEEP_RESEARCH_AGENT_PRESET["system_prompt"]
     assert "OODA" in sys_prompt
-    assert "OBSERVE" in sys_prompt  # "## 1. OBSERVE" in the prompt
-    # tool-loop prompt 里保留 "## 1. OBSERVE" 这样的阶段标题
+    assert "OBSERVE" in sys_prompt  # "## 1. OBSERVE" in the prompt 注：tool-loop prompt 里保留 "## 1. OBSERVE" 这样的阶段标题

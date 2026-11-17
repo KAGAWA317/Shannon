@@ -61,6 +61,7 @@ def _block_to_dict(content_block: Any, block_type: Optional[str]) -> Optional[Di
     便于运维排查我们尚未支持的 Anthropic 新 block 类型。
     """
     # 1. Pydantic SDK shape.
+    # 1. Pydantic SDK 形状。
     model_dump = getattr(content_block, "model_dump", None)
     if callable(model_dump):
         try:
@@ -71,6 +72,7 @@ def _block_to_dict(content_block: Any, block_type: Optional[str]) -> Optional[Di
             logger.debug("model_dump failed on Anthropic block (type=%s): %s", block_type, e)
 
     # 2. Generic .to_dict() on older SDK shapes.
+    # 2. 老版本 SDK 形状上的通用 .to_dict()。
     to_dict = getattr(content_block, "to_dict", None)
     if callable(to_dict):
         try:
@@ -82,10 +84,13 @@ def _block_to_dict(content_block: Any, block_type: Optional[str]) -> Optional[Di
 
     # 3. Plain dict input (MiniMax, etc.). Make a shallow copy so callers
     # can't mutate the upstream object via our returned dict.
+    # 3. 纯 dict 输入（MiniMax 等）。做浅拷贝，使调用方
+    # 无法通过我们返回的 dict 改动上游对象。
     if isinstance(content_block, dict):
         return dict(content_block)
 
     # 4. Per-type fallback for the four known shapes.
+    # 4. 四种已知形状的按类型兜底。
     if block_type == "text":
         return {"type": "text", "text": getattr(content_block, "text", "") or ""}
     if block_type == "thinking":
@@ -107,6 +112,9 @@ def _block_to_dict(content_block: Any, block_type: Optional[str]) -> Optional[Di
     # Unknown / unhandled type: don't emit a partial / malformed shape. Log so
     # the day Anthropic ships a new block type we have a breadcrumb pointing at
     # this branch (vs. silent drop forever).
+    # 未知/未处理类型：不要输出半成品/畸形形状。打日志，
+    # 这样当 Anthropic 发布新 block 类型时，我们有一条线索指向
+    # 这个分支（而不是永久静默丢弃）。
     logger.debug("Unhandled Anthropic content block type: %s", block_type)
     return None
 
@@ -168,6 +176,7 @@ def _record_cache_metrics(
             ANTHROPIC_CACHE_WRITE_1H_TOKENS.labels(provider, model, src).inc(cache_creation_1h)
     except Exception:
         # Metrics must never break the request path
+        # 指标绝不能打断 request 路径
         pass
 
 
@@ -281,7 +290,7 @@ def _ttl_block(request) -> Optional[Dict[str, str]]:
 # asyncio.Lock 包裹 _remember_marker / _recall_marker（或将 memo 改为按 session 对象
 # 存放）—— FastAPI 会并发派发 async handler，而 OrderedDict.popitem 不是协程安全的。
 _PREV_ROLLING_MAX = 1000
-_prev_rolling = OrderedDict()  # session_id → marker hash; LRU evicted
+_prev_rolling = OrderedDict()  # session_id → marker hash; LRU evicted 注：session_id → 标记哈希；按 LRU 淘汰
 
 
 def _msg_stable_hash(msg: Dict[str, Any]) -> str:
@@ -336,6 +345,7 @@ def _semantic_signature(content: Any) -> str:
                 parts.append("T:" + str(b.get("text", "")))
             elif btype == "tool_use":
                 # Tool use ID is stable across turns (Anthropic-assigned)
+                # tool use ID 跨轮稳定（由 Anthropic 分配）
                 parts.append("U:" + str(b.get("id", "")))
             elif btype == "tool_result":
                 tid = str(b.get("tool_use_id", ""))
@@ -344,13 +354,16 @@ def _semantic_signature(content: Any) -> str:
                 parts.append("R:" + tid + ":" + tc_str)
             elif btype in ("image", "document"):
                 # Hash by source URL/data presence; ignore noise like media_type ordering
+                # 按 source URL/data 是否存在做哈希；忽略 media_type 顺序等噪声
                 src = b.get("source", {}) if isinstance(b.get("source"), dict) else {}
                 parts.append(btype[0].upper() + ":" + str(src.get("url") or src.get("data", ""))[:64])
             else:
                 # Unknown block: hash whole thing (rare; keep stable as best we can)
+                # 未知 block：对整体做哈希（少见；尽量保持稳定）
                 parts.append("X:" + json.dumps(b, sort_keys=True, default=str))
         return "\n".join(parts)
     # Fallback for unexpected shapes
+    # 非预期形状的兜底
     return "F:" + json.dumps(content, sort_keys=True, default=str)
 
 
@@ -454,6 +467,7 @@ class CacheBreakDetector:
 
         if not self._prev_system_hash:
             # First call — record state, no comparison possible
+            # 首次调用 —— 记录状态，无可比较
             self._prev_system_hash = sys_hash
             self._prev_tool_names = sorted_names
             self._prev_model = model
@@ -479,6 +493,7 @@ class CacheBreakDetector:
             result["new_model"] = model
 
         # Update state
+        # 更新状态
         self._prev_system_hash = sys_hash
         self._prev_tool_names = sorted_names
         self._prev_model = model
@@ -536,6 +551,7 @@ class AnthropicProvider(LLMProvider):
         注意：Anthropic 未提供公开分词器，因此这里采用估算。
         """
         # Use the base token counter for estimation
+        # 使用基础 token counter 做估算
         return TokenCounter.count_messages_tokens(messages, model)
 
     def _convert_messages_to_claude_format(
@@ -1036,6 +1052,25 @@ class AnthropicProvider(LLMProvider):
         # we'd need either an Anthropic API change (treat cache_control as
         # cache-key-insensitive) or a byte-rewriting scheme that preserves
         # exact bytes while freeing a slot — neither is available today.
+        # [-2] 上的滚动 cache_control 标记是在
+        # _convert_messages_to_claude_format 内部应用的。跨轮的 prev_marker
+        # 保留逻辑（_apply_rolling_cache_marker）此处有意不调用。
+        # 实测（2026-04-15 基准测试 Phase 3 尝试）：
+        # 重新启用它使 30 轮 CHR 从 93% 回退到 61%、CER 从
+        # 15.6 倍回退到 4.0 倍，未命中 cache 的输入 token 增至三倍。根因：
+        # 保留路径会对 user_1 调用 _strip_message_cache_control 以
+        # 腾出一个断点槽位，但剥离 cache_control 会改变该
+        # block 在网络上的字节表示。尽管
+        # 非 cache_control 的内容完全相同，Anthropic 的前缀匹配
+        # 在该边界处似乎会失效 —— 于是到 msg[prev_idx] 为止的"空闲"缓存前缀
+        # 不再匹配，每一轮都只能回退到
+        # 重新写入 cache。[-2] 上单个滚动标记（已由
+        # _convert_messages_to_claude_format 应用）带来了我们观测到的
+        # 30 轮 session 上 93% CHR / 15.6 倍 CER，这在
+        # 公开 API 4 个断点的上限下是最优的。若要安全恢复 prev_marker，
+        # 我们需要 Anthropic 改动 API（把 cache_control 视为
+        # 不影响 cache key），或一种在释放槽位的同时保留精确字节的
+        # 字节重写方案 —— 两者目前都不可用。
 
         # Compute safe max_tokens based on context window headroom (OpenAI-style)
         # 基于 context window 余量计算安全的 max_tokens（OpenAI 风格）
@@ -1245,6 +1280,9 @@ class AnthropicProvider(LLMProvider):
                 # cache_control always sits directly on content-block dicts
                 # (tools, system blocks, message content blocks); there's no
                 # need to recurse into other dict values for Anthropic's schema.
+                # cache_control 总是直接挂在 content-block 的 dict 上
+                # （tools、system blocks、message content blocks）；按 Anthropic 的 schema，
+                # 无需递归进入其他 dict 值。
                 if "cache_control" in container:
                     if ttl_block is None:
                         container.pop("cache_control", None)

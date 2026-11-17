@@ -162,7 +162,7 @@ class TestWebFetchBatchMode:
         with patch.object(tool, '_fetch_pure_python', side_effect=mock_fetch):
             result = await tool.execute(urls=test_urls)
 
-            assert result.success is True  # At least 1 succeeded
+            assert result.success is True  # At least 1 succeeded 注：至少 1 个成功
             assert result.output["succeeded"] == 1
             assert result.output["failed"] == 1
             assert result.output["partial_success"] is True
@@ -215,7 +215,8 @@ class TestWebFetchBatchMode:
 
             assert result.success is True
             # Should have stopped before fetching all 4
-            assert result.output["total_chars"] <= 60000  # Allow some buffer
+            # 应在抓取完 4 个之前就停止
+            assert result.output["total_chars"] <= 60000  # Allow some buffer 注：留一些余量
 
     @pytest.mark.asyncio
     async def test_batch_mode_concurrency_limit(self, tool):
@@ -229,7 +230,7 @@ class TestWebFetchBatchMode:
             nonlocal concurrent_count, max_concurrent
             concurrent_count += 1
             max_concurrent = max(max_concurrent, concurrent_count)
-            await asyncio.sleep(0.05)  # Simulate network delay
+            await asyncio.sleep(0.05)  # Simulate network delay 注：模拟网络延迟
             concurrent_count -= 1
             return ToolResult(
                 success=True,
@@ -474,7 +475,7 @@ class TestWebFetchFirecrawlRateLimiting:
                         target_paths=[]
                     )
                 except Exception:
-                    pass  # May fail for other reasons in test
+                    pass  # May fail for other reasons in test 注：测试中可能因其他原因失败
 
         # Both methods should be called for timeout
         # timeout 场景下两个方法都应被调用

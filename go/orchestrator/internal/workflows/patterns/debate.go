@@ -16,17 +16,19 @@ import (
 )
 
 // DebateConfig configures the debate pattern
+// DebateConfig 配置 debate 模式
 type DebateConfig struct {
-	NumDebaters      int      // Number of agents in debate (2-5)
-	MaxRounds        int      // Maximum debate rounds
-	Perspectives     []string // Different perspectives to represent
-	RequireConsensus bool     // Whether to require consensus
-	ModeratorEnabled bool     // Use a moderator agent
-	VotingEnabled    bool     // Enable voting mechanism
-	ModelTier        string   // Model tier for debaters
+	NumDebaters      int      // Number of agents in debate (2-5) 注：参与辩论的 agent 数量（2-5）
+	MaxRounds        int      // Maximum debate rounds 注：最大辩论轮数
+	Perspectives     []string // Different perspectives to represent 注：要代表的不同视角
+	RequireConsensus bool     // Whether to require consensus 注：是否要求达成共识
+	ModeratorEnabled bool     // Use a moderator agent 注：使用 moderator agent
+	VotingEnabled    bool     // Enable voting mechanism 注：启用投票机制
+	ModelTier        string   // Model tier for debaters 注：辩手使用的 model tier
 }
 
 // DebateResult contains the outcome of a debate
+// DebateResult 包含一次辩论的结果
 type DebateResult struct {
 	FinalPosition    string
 	Positions        []DebatePosition
@@ -38,6 +40,7 @@ type DebateResult struct {
 }
 
 // DebatePosition represents one agent's position
+// DebatePosition 表示单个 agent 的立场
 type DebatePosition struct {
 	AgentID    string
 	Position   string
@@ -47,6 +50,7 @@ type DebatePosition struct {
 }
 
 // Debate implements multi-agent debate pattern for exploring different perspectives
+// Debate 实现多 agent 辩论模式，用于探索不同视角
 func Debate(
 	ctx workflow.Context,
 	query string,
@@ -65,11 +69,12 @@ func Debate(
 	)
 
 	// Set defaults
+	// 设置默认值
 	if config.NumDebaters == 0 {
 		config.NumDebaters = 3
 	}
 	if config.NumDebaters > 5 {
-		config.NumDebaters = 5 // Cap at 5 for manageability
+		config.NumDebaters = 5 // Cap at 5 for manageability 注：上限 5 以保证可管理性
 	}
 	if config.MaxRounds == 0 {
 		config.MaxRounds = 3
@@ -82,6 +87,7 @@ func Debate(
 	}
 
 	// Initialize perspectives if not provided
+	// 未提供视角时初始化默认视角
 	if len(config.Perspectives) == 0 {
 		config.Perspectives = generateDefaultPerspectives(config.NumDebaters)
 	}
@@ -92,6 +98,7 @@ func Debate(
 	}
 
 	// Track debate history for context
+	// 跟踪辩论历史以提供上下文
 	debateHistory := []string{}
 
 	// Phase 1: Initial positions
@@ -110,6 +117,7 @@ func Debate(
 		agentID := fmt.Sprintf("debater-%d-%s", i+1, perspective)
 
 		// Create debate context
+		// 构建辩论上下文
 		debateContext := make(map[string]any)
 		maps.Copy(debateContext, context)
 		debateContext["perspective"] = perspective
@@ -149,6 +157,7 @@ func Debate(
 				})
 		} else {
 			// Determine parent workflow for streaming correlation
+			// 确定父 workflow 以便流式事件关联
 			wid := workflow.GetInfo(ctx).WorkflowExecution.ID
 			if p, ok := debateContext["parent_workflow_id"].(string); ok && p != "" {
 				wid = p
@@ -171,6 +180,7 @@ func Debate(
 	}
 
 	// Collect initial positions
+	// 收集初始立场
 	for i, future := range futures {
 		var agentResult activities.AgentExecutionResult
 		if err := future.Get(ctx, &agentResult); err != nil {
@@ -185,7 +195,7 @@ func Debate(
 			AgentID:    fmt.Sprintf("debater-%d", i+1),
 			Position:   agentResult.Response,
 			Arguments:  extractArguments(agentResult.Response),
-			Confidence: 0.5, // Initial confidence
+			Confidence: 0.5, // Initial confidence 注：初始置信度
 			TokensUsed: agentResult.TokensUsed,
 		}
 		initialPositions = append(initialPositions, position)
@@ -236,6 +246,7 @@ func Debate(
 	result.Positions = initialPositions
 
 	// Phase 2: Debate rounds
+	// Phase 2：辩论轮次
 	for round := 1; round <= config.MaxRounds; round++ {
 		logger.Info("Debate round", "round", round)
 
@@ -243,8 +254,10 @@ func Debate(
 		roundFutures := make([]workflow.Future, len(initialPositions))
 
 		// Each debater responds to others
+		// 每个辩手回应其他辩手
 		for i, debater := range initialPositions {
 			// Build context with other positions
+			// 构建包含其他立场的上下文
 			othersPositions := []string{}
 			for j, other := range initialPositions {
 				if i != j {
@@ -297,6 +310,7 @@ func Debate(
 					})
 			} else {
 				// Determine parent workflow for streaming correlation
+				// 确定父 workflow 以便流式事件关联
 				wid := workflow.GetInfo(ctx).WorkflowExecution.ID
 				if p, ok := debateContext["parent_workflow_id"].(string); ok && p != "" {
 					wid = p
@@ -319,6 +333,7 @@ func Debate(
 		}
 
 		// Collect round responses
+		// 收集本轮回应
 		for i, future := range roundFutures {
 			var agentResult activities.AgentExecutionResult
 			if err := future.Get(ctx, &agentResult); err != nil {
@@ -343,6 +358,7 @@ func Debate(
 				fmt.Sprintf("Round %d - %s: %s", round, position.AgentID, position.Position))
 
 			// Record token usage for each debate round when not budgeted
+			// 非 budget 路径下为每轮辩论记录 token 用量
 			if opts.BudgetAgentMax <= 0 {
 				wid := workflow.GetInfo(ctx).WorkflowExecution.ID
 				if context != nil {
@@ -383,11 +399,13 @@ func Debate(
 		}
 
 		// Update positions with latest round
+		// 用最新一轮更新立场
 		initialPositions = roundPositions
 		result.Positions = roundPositions
 		result.Rounds = round
 
 		// Check for consensus if required
+		// 若要求共识则检查是否已达成
 		if config.RequireConsensus && checkConsensus(roundPositions) {
 			result.ConsensusReached = true
 			logger.Info("Consensus reached", "round", round)
@@ -396,16 +414,19 @@ func Debate(
 	}
 
 	// Phase 3: Resolution (Moderator or Voting)
+	// Phase 3：收敛（moderator 或投票）
 	if config.ModeratorEnabled {
 		result.FinalPosition = moderateDebate(ctx, result.Positions, query, debateHistory, opts)
 	} else if config.VotingEnabled {
 		result.FinalPosition, result.Votes = conductVoting(result.Positions)
 	} else {
 		// Synthesize positions
+		// 综合各方立场
 		result.FinalPosition = synthesizePositions(result.Positions, query)
 	}
 
 	// Determine winning argument
+	// 确定获胜论点
 	bestConfidence := 0.0
 	for _, pos := range result.Positions {
 		if pos.Confidence > bestConfidence {
@@ -430,15 +451,17 @@ func Debate(
 		})
 
 		// Extract all position texts for storage
+		// 提取所有立场文本用于存储
 		positionTexts := make([]string, len(result.Positions))
 		for i, pos := range result.Positions {
 			positionTexts[i] = pos.Position
 		}
 
 		// Calculate consensus confidence
+		// 计算共识置信度
 		consensusConfidence := bestConfidence
 		if result.ConsensusReached {
-			consensusConfidence = 0.9 // High confidence when consensus reached
+			consensusConfidence = 0.9 // High confidence when consensus reached 注：达成共识时给予高置信度
 		}
 
 		workflow.ExecuteActivity(
@@ -465,6 +488,7 @@ func Debate(
 }
 
 // generateDefaultPerspectives creates default debate perspectives
+// generateDefaultPerspectives 创建默认的辩论视角
 func generateDefaultPerspectives(num int) []string {
 	perspectives := []string{
 		"optimistic",
@@ -481,10 +505,12 @@ func generateDefaultPerspectives(num int) []string {
 }
 
 // extractArguments parses key arguments from a position
+// extractArguments 从立场中解析关键论点
 func extractArguments(position string) []string {
 	arguments := []string{}
 
 	// Look for numbered points
+	// 查找带编号的要点
 	lines := strings.SplitSeq(position, "\n")
 	for line := range lines {
 		line = strings.TrimSpace(line)
@@ -498,10 +524,11 @@ func extractArguments(position string) []string {
 	}
 
 	// If no structured arguments, extract sentences
+	// 若无结构化论点，则抽取句子
 	if len(arguments) == 0 {
 		sentences := strings.Split(position, ". ")
 		for i, sent := range sentences {
-			if i >= 3 { // Limit to key points
+			if i >= 3 { // Limit to key points 注：只取关键点
 				break
 			}
 			if len(sent) > 20 {
@@ -514,10 +541,12 @@ func extractArguments(position string) []string {
 }
 
 // calculateArgumentStrength estimates the strength of arguments
+// calculateArgumentStrength 估计论点的强度
 func calculateArgumentStrength(response string) float64 {
 	strength := 0.5
 
 	// Evidence indicators
+	// 证据类指示词
 	if strings.Contains(strings.ToLower(response), "evidence") ||
 		strings.Contains(strings.ToLower(response), "study") ||
 		strings.Contains(strings.ToLower(response), "data") {
@@ -525,6 +554,7 @@ func calculateArgumentStrength(response string) float64 {
 	}
 
 	// Logical structure
+	// 逻辑结构类指示词
 	if strings.Contains(response, "therefore") ||
 		strings.Contains(response, "because") ||
 		strings.Contains(response, "consequently") {
@@ -532,6 +562,7 @@ func calculateArgumentStrength(response string) float64 {
 	}
 
 	// Counter-arguments addressed
+	// 是否回应了反方观点
 	if strings.Contains(strings.ToLower(response), "however") ||
 		strings.Contains(strings.ToLower(response), "although") ||
 		strings.Contains(strings.ToLower(response), "counter") {
@@ -539,6 +570,7 @@ func calculateArgumentStrength(response string) float64 {
 	}
 
 	// Specific examples
+	// 具体例子类指示词
 	if strings.Contains(strings.ToLower(response), "for example") ||
 		strings.Contains(strings.ToLower(response), "such as") ||
 		strings.Contains(strings.ToLower(response), "instance") {
@@ -553,6 +585,7 @@ func calculateArgumentStrength(response string) float64 {
 }
 
 // checkConsensus determines if positions have converged
+// checkConsensus 判断各方立场是否已收敛
 func checkConsensus(positions []DebatePosition) bool {
 	if len(positions) < 2 {
 		return true
@@ -572,10 +605,12 @@ func checkConsensus(positions []DebatePosition) bool {
 	}
 
 	// If majority show agreement, consider consensus reached
+	// 多数表示赞同即视为达成共识
 	return agreementCount > len(positions)/2
 }
 
 // moderateDebate uses a moderator to synthesize the debate
+// moderateDebate 由 moderator 综合整场辩论
 func moderateDebate(ctx workflow.Context, positions []DebatePosition, query string, history []string, opts Options) string {
 	// Simplified moderation - in practice would use another agent
 	// 目前 moderator 只是复用综合逻辑，并没有真的调用第三个 agent。
@@ -583,10 +618,12 @@ func moderateDebate(ctx workflow.Context, positions []DebatePosition, query stri
 }
 
 // conductVoting tallies votes from positions
+// conductVoting 统计各立场的票数
 func conductVoting(positions []DebatePosition) (string, map[string]int) {
 	votes := make(map[string]int)
 
 	// Simple voting based on confidence
+	// 基于置信度的简易投票
 	winner := positions[0]
 	for _, pos := range positions {
 		votes[pos.AgentID] = int(pos.Confidence * 100)
@@ -599,22 +636,26 @@ func conductVoting(positions []DebatePosition) (string, map[string]int) {
 }
 
 // synthesizePositions combines multiple debate positions
+// synthesizePositions 合并多个辩论立场
 func synthesizePositions(positions []DebatePosition, query string) string {
 	if len(positions) == 0 {
 		return "No positions available"
 	}
 
 	// Find strongest arguments across all positions
+	// 在所有立场中找出最强论点
 	allArguments := []string{}
 	for _, pos := range positions {
 		allArguments = append(allArguments, pos.Arguments...)
 	}
 
 	// Build synthesis
+	// 构建综合结果
 	var synthesis strings.Builder
 	fmt.Fprintf(&synthesis, "After debate on '%s':\n\n", query)
 
 	// Add strongest position
+	// 加入最强立场
 	strongest := positions[0]
 	for _, pos := range positions {
 		if pos.Confidence > strongest.Confidence {
@@ -624,10 +665,11 @@ func synthesizePositions(positions []DebatePosition, query string) string {
 	fmt.Fprintf(&synthesis, "Strongest Position: %s\n\n", strongest.Position)
 
 	// Add key arguments
+	// 加入关键论点
 	if len(allArguments) > 0 {
 		synthesis.WriteString("Key Arguments:\n")
 		for i, arg := range allArguments {
-			if i >= 5 { // Limit to top arguments
+			if i >= 5 { // Limit to top arguments 注：只取最重要的论点
 				break
 			}
 			fmt.Fprintf(&synthesis, "- %s\n", arg)

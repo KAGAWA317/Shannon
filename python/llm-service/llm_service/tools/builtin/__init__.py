@@ -42,5 +42,6 @@ __all__ = [
 ]
 
 # Add browser tool to exports if available
+# 若可用则把 browser 工具加入 exports
 if _HAS_BROWSER_TOOLS:
     __all__.append("BrowserTool")

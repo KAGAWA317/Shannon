@@ -13,11 +13,14 @@ import (
 
 // GetContextBool is a convenience wrapper around util.GetContextBool for workflows.
 // It extracts a boolean value from context, handling both bool and string "true"/"false".
+// GetContextBool 是 util.GetContextBool 在 workflow 场景下的便捷封装。
+// 它从 context 中取出布尔值，同时兼容 bool 和字符串 "true"/"false"。
 func GetContextBool(ctx map[string]any, key string) bool {
 	return util.GetContextBool(ctx, key)
 }
 
 // GetContextString extracts a string value from a context map.
+// GetContextString 从 context map 中取出字符串值。
 func GetContextString(ctx map[string]any, key string) string {
 	if ctx == nil {
 		return ""
@@ -31,6 +34,7 @@ func GetContextString(ctx map[string]any, key string) string {
 }
 
 // convertHistoryForAgent formats session history into a simple string slice for agents
+// convertHistoryForAgent 把 session 历史格式化成供 agent 使用的简单字符串切片
 func convertHistoryForAgent(messages []Message) []string {
 	result := make([]string, len(messages))
 	for i, msg := range messages {
@@ -42,8 +46,11 @@ func convertHistoryForAgent(messages []Message) []string {
 
 // parseNumericValue attempts to extract a numeric value from a response string
 // parseNumericValue wrappers removed; use util.ParseNumericValue at call sites
+// parseNumericValue 尝试从响应字符串中提取数值
+// parseNumericValue 的包装已移除；调用方请直接使用 util.ParseNumericValue
 
 // convertHistoryMapForCompression converts Message history to map format for compression
+// convertHistoryMapForCompression 把 Message 历史转成 map 格式以便压缩
 func convertHistoryMapForCompression(messages []Message) []map[string]string {
 	result := make([]map[string]string, len(messages))
 	for i, msg := range messages {
@@ -56,6 +63,7 @@ func convertHistoryMapForCompression(messages []Message) []map[string]string {
 }
 
 // getPrimersRecents extracts primers/recents counts from context with defaults.
+// getPrimersRecents 从 context 中取出 primers/recents 数量，缺失时用默认值。
 func getPrimersRecents(ctx map[string]any, defPrimers, defRecents int) (int, int) {
 	p, r := defPrimers, defRecents
 	if ctx == nil {
@@ -86,6 +94,8 @@ func getPrimersRecents(ctx map[string]any, defPrimers, defRecents int) (int, int
 
 // getCompressionRatios reads compression trigger/target ratios from context
 // falling back to provided defaults. Values are clamped to sane bounds.
+// getCompressionRatios 从 context 中读取压缩的触发/目标比例，
+// 缺失时回退到传入的默认值。取值会被收敛到合理范围内。
 func getCompressionRatios(ctx map[string]any, defTrigger, defTarget float64) (float64, float64) {
 	tr, tg := defTrigger, defTarget
 	clamp := func(v float64, lo, hi float64) float64 {
@@ -112,6 +122,7 @@ func getCompressionRatios(ctx map[string]any, defTrigger, defTarget float64) (fl
 		}
 	}
 	// Sane bounds to avoid extremes
+	// 合理范围，避免取值极端
 	tr = clamp(tr, 0.1, 0.95)
 	tg = clamp(tg, 0.1, 0.9)
 	return tr, tg
@@ -143,6 +154,7 @@ func shapeHistory(messages []Message, nPrimers, nRecents int) []Message {
 }
 
 // fallbackToBasicMemory loads basic hierarchical memory for supervisor workflow
+// fallbackToBasicMemory 为 supervisor workflow 加载基础分层记忆
 func fallbackToBasicMemory(ctx workflow.Context, input *TaskInput, logger log.Logger) {
 	var memoryResult activities.FetchHierarchicalMemoryResult
 	memoryInput := activities.FetchHierarchicalMemoryInput{
@@ -169,6 +181,7 @@ func fallbackToBasicMemory(ctx workflow.Context, input *TaskInput, logger log.Lo
 }
 
 // extractSubtaskDescriptions extracts descriptions from subtasks
+// extractSubtaskDescriptions 提取各 subtask 的描述
 func extractSubtaskDescriptions(subtasks []activities.Subtask) []string {
 	descriptions := make([]string, len(subtasks))
 	for i, st := range subtasks {
@@ -179,6 +192,8 @@ func extractSubtaskDescriptions(subtasks []activities.Subtask) []string {
 
 // detectProviderFromModel determines the provider based on the model name
 // Delegates to shared models.DetectProvider for consistent provider detection
+// detectProviderFromModel 根据模型名称判断 provider
+// 委托给共享的 models.DetectProvider，保证 provider 判断一致
 func detectProviderFromModel(model string) string {
 	return models.DetectProvider(model)
 }
@@ -186,6 +201,9 @@ func detectProviderFromModel(model string) string {
 // aggregateAgentMetadata extracts model, provider, and token information from agent results
 // Returns metadata map with model_used, provider, input_tokens, output_tokens
 // aggregateAgentMetadata removed; use metadata.AggregateAgentMetadata at call sites
+// aggregateAgentMetadata 从 agent 结果中提取 model、provider 与 token 信息
+// 返回包含 model_used、provider、input_tokens、output_tokens 的 metadata map
+// aggregateAgentMetadata 已移除；调用方请使用 metadata.AggregateAgentMetadata
 
 // AddTaskContextToMetadata enriches TaskResult metadata with task submission context
 // for API exposure (force_research, research_strategy, etc.). Call before returning

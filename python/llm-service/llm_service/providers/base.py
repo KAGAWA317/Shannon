@@ -22,7 +22,7 @@ class ModelInfo:
 
     id: str
     name: str
-    provider: Any  # Can be ProviderType enum or string
+    provider: Any  # Can be ProviderType enum or string 注：可以是 ProviderType 枚举或字符串
     # 可以是 ProviderType enum 或字符串
     tier: ModelTier
     context_window: int

@@ -13,12 +13,14 @@ import (
 )
 
 // ApprovalHandler handles approval-related HTTP requests
+// ApprovalHandler 处理与审批相关的 HTTP request。
 type ApprovalHandler struct {
 	orchClient orchpb.OrchestratorServiceClient
 	logger     *zap.Logger
 }
 
 // NewApprovalHandler creates a new approval handler
+// NewApprovalHandler 创建新的 approval handler。
 func NewApprovalHandler(
 	orchClient orchpb.OrchestratorServiceClient,
 	logger *zap.Logger,
@@ -30,6 +32,7 @@ func NewApprovalHandler(
 }
 
 // ApprovalDecisionRequest represents the approval decision request
+// ApprovalDecisionRequest 表示审批决策 request。
 type ApprovalDecisionRequest struct {
 	WorkflowID     string `json:"workflow_id"`
 	RunID          string `json:"run_id,omitempty"`
@@ -41,10 +44,12 @@ type ApprovalDecisionRequest struct {
 }
 
 // SubmitDecision handles POST /api/v1/approvals/decision
+// SubmitDecision 处理 POST /api/v1/approvals/decision。
 func (h *ApprovalHandler) SubmitDecision(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user context
+	// 获取用户 context。
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -52,6 +57,7 @@ func (h *ApprovalHandler) SubmitDecision(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Parse request body
+	// 解析 request body。
 	var req ApprovalDecisionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.sendError(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
@@ -59,6 +65,7 @@ func (h *ApprovalHandler) SubmitDecision(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Validate required fields
+	// 校验必填字段。
 	if req.WorkflowID == "" || req.ApprovalID == "" {
 		h.sendError(w, "workflow_id and approval_id are required", http.StatusBadRequest)
 		return
@@ -71,9 +78,11 @@ func (h *ApprovalHandler) SubmitDecision(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Propagate auth/tracing headers to gRPC metadata
+	// 将 auth/tracing 头透传到 gRPC metadata。
 	ctx = withGRPCMetadata(ctx, r)
 
 	// Build gRPC request
+	// 构造 gRPC request。
 	grpcReq := &orchpb.ApproveTaskRequest{
 		ApprovalId:     req.ApprovalID,
 		WorkflowId:     req.WorkflowID,
@@ -85,6 +94,7 @@ func (h *ApprovalHandler) SubmitDecision(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Call ApproveTask gRPC
+	// 调用 ApproveTask gRPC。
 	resp, err := h.orchClient.ApproveTask(ctx, grpcReq)
 	if err != nil {
 		if st, ok := status.FromError(err); ok {
@@ -107,6 +117,7 @@ func (h *ApprovalHandler) SubmitDecision(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Log approval
+	// 记录审批日志。
 	h.logger.Info("Approval decision submitted",
 		zap.String("workflow_id", req.WorkflowID),
 		zap.String("approval_id", req.ApprovalID),
@@ -115,6 +126,7 @@ func (h *ApprovalHandler) SubmitDecision(w http.ResponseWriter, r *http.Request)
 	)
 
 	// Send response
+	// 发送响应。
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]any{
@@ -128,6 +140,7 @@ func (h *ApprovalHandler) SubmitDecision(w http.ResponseWriter, r *http.Request)
 }
 
 // sendError sends an error response
+// sendError 发送错误响应。
 func (h *ApprovalHandler) sendError(w http.ResponseWriter, message string, code int) {
 	writeJSON(w, code, map[string]string{"error": message})
 }

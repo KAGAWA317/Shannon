@@ -35,12 +35,14 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	)
 
 	// Determine workflow ID for event streaming
+	// 确定用于 event streaming 的 workflow ID。
 	workflowID := input.ParentWorkflowID
 	if workflowID == "" {
 		workflowID = workflow.GetInfo(ctx).WorkflowExecution.ID
 	}
 
 	// Configure activity options
+	// 配置 activity options。
 	activityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -50,6 +52,7 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
 	// Initialize control signal handler
+	// 初始化控制信号 handler。
 	emitCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Second,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
@@ -64,6 +67,7 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	controlHandler.Setup(ctx)
 
 	// Prepare base context
+	// 准备 base context。
 	baseContext := make(map[string]any)
 	maps.Copy(baseContext, input.Context)
 	maps.Copy(baseContext, input.SessionCtx)
@@ -72,9 +76,11 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	}
 
 	// Check for budget configuration
+	// 检查 budget 配置。
 	agentMaxTokens := getBudgetMax(baseContext)
 
 	// Use medium tier for browser tasks (needs good reasoning + tool use)
+	// 浏览器任务使用 medium 档位（需要较强推理与 tool 使用能力）。
 	modelTier := "medium"
 	approxModel := pricing.GetPriorityOneModel(modelTier)
 	if approxModel == "" {
@@ -82,9 +88,10 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	}
 
 	// Configure browser loop
+	// 配置 browser loop。
 	browserConfig := patterns.BrowserConfig{
-		MaxIterations: 15,     // Browser tasks typically need more iterations
-		ActionTimeout: 180000, // 3 minutes per action
+		MaxIterations: 15,     // Browser tasks typically need more iterations 注：浏览器任务通常需要更多迭代
+		ActionTimeout: 180000, // 3 minutes per action 注：每个动作 3 分钟
 	}
 
 	browserOpts := patterns.Options{
@@ -97,16 +104,19 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	}
 
 	// Check pause/cancel before execution
+	// 执行前检查暂停/取消。
 	if err := controlHandler.CheckPausePoint(ctx, "pre_execution"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
 
 	// Execute browser loop
+	// 执行 browser loop。
 	logger.Info("Executing browser automation loop",
 		"max_iterations", browserConfig.MaxIterations,
 	)
 
 	// Create checkpoint callback that delegates to control handler
+	// 构造 checkpoint callback，转交给 control handler 处理。
 	checkPause := func(wfCtx workflow.Context, checkpoint string) error {
 		return controlHandler.CheckPausePoint(wfCtx, checkpoint)
 	}
@@ -134,6 +144,7 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	totalTokens := browserResult.TotalTokens
 
 	// Update session with results
+	// 用结果更新 session。
 	if input.SessionID != "" {
 		var updRes activities.SessionUpdateResult
 		usages := make([]activities.AgentUsage, 0, len(browserResult.AgentResults))
@@ -160,6 +171,7 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 		}
 
 		// Persist to vector store
+		// 持久化到 vector store。
 		_ = workflow.ExecuteActivity(ctx,
 			activities.RecordQuery,
 			activities.RecordQueryInput{
@@ -185,6 +197,7 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	)
 
 	// Build metadata
+	// 组装 metadata。
 	meta := map[string]any{
 		"workflow":     "browser_use",
 		"iterations":   browserResult.Iterations,
@@ -193,6 +206,7 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	}
 
 	// Collect persisted screenshot paths from agent results (version-gated)
+	// 从 agent 结果中汇总已持久化的截图路径（按版本门控）。
 	screenshotVersion := workflow.GetVersion(ctx, "screenshot_persistence_v1", workflow.DefaultVersion, 1)
 	if screenshotVersion >= 1 {
 		var allScreenshots []string
@@ -205,6 +219,7 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	}
 
 	// Aggregate agent metadata
+	// 聚合 agent metadata。
 	agentResults := []activities.AgentExecutionResult{
 		{
 			AgentID:      "browser-agent",
@@ -219,11 +234,13 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	maps.Copy(meta, agentMeta)
 
 	// Compute estimated cost
+	// 计算预估费用。
 	if totalTokens > 0 {
 		meta["cost_usd"] = pricing.CostForTokens(approxModel, totalTokens)
 	}
 
 	// Emit final output
+	// 发出最终输出。
 	if finalResult != "" {
 		_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: workflowID,
@@ -239,6 +256,7 @@ func BrowserUseWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, erro
 	}
 
 	// Emit workflow completed
+	// 发出 workflow completed。
 	_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 		WorkflowID: workflowID,
 		EventType:  activities.StreamEventWorkflowCompleted,

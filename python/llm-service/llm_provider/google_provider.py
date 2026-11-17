@@ -373,7 +373,7 @@ class GoogleProvider(LLMProvider):
                     estimated_cost=cost,
                 ),
                 finish_reason=finish_reason,
-                function_call=None,  # Gemini doesn't use OpenAI-style function calls
+                function_call=None,  # Gemini doesn't use OpenAI-style function calls 注：Gemini 不使用 OpenAI 风格的 function call
                 # Gemini 不使用 OpenAI 风格的 function call
                 request_id=request_id,
                 latency_ms=latency_ms,

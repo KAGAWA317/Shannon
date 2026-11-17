@@ -6,7 +6,7 @@ from llm_provider.base import RateLimiter
 def test_rate_limiter_throttles_and_advances(monkeypatch):
     # Simulate time progression without real sleeps
     # 在不真正 sleep 的情况下模拟时间推进
-    current = [0.0]  # mutable container
+    current = [0.0]  # mutable container 注：可变容器
 
     def fake_time():
         return current[0]
@@ -44,6 +44,6 @@ def test_rate_limiter_throttles_and_advances(monkeypatch):
         t_before = fake_time()
         await rl.acquire()
         await rl.acquire()
-        assert fake_time() == t_before  # no extra waiting
+        assert fake_time() == t_before  # no extra waiting 注：没有额外等待
 
     asyncio.run(_run())

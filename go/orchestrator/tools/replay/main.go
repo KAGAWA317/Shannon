@@ -9,6 +9,7 @@ import (
 	"go.temporal.io/sdk/worker"
 
 	// Register workflows from the orchestrator module
+// 从 orchestrator 模块注册 workflow
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/workflows"
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/workflows/scheduled"
 	"github.com/Kocoro-lab/Shannon/go/orchestrator/internal/workflows/strategies"

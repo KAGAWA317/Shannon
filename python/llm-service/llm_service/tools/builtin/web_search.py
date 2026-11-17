@@ -31,10 +31,12 @@ def _ensure_snippet(result: Dict[str, Any], min_length: int = 30) -> str:
     snippet = result.get("snippet", "")
 
     # Already has sufficient snippet
+    # 已有足够长的 snippet
     if snippet and len(snippet) >= min_length:
         return snippet
 
     # Try alternative fields
+    # 尝试其他备选字段
     alternatives = [
         result.get("text", ""),
         result.get("content", ""),
@@ -46,15 +48,16 @@ def _ensure_snippet(result: Dict[str, Any], min_length: int = 30) -> str:
 
     for alt in alternatives:
         if alt and len(alt) >= min_length:
-            return alt[:500]  # Cap at 500 chars
+            return alt[:500]  # Cap at 500 chars 注：截断到 500 字符
 
     # Last resort: combine title + url for minimal context
+    # 最后兜底：用 title + url 组合出最小上下文
     title = result.get("title", "")
     url = result.get("url", "")
     if title:
         return f"{title} - {url}"
 
-    return snippet  # Return whatever we have
+    return snippet  # Return whatever we have 注：有多少返回多少
 
 
 class SearchProvider(Enum):
@@ -231,22 +234,23 @@ class ExaSearchProvider(WebSearchProvider):
         payload = {
             "query": query,
             "numResults": max_results,
-            "type": search_type,  # neural, keyword, or auto
-            "useAutoprompt": True,  # Enhance query for better results
+            "type": search_type,  # neural, keyword, or auto 注：neural、keyword 或 auto
+            "useAutoprompt": True,  # Enhance query for better results 注：优化 query 以提升结果质量
             "contents": {
                 "text": {
-                    "maxCharacters": 2000,  # Get substantial text content for each result
-                    "includeHtmlTags": False,  # Clean text without HTML
+                    "maxCharacters": 2000,  # Get substantial text content for each result 注：为每条结果取足够长的正文
+                    "includeHtmlTags": False,  # Clean text without HTML 注：纯文本，不含 HTML
                 },
                 "highlights": {
-                    "numSentences": 3,  # Extract key highlights
+                    "numSentences": 3,  # Extract key highlights 注：提取关键 highlights
                     "highlightsPerUrl": 2,
                 },
             },
-            "liveCrawl": "fallback",  # Use live crawl if cached results are stale
+            "liveCrawl": "fallback",  # Use live crawl if cached results are stale 注：缓存结果过旧时改走实时抓取
         }
 
         # Add category filter if specified
+        # 若指定了 category，则加入分类过滤
         if category:
             payload["category"] = category
 
@@ -278,17 +282,19 @@ class ExaSearchProvider(WebSearchProvider):
 
                 for result in data.get("results", []):
                     # Extract text content and highlights
+                    # 提取正文内容与 highlights
                     text_content = result.get("text", "")
                     highlights = result.get("highlights", [])
 
                     # Use highlights if available, otherwise use text content
+                    # 有 highlights 就用 highlights，否则用正文内容
                     snippet = ""
                     if highlights:
                         snippet = " ... ".join(
                             highlights[:2]
-                        )  # Join first 2 highlights
+                        )  # Join first 2 highlights 注：拼接前 2 条 highlight
                     elif text_content:
-                        snippet = text_content[:500]  # Use first 500 chars of text
+                        snippet = text_content[:500]  # Use first 500 chars of text 注：取正文前 500 字符
 
                     results.append(
                         {
@@ -296,7 +302,7 @@ class ExaSearchProvider(WebSearchProvider):
                             "snippet": snippet,
                             "content": text_content[:2000]
                             if text_content
-                            else "",  # Include fuller content
+                            else "",  # Include fuller content 注：附带更完整的内容
                             "url": result.get("url", ""),
                             "source": "exa",
                             "score": result.get("score", 0),
@@ -328,13 +334,14 @@ class FirecrawlSearchProvider(WebSearchProvider):
         }
 
         # Use Firecrawl's latest V2 search API
+        # 使用 Firecrawl 最新的 V2 search API
         payload = {
             "query": query,
-            "limit": min(max_results, 20),  # Firecrawl alpha caps at lower limits
-            "sources": ["web"],  # Search the web
+            "limit": min(max_results, 20),  # Firecrawl alpha caps at lower limits 注：Firecrawl alpha 上限更低
+            "sources": ["web"],  # Search the web 注：搜索网页
             "scrapeOptions": {
-                "formats": ["markdown"],  # Get markdown content
-                "onlyMainContent": True,  # Skip navigation, ads, etc.
+                "formats": ["markdown"],  # Get markdown content 注：返回 markdown 内容
+                "onlyMainContent": True,  # Skip navigation, ads, etc. 注：跳过导航、广告等
             },
         }
 
@@ -361,9 +368,10 @@ class FirecrawlSearchProvider(WebSearchProvider):
                 # Firecrawl 在 'data' 字段中返回数据
                 for result in data.get("data", []):
                     # Extract content from markdown if available
+                    # 若有 markdown 则从中提取内容
                     content = ""
                     if result.get("markdown"):
-                        content = result["markdown"][:300]  # First 300 chars
+                        content = result["markdown"][:300]  # First 300 chars 注：前 300 字符
                     elif result.get("description"):
                         content = result["description"]
 
@@ -375,7 +383,7 @@ class FirecrawlSearchProvider(WebSearchProvider):
                             "source": "firecrawl",
                             "markdown": result.get(
                                 "markdown", ""
-                            ),  # Full markdown available
+                            ),  # Full markdown available 注：可用完整 markdown
                         }
                     )
 
@@ -404,7 +412,7 @@ class GoogleSearchProvider(WebSearchProvider):
             "key": self.api_key,
             "cx": self.search_engine_id,
             "q": query,
-            "num": min(max_results, 10),  # Google limits to 10 per request
+            "num": min(max_results, 10),  # Google limits to 10 per request 注：Google 每次请求上限 10 条
         }
 
         async with aiohttp.ClientSession() as session:
@@ -437,6 +445,7 @@ class GoogleSearchProvider(WebSearchProvider):
 
                 for item in data.get("items", []):
                     # Extract content from various fields
+                    # 从多个字段中提取内容
                     snippet = item.get("snippet", "")
                     page_map = item.get("pagemap", {})
                     metatags = page_map.get("metatags", [{}])[0]
@@ -512,6 +521,7 @@ class SerperSearchProvider(WebSearchProvider):
                 results = []
 
                 # Process organic search results
+                # 处理 organic 搜索结果
                 for result in data.get("organic", []):
                     results.append(
                         {
@@ -525,6 +535,7 @@ class SerperSearchProvider(WebSearchProvider):
                     )
 
                 # Include knowledge graph if available
+                # 若有 knowledge graph 则一并纳入
                 if data.get("knowledgeGraph"):
                     kg = data["knowledgeGraph"]
                     results.insert(
@@ -566,6 +577,7 @@ class SerpAPISearchProvider(WebSearchProvider):
         **extra_params: Any,
     ) -> List[Dict[str, Any]]:
         # Validate max_results
+        # 校验 max_results
         max_results = self.validate_max_results(max_results)
 
         # Use passed engine or fall back to instance default (avoids race condition)
@@ -582,6 +594,7 @@ class SerpAPISearchProvider(WebSearchProvider):
         }
 
         # Merge extra params (gl, hl, location, tbs, etc.)
+        # 合并额外参数（gl、hl、location、tbs 等）
         params.update(extra_params)
 
         async with aiohttp.ClientSession() as session:
@@ -616,6 +629,7 @@ class SerpAPISearchProvider(WebSearchProvider):
                 # 处理 Google Finance 的特殊 response 格式
                 if effective_engine == "google_finance":
                     # Extract summary (current price, change, etc.)
+                    # 提取 summary（当前价格、涨跌幅等）
                     summary = data.get("summary", {})
                     if summary:
                         price_info = {
@@ -630,6 +644,7 @@ class SerpAPISearchProvider(WebSearchProvider):
                         results.append(price_info)
 
                     # Extract key stats if available
+                    # 若有 key_stats 则提取关键统计
                     key_stats = data.get("key_stats", {})
                     if key_stats:
                         stats_info = {
@@ -646,10 +661,11 @@ class SerpAPISearchProvider(WebSearchProvider):
                 # 处理 Google Finance Markets 的特殊 response 格式
                 if effective_engine == "google_finance_markets":
                     # Extract market trends
+                    # 提取市场趋势
                     market_trends = data.get("market_trends", [])
                     for trend in market_trends:
                         trend_title = trend.get("title", "Market Trend")
-                        for item in trend.get("results", [])[:5]:  # Limit items per trend
+                        for item in trend.get("results", [])[:5]:  # Limit items per trend 注：每个 trend 限制条数
                             results.append({
                                 "title": f"{item.get('name', '')} ({item.get('stock', '')})",
                                 "snippet": f"Price: {item.get('price', 'N/A')} | Change: {item.get('price_movement', {}).get('percentage', 'N/A')}%",
@@ -659,6 +675,7 @@ class SerpAPISearchProvider(WebSearchProvider):
                             })
 
                     # Also include markets overview
+                    # 同时纳入 markets 总览
                     markets = data.get("markets", {})
                     for region, items in markets.items():
                         if isinstance(items, list):
@@ -674,6 +691,7 @@ class SerpAPISearchProvider(WebSearchProvider):
                     return results[:max_results]
 
                 # Handle Google News special response format
+                # 处理 Google News 的特殊 response 格式
                 if effective_engine == "google_news":
                     # Google News returns results in news_results, not organic_results
                     # 处理 Google News 的特殊 response 格式
@@ -681,6 +699,7 @@ class SerpAPISearchProvider(WebSearchProvider):
                     news_results = data.get("news_results", [])
 
                     # Fallback to top_stories if news_results is empty
+                    # news_results 为空时降级用 top_stories
                     if not news_results:
                         news_results = data.get("top_stories", [])
 
@@ -699,6 +718,7 @@ class SerpAPISearchProvider(WebSearchProvider):
                         )
 
                     # Ensure we don't exceed max_results
+                    # 确保不超过 max_results
                     results = results[:max_results]
                     return results
 
@@ -717,6 +737,7 @@ class SerpAPISearchProvider(WebSearchProvider):
                     )
 
                 # Include knowledge graph if available
+                # 若有 knowledge graph 则一并纳入
                 if data.get("knowledge_graph"):
                     kg = data["knowledge_graph"]
                     # Safely extract URL from source field with type checking
@@ -741,6 +762,7 @@ class SerpAPISearchProvider(WebSearchProvider):
                     )
 
                 # Ensure we don't exceed max_results after adding knowledge graph
+                # 加入 knowledge graph 后确保不超过 max_results
                 results = results[:max_results]
 
                 return results
@@ -809,6 +831,7 @@ class SearchAPISearchProvider(WebSearchProvider):
                 # 对 Google 而言，SearchAPI.io 使用与 SerpAPI 相同的 response 结构
 
                 # Handle Google News
+                # 处理 Google News
                 if effective_engine == "google_news":
                     news_results = data.get("news_results", [])
                     if not news_results:
@@ -828,6 +851,7 @@ class SearchAPISearchProvider(WebSearchProvider):
                     return results[:max_results]
 
                 # Organic results
+                # organic 结果
                 for result in data.get("organic_results", []):
                     results.append({
                         "title": result.get("title", ""),
@@ -839,6 +863,7 @@ class SearchAPISearchProvider(WebSearchProvider):
                     })
 
                 # Knowledge graph
+                # 知识图谱
                 if data.get("knowledge_graph"):
                     kg = data["knowledge_graph"]
                     kg_url = ""
@@ -913,6 +938,7 @@ class BingSearchProvider(WebSearchProvider):
                 results = []
 
                 # Process web pages results
+                # 处理 web pages 结果
                 web_pages = data.get("webPages", {})
                 for result in web_pages.get("value", []):
                     results.append(
@@ -1033,12 +1059,15 @@ class WebSearchTool(Tool):
         """Initialize the search provider based on environment configuration"""
 
         # Default to Google, then Serper, then others
+        # 默认 Google，其次 Serper，再次其他
         default_provider = SearchProvider.GOOGLE.value
 
         # Check which provider is configured via environment
+        # 检查环境变量配置的是哪个 provider
         provider_name = os.getenv("WEB_SEARCH_PROVIDER", default_provider).lower()
 
         # Provider configuration
+        # provider 配置表
         providers_config = {
             SearchProvider.GOOGLE.value: {
                 "class": GoogleSearchProvider,
@@ -1072,11 +1101,13 @@ class WebSearchTool(Tool):
         }
 
         # Try configured provider first
+        # 优先尝试已配置的 provider
         if provider_name in providers_config:
             config = providers_config[provider_name]
             api_key = os.getenv(config["api_key_env"])
             if api_key and WebSearchProvider.validate_api_key(api_key):
                 # Special handling for Google which needs search engine ID
+                # Google 需要额外的 search engine ID，单独处理
                 if provider_name == SearchProvider.GOOGLE.value:
                     search_engine_id = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
                     if not search_engine_id:
@@ -1097,6 +1128,7 @@ class WebSearchTool(Tool):
                 )
 
         # Fallback: try other providers in priority order
+        # 兜底：按优先级依次尝试其他 provider
         priority_order = [
             SearchProvider.GOOGLE.value,
             SearchProvider.SERPER.value,
@@ -1110,11 +1142,12 @@ class WebSearchTool(Tool):
         for name in priority_order:
             if (
                 name != provider_name and name in providers_config
-            ):  # Skip already tried provider
+            ):  # Skip already tried provider 注：跳过已尝试过的 provider
                 config = providers_config[name]
                 api_key = os.getenv(config["api_key_env"])
                 if api_key and WebSearchProvider.validate_api_key(api_key):
                     # Special handling for Google
+                    # Google 单独处理
                     if name == SearchProvider.GOOGLE.value:
                         search_engine_id = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
                         if search_engine_id:
@@ -1147,6 +1180,7 @@ class WebSearchTool(Tool):
             )
 
         # Generate description based on provider type
+        # 按 provider 类型生成描述
         if isinstance(self.provider, (SerpAPISearchProvider, SearchAPISearchProvider)):
             desc = (
                 "Search the web with multiple engine support. "
@@ -1229,17 +1263,18 @@ class WebSearchTool(Tool):
             category="search",
             author="Shannon",
             requires_auth=True,
-            rate_limit=self.settings.web_search_rate_limit,  # Configurable via WEB_SEARCH_RATE_LIMIT env var
+            rate_limit=self.settings.web_search_rate_limit,  # Configurable via WEB_SEARCH_RATE_LIMIT env var 注：可通过 WEB_SEARCH_RATE_LIMIT 环境变量配置
             timeout_seconds=20,
             memory_limit_mb=256,
             sandboxed=True,
             dangerous=False,
-            cost_per_use=0.001,  # Approximate cost per search
-            session_aware=True,  # Enable session context for official_domains auto-fetch
+            cost_per_use=0.001,  # Approximate cost per search 注：每次搜索的近似成本
+            session_aware=True,  # Enable session context for official_domains auto-fetch 注：启用 session context，供 official_domains 自动抓取使用
         )
 
     def _get_parameters(self) -> List[ToolParameter]:
         # Base parameters (common to all providers)
+        # 基础参数（所有 provider 通用）
         params = [
             ToolParameter(
                 name="query",
@@ -1262,6 +1297,7 @@ class WebSearchTool(Tool):
         ]
 
         # SerpAPI / SearchAPI.io parameters (compatible APIs)
+        # SerpAPI / SearchAPI.io 参数（两者 API 兼容）
         if isinstance(self.provider, (SerpAPISearchProvider, SearchAPISearchProvider)):
             params.extend([
                 ToolParameter(
@@ -1313,6 +1349,7 @@ class WebSearchTool(Tool):
             ])
 
         # Exa-specific parameters
+        # Exa 专属参数
         elif isinstance(self.provider, ExaSearchProvider):
             params.extend([
                 ToolParameter(
@@ -1334,6 +1371,7 @@ class WebSearchTool(Tool):
             ])
 
         # Common advanced parameters (all providers)
+        # 通用高级参数（所有 provider 适用）
         params.extend([
             ToolParameter(
                 name="source_type",
@@ -1363,6 +1401,7 @@ class WebSearchTool(Tool):
         search_type = kwargs.get("search_type", "auto")
         if not self.provider:
             # If no provider is configured but the query targets a single site, attempt a lightweight scrape
+            # 未配置任何 provider、但 query 指向单一站点时，尝试轻量抓取
             site_url = self._extract_site_url(query)
             if site_url:
                 return await self._fallback_site_scrape(site_url, max_results)
@@ -1381,6 +1420,7 @@ class WebSearchTool(Tool):
                 ),
             )
         # Sanitize/normalize search_type to avoid hard failures from invalid values
+        # 清洗并归一化 search_type，避免非法取值直接报错
         if not isinstance(search_type, str) or search_type.strip() == "":
             logger.warning("Missing or empty search_type, falling back to 'auto'")
             search_type = "auto"
@@ -1396,10 +1436,11 @@ class WebSearchTool(Tool):
         site_filter = kwargs.get("site_filter")
 
         # Source type to Exa category and site mapping (Deep Research 2.0)
+        # source_type 到 Exa category 与站点列表的映射（Deep Research 2.0）
         source_type_config = {
             "official": {
-                "category": None,  # No category filter - rely on site: queries
-                "sites": [],  # Sites come from official_domains in context
+                "category": None,  # No category filter - rely on site: queries 注：不做 category 过滤，依赖 site: 查询
+                "sites": [],  # Sites come from official_domains in context 注：站点来自 context 中的 official_domains
                 "query_suffix": "official site",
             },
             "aggregator": {
@@ -1426,65 +1467,77 @@ class WebSearchTool(Tool):
                 "category": None,
                 "sites": [
                     # China funding/company data sources (prioritized)
-                    "tianyancha.com",   # Tianyancha - company registry + funding
-                    "qichacha.com",     # Qichacha - company registry + funding
-                    "it-juzi.com",      # IT Juzi - startup funding database
-                    "36kr.com",         # 36Kr - tech news + funding
-                    "iyiou.com",        # EqualOcean - industry news + funding
-                    "pedaily.cn",       # PEdaily - PE/VC news
+                    # 中国融资/公司数据源（按优先级）
+                    "tianyancha.com",   # Tianyancha - company registry + funding 注：天眼查——工商信息 + 融资
+                    "qichacha.com",     # Qichacha - company registry + funding 注：企查查——工商信息 + 融资
+                    "it-juzi.com",      # IT Juzi - startup funding database 注：IT 桔子——创业融资数据库
+                    "36kr.com",         # 36Kr - tech news + funding 注：36氪——科技新闻 + 融资
+                    "iyiou.com",        # EqualOcean - industry news + funding 注：亿欧——行业新闻 + 融资
+                    "pedaily.cn",       # PEdaily - PE/VC news 注：投资界——PE/VC 新闻
                 ],
             },
             "local_jp": {
                 "category": None,
                 "sites": [
                     # Japan funding/company data sources (prioritized)
-                    "initial.inc",      # INITIAL - Japan's largest startup database
-                    "entrepedia.jp",    # Entrepedia - Japan startup encyclopedia
-                    "thebridge.jp",     # The Bridge - Japan tech startup news
-                    "jp.techcrunch.com",  # TechCrunch Japan
-                    "nikkei.com",       # Nikkei - business news
-                    "prtimes.jp",       # PR Times - press releases
+                    # 日本融资/公司数据源（按优先级）
+                    "initial.inc",      # INITIAL - Japan's largest startup database 注：INITIAL——日本最大的创业公司数据库
+                    "entrepedia.jp",    # Entrepedia - Japan startup encyclopedia 注：Entrepedia——日本创业百科
+                    "thebridge.jp",     # The Bridge - Japan tech startup news 注：The Bridge——日本科技创业新闻
+                    "jp.techcrunch.com",  # TechCrunch Japan 注：TechCrunch 日本版
+                    "nikkei.com",       # Nikkei - business news 注：日经——商业新闻
+                    "prtimes.jp",       # PR Times - press releases 注：PR Times——新闻稿
                 ],
             },
         }
 
         # Apply source_type configuration if provided
+        # 若提供了 source_type，则应用对应配置
         if source_type and source_type in source_type_config:
             config = source_type_config[source_type]
             logger.info(f"Applying source_type '{source_type}' configuration")
 
             # Override category if source_type specifies one
+            # source_type 指定了 category 时覆盖之
             if config.get("category") and not category_raw:
                 category_raw = config["category"]
 
             # Build site filter from source_type sites
+            # 用 source_type 的 sites 构建 site filter
             if config.get("sites") and not site_filter:
                 site_filter = ",".join(config["sites"])
 
             # Add query suffix for official source type
+            # 为 official 类型追加 query 后缀
             if config.get("query_suffix") and source_type == "official":
                 # Check if query doesn't already have site: prefix
+                # 检查 query 是否已带 site: 前缀
                 if not re.search(r"site:", query, re.IGNORECASE):
                     query = f"{query} {config['query_suffix']}"
 
         # Apply explicit site_filter to query
+        # 把显式传入的 site_filter 应用到 query
         if site_filter:
             sites = [s.strip() for s in site_filter.split(",") if s.strip()]
             if sites and not re.search(r"site:", query, re.IGNORECASE):
                 # For multiple sites, use OR syntax: site:a.com OR site:b.com
+                # 多站点时使用 OR 语法：site:a.com OR site:b.com
                 if len(sites) == 1:
                     query = f"site:{sites[0]} {query}"
                 elif len(sites) <= 3:
                     # Exa works better with fewer site filters
+                    # site 过滤越少，Exa 效果越好
                     site_query = " OR ".join([f"site:{s}" for s in sites[:3]])
                     query = f"({site_query}) {query}"
                 else:
                     # For many sites, just use the first 3 to avoid query pollution
+                    # 站点过多时只取前 3 个，避免污染 query
                     logger.warning(f"Too many site filters ({len(sites)}), using first 3")
                     site_query = " OR ".join([f"site:{s}" for s in sites[:3]])
                     query = f"({site_query}) {query}"
 
         # Normalize/validate category; default to personal site for domain-scoped queries
+        # 归一化并校验 category；domain 限定的 query 默认用 personal site
         category_aliases = {
             "company": "company",
             "companies": "company",
@@ -1520,6 +1573,7 @@ class WebSearchTool(Tool):
 
         if category is None:
             # If the query is domain-scoped, default to personal site; otherwise default to news
+            # query 限定域名时默认 personal site，否则默认 news
             domains = set(re.findall(r"site:([A-Za-z0-9\.\-]+)", query or ""))
             for url in re.findall(r"https?://[^\s]+", query or ""):
                 parsed = urlparse(url)
@@ -1534,6 +1588,7 @@ class WebSearchTool(Tool):
                 category = "news"
 
         # Validate max_results parameter
+        # 校验 max_results 参数
         try:
             max_results = self.provider.validate_max_results(max_results)
         except ValueError as e:
@@ -1547,6 +1602,7 @@ class WebSearchTool(Tool):
             )
 
             # Emit progress via observer if available
+            # 若有 observer，则上报进度
             observer = kwargs.get("observer")
             if observer:
                 try:
@@ -1555,12 +1611,14 @@ class WebSearchTool(Tool):
                     pass
 
             # Pass provider-specific parameters
+            # 传各 provider 专属参数
             if isinstance(self.provider, ExaSearchProvider):
                 results = await self.provider.search(
                     query, max_results, search_type=search_type, category=category
                 )
             elif isinstance(self.provider, (SerpAPISearchProvider, SearchAPISearchProvider)):
                 # Extract and validate SerpAPI/SearchAPI.io-specific parameters
+                # 提取并校验 SerpAPI/SearchAPI.io 专属参数
                 engine = kwargs.get("engine", "google")
                 gl = kwargs.get("gl")
                 hl = kwargs.get("hl")
@@ -1570,6 +1628,7 @@ class WebSearchTool(Tool):
                 trend = kwargs.get("trend")
 
                 # Validate engine
+                # 校验 engine
                 valid_engines = {
                     "google", "bing", "baidu", "google_scholar",
                     "youtube", "google_news", "google_finance", "google_finance_markets"
@@ -1582,6 +1641,7 @@ class WebSearchTool(Tool):
                     )
 
                 # Validate time_filter
+                # 校验 time_filter
                 valid_time_filters = {"day", "week", "month", "year"}
                 if time_filter and time_filter not in valid_time_filters:
                     return ToolResult(
@@ -1591,6 +1651,7 @@ class WebSearchTool(Tool):
                     )
 
                 # Validate window (for google_finance)
+                # 校验 window（google_finance 用）
                 valid_windows = {"1D", "5D", "1M", "6M", "YTD", "1Y", "5Y", "MAX"}
                 if window and window not in valid_windows:
                     return ToolResult(
@@ -1600,6 +1661,7 @@ class WebSearchTool(Tool):
                     )
 
                 # Validate trend (for google_finance_markets)
+                # 校验 trend（google_finance_markets 用）
                 valid_trends = {"indexes", "most-active", "gainers", "losers", "climate-leaders", "crypto", "currencies"}
                 if trend and trend not in valid_trends:
                     return ToolResult(
@@ -1609,6 +1671,7 @@ class WebSearchTool(Tool):
                     )
 
                 # Sanitize location (basic alphanumeric + spaces/commas only)
+                # 清洗 location（仅允许字母数字、空格与逗号）
                 if location:
                     if not re.match(r"^[\w\s,.-]+$", location):
                         return ToolResult(
@@ -1618,13 +1681,16 @@ class WebSearchTool(Tool):
                         )
 
                 # Build extra params dict
+                # 构建 extra params 字典
                 extra_params: Dict[str, Any] = {}
                 if gl:
                     # Basic validation: 2-letter country code
+                    # 基础校验：两位国家代码
                     if len(gl) == 2 and gl.isalpha():
                         extra_params["gl"] = gl.lower()
                 if hl:
                     # Basic validation: language code format (e.g., "en", "zh-CN")
+                    # 基础校验：语言代码格式（如 "en"、"zh-CN"）
                     if re.match(r"^[a-z]{2}(-[A-Z]{2})?$", hl):
                         extra_params["hl"] = hl
                 if location:
@@ -1634,24 +1700,28 @@ class WebSearchTool(Tool):
                     extra_params["tbs"] = tbs_map[time_filter]
 
                 # Google Finance specific parameters
+                # Google Finance 专属参数
                 if engine == "google_finance" and window:
                     extra_params["window"] = window
                 if engine == "google_finance_markets" and trend:
                     extra_params["trend"] = trend
 
                 # Pass engine as parameter instead of mutating provider state
+                # engine 作为参数传入，而不是改写 provider 状态
                 results = await self.provider.search(query, max_results, engine=engine, **extra_params)
             else:
                 results = await self.provider.search(query, max_results)
 
             if not results:
                 # Provide specific empty result reason instead of generic "knowledge cutoff" narrative
+                # 给出具体的空结果原因，而不是笼统的 "knowledge cutoff" 说法
                 provider_name = self.provider.__class__.__name__
                 engine_info = kwargs.get("engine", "google") if isinstance(self.provider, (SerpAPISearchProvider, SearchAPISearchProvider)) else "default"
 
                 empty_reason = f"Search returned no results. Provider: {provider_name}, Engine: {engine_info}, Query: '{query[:100]}...'"
 
                 # Suggest troubleshooting steps
+                # 给出排查建议
                 suggestions = []
                 if "google_news" in engine_info:
                     suggestions.append("Try broader search terms or different time filters")
@@ -1665,7 +1735,7 @@ class WebSearchTool(Tool):
                 logger.warning(f"Empty search results: {empty_reason}")
 
                 return ToolResult(
-                    success=True,  # Search executed successfully, just no results
+                    success=True,  # Search executed successfully, just no results 注：搜索已成功执行，只是无结果
                     output=[],
                     metadata={
                         "query": query,
@@ -1680,6 +1750,7 @@ class WebSearchTool(Tool):
             logger.info(f"Web search returned {len(results)} results")
 
             # Optional: auto-fetch top results when using Exa to ensure deep reads
+            # 可选：使用 Exa 时自动抓取前几条结果，保证深读
             auto_fetch_meta = None
             auto_fetch_enabled = int(os.getenv("WEB_SEARCH_EXA_AUTO_FETCH_ENABLED", "1")) > 0
             if isinstance(self.provider, ExaSearchProvider) and auto_fetch_enabled:
@@ -1687,20 +1758,24 @@ class WebSearchTool(Tool):
                 is_research = bool(ctx.get("research_mode"))
 
                 # Base defaults (safer): disabled by default, small caps
+                # 基础默认值（更保守）：默认关闭，上限较小
                 auto_fetch_top_k_env = int(os.getenv("WEB_SEARCH_EXA_AUTO_FETCH_TOP_K", "0"))
                 fetch_max_length_env = int(os.getenv("WEB_SEARCH_EXA_AUTO_FETCH_MAX_LENGTH", "8000"))
 
                 # Allow per-request overrides via session_context (passed through safe_keys)
+                # 允许经 session_context 按请求覆盖（通过 safe_keys 透传）
                 auto_fetch_top_k = int(ctx.get("auto_fetch_k", auto_fetch_top_k_env))
                 fetch_max_length = int(ctx.get("auto_fetch_max_length", fetch_max_length_env))
 
                 # Gate: only fetch if research OR explicit top_k > 0
+                # 触发条件：research 模式，或显式 top_k > 0
                 should_auto_fetch = False
 
                 official_domains = ctx.get("official_domains", [])
                 if not isinstance(official_domains, list):
                     official_domains = []
                 # Skip auto-fetch for inferred domains (not verified by domain_analysis)
+                # 推断出的 domain（未经 domain_analysis 验证）跳过自动抓取
                 official_domains_source = ctx.get("official_domains_source", "")
                 is_domains_verified = official_domains_source not in ("", "refiner_inferred")
                 has_official = len(official_domains) > 0 and is_domains_verified
@@ -1715,6 +1790,7 @@ class WebSearchTool(Tool):
                     auto_fetch_results: List[Dict[str, Any]] = []
 
                     # Step 1: Official domains (deep)
+                    # 第 1 步：官方域名（深度抓取）
                     for domain in official_domains[:3]:
                         if consumed_chars >= total_chars_cap:
                             break
@@ -1724,6 +1800,8 @@ class WebSearchTool(Tool):
                         try:
                             # Call web_fetch for single-page content
                             # NOTE: For multi-page, caller should use web_subpage_fetch instead
+                            # 调用 web_fetch 抓取单页内容
+                            # 注意：多页抓取请调用方改用 web_subpage_fetch
                             fetch_res = await fetcher.execute(
                                 session_context=session_context,
                                 url=official_url,
@@ -1756,6 +1834,7 @@ class WebSearchTool(Tool):
                             )
 
                     # Step 2: Top-K third-party results (shallow by default)
+                    # 第 2 步：Top-K 第三方结果（默认浅抓）
                     for result in results[:auto_fetch_top_k]:
                         if consumed_chars >= total_chars_cap:
                             break
@@ -1774,6 +1853,7 @@ class WebSearchTool(Tool):
                             continue
                         try:
                             # Call web_fetch for single-page content
+                            # 调用 web_fetch 抓取单页内容
                             fetch_res = await fetcher.execute(
                                 session_context=session_context,
                                 url=url,
@@ -1823,7 +1903,7 @@ class WebSearchTool(Tool):
                     "query": query,
                     "results": results,
                     "result_count": len(results),
-                    "tool_source": "search",  # Citation V2: mark as search-origin
+                    "tool_source": "search",  # Citation V2: mark as search-origin 注：Citation V2：标记来源为 search
                 },
                 metadata={
                     "query": query,
@@ -1837,6 +1917,7 @@ class WebSearchTool(Tool):
 
         except ValueError as e:
             # Configuration errors - these are safe to show
+            # 配置类错误——可以安全展示
             logger.error(f"Search configuration error: {e}")
             return ToolResult(
                 success=False,
@@ -1845,12 +1926,14 @@ class WebSearchTool(Tool):
             )
         except Exception as e:
             # Runtime errors - sanitize these
+            # 运行时错误——需先清洗
             sanitized_error = WebSearchProvider.sanitize_error_message(str(e))
             logger.error(
                 f"Search failed with {self.provider.__class__.__name__}: {sanitized_error}"
             )
 
             # Return user-friendly error message
+            # 返回对用户友好的错误信息
             error_message = str(e)
             if (
                 "temporarily unavailable" in error_message
@@ -1858,9 +1941,11 @@ class WebSearchTool(Tool):
                 or "authentication failed" in error_message
             ):
                 # These are already sanitized messages from our providers
+                # 这些已是各 provider 清洗过的消息
                 return ToolResult(success=False, output=None, error=error_message)
             else:
                 # Generic error for unexpected failures
+                # 意外失败的通用错误
                 return ToolResult(
                     success=False,
                     output=None,

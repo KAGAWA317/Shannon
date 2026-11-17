@@ -78,6 +78,8 @@ func (a *Activities) UpdateSessionResult(ctx context.Context, input SessionUpdat
 			}
 			// When CacheAwareTokensUsed is set, price the cache-inclusive total
 			// so the model-only fallback doesn't undercount prompt-cache cost.
+			// 当设置了 CacheAwareTokensUsed 时，按含 cache 的总量计价，
+			// 以免只看 model 的回退路径低估 prompt cache 成本。
 			tokensForPricing := max(input.CacheAwareTokensUsed, input.TokensUsed)
 			costUSD = pricing.CostForTokens(input.ModelUsed, tokensForPricing)
 		} else {

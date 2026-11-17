@@ -17,10 +17,10 @@ from qdrant_client.models import (
 )
 
 # Get Qdrant URL from environment or use default
+#从环境变量读取 Qdrant URL，否则使用默认值
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 COLLECTION_NAME = "decomposition_patterns"
-VECTOR_SIZE = 1536  # OpenAI embedding size
-# OpenAI embedding 维度
+VECTOR_SIZE = 1536  # OpenAI embedding size 注：OpenAI embedding 维度
 
 def create_decomposition_patterns_collection():
     """Create the decomposition_patterns collection with appropriate configuration."""
@@ -29,6 +29,7 @@ def create_decomposition_patterns_collection():
     client = QdrantClient(url=QDRANT_URL)
 
     # Check if collection exists
+    #检查 collection 是否存在
     collections = client.get_collections().collections
     existing_collections = [c.name for c in collections]
 
@@ -49,6 +50,7 @@ def create_decomposition_patterns_collection():
     print(f"Creating collection '{COLLECTION_NAME}'...")
 
     # Create collection with vector configuration
+    #使用向量配置创建 collection
     client.create_collection(
         collection_name=COLLECTION_NAME,
         vectors_config=VectorParams(
@@ -76,6 +78,7 @@ def create_decomposition_patterns_collection():
     print("Creating payload indexes...")
 
     # Index for session_id (exact match filtering)
+    #为 session_id 建索引（精确匹配过滤）
     client.create_payload_index(
         collection_name=COLLECTION_NAME,
         field_name="session_id",
@@ -83,6 +86,7 @@ def create_decomposition_patterns_collection():
     )
 
     # Index for user_id (exact match filtering)
+    #为 user_id 建索引（精确匹配过滤）
     client.create_payload_index(
         collection_name=COLLECTION_NAME,
         field_name="user_id",
@@ -90,6 +94,7 @@ def create_decomposition_patterns_collection():
     )
 
     # Index for strategy (exact match filtering)
+    #为 strategy 建索引（精确匹配过滤）
     client.create_payload_index(
         collection_name=COLLECTION_NAME,
         field_name="strategy",
@@ -97,6 +102,7 @@ def create_decomposition_patterns_collection():
     )
 
     # Index for success_rate (range filtering)
+    #为 success_rate 建索引（范围过滤）
     client.create_payload_index(
         collection_name=COLLECTION_NAME,
         field_name="success_rate",
@@ -104,6 +110,7 @@ def create_decomposition_patterns_collection():
     )
 
     # Index for timestamp (range filtering and sorting)
+    #为 timestamp 建索引（范围过滤与排序）
     client.create_payload_index(
         collection_name=COLLECTION_NAME,
         field_name="timestamp",
@@ -111,6 +118,7 @@ def create_decomposition_patterns_collection():
     )
 
     # Index for pattern text search
+    #为 pattern 文本搜索建索引
     client.create_payload_index(
         collection_name=COLLECTION_NAME,
         field_name="pattern",
@@ -120,6 +128,7 @@ def create_decomposition_patterns_collection():
     print("Payload indexes created successfully")
 
     # Get collection info to verify
+    #读取 collection 信息以校验
     collection_info = client.get_collection(collection_name=COLLECTION_NAME)
     print(f"\nCollection info:")
     print(f"  Vectors count: {collection_info.vectors_count}")

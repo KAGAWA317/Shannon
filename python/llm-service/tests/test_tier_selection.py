@@ -8,7 +8,7 @@ LLM service 中 model tier 选择的单元测试。
 这些测试确保在回退到 context/model 维度的 tier 之前，优先尊重顶层 query.model_tier。
 """
 
-from __future__ import annotations  # PEP 604 `X | None` syntax on Python 3.9
+from __future__ import annotations  # PEP 604 `X | None` syntax on Python 3.9 注：PEP 604，Python 3.9 上的 `X | None` 语法
 
 from enum import Enum
 
@@ -28,6 +28,7 @@ class TestTierSelection:
     def test_query_model_tier_overrides_context_and_mode_default(self):
         """Top-level query model_tier should override context and mode default"""
         # Even if context specifies a different tier, top-level should win
+        #即使 context 指定了不同的 tier，顶层（query）也应优先
         context = {"model_tier": "medium"}
         tier = determine_model_tier(context, mode="simple", query_tier="large")
         assert tier == ModelTier.LARGE, "Top-level query model_tier should have highest precedence"
@@ -43,20 +44,24 @@ class TestTierSelection:
         context = {}
 
         # Simple mode -> SMALL
+        #simple 模式 -> SMALL
         tier = determine_model_tier(context, mode="simple", query_tier=None)
         assert tier == ModelTier.SMALL, "Simple mode should default to SMALL"
 
         # Standard mode -> MEDIUM
+        #standard 模式 -> MEDIUM
         tier = determine_model_tier(context, mode="standard", query_tier=None)
         assert tier == ModelTier.MEDIUM, "Standard mode should default to MEDIUM"
 
         # Complex mode -> LARGE
+        #complex 模式 -> LARGE
         tier = determine_model_tier(context, mode="complex", query_tier=None)
         assert tier == ModelTier.LARGE, "Complex mode should default to LARGE"
 
     def test_precedence_order(self):
         """Test precedence: query.model_tier > context.model_tier > mode default"""
         # All three present - query should win
+        #三者都提供时，query 应胜出
         context = {"model_tier": "large"}
         tier = determine_model_tier(context, mode="simple", query_tier="medium")
         assert tier == ModelTier.MEDIUM, "Query (top-level) tier should have highest precedence"
@@ -81,6 +86,7 @@ class TestTierSelection:
 
 
 # Helper function that mimics the actual implementation
+#模拟实际实现的辅助函数
 def determine_model_tier(context: dict, mode: str, query_tier: str | None) -> ModelTier:
     """
     Determine model tier with precedence: query.model_tier > context.model_tier > mode default
@@ -88,13 +94,16 @@ def determine_model_tier(context: dict, mode: str, query_tier: str | None) -> Mo
     This mirrors the actual implementation in llm_service/api/agent.py
     """
     # Try top-level query.model_tier first
+    #优先尝试顶层 query.model_tier
     tier_str = (query_tier or "").strip().lower() if query_tier else ""
 
     # Fall back to context.model_tier
+    #回退到 context.model_tier
     if not tier_str:
         tier_str = (context.get("model_tier", "") or "").strip().lower()
 
     # Map to ModelTier enum
+    #映射到 ModelTier 枚举
     tier_map = {
         "small": ModelTier.SMALL,
         "medium": ModelTier.MEDIUM,
@@ -105,6 +114,7 @@ def determine_model_tier(context: dict, mode: str, query_tier: str | None) -> Mo
         return tier_map[tier_str]
 
     # Fall back to mode-based default
+    #回退到基于 mode 的默认值
     mode_defaults = {
         "simple": ModelTier.SMALL,
         "standard": ModelTier.MEDIUM,

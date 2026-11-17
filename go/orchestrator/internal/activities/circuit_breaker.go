@@ -27,6 +27,7 @@ type CircuitBreaker struct {
 	lastFailureTime time.Time
 
 	// Configuration
+	// 配置
 	maxFailures     int
 	resetTimeout    time.Duration
 	halfOpenSuccess int
@@ -37,9 +38,9 @@ type CircuitBreaker struct {
 func NewCircuitBreaker() *CircuitBreaker {
 	return &CircuitBreaker{
 		state:           StateClosed,
-		maxFailures:     5,                // Open circuit after 5 consecutive failures
-		resetTimeout:    30 * time.Second, // Try to reset after 30 seconds
-		halfOpenSuccess: 2,                // Need 2 successful calls to fully close circuit
+		maxFailures:     5,                // Open circuit after 5 consecutive failures 注：连续 5 次失败后打开熔断
+		resetTimeout:    30 * time.Second, // Try to reset after 30 seconds 注：30 秒后尝试重置
+		halfOpenSuccess: 2,                // Need 2 successful calls to fully close circuit 注：需要 2 次成功调用才完全关闭熔断
 	}
 }
 

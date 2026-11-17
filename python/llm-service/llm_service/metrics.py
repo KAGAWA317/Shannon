@@ -11,7 +11,7 @@ from prometheus_client import Counter, Histogram, Gauge, Info
 LLM_REQUESTS_TOTAL = Counter(
     "llm_requests_total",
     "Total number of LLM requests",
-    ["provider", "model", "tier", "cache_status"],  # cache_status: hit/miss
+    ["provider", "model", "tier", "cache_status"],  # cache_status: hit/miss 注：cache_status 取值：hit/miss
 )
 
 LLM_REQUEST_DURATION = Histogram(
@@ -24,7 +24,7 @@ LLM_REQUEST_DURATION = Histogram(
 LLM_TOKENS_TOTAL = Counter(
     "llm_tokens_total",
     "Total tokens processed",
-    ["provider", "model", "type"],  # type: prompt/completion
+    ["provider", "model", "type"],  # type: prompt/completion 注：type 用于区分 prompt 与 completion
 )
 
 LLM_COST_TOTAL = Counter(
@@ -44,7 +44,7 @@ ACTIVE_CONNECTIONS = Gauge(
 ERROR_REQUESTS_TOTAL = Counter(
     "llm_service_errors_total",
     "Total number of errors",
-    ["error_type", "component"],  # component: cache/llm/service
+    ["error_type", "component"],  # component: cache/llm/service 注：component 取值：cache/llm/service
 )
 
 # MCP metrics
@@ -52,7 +52,7 @@ ERROR_REQUESTS_TOTAL = Counter(
 MCP_REQUESTS_TOTAL = Counter(
     "llm_mcp_requests_total",
     "Total number of MCP requests",
-    ["name", "function", "status"],  # status: success/error
+    ["name", "function", "status"],  # status: success/error 注：status 取值：success/error
 )
 
 MCP_REQUEST_DURATION = Histogram(
@@ -151,6 +151,7 @@ class MetricsCollector:
         ACTIVE_CONNECTIONS.set(count)
 
     # --- MCP ---
+    # --- MCP 相关 ---
     def record_mcp_request(
         self, name: str, function: str, status: str, duration: float
     ):
@@ -190,4 +191,4 @@ class TimedOperation:
             error_type = exc_type.__name__ if exc_type else "unknown"
             metrics.record_error(error_type, self.component)
 
-        return False  # Don't suppress exceptions
+        return False  # Don't suppress exceptions 注：不吞掉异常

@@ -128,8 +128,7 @@ class XAIProvider(LLMProvider):
             # 确保 content 为字符串 —— xAI 拒绝非字符串 content
             content = msg.get("content")
             if content is None:
-                continue  # Skip messages with no content
-                # 跳过没有 content 的消息
+                continue  # Skip messages with no content 注：跳过没有 content 的消息
             elif isinstance(content, str):
                 clean_msg["content"] = content
             elif isinstance(content, list):
@@ -201,6 +200,7 @@ class XAIProvider(LLMProvider):
         # xAI 使用 tools 格式（OpenAI 兼容），而非 functions
         if request.functions and model_config.supports_functions:
             # Convert functions to tools format (idempotent if already tools)
+            # 将 functions 转成 tools 格式（已经是 tools 时幂等）
             tools: List[Dict[str, Any]] = []
             for func in request.functions:
                 if isinstance(func, dict) and func.get("type") == "function" and isinstance(func.get("function"), dict):
@@ -573,6 +573,7 @@ class XAIProvider(LLMProvider):
         # xAI 使用 tools 格式（OpenAI 兼容），而非 functions
         if request.functions and model_config.supports_functions:
             # Convert functions to tools format (idempotent if already tools)
+            # 将 functions 转成 tools 格式（已经是 tools 时幂等）
             tools: List[Dict[str, Any]] = []
             for func in request.functions:
                 if isinstance(func, dict) and func.get("type") == "function" and isinstance(func.get("function"), dict):

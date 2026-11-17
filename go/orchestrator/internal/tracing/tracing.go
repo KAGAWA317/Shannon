@@ -18,6 +18,7 @@ import (
 var tracer oteltrace.Tracer
 
 // Config holds tracing configuration
+// Config 保存 tracing 配置
 type Config struct {
 	Enabled      bool   `mapstructure:"enabled"`
 	ServiceName  string `mapstructure:"service_name"`
@@ -25,6 +26,7 @@ type Config struct {
 }
 
 // Initialize sets up minimal OTLP tracing
+// Initialize 建立最小化的 OTLP tracing
 func Initialize(cfg Config, logger *zap.Logger) error {
 	// Always initialize a tracer handle, even if provider is disabled.
 	// This ensures Start* helpers never panic when tracing is disabled.
@@ -41,11 +43,13 @@ func Initialize(cfg Config, logger *zap.Logger) error {
 	}
 
 	// Default values
+	// 默认值
 	if cfg.OTLPEndpoint == "" {
 		cfg.OTLPEndpoint = "localhost:4317"
 	}
 
 	// Create OTLP exporter
+	// 创建 OTLP exporter
 	exporter, err := otlptracegrpc.New(
 		context.Background(),
 		otlptracegrpc.WithEndpoint(cfg.OTLPEndpoint),
@@ -56,6 +60,7 @@ func Initialize(cfg Config, logger *zap.Logger) error {
 	}
 
 	// Create resource
+	// 创建 resource
 	res, err := resource.New(context.Background(),
 		resource.WithAttributes(
 			semconv.ServiceName(cfg.ServiceName),
@@ -67,6 +72,7 @@ func Initialize(cfg Config, logger *zap.Logger) error {
 	}
 
 	// Create tracer provider
+	// 创建 tracer provider
 	tp := trace.NewTracerProvider(
 		trace.WithBatcher(exporter),
 		trace.WithResource(res),
@@ -127,6 +133,7 @@ func StartHTTPSpan(ctx context.Context, method, url string) (context.Context, ot
 }
 
 // ParseTraceparent parses W3C traceparent header
+// ParseTraceparent 解析 W3C traceparent header
 func ParseTraceparent(traceparent string) (traceID, spanID string, flags byte, valid bool) {
 	parts := strings.Split(traceparent, "-")
 	if len(parts) != 4 {

@@ -16,17 +16,18 @@ import (
 // StructuredFact 表示一条带置信度与来源的已抽取 fact。
 type StructuredFact struct {
 	ID             string   `json:"id"`
-	Statement      string   `json:"statement"`       // The factual claim
-	Category       string   `json:"category"`        // e.g., "funding", "product", "market", "technical"
-	Confidence     float64  `json:"confidence"`      // 0.0-1.0
-	SourceCitation []int    `json:"source_citation"` // Citation indices [1], [2], etc.
-	EntityMentions []string `json:"entity_mentions"` // Entities mentioned in the fact
-	TemporalMarker string   `json:"temporal_marker"` // e.g., "2024", "Q3 2024", "recent"
-	IsQuantitative bool     `json:"is_quantitative"` // Contains numbers/metrics
-	Contradictions []string `json:"contradictions"`  // IDs of contradicting facts
+	Statement      string   `json:"statement"`       // The factual claim 注：事实陈述本身
+	Category       string   `json:"category"`        // e.g., "funding", "product", "market", "technical" 注：例如 "funding"、"product"、"market"、"technical"
+	Confidence     float64  `json:"confidence"`      // 0.0-1.0 注：取值范围 0.0-1.0
+	SourceCitation []int    `json:"source_citation"` // Citation indices [1], [2], etc. 注：citation 序号，如 [1]、[2]
+	EntityMentions []string `json:"entity_mentions"` // Entities mentioned in the fact 注：该 fact 中提到的实体
+	TemporalMarker string   `json:"temporal_marker"` // e.g., "2024", "Q3 2024", "recent" 注：例如 "2024"、"Q3 2024"、"recent"
+	IsQuantitative bool     `json:"is_quantitative"` // Contains numbers/metrics 注：是否包含数字/指标
+	Contradictions []string `json:"contradictions"`  // IDs of contradicting facts 注：与之矛盾的 fact ID
 }
 
 // FactExtractionCitation is a simplified citation for fact extraction input
+// FactExtractionCitation 是 fact 抽取入参用的精简 citation
 type FactExtractionCitation struct {
 	URL    string `json:"url"`
 	Title  string `json:"title"`
@@ -34,6 +35,7 @@ type FactExtractionCitation struct {
 }
 
 // FactExtractionInput is the input for fact extraction
+// FactExtractionInput 是 fact 抽取的入参
 type FactExtractionInput struct {
 	Query            string                   `json:"query"`
 	SynthesisResult  string                   `json:"synthesis_result"`
@@ -44,11 +46,12 @@ type FactExtractionInput struct {
 }
 
 // FactExtractionResult contains the extracted facts
+// FactExtractionResult 保存抽取出的 facts
 type FactExtractionResult struct {
 	Facts              []StructuredFact `json:"facts"`
 	FactCount          int              `json:"fact_count"`
-	CategorizedFacts   map[string]int   `json:"categorized_facts"`   // Count per category
-	HighConfidenceFacts int             `json:"high_confidence_facts"` // Facts with confidence >= 0.8
+	CategorizedFacts   map[string]int   `json:"categorized_facts"`   // Count per category 注：各分类的数量
+	HighConfidenceFacts int             `json:"high_confidence_facts"` // Facts with confidence >= 0.8 注：置信度 >= 0.8 的 facts
 	ContradictionCount int              `json:"contradiction_count"`
 	TokensUsed         int              `json:"tokens_used"`
 	ModelUsed          string           `json:"model_used"`
@@ -68,19 +71,19 @@ func (a *Activities) ExtractFacts(ctx context.Context, input FactExtractionInput
 	)
 
 	// Build extraction prompt
+	// 构造抽取用的 prompt
 	systemPrompt := buildFactExtractionPrompt(input)
 	userContent := buildFactExtractionContent(input)
 
 	// Call LLM service
+	// 调用 LLM 服务
 	llmServiceURL := getenv("LLM_SERVICE_URL", "http://llm-service:8000")
 	url := fmt.Sprintf("%s/agent/query", llmServiceURL)
 
 	reqBody := map[string]any{
 		"query":       userContent,
-		"max_tokens":  8192, // Extended for detailed fact extraction
-		// 加大到 8192，以容纳详细的 fact 抽取输出。
-		"temperature": 0.1, // Low temperature for factual extraction
-		// 低 temperature，保证事实抽取稳定。
+		"max_tokens":  8192, // Extended for detailed fact extraction 注：加大到 8192，以容纳详细的 fact 抽取输出。
+		"temperature": 0.1, // Low temperature for factual extraction 注：低 temperature，保证事实抽取稳定。
 		"agent_id":    "fact_extractor",
 		"model_tier":  "small",
 		"context": map[string]any{
@@ -95,8 +98,7 @@ func (a *Activities) ExtractFacts(ctx context.Context, input FactExtractionInput
 	}
 
 	client := &http.Client{
-		Timeout:   120 * time.Second, // Longer timeout for large synthesis content
-		// 加长 timeout，应对大段 synthesis 内容。
+		Timeout:   120 * time.Second, // Longer timeout for large synthesis content 注：加长 timeout，应对大段 synthesis 内容。
 		Transport: interceptors.NewWorkflowHTTPRoundTripper(nil),
 	}
 
@@ -121,6 +123,7 @@ func (a *Activities) ExtractFacts(ctx context.Context, input FactExtractionInput
 	}
 
 	// Parse response
+	// 解析 response
 	var llmResp struct {
 		Success  bool   `json:"success"`
 		Response string `json:"response"`
@@ -148,6 +151,7 @@ func (a *Activities) ExtractFacts(ctx context.Context, input FactExtractionInput
 	}
 
 	// Parse structured response
+	// 解析结构化 response
 	if err := parseFactExtractionResponse(llmResp.Response, result); err != nil {
 		logger.Warn("ExtractFacts: failed to parse structured response",
 			"error", err,
@@ -158,6 +162,7 @@ func (a *Activities) ExtractFacts(ctx context.Context, input FactExtractionInput
 	}
 
 	// Compute summary statistics
+	// 计算汇总统计
 	result.FactCount = len(result.Facts)
 	for _, fact := range result.Facts {
 		result.CategorizedFacts[fact.Category]++
@@ -179,6 +184,7 @@ func (a *Activities) ExtractFacts(ctx context.Context, input FactExtractionInput
 }
 
 // buildFactExtractionPrompt creates the system prompt for fact extraction
+// buildFactExtractionPrompt 构造 fact 抽取用的 system prompt
 func buildFactExtractionPrompt(input FactExtractionInput) string {
 	var sb strings.Builder
 
@@ -240,6 +246,7 @@ Return a JSON object:
 }
 
 // buildFactExtractionContent builds the user content for fact extraction
+// buildFactExtractionContent 构造 fact 抽取用的 user content
 func buildFactExtractionContent(input FactExtractionInput) string {
 	var sb strings.Builder
 
@@ -276,8 +283,10 @@ func buildFactExtractionContent(input FactExtractionInput) string {
 }
 
 // parseFactExtractionResponse parses the LLM response into structured facts
+// parseFactExtractionResponse 把 LLM response 解析成结构化 facts
 func parseFactExtractionResponse(response string, result *FactExtractionResult) error {
 	// Find JSON in response
+	// 从 response 里截出 JSON
 	start := strings.Index(response, "{")
 	end := strings.LastIndex(response, "}")
 
@@ -299,6 +308,7 @@ func parseFactExtractionResponse(response string, result *FactExtractionResult) 
 	result.Facts = parsed.Facts
 
 	// Assign IDs if not provided
+	// 未提供 ID 时补上
 	for i := range result.Facts {
 		if result.Facts[i].ID == "" {
 			result.Facts[i].ID = fmt.Sprintf("fact-%d", i+1)

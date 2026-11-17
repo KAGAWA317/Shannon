@@ -27,6 +27,7 @@ func (r *SkillRegistry) LoadDirectory(root string) error {
 	defer r.mu.Unlock()
 
 	// Check if directory exists
+	// 检查目录是否存在
 	info, err := os.Stat(root)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -46,11 +47,13 @@ func (r *SkillRegistry) LoadDirectory(root string) error {
 		}
 
 		// Skip directories and non-markdown files
+		// 跳过目录和非 markdown 文件
 		if d.IsDir() || filepath.Ext(path) != ".md" {
 			return nil
 		}
 
 		// Skip README files
+		// 跳过 README 文件
 		if d.Name() == "README.md" {
 			return nil
 		}
@@ -73,6 +76,7 @@ func (r *SkillRegistry) loadFileLocked(path string) error {
 	}
 
 	// Create registry entry
+	// 创建 registry 条目
 	key := fmt.Sprintf("%s@%s", skill.Name, skill.Version)
 	entry := SkillEntry{
 		Key:         key,
@@ -83,23 +87,28 @@ func (r *SkillRegistry) loadFileLocked(path string) error {
 	}
 
 	// Check for duplicate versioned key
+	// 检查是否重复的带版本 key
 	if existing, ok := r.skills[key]; ok {
 		return fmt.Errorf("duplicate skill %s found in %s (already loaded from %s)",
 			key, path, existing.SourcePath)
 	}
 
 	// Store by versioned key
+	// 按带版本 key 存储
 	r.skills[key] = entry
 
 	// Track all versions by name
+	// 按名称跟踪所有版本
 	r.byName[skill.Name] = append(r.byName[skill.Name], entry)
 
 	// Update latest pointer (highest version)
+	// 更新 latest 指针（最高版本）
 	if latest, ok := r.skills[skill.Name]; !ok || CompareVersions(skill.Version, latest.Skill.Version) > 0 {
 		r.skills[skill.Name] = entry
 	}
 
 	// Index by category
+	// 按 category 建索引
 	if skill.Category != "" {
 		r.byCategory[skill.Category] = append(r.byCategory[skill.Category], key)
 	}
@@ -155,6 +164,7 @@ func (r *SkillRegistry) List() []SkillSummary {
 	}
 
 	// Sort by name for consistent output
+	// 按名称排序，保证输出稳定
 	sort.Slice(summaries, func(i, j int) bool {
 		return summaries[i].Name < summaries[j].Name
 	})
@@ -163,6 +173,7 @@ func (r *SkillRegistry) List() []SkillSummary {
 }
 
 // ListByCategory filters skills by category.
+// ListByCategory 按 category 过滤 skill。
 func (r *SkillRegistry) ListByCategory(category string) []SkillSummary {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -200,6 +211,7 @@ func (r *SkillRegistry) ListByCategory(category string) []SkillSummary {
 	}
 
 	// Sort by name for consistent output
+	// 按名称排序，保证输出稳定
 	sort.Slice(summaries, func(i, j int) bool {
 		return summaries[i].Name < summaries[j].Name
 	})
@@ -208,6 +220,7 @@ func (r *SkillRegistry) ListByCategory(category string) []SkillSummary {
 }
 
 // Categories returns all unique categories.
+// Categories 返回所有唯一的 category。
 func (r *SkillRegistry) Categories() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -246,6 +259,7 @@ func (r *SkillRegistry) Finalize() error {
 	}
 
 	// Validate that dangerous skills have descriptions
+	// 校验危险 skill 必须有描述
 	for _, entry := range r.skills {
 		if entry.Skill.Dangerous && entry.Skill.Description == "" {
 			return fmt.Errorf("dangerous skill %q must have a description", entry.Skill.Name)
@@ -267,6 +281,7 @@ func (r *SkillRegistry) GetVersions(name string) []SkillEntry {
 	}
 
 	// Return a copy to avoid mutation
+	// 返回副本，避免被调用方改动
 	result := make([]SkillEntry, len(entries))
 	copy(result, entries)
 	return result

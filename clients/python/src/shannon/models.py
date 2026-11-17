@@ -48,9 +48,9 @@ class EventType(str, Enum):
     WORKFLOW_CANCELLING = "workflow.cancelling"
     WORKFLOW_CANCELLED = "workflow.cancelled"
     # Workflow lifecycle events
+    # Workflow 生命周期事件
     WORKFLOW_FAILED = "WORKFLOW_FAILED"
-    STREAM_END = "done"  # SSE transforms STREAM_END to "done"
-    # SSE 会把 STREAM_END 转换成「done」
+    STREAM_END = "done"  # SSE transforms STREAM_END to "done" 注：SSE 会把 STREAM_END 转换成「done」
     # OpenAI-style streaming events (used by some providers)
     # OpenAI 风格的流式 event（部分 provider 使用）
     THREAD_MESSAGE_DELTA = "thread.message.delta"
@@ -246,6 +246,7 @@ class TaskStatus:
     usage: Optional[Dict[str, Any]] = None
     metadata: Optional[Dict[str, Any]] = None
     # Deprecated: use 'usage' instead
+    # 已弃用：请改用 'usage'
     metrics: Optional[ExecutionMetrics] = None
     agent_statuses: List[AgentTaskStatus] = field(default_factory=list)
 
@@ -279,7 +280,7 @@ class PendingApproval:
 class ConversationMessage:
     """Message in a conversation history."""
 
-    role: str  # "user", "assistant", "system"
+    role: str  # "user", "assistant", "system" 注："user"、"assistant"、"system"
     content: str
     timestamp: Optional[datetime] = None
     tokens_used: int = 0
@@ -591,7 +592,7 @@ class ScheduleRun:
 class ReviewRound:
     """A single round of human-in-the-loop review conversation."""
 
-    role: str  # "user", "assistant"
+    role: str  # "user", "assistant" 注："user"、"assistant"
     message: str
     timestamp: Optional[datetime] = None
 
@@ -600,7 +601,7 @@ class ReviewRound:
 class ReviewState:
     """Current state of a human-in-the-loop review."""
 
-    status: str  # "reviewing", "approved"
+    status: str  # "reviewing", "approved" 注："reviewing"、"approved"
     round: int
     version: int
     current_plan: Optional[str] = None

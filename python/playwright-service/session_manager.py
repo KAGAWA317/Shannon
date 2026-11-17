@@ -26,9 +26,10 @@ else:
 logger = logging.getLogger(__name__)
 
 # Session configuration
-SESSION_TTL_SECONDS = int(300)  # 5 minutes idle TTL
-SESSION_CLEANUP_INTERVAL = int(60)  # Check every 60 seconds
-MAX_SESSIONS = int(50)  # Maximum concurrent sessions
+# 会话配置
+SESSION_TTL_SECONDS = int(300)  # 5 minutes idle TTL 注：空闲 TTL 5 分钟
+SESSION_CLEANUP_INTERVAL = int(60)  # Check every 60 seconds 注：每 60 秒检查一次
+MAX_SESSIONS = int(50)  # Maximum concurrent sessions 注：最大并发会话数
 
 
 @dataclass
@@ -90,6 +91,7 @@ class BrowserSessionManager:
                 pass
 
         # Close all sessions
+        # 关闭所有会话
         async with self._lock:
             for session_id in list(self.sessions.keys()):
                 await self._close_session_unlocked(session_id)
@@ -119,6 +121,7 @@ class BrowserSessionManager:
         """
         async with self._lock:
             # Check if session exists
+            # 检查 session 是否存在
             if session_id in self.sessions:
                 session = self.sessions[session_id]
                 session.touch()
@@ -126,6 +129,7 @@ class BrowserSessionManager:
                 return session.page, False
 
             # Check session limit
+            # 检查 session 数量上限
             if len(self.sessions) >= MAX_SESSIONS:
                 # Try to evict oldest expired session
                 # 尝试驱逐最旧的已过期 session
@@ -134,6 +138,7 @@ class BrowserSessionManager:
                     raise RuntimeError(f"Maximum sessions ({MAX_SESSIONS}) reached")
 
             # Create new session
+            # 创建新 session
             context = await self.browser.new_context(
                 viewport={"width": viewport_width, "height": viewport_height},
                 locale=locale,

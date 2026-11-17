@@ -17,6 +17,7 @@ type Manager struct {
 	logger                *zap.Logger
 
 	// Background monitoring
+	// 后台监控。
 	healthCheckInterval time.Duration
 	stopCh              chan struct{}
 	started             bool
@@ -24,15 +25,18 @@ type Manager struct {
 }
 
 // NewManager creates a new degradation manager
+// NewManager 创建新的 degradation manager。
 func NewManager(
 	redisWrapper interface{ IsCircuitBreakerOpen() bool },
 	databaseWrapper interface{ IsCircuitBreakerOpen() bool },
 	logger *zap.Logger,
 ) *Manager {
 	// Create default strategy
+	// 创建默认 strategy。
 	strategy := NewDefaultStrategy(logger, redisWrapper, databaseWrapper)
 
 	// Create sub-managers
+	// 创建各子 manager。
 	modeManager := NewModeManager(strategy, logger)
 	partialResultsManager := NewPartialResultsManager(strategy, logger)
 
@@ -41,7 +45,7 @@ func NewManager(
 		modeManager:           modeManager,
 		partialResultsManager: partialResultsManager,
 		logger:                logger,
-		healthCheckInterval:   30 * time.Second, // Check health every 30 seconds
+		healthCheckInterval:   30 * time.Second, // Check health every 30 seconds 注：每 30 秒检查一次健康状态
 		stopCh:                make(chan struct{}),
 	}
 }
@@ -59,6 +63,7 @@ func (m *Manager) Start(ctx context.Context) error {
 	m.started = true
 
 	// Start background health monitoring
+	// 启动后台健康监控。
 	go m.healthMonitorLoop()
 
 	m.logger.Info("Degradation manager started",
@@ -69,6 +74,7 @@ func (m *Manager) Start(ctx context.Context) error {
 }
 
 // Stop stops background monitoring
+// Stop 停止后台监控。
 func (m *Manager) Stop() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -105,36 +111,42 @@ func (m *Manager) healthMonitorLoop() {
 // updateHealthMetrics 刷新健康相关 metrics
 func (m *Manager) updateHealthMetrics() {
 	// Get system health from strategy
+	// 从 strategy 取系统健康状态。
 	if defaultStrategy, ok := m.strategy.(*DefaultStrategy); ok {
 		health := defaultStrategy.checkSystemHealth()
 
 		// Update dependency health metrics
+		// 刷新各依赖的健康 metrics。
 		RecordDependencyHealth("redis", health.Redis.IsHealthy)
 		RecordDependencyHealth("database", health.Database.IsHealthy)
 		RecordDependencyHealth("agent_core", health.AgentCore.IsHealthy)
 		RecordDependencyHealth("llm_service", health.LLMService.IsHealthy)
 
 		// Update circuit breaker health metrics
-		RecordCircuitBreakerHealth("redis", health.Redis.CircuitBreaker == 2) // StateOpen = 2
-		// StateOpen = 2，即 circuit breaker 处于 open 时记为不健康
+// 更新 circuit breaker 健康度指标
+		RecordCircuitBreakerHealth("redis", health.Redis.CircuitBreaker == 2) // StateOpen = 2 注：StateOpen = 2，即 circuit breaker 处于 open 时记为不健康
 		RecordCircuitBreakerHealth("database", health.Database.CircuitBreaker == 2)
 
 		// Update current degradation level
+		// 刷新当前 degradation level。
 		currentDegradationLevel.Set(float64(health.Overall))
 	}
 }
 
 // GetModeManager returns the mode manager for workflow use
+// GetModeManager 返回供 workflow 使用的 mode manager。
 func (m *Manager) GetModeManager() *ModeManager {
 	return m.modeManager
 }
 
 // GetPartialResultsManager returns the partial results manager
+// GetPartialResultsManager 返回 partial results manager。
 func (m *Manager) GetPartialResultsManager() *PartialResultsManager {
 	return m.partialResultsManager
 }
 
 // GetStrategy returns the degradation strategy
+// GetStrategy 返回 degradation strategy。
 func (m *Manager) GetStrategy() DegradationStrategy {
 	return m.strategy
 }
@@ -148,6 +160,7 @@ func (m *Manager) CheckSystemHealth(ctx context.Context) (*SystemHealth, error) 
 	}
 
 	// Fallback health check
+	// 兜底健康检查。
 	_, level, err := m.strategy.ShouldDegrade(ctx)
 	if err != nil {
 		return nil, err
@@ -178,6 +191,7 @@ func (m *Manager) UpdateExternalServiceHealth(service string, healthy bool) {
 }
 
 // IsSystemDegraded returns true if system is currently in degraded state
+// IsSystemDegraded 在系统当前处于降级状态时返回 true。
 func (m *Manager) IsSystemDegraded(ctx context.Context) (bool, DegradationLevel, error) {
 	return m.strategy.ShouldDegrade(ctx)
 }
@@ -191,6 +205,7 @@ func (m *Manager) GetRecommendedMode(
 	sessionID string,
 ) (string, bool, error) {
 	// Convert string to ExecutionMode
+	// 把字符串转换为 ExecutionMode。
 	var execMode ExecutionMode
 	switch originalMode {
 	case "simple":
@@ -200,7 +215,7 @@ func (m *Manager) GetRecommendedMode(
 	case "complex":
 		execMode = ModeComplex
 	default:
-		execMode = ModeStandard // Default fallback
+		execMode = ModeStandard // Default fallback 注：默认兜底
 	}
 
 	finalMode, reason, err := m.modeManager.DetermineFinalMode(ctx, execMode, query, sessionID)
@@ -234,6 +249,7 @@ func (m *Manager) AggregatePartialResults(
 }
 
 // CreatePartialResult creates a partial result from component execution
+// CreatePartialResult 依据组件执行结果构造 partial result。
 func (m *Manager) CreatePartialResult(
 	source string,
 	success bool,

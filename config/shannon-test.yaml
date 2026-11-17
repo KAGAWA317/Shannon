@@ -5,35 +5,35 @@
 
 service:
   port: 50052
-  health_port: 8082  # Changed from 8081 to test hot-reload
-  graceful_timeout: "45s"  # Increased from 30s
-  read_timeout: "15s"     # Increased from 10s
-  write_timeout: "15s"    # Increased from 10s
+  health_port: 8082  # Changed from 8081 to test hot-reload 注：由 8081 改为 8082 以测试热重载
+  graceful_timeout: "45s"  # Increased from 30s 注：由 30s 增加到 45s
+  read_timeout: "15s"     # Increased from 10s 注：由 10s 增加到 15s
+  write_timeout: "15s"    # Increased from 10s 注：由 10s 增加到 15s
 
 circuit_breakers:
   redis:
-    max_requests: 8      # Increased from 5
-    interval: "45s"      # Increased from 30s
-    timeout: "90s"       # Increased from 60s
-    max_failures: 8      # Increased from 5
+    max_requests: 8      # Increased from 5 注：由 5 增加到 8
+    interval: "45s"      # Increased from 30s 注：由 30s 增加到 45s
+    timeout: "90s"       # Increased from 60s 注：由 60s 增加到 90s
+    max_failures: 8      # Increased from 5 注：由 5 增加到 8
     enabled: true
   database:
-    max_requests: 5      # Increased from 3
-    interval: "45s"      # Increased from 30s
-    timeout: "90s"       # Increased from 60s
-    max_failures: 5      # Increased from 3
+    max_requests: 5      # Increased from 3 注：由 3 增加到 5
+    interval: "45s"      # Increased from 30s 注：由 30s 增加到 45s
+    timeout: "90s"       # Increased from 60s 注：由 60s 增加到 90s
+    max_failures: 5      # Increased from 3 注：由 3 增加到 5
     enabled: true
 
 degradation:
   enabled: true
-  check_interval: "45s"  # Increased from 30s
+  check_interval: "45s"  # Increased from 30s 注：由 30s 增加到 45s
   thresholds:
     minor:
-      circuit_breakers_open: 2      # Increased from 1
-      error_rate_percentage: 8.0    # Increased from 5.0
+      circuit_breakers_open: 2      # Increased from 1 注：由 1 增加到 2
+      error_rate_percentage: 8.0    # Increased from 5.0 注：由 5.0 增加到 8.0
     moderate:
-      circuit_breakers_open: 3      # Increased from 2
-      error_rate_percentage: 20.0   # Increased from 15.0
+      circuit_breakers_open: 3      # Increased from 2 注：由 2 增加到 3
+      error_rate_percentage: 20.0   # Increased from 15.0 注：由 15.0 增加到 20.0
   mode_downgrade:
     minor_degradation_rules:
       complex_to_standard: true
@@ -51,49 +51,49 @@ degradation:
 
 health:
   enabled: true
-  check_interval: "45s"  # Increased from 30s
-  timeout: "8s"          # Increased from 5s
-  port: 8082             # Changed from 8081
+  check_interval: "45s"  # Increased from 30s 注：由 30s 增加到 45s
+  timeout: "8s"          # Increased from 5s 注：由 5s 增加到 8s
+  port: 8082             # Changed from 8081 注：由 8081 改为 8082
   checks:
     redis:
       enabled: true
       critical: true
-      timeout: "8s"      # Increased from 5s
-      interval: "45s"    # Increased from 30s
+      timeout: "8s"      # Increased from 5s 注：由 5s 增加到 8s
+      interval: "45s"    # Increased from 30s 注：由 30s 增加到 45s
     database:
       enabled: true
       critical: true
-      timeout: "8s"      # Increased from 5s
-      interval: "45s"    # Increased from 30s
+      timeout: "8s"      # Increased from 5s 注：由 5s 增加到 8s
+      interval: "45s"    # Increased from 30s 注：由 30s 增加到 45s
     agent_core:
-      enabled: false     # DISABLED to test per-check enable/disable
+      enabled: false     # DISABLED to test per-check enable/disable 注：停用该项以测试单项检查的启用/停用
       critical: true
       timeout: "8s"
       interval: "45s"
     llm_service:
       enabled: true
       critical: false
-      timeout: "10s"     # Increased from 5s
-      interval: "90s"    # Increased from 60s
+      timeout: "10s"     # Increased from 5s 注：由 5s 增加到 10s
+      interval: "90s"    # Increased from 60s 注：由 60s 增加到 90s
 
 agents:
-  max_concurrent: 8         # Increased from 5
-  default_timeout: "45s"    # Increased from 30s
-  retry_count: 5            # Increased from 3
-  retry_backoff: "3s"       # Increased from 2s
-  agent_core_endpoint: "localhost:50051"        # Different from "agent-core:50051"
-  llm_service_endpoint: "http://localhost:8000" # Different from "http://llm-service:8000"
+  max_concurrent: 8         # Increased from 5 注：由 5 增加到 8
+  default_timeout: "45s"    # Increased from 30s 注：由 30s 增加到 45s
+  retry_count: 5            # Increased from 3 注：由 3 增加到 5
+  retry_backoff: "3s"       # Increased from 2s 注：由 2s 增加到 3s
+  agent_core_endpoint: "localhost:50051"        # Different from "agent-core:50051" 注：与 "agent-core:50051" 不同
+  llm_service_endpoint: "http://localhost:8000" # Different from "http://llm-service:8000" 注：与 "http://llm-service:8000" 不同
 
 temporal:
   host_port: "localhost:7233"
   namespace: "default"
   task_queue: "shannon-task-queue"
-  timeout: "45s"  # Increased from 30s
+  timeout: "45s"  # Increased from 30s 注：由 30s 增加到 45s
 
 logging:
-  level: "debug"  # Changed from "info" to test logging config changes
-  development: true  # Changed from false
-  encoding: "console"  # Changed from "json" for easier debugging
+  level: "debug"  # Changed from "info" to test logging config changes 注：由 "info" 改为 "debug" 以测试日志配置变更
+  development: true  # Changed from false 注：由 false 改为 true
+  encoding: "console"  # Changed from "json" for easier debugging 注：由 "json" 改为 "console" 便于调试
 
 # Vector DB Configuration - ENABLED for testing
 # 向量库配置 - 测试环境下启用
@@ -112,6 +112,6 @@ vector:
 # Tracing Configuration - ENABLED for testing
 # 追踪配置 - 测试环境下启用
 tracing:
-  enabled: true  # Enabled for development/testing
+  enabled: true  # Enabled for development/testing 注：开发/测试环境下启用
   service_name: "shannon-orchestrator-test"
   otlp_endpoint: "localhost:4317"

@@ -28,6 +28,7 @@ type ToolsHandler struct {
 	httpClient    *http.Client
 
 	// In-memory metadata cache (tool name -> cached entry)
+	// 内存中的 metadata 缓存（tool 名称 -> 缓存条目）
 	metaCacheMu sync.RWMutex
 	metaCache   map[string]*toolMetaCacheEntry
 }
@@ -40,6 +41,7 @@ type toolMetaCacheEntry struct {
 const toolMetaCacheTTL = 5 * time.Minute
 
 // Response types matching Python LLM-service.
+// 与 Python LLM-service 对应的 response 类型。
 
 type toolSchemaItem struct {
 	Name        string         `json:"name"`
@@ -96,6 +98,7 @@ type toolUsage struct {
 }
 
 // NewToolsHandler creates a ToolsHandler.
+// NewToolsHandler 创建 ToolsHandler。
 func NewToolsHandler(db *sqlx.DB, logger *zap.Logger) *ToolsHandler {
 	llmURL := os.Getenv("LLM_SERVICE_URL")
 	if llmURL == "" {
@@ -119,6 +122,7 @@ func (h *ToolsHandler) ListTools(w http.ResponseWriter, r *http.Request) {
 	category := r.URL.Query().Get("category")
 
 	// Build URL -- always exclude dangerous tools at gateway level
+	// 构造 URL —— 始终在 gateway 层排除危险 tool
 	q := url.Values{}
 	q.Set("exclude_dangerous", "true")
 	if category != "" {
@@ -175,7 +179,7 @@ func (h *ToolsHandler) fetchToolMetadata(ctx context.Context, toolName string) (
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		return nil, nil // tool not found
+		return nil, nil // tool not found 注：tool 不存在
 	}
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("LLM service returned %d for tool metadata", resp.StatusCode)
@@ -219,6 +223,7 @@ func (h *ToolsHandler) GetTool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch schema -- check response code before decoding
+	// 取 schema —— 解码前先检查 response 状态码
 	schemaURL := fmt.Sprintf("%s/tools/%s/schema", h.llmServiceURL, url.PathEscape(name))
 	schemaReq, err := http.NewRequestWithContext(r.Context(), http.MethodGet, schemaURL, nil)
 	if err != nil {
@@ -259,6 +264,7 @@ func (h *ToolsHandler) GetTool(w http.ResponseWriter, r *http.Request) {
 }
 
 // ExecuteTool handles POST /api/v1/tools/{name}/execute
+// ExecuteTool 处理 POST /api/v1/tools/{name}/execute
 func (h *ToolsHandler) ExecuteTool(w http.ResponseWriter, r *http.Request) {
 	toolName := r.PathValue("name")
 	if toolName == "" {
@@ -269,6 +275,7 @@ func (h *ToolsHandler) ExecuteTool(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Auth context
+	// auth 上下文
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", http.StatusUnauthorized)
@@ -276,6 +283,7 @@ func (h *ToolsHandler) ExecuteTool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check dangerous flag (cached)
+	// 检查危险标记（走缓存）
 	meta, err := h.fetchToolMetadata(ctx, toolName)
 	if err != nil {
 		h.logger.Error("Failed to fetch tool metadata", zap.String("tool", toolName), zap.Error(err))
@@ -292,6 +300,7 @@ func (h *ToolsHandler) ExecuteTool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse request body
+	// 解析 request body
 	var req toolExecuteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.sendError(w, "Invalid request body", http.StatusBadRequest)
@@ -338,6 +347,7 @@ func (h *ToolsHandler) ExecuteTool(w http.ResponseWriter, r *http.Request) {
 	proxyReq.Header.Set("X-Workflow-ID", requestID)
 
 	// Execute
+	// 执行
 	resp, err := h.httpClient.Do(proxyReq)
 	if err != nil {
 		h.logger.Error("Tool execute proxy failed", zap.String("tool", toolName), zap.Error(err))
@@ -362,6 +372,7 @@ func (h *ToolsHandler) ExecuteTool(w http.ResponseWriter, r *http.Request) {
 			zap.String("tool", toolName),
 			zap.Error(parseErr))
 		// Forward raw upstream response without quota charge
+		// 原样透传上游 response，不计配额
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(resp.StatusCode)
 		w.Write(respBody)
@@ -378,6 +389,7 @@ func (h *ToolsHandler) ExecuteTool(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Synthetic tokens: cost / $0.000002, minimum 100
+	// 折算 tokens：cost / $0.000002，最小 100
 	syntheticTokens := 100
 	if costUSD > 0 {
 		computed := int(costUSD / 0.000002)
@@ -388,6 +400,7 @@ func (h *ToolsHandler) ExecuteTool(w http.ResponseWriter, r *http.Request) {
 	usage := &toolUsage{Tokens: syntheticTokens, CostUSD: costUSD}
 
 	// Fire-and-forget usage recording
+	// 异步记录用量，不等待结果
 	go h.recordToolUsage(userCtx.UserID, userCtx.TenantID, requestID, toolName, syntheticTokens, costUSD)
 
 	h.logger.Info("Tool executed",
@@ -399,6 +412,7 @@ func (h *ToolsHandler) ExecuteTool(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Build response
+	// 构造 response
 	result := toolExecuteResponse{
 		Success:         proxyResp.Success,
 		Output:          proxyResp.Output,

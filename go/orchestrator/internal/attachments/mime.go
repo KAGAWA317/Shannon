@@ -91,16 +91,15 @@ func IsDangerousFilename(name string) bool {
 func IsDangerous(mediaType string) bool {
 	switch strings.ToLower(strings.TrimSpace(mediaType)) {
 	case
-		"application/x-msdownload",       // .exe / .dll
-		"application/x-ms-installer",     // .msi
-		"application/x-msi",              // .msi alt
+		"application/x-msdownload",       // .exe / .dll 注：.exe / .dll 可执行文件
+		"application/x-ms-installer",     // .msi 注：.msi 安装包
+		"application/x-msi",              // .msi alt 注：.msi 的另一种写法
 		"application/vnd.microsoft.portable-executable",
 		"application/x-dosexec",
-		"application/x-executable",       // generic ELF / executable
-		// .sh —— 严格来说不危险但有歧义，出于安全默认排除
-		"application/x-sh",               // .sh — not strictly dangerous but ambiguous; opt out for safety
-		"application/x-bat",              // .bat
-		"application/x-msdos-program",    // .com / .bat (legacy)
+		"application/x-executable",       // generic ELF / executable 注：通用的 ELF / 可执行文件
+		"application/x-sh",               // .sh — not strictly dangerous but ambiguous; opt out for safety 注：.sh —— 严格来说不危险但有歧义，出于安全默认排除
+		"application/x-bat",              // .bat 注：.bat 批处理脚本
+		"application/x-msdos-program",    // .com / .bat (legacy) 注：.com / .bat（旧式）
 		"application/x-msi-installer":
 		return true
 	}
@@ -135,6 +134,7 @@ func IsExtractable(mediaType string) bool {
 			return true
 		}
 		// Unknown image/* subtype falls through (passthrough).
+		// 未知的 image/* 子类型落到 passthrough。
 		return false
 	}
 	switch mt {
@@ -146,6 +146,7 @@ func IsExtractable(mediaType string) bool {
 		"application/javascript",
 		"application/typescript",
 		// Office document family (extraction Phase 3):
+		// Office 文档族（阶段 3 提取）：
 		"application/msword",
 		"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 		"application/vnd.ms-excel",
@@ -153,6 +154,7 @@ func IsExtractable(mediaType string) bool {
 		"application/vnd.ms-powerpoint",
 		"application/vnd.openxmlformats-officedocument.presentationml.presentation",
 		// OpenDocument family — claude.ai supports ODT.
+		// OpenDocument 族——claude.ai 支持 ODT。
 		"application/vnd.oasis.opendocument.text",
 		"application/vnd.oasis.opendocument.spreadsheet",
 		"application/vnd.oasis.opendocument.presentation",
@@ -196,7 +198,7 @@ func IsPassthrough(mediaType string) bool {
 		"application/x-7z-compressed",
 		"application/x-rar-compressed",
 		"application/vnd.rar",
-		"application/x-apple-diskimage", // .dmg
+		"application/x-apple-diskimage", // .dmg 注：.dmg 磁盘映像
 		"application/octet-stream",
 		"application/x-iso9660-image":
 		return true

@@ -12,18 +12,21 @@ const (
 )
 
 // PauseRequest is sent when pausing a workflow
+// PauseRequest 在暂停 workflow 时发送
 type PauseRequest struct {
 	Reason      string `json:"reason"`
 	RequestedBy string `json:"requested_by"`
 }
 
 // ResumeRequest is sent when resuming a paused workflow
+// ResumeRequest 在恢复已暂停的 workflow 时发送
 type ResumeRequest struct {
 	Reason      string `json:"reason"`
 	RequestedBy string `json:"requested_by"`
 }
 
 // CancelRequest is sent when gracefully cancelling a workflow
+// CancelRequest 在优雅取消 workflow 时发送
 type CancelRequest struct {
 	Reason      string `json:"reason"`
 	RequestedBy string `json:"requested_by"`

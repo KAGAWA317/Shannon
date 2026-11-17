@@ -41,12 +41,14 @@ class TestPythonWasiExecutor:
     async def test_infinite_loop_timeout(self, executor, mock_grpc_stub):
         """Test that infinite loops are terminated by timeout"""
         # Code with infinite loop
+        # 含死循环的代码
         infinite_loop_code = """
 while True:
     x = 1 + 1
 """
 
         # Mock the gRPC call to simulate timeout
+        # mock gRPC 调用以模拟超时
         with patch(
             "llm_service.tools.builtin.python_wasi_executor.grpc.aio.insecure_channel"
         ) as mock_channel:
@@ -59,6 +61,7 @@ while True:
                 mock_stub_class.return_value = mock_grpc_stub
 
                 # Simulate timeout
+                # 模拟超时
                 with patch(
                     "llm_service.tools.builtin.python_wasi_executor.asyncio.wait_for"
                 ) as mock_wait:
@@ -93,6 +96,7 @@ def broken_function(
                 mock_stub_class.return_value = mock_grpc_stub
 
                 # Mock response with syntax error
+                # mock 带语法错误的响应
                 mock_response = Mock()
                 mock_response.result = ""
                 mock_response.error_message = "SyntaxError: invalid syntax"
@@ -126,6 +130,7 @@ for i in range(10**9):
                 mock_stub_class.return_value = mock_grpc_stub
 
                 # Mock OOM error response
+                # mock OOM 错误响应
                 mock_response = Mock()
                 mock_response.result = ""
                 mock_response.error_message = "MemoryError: Unable to allocate memory"
@@ -157,6 +162,7 @@ for i in range(100000):
                 mock_stub_class.return_value = mock_grpc_stub
 
                 # Mock truncated output
+                # mock 被截断的输出
                 mock_response = Mock()
                 mock_response.result = (
                     "Line 0: " + "x" * 100 + "\n" + "[Output truncated]"
@@ -175,15 +181,18 @@ for i in range(100000):
         session_id = "test_session_123"
 
         # First execution - set variable
+        # 第一次执行：写入变量
         session = await executor._get_or_create_session(session_id)
         assert session is not None
         assert session.session_id == session_id
 
         # Simulate storing variables
+        # 模拟存储变量
         session.variables["x"] = 42
         session.variables["name"] = "Alice"
 
         # Second execution - verify variables exist
+        # 第二次执行：校验变量是否仍在
         session2 = await executor._get_or_create_session(session_id)
         assert session2 is not None
         assert session2.variables["x"] == 42
@@ -212,6 +221,7 @@ infinite_recursion(0)
                 mock_stub_class.return_value = mock_grpc_stub
 
                 # Mock stack overflow error
+                # mock 栈溢出错误
                 mock_response = Mock()
                 mock_response.result = ""
                 mock_response.error_message = (
@@ -248,6 +258,7 @@ for i in range(1000):
                 mock_stub_class.return_value = mock_grpc_stub
 
                 # Mock sandbox restriction error
+                # mock sandbox 限制错误
                 mock_response = Mock()
                 mock_response.result = ""
                 mock_response.error_message = (
@@ -267,14 +278,16 @@ for i in range(1000):
         import time
 
         # Create multiple sessions
+        # 创建多个 session
         for i in range(5):
             session = await executor._get_or_create_session(f"session_{i}")
             # 把 last_accessed 推到 timeout 窗口之外，制造过期 session
             session.last_accessed = time.time() - (
                 executor._session_timeout + 100
-            )  # Expired
+            )  # Expired 注：已过期
 
         # Create one active session
+        # 再创建一个活跃 session
         await executor._get_or_create_session("active_session")
 
         # Trigger cleanup by creating another session
@@ -282,6 +295,7 @@ for i in range(1000):
         await executor._get_or_create_session("new_session")
 
         # Check that expired sessions are removed
+        # 校验过期 session 已被清理
         assert "active_session" in executor._sessions
         assert "new_session" in executor._sessions
         for i in range(5):
@@ -302,27 +316,31 @@ for i in range(1000):
         async def create_and_modify_session(session_id: str, value: int):
             """Create a session and modify its variables"""
             session = await executor._get_or_create_session(session_id)
-            await asyncio.sleep(0.01)  # Simulate some work
+            await asyncio.sleep(0.01)  # Simulate some work 注：模拟耗时操作
             session.variables[f"var_{value}"] = value
             return session
 
         # Create multiple concurrent tasks accessing different sessions
+        # 并发创建多个访问不同 session 的 task
         tasks = []
         for i in range(10):
             # Some tasks use same session, some use different
+            # 部分 task 共用 session，部分各用各的
             session_id = (
-                f"session_{i % 3}"  # 3 unique sessions, accessed multiple times
+                f"session_{i % 3}"  # 3 unique sessions, accessed multiple times 注：3 个独立 session，被多次访问
             )
             tasks.append(create_and_modify_session(session_id, i))
 
         # Run all tasks concurrently
+        # 并发执行全部 task
         await asyncio.gather(*tasks)
 
         # Verify sessions were created correctly
         # 10 个 task 映射到 3 个 session
-        assert len(executor._sessions) == 3  # Only 3 unique sessions
+        assert len(executor._sessions) == 3  # Only 3 unique sessions 注：只有 3 个独立 session
 
         # Verify all variables were set (no race condition data loss)
+        # 校验变量都写入了（没有竞态导致的数据丢失）
         all_vars = set()
         for session in executor._sessions.values():
             all_vars.update(session.variables.keys())
@@ -332,6 +350,7 @@ for i in range(1000):
         assert len(all_vars) == 10
 
         # Verify execution counts
+        # 校验执行次数
         total_executions = sum(s.execution_count for s in executor._sessions.values())
         assert total_executions == 10
 
@@ -364,6 +383,7 @@ print(f"The answer is {x}")
                 mock_stub_class.return_value = mock_grpc_stub
 
                 # Mock successful execution with output
+                # mock 带输出的成功执行
                 mock_response = Mock()
                 mock_response.result = "Hello, World!\nThe answer is 42"
                 mock_response.error_message = None
@@ -391,6 +411,7 @@ __SESSION_STATE__:{"x": "42", "name": "'Alice'", "data": "[1, 2, 3]"}__END_SESSI
         clean_output = await executor._extract_session_state(output_with_state, session)
 
         # Check that state was extracted
+        # 校验状态已提取
         assert session.variables["x"] == 42
         assert session.variables["name"] == "Alice"
         assert session.variables["data"] == [1, 2, 3]
@@ -419,12 +440,13 @@ __SESSION_STATE__:{"x": "42", "name": "'Alice'", "data": "[1, 2, 3]"}__END_SESSI
                     mock_wait.return_value = Mock(result="Success", error_message=None)
 
                     # Try to set timeout > 60 seconds
+                    # 试图设置超过 60 秒的 timeout
                     await executor._execute_impl(
                         code="print('test')",
-                        timeout_seconds=300,  # Should be capped at 60
-                        # 上限 60 秒，传 300 应被截断
+                        timeout_seconds=300,  # Should be capped at 60 注：上限 60 秒，传 300 应被截断
                     )
 
                     # Check that timeout was capped at 60
+                    # 校验 timeout 被截断为 60
                     _, kwargs = mock_wait.call_args
                     assert kwargs["timeout"] == 60

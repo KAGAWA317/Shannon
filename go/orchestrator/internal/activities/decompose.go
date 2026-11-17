@@ -15,6 +15,7 @@ import (
 )
 
 // DecompositionInput is the input for DecomposeTask activity
+// DecompositionInput 是 DecomposeTask activity 的入参
 type DecompositionInput struct {
 	Query          string         `json:"query"`
 	Context        map[string]any `json:"context"`
@@ -22,12 +23,14 @@ type DecompositionInput struct {
 }
 
 // DecompositionResult is the result from the Python LLM service
+// DecompositionResult 是 Python LLM service 返回的结果
 type DecompositionResult struct {
     Mode                 string    `json:"mode"`
     ComplexityScore      float64   `json:"complexity_score"`
     Subtasks             []Subtask `json:"subtasks"`
     TotalEstimatedTokens int       `json:"total_estimated_tokens"`
     // Extended planning schema (plan_schema_v2)
+    // 扩展的规划 schema（plan_schema_v2）
     ExecutionStrategy string         `json:"execution_strategy"`
     AgentTypes        []string       `json:"agent_types"`
     ConcurrencyLimit  int            `json:"concurrency_limit"`
@@ -38,6 +41,7 @@ type DecompositionResult struct {
     Confidence        float64 `json:"confidence"`
     FallbackStrategy  string  `json:"fallback_strategy"`
     // Usage and provider/model metadata (optional)
+    // 用量与 provider/model 元数据（可选）
     InputTokens         int     `json:"input_tokens"`
     OutputTokens        int     `json:"output_tokens"`
     TokensUsed          int     `json:"total_tokens"`
@@ -57,7 +61,7 @@ func (a *Activities) DecomposeTask(ctx context.Context, in DecompositionInput) (
 	body, _ := json.Marshal(map[string]any{
 		"query":   in.Query,
 		"context": in.Context,
-		"tools":   in.AvailableTools, // Fixed: "tools" not "available_tools"
+		"tools":   in.AvailableTools, // Fixed: "tools" not "available_tools" 注：已修正为 "tools"，不是 "available_tools"
 		"mode":    "standard",
 	})
 
@@ -105,6 +109,7 @@ func (a *Activities) DecomposeTask(ctx context.Context, in DecompositionInput) (
 	}
 
 	// TODO: Assign personas to each subtask when personas package is complete
+	// personas 包完成后为每个 subtask 分配 persona
 	// logger := activity.GetLogger(ctx)
 	// for i := range out.Subtasks {
 	//     personaID := personas.SelectPersona(out.Subtasks[i].Description, out.ComplexityScore)

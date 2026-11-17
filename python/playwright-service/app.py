@@ -46,6 +46,7 @@ WAF_BLOCK_TITLES = {"access denied", "403 forbidden", "attention required", "jus
 PROXY_TIMEOUT_MS = int(os.getenv("PROXY_TIMEOUT_MS", "60000"))
 
 # Configuration (read from environment variables)
+# 配置（从环境变量读取）
 MAX_CONCURRENT_BROWSERS = int(os.getenv("MAX_CONCURRENT_BROWSERS", "2"))
 MAX_CONCURRENT_ACTIONS = int(
     os.getenv("MAX_CONCURRENT_ACTIONS", str(MAX_CONCURRENT_BROWSERS * 5))
@@ -109,6 +110,7 @@ async def _get_proxy_browser() -> Optional[Browser]:
 
 
 # Concurrency control
+# 并发控制
 _semaphore: asyncio.Semaphore = None
 _action_semaphore: asyncio.Semaphore = None
 _browser: Browser = None
@@ -120,12 +122,14 @@ _session_manager: BrowserSessionManager = None
 # 弹窗关闭选择器（基于点击）
 POPUP_SELECTORS = [
     # Cookie consent buttons
+    # Cookie 同意按钮
     "#onetrust-accept-btn-handler",
     ".cc-btn.cc-allow",
     "[class*='cookie'] button[class*='accept']",
     "button[id*='cookie'][id*='accept']",
 
     # Japanese patterns
+    # 日文文案模式
     "button:has-text('同意')",
     "button:has-text('同意する')",
     "button:has-text('閉じる')",
@@ -134,6 +138,7 @@ POPUP_SELECTORS = [
     "button:has-text('はい')",
 
     # Generic close buttons
+    # 通用关闭按钮
     "[aria-label='Close']",
     "[aria-label='close']",
     ".modal-close",
@@ -143,6 +148,7 @@ POPUP_SELECTORS = [
     "[class*='overlay'] button[class*='close']",
 
     # Newsletter/promo popups
+    # 订阅邮件/促销弹窗
     "[class*='newsletter'] button[class*='close']",
     "[class*='promo'] button[class*='close']",
 ]
@@ -405,16 +411,16 @@ class CaptureRequest(BaseModel):
     url: HttpUrl
     full_page: bool = True
     wait_ms: int = 3000
-    include_text: bool = False  # Also extract page.inner_text("body") for content hashing
+    include_text: bool = False  # Also extract page.inner_text("body") for content hashing 注：同时提取 page.inner_text("body") 用于内容哈希
 
 
 class CaptureResponse(BaseModel):
     success: bool
-    screenshot: Optional[str] = None  # base64 encoded (clean page)
-    popup_screenshot: Optional[str] = None  # base64 encoded (before dismissal, only if popup detected)
+    screenshot: Optional[str] = None  # base64 encoded (clean page) 注：base64 编码（干净页面）
+    popup_screenshot: Optional[str] = None  # base64 encoded (before dismissal, only if popup detected) 注：base64 编码（关闭弹窗前，仅在检测到弹窗时）
     popup_detected: bool = False
     title: Optional[str] = None
-    text_content: Optional[str] = None  # Visible text from page (when include_text=True)
+    text_content: Optional[str] = None  # Visible text from page (when include_text=True) 注：页面可见文本（当 include_text=True 时）
     error: Optional[str] = None
     popups_dismissed: int = 0
 
@@ -448,17 +454,17 @@ class SectionInfo(BaseModel):
     height: float
     width: float
     selector_matched: Optional[str] = None
-    screenshot: str  # base64 encoded
+    screenshot: str  # base64 encoded 注：base64 编码
 
 
 class SectionCaptureRequest(BaseModel):
     url: HttpUrl
-    device: str = "desktop"  # desktop, mobile, tablet, or Playwright device name
-    min_height: int = 300  # Skip sections smaller than this
-    max_sections: int = 8  # Cap output to prevent token explosion
-    merge_threshold: int = 500  # Merge adjacent sections smaller than this
+    device: str = "desktop"  # desktop, mobile, tablet, or Playwright device name 注：desktop、mobile、tablet 或 Playwright 设备名
+    min_height: int = 300  # Skip sections smaller than this 注：跳过小于该高度的分块
+    max_sections: int = 8  # Cap output to prevent token explosion 注：限制输出数量以防 token 爆炸
+    merge_threshold: int = 500  # Merge adjacent sections smaller than this 注：合并小于该高度的相邻分块
     wait_ms: int = 3000
-    selectors: Optional[List[str]] = None  # Custom selectors, uses defaults if None
+    selectors: Optional[List[str]] = None  # Custom selectors, uses defaults if None 注：自定义选择器，为 None 时使用默认值
 
 
 class SectionCaptureResponse(BaseModel):
@@ -547,6 +553,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Cleanup
+    # 清理
     await _session_manager.stop()
     if _proxy_browser and _proxy_browser.is_connected():
         await _proxy_browser.close()
@@ -591,6 +598,7 @@ async def _do_capture(browser: Browser, url: str, body: CaptureRequest, timeout_
         await page.goto(url, timeout=nav_timeout, wait_until="domcontentloaded")
 
         # Wait for page to settle
+        # 等待页面稳定
         await page.wait_for_timeout(body.wait_ms)
 
         # Detect if popup is present
@@ -606,7 +614,7 @@ async def _do_capture(browser: Browser, url: str, body: CaptureRequest, timeout_
         # 若检测到弹窗，先截图再关闭
         if popup_detected:
             logger.info(f"Popup detected on {url}, capturing before dismissal")
-            popup_bytes = await page.screenshot(full_page=False)  # Viewport only for popup
+            popup_bytes = await page.screenshot(full_page=False)  # Viewport only for popup 注：弹窗仅截 viewport
             popup_screenshot_b64 = base64.b64encode(popup_bytes).decode("utf-8")
 
         # Try to dismiss popups by clicking close buttons
@@ -618,10 +626,9 @@ async def _do_capture(browser: Browser, url: str, body: CaptureRequest, timeout_
                 if await element.is_visible(timeout=500):
                     await element.click(timeout=1000)
                     popups_dismissed += 1
-                    await page.wait_for_timeout(500)  # Wait for animation
+                    await page.wait_for_timeout(500)  # Wait for animation 注：等待动画结束
             except Exception:
-                continue  # Selector not found or not clickable
-                # 选择器不存在或不可点击
+                continue  # Selector not found or not clickable 注：选择器不存在或不可点击
 
         # DOM-based popup removal as fallback
         # 兜底：直接通过 DOM 移除弹窗
@@ -688,6 +695,7 @@ async def _do_capture(browser: Browser, url: str, body: CaptureRequest, timeout_
 
             if slide_images:
                 # Stitch vertically
+                # 纵向拼接
                 total_height = sum(img.height for img in slide_images)
                 width = slide_images[0].width
                 stitched = Image.new("RGB", (width, total_height))
@@ -704,12 +712,14 @@ async def _do_capture(browser: Browser, url: str, body: CaptureRequest, timeout_
                 screenshot_bytes = await page.screenshot(full_page=False)
         else:
             # Standard full-page screenshot
+            # 常规整页截图
             if body.full_page:
                 await _preload_lazy_content(page, VIEWPORT_HEIGHT)
             screenshot_bytes = await page.screenshot(full_page=body.full_page)
         screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
 
         # Get page title
+        # 获取页面标题
         title = await page.title()
 
         # Extract visible text content if requested (for content hashing/diff)
@@ -807,6 +817,7 @@ async def capture_sections(body: SectionCaptureRequest, _: None = Depends(_rate_
         page = None
         try:
             # Get device settings
+            # 获取设备配置
             device_settings = DEVICE_PRESETS.get(body.device.lower())
             if device_settings is None:
                 device_settings = DEVICE_PRESETS["desktop"]
@@ -832,6 +843,7 @@ async def capture_sections(body: SectionCaptureRequest, _: None = Depends(_rate_
             page = await context.new_page()
 
             # Navigate
+            # 导航
             await page.goto(url, timeout=REQUEST_TIMEOUT_MS, wait_until="domcontentloaded")
             await page.wait_for_timeout(body.wait_ms)
 
@@ -860,6 +872,7 @@ async def capture_sections(body: SectionCaptureRequest, _: None = Depends(_rate_
                 logger.warning(f"Scroll hijack detection failed: {e}")
 
             # Get page dimensions
+            # 获取页面尺寸
             page_height = await page.evaluate("() => document.documentElement.scrollHeight")
             viewport_width = device_settings["width"]
             viewport_height = device_settings["height"]
@@ -908,6 +921,8 @@ async def capture_sections(body: SectionCaptureRequest, _: None = Depends(_rate_
             else:
                 # Standard section extraction
                 # Extract sections using selectors
+                # 常规分块提取
+                # 使用选择器提取各分块
                 selectors = body.selectors or DEFAULT_SECTION_SELECTORS
                 raw_sections = []
 
@@ -1004,6 +1019,7 @@ async def capture_sections(body: SectionCaptureRequest, _: None = Depends(_rate_
                 for idx, sec in enumerate(merged):
                     try:
                         # Use PIL to crop section from full screenshot
+                        # 使用 PIL 从整页截图中裁剪分块
                         from io import BytesIO
                         from PIL import Image
 
@@ -1028,6 +1044,7 @@ async def capture_sections(body: SectionCaptureRequest, _: None = Depends(_rate_
                         section_img = full_img.crop((left, upper, right, lower))
 
                         # Convert back to bytes
+                        # 转换回 bytes
                         section_buffer = BytesIO()
                         section_img.save(section_buffer, format="PNG")
                         screenshot_bytes = section_buffer.getvalue()
@@ -1099,35 +1116,44 @@ class BrowserActionRequest(BaseModel):
     action: BrowserActionType = Field(..., description="Action to perform")
 
     # Navigation
+    # 导航
     url: Optional[str] = Field(None, description="URL to navigate to (for navigate action)")
     wait_until: Optional[str] = Field("domcontentloaded", description="Wait condition: load, domcontentloaded, networkidle")
 
     # Element interaction
+    # 元素交互
     selector: Optional[str] = Field(None, description="CSS/XPath selector for element")
     text: Optional[str] = Field(None, description="Text to type (for type action)")
 
     # Click options
+    # 点击选项
     button: Optional[str] = Field("left", description="Mouse button: left, right, middle")
     click_count: Optional[int] = Field(1, description="Number of clicks")
 
     # Scroll
+    # 滚动
     x: Optional[int] = Field(None, description="Horizontal scroll amount or X coordinate")
     y: Optional[int] = Field(None, description="Vertical scroll amount or Y coordinate")
 
     # Wait
+    # 等待
     timeout_ms: Optional[int] = Field(5000, description="Timeout in milliseconds")
 
     # Screenshot
+    # 截图
     full_page: Optional[bool] = Field(False, description="Capture full page screenshot")
 
     # Extract
+    # 提取
     extract_type: Optional[str] = Field("text", description="What to extract: text, html, attribute")
     attribute: Optional[str] = Field(None, description="Attribute name to extract")
 
     # Evaluate
+    # 脚本执行
     script: Optional[str] = Field(None, description="JavaScript to evaluate")
 
     # Session options (used when creating new session)
+    # Session 选项（创建新 session 时使用）
     viewport_width: Optional[int] = Field(1280, description="Viewport width")
     viewport_height: Optional[int] = Field(720, description="Viewport height")
     locale: Optional[str] = Field("en-US", description="Browser locale")
@@ -1150,20 +1176,25 @@ class BrowserActionResponse(BaseModel):
     error: Optional[str] = None
 
     # Navigation result
+    # 导航结果
     url: Optional[str] = None
     title: Optional[str] = None
 
     # Screenshot result
-    screenshot: Optional[str] = None  # base64 encoded
+    # 截图结果
+    screenshot: Optional[str] = None  # base64 encoded 注：base64 编码
 
     # Extract result
+    # 提取结果
     content: Optional[str] = None
     elements: Optional[List[ElementInfo]] = None
 
     # Evaluate result
+    # 脚本执行结果
     result: Optional[Any] = None
 
     # Metadata
+    # 元数据
     elapsed_ms: Optional[int] = None
 
 
@@ -1198,6 +1229,7 @@ async def browser_action(action_req: BrowserActionRequest, _: None = Depends(_ra
     async with _action_semaphore:
         try:
             # Get or create session
+            # 获取或创建 session
             page, _ = await _session_manager.get_or_create_session(
                 session_id=action_req.session_id,
                 viewport_width=action_req.viewport_width,
@@ -1212,6 +1244,7 @@ async def browser_action(action_req: BrowserActionRequest, _: None = Depends(_ra
             )
 
             # Execute action
+            # 执行 action
             if action_req.action == BrowserActionType.NAVIGATE:
                 if not action_req.url:
                     raise HTTPException(status_code=400, detail="URL required for navigate action")
@@ -1259,11 +1292,13 @@ async def browser_action(action_req: BrowserActionRequest, _: None = Depends(_ra
             elif action_req.action == BrowserActionType.SCROLL:
                 if action_req.selector:
                     # Scroll element into view
+                    # 滚动元素进入可视区域
                     await page.locator(action_req.selector).scroll_into_view_if_needed(
                         timeout=action_req.timeout_ms
                     )
                 else:
                     # Scroll by amount
+                    # 按指定距离滚动
                     await page.evaluate(f"window.scrollBy({action_req.x or 0}, {action_req.y or 0})")
 
             elif action_req.action == BrowserActionType.WAIT:
@@ -1275,6 +1310,7 @@ async def browser_action(action_req: BrowserActionRequest, _: None = Depends(_ra
             elif action_req.action == BrowserActionType.EXTRACT:
                 if not action_req.selector:
                     # Extract from whole page
+                    # 从整个页面提取
                     if action_req.extract_type == "text":
                         result.content = await page.inner_text("body")
                     elif action_req.extract_type == "html":
@@ -1284,7 +1320,7 @@ async def browser_action(action_req: BrowserActionRequest, _: None = Depends(_ra
                     count = await elements.count()
 
                     extracted_elements = []
-                    for i in range(min(count, 50)):  # Limit to 50 elements
+                    for i in range(min(count, 50)):  # Limit to 50 elements 注：最多 50 个元素
                         el = elements.nth(i)
                         try:
                             elem_info = ElementInfo(
@@ -1297,6 +1333,7 @@ async def browser_action(action_req: BrowserActionRequest, _: None = Depends(_ra
                                 elem_info.attributes[action_req.attribute] = attr_val or ""
 
                             # Get bounding box
+                            # 获取 bounding box
                             try:
                                 box = await el.bounding_box()
                                 if box:

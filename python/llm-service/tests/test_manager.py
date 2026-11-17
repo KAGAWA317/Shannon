@@ -20,7 +20,7 @@ def _import_manager_with_stubs():
     # 提供 stub 模块，使 manager 的 provider 导入不依赖外部包
     anth = types.ModuleType("anthropic")
 
-    class _AsyncAnthropic:  # minimal placeholder
+    class _AsyncAnthropic:  # minimal placeholder 注：最小占位实现
         def __init__(self, *a, **kw):
             pass
 
@@ -29,7 +29,7 @@ def _import_manager_with_stubs():
 
     oi = types.ModuleType("openai")
 
-    class _AsyncOpenAI:  # minimal placeholder
+    class _AsyncOpenAI:  # minimal placeholder 注：最小占位实现
         def __init__(self, *a, **kw):
             pass
 

@@ -376,11 +376,11 @@ class SandboxClient:
             # Clamp positive values to prevent DoS via unbounded waits
             # 对正值做上限钳制，防止通过无界等待造成 DoS
             if timeout_seconds <= 0:
-                effective_timeout = self.DEFAULT_TIMEOUT  # Match Rust's default
+                effective_timeout = self.DEFAULT_TIMEOUT  # Match Rust's default 注：与 Rust 的默认值一致
                 # 与 Rust 侧的默认值保持一致
             else:
                 effective_timeout = min(timeout_seconds, self.MAX_COMMAND_TIMEOUT)
-            cmd_timeout = effective_timeout + 5  # Allow 5s buffer for gRPC overhead
+            cmd_timeout = effective_timeout + 5  # Allow 5s buffer for gRPC overhead 注：为 gRPC 开销预留 5s 缓冲
             # 为 gRPC 开销预留 5s buffer
             response = await self._stub.ExecuteCommand(request, timeout=cmd_timeout)
             logger.info("Sandbox gRPC execute_command completed", extra={"session_id": session_id, "operation": "execute_command", "success": response.success})

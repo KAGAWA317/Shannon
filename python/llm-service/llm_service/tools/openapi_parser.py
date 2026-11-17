@@ -103,8 +103,7 @@ def resolve_ref(spec: Dict[str, Any], ref_path: str) -> Any:
             f"Only local references supported (starting with #/), got: {ref_path}"
         )
 
-    parts = ref_path[2:].split("/")  # Skip "#/"
-    # 跳过 "#/"
+    parts = ref_path[2:].split("/")  # Skip "#/" 注：跳过 "#/"
     current = spec
 
     try:
@@ -499,8 +498,7 @@ def extract_parameters(
 
         required = param.get("required", False)
         if location == "path":
-            required = True  # Path params are always required
-            # 路径参数始终必填
+            required = True  # Path params are always required 注：路径参数始终必填
 
         description = param.get("description", "")
 

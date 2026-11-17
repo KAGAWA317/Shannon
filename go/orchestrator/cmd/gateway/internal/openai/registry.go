@@ -10,14 +10,16 @@ import (
 )
 
 // ModelConfig represents a single model's configuration.
+// ModelConfig 表示单个模型的配置。
 type ModelConfig struct {
-	WorkflowMode     string         `yaml:"workflow_mode"`      // simple, research, supervisor
-	Context          map[string]any `yaml:"context"`            // Shannon context to inject
-	Description      string         `yaml:"description"`        // Human-readable description
-	MaxTokensDefault int            `yaml:"max_tokens_default"` // Default max_tokens
+	WorkflowMode     string         `yaml:"workflow_mode"`      // simple, research, supervisor 注：simple、research、supervisor
+	Context          map[string]any `yaml:"context"`            // Shannon context to inject 注：要注入的 Shannon context
+	Description      string         `yaml:"description"`        // Human-readable description 注：人类可读的描述
+	MaxTokensDefault int            `yaml:"max_tokens_default"` // Default max_tokens 注：默认 max_tokens
 }
 
 // RegistryConfig represents the full model registry configuration.
+// RegistryConfig 表示完整的模型 registry 配置。
 type RegistryConfig struct {
 	Models       map[string]ModelConfig `yaml:"models"`
 	DefaultModel string                 `yaml:"default_model"`
@@ -52,6 +54,7 @@ func GetRegistry() (*Registry, error) {
 }
 
 // loadRegistry loads the model registry from configuration files.
+// loadRegistry 从配置文件加载模型 registry。
 func loadRegistry() (*Registry, error) {
 	candidates := []string{
 		"config/openai_models.yaml",
@@ -71,6 +74,7 @@ func loadRegistry() (*Registry, error) {
 			}
 
 			// Apply defaults
+			// 应用默认值
 			if config.DefaultModel == "" {
 				config.DefaultModel = "shannon-chat"
 			}
@@ -97,6 +101,7 @@ func loadRegistry() (*Registry, error) {
 }
 
 // newDefaultRegistry creates a registry with built-in defaults.
+// newDefaultRegistry 用内置默认值创建 registry。
 func newDefaultRegistry() *Registry {
 	config := &RegistryConfig{
 		DefaultModel: "shannon-chat",
@@ -173,6 +178,7 @@ func (r *Registry) GetModel(modelName string) (*ModelConfig, error) {
 }
 
 // GetDefaultModel returns the default model name.
+// GetDefaultModel 返回默认模型名。
 func (r *Registry) GetDefaultModel() string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -180,6 +186,7 @@ func (r *Registry) GetDefaultModel() string {
 }
 
 // ListModels returns all available models.
+// ListModels 返回所有可用模型。
 func (r *Registry) ListModels() []ModelObject {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -197,6 +204,7 @@ func (r *Registry) ListModels() []ModelObject {
 }
 
 // GetMaxTokensLimit returns the global max tokens limit.
+// GetMaxTokensLimit 返回全局最大 token 上限。
 func (r *Registry) GetMaxTokensLimit() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -204,6 +212,7 @@ func (r *Registry) GetMaxTokensLimit() int {
 }
 
 // GetDefaultTemperature returns the default temperature.
+// GetDefaultTemperature 返回默认 temperature。
 func (r *Registry) GetDefaultTemperature() float64 {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -211,6 +220,7 @@ func (r *Registry) GetDefaultTemperature() float64 {
 }
 
 // IsValidModel checks if a model name is valid.
+// IsValidModel 校验模型名是否有效。
 func (r *Registry) IsValidModel(modelName string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

@@ -12,12 +12,14 @@ import (
 )
 
 // MemoryHandler handles user memory file operations.
+//MemoryHandler 处理用户 memory 文件操作。
 type MemoryHandler struct {
 	logger      *zap.Logger
 	memoryBaseDir string
 }
 
 // NewMemoryHandler creates a new memory handler.
+//NewMemoryHandler 创建一个 memory handler。
 func NewMemoryHandler(logger *zap.Logger) *MemoryHandler {
 	memoryBaseDir := os.Getenv("SHANNON_USER_MEMORY_DIR")
 	if memoryBaseDir == "" {
@@ -78,6 +80,7 @@ func (h *MemoryHandler) ListMemoryFiles(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// If memory directory doesn't exist, return empty list
+	//memory 目录不存在时返回空列表
 	entries, err := os.ReadDir(absTarget)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -128,6 +131,7 @@ func (h *MemoryHandler) DownloadMemoryFile(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Security: reject path traversal
+	//安全：拒绝路径穿越
 	if strings.Contains(filePath, "..") || strings.HasPrefix(filePath, "/") {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid path"})
 		return

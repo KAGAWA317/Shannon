@@ -11,16 +11,19 @@ import (
 )
 
 // DBOperations handles schedule database operations
+// DBOperations 负责定时任务的数据库操作
 type DBOperations struct {
 	db *sql.DB
 }
 
 // NewDBOperations creates a new DBOperations instance
+// NewDBOperations 创建新的 DBOperations 实例
 func NewDBOperations(db *sql.DB) *DBOperations {
 	return &DBOperations{db: db}
 }
 
 // CreateSchedule inserts a new schedule
+// CreateSchedule 插入一条新的定时任务
 func (d *DBOperations) CreateSchedule(ctx context.Context, s *Schedule) error {
 	contextJSON, _ := json.Marshal(s.TaskContext)
 
@@ -39,6 +42,7 @@ func (d *DBOperations) CreateSchedule(ctx context.Context, s *Schedule) error {
 }
 
 // GetSchedule retrieves a schedule by ID
+// GetSchedule 按 ID 获取一条定时任务
 func (d *DBOperations) GetSchedule(ctx context.Context, id uuid.UUID) (*Schedule, error) {
 	var s Schedule
 	var contextJSON []byte
@@ -63,18 +67,21 @@ func (d *DBOperations) GetSchedule(ctx context.Context, id uuid.UUID) (*Schedule
 	}
 
 	// Parse tenant ID
+	// 解析 tenant ID
 	if tenantID.Valid {
 		tid, _ := uuid.Parse(tenantID.String)
 		s.TenantID = tid
 	}
 
 	// Parse task context
+	// 解析 task context
 	_ = json.Unmarshal(contextJSON, &s.TaskContext)
 	if s.TaskContext == nil {
 		s.TaskContext = make(map[string]any)
 	}
 
 	// Parse nullable timestamps
+	// 解析可为空的 time 字段
 	if lastRunAt.Valid {
 		s.LastRunAt = &lastRunAt.Time
 	}
@@ -98,6 +105,7 @@ func (d *DBOperations) ListSchedules(ctx context.Context, userID, tenantID uuid.
 	}
 
 	// Get total count
+	// 取总数
 	var totalCount int
 	countQuery := fmt.Sprintf(`
 		SELECT COUNT(*) FROM scheduled_tasks
@@ -109,6 +117,7 @@ func (d *DBOperations) ListSchedules(ctx context.Context, userID, tenantID uuid.
 	}
 
 	// Get schedules
+	// 取定时任务列表
 	query := fmt.Sprintf(`
 		SELECT id, user_id, tenant_id, name, description, cron_expression, timezone,
 			   task_query, task_context, max_budget_per_run_usd, timeout_seconds,
@@ -144,18 +153,21 @@ func (d *DBOperations) ListSchedules(ctx context.Context, userID, tenantID uuid.
 		}
 
 		// Parse tenant ID
+		// 解析 tenant ID
 		if tenantIDVal.Valid {
 			tid, _ := uuid.Parse(tenantIDVal.String)
 			s.TenantID = tid
 		}
 
 		// Parse task context
+		// 解析 task context
 		_ = json.Unmarshal(contextJSON, &s.TaskContext)
 		if s.TaskContext == nil {
 			s.TaskContext = make(map[string]any)
 		}
 
 		// Parse nullable timestamps
+		// 解析可为空的 time 字段
 		if lastRunAt.Valid {
 			s.LastRunAt = &lastRunAt.Time
 		}
@@ -170,6 +182,7 @@ func (d *DBOperations) ListSchedules(ctx context.Context, userID, tenantID uuid.
 }
 
 // UpdateScheduleStatus updates a schedule's status
+// UpdateScheduleStatus 更新定时任务的状态
 func (d *DBOperations) UpdateScheduleStatus(ctx context.Context, id uuid.UUID, status string) error {
 	_, err := d.db.ExecContext(ctx, `
 		UPDATE scheduled_tasks SET status = $1, updated_at = NOW()
@@ -179,6 +192,7 @@ func (d *DBOperations) UpdateScheduleStatus(ctx context.Context, id uuid.UUID, s
 }
 
 // UpdateScheduleNextRun updates the next run timestamp
+// UpdateScheduleNextRun 更新下次执行时间
 func (d *DBOperations) UpdateScheduleNextRun(ctx context.Context, id uuid.UUID, nextRun time.Time) error {
 	_, err := d.db.ExecContext(ctx, `
 		UPDATE scheduled_tasks SET next_run_at = $1, updated_at = NOW()
@@ -248,7 +262,7 @@ func (d *DBOperations) GetTenantMaxSchedules(ctx context.Context, tenantID uuid.
 		SELECT (metadata->>'max_schedules')::int FROM auth.tenants WHERE id = $1
 	`, tenantID).Scan(&maxSchedules)
 	if err != nil {
-		return 0, err // 0 = unlimited on error
+		return 0, err // 0 = unlimited on error 注：返回 0 表示出错时不限制
 	}
 	if !maxSchedules.Valid {
 		return 0, nil
@@ -319,6 +333,7 @@ func (d *DBOperations) RecordScheduleExecution(ctx context.Context, scheduleID u
 	`, scheduleID, taskID, status, cost, errorMsg, completedAt)
 
 	// Update schedule statistics
+	// 更新定时任务统计
 	if status == "COMPLETED" {
 		_, _ = d.db.ExecContext(ctx, `
 			UPDATE scheduled_tasks

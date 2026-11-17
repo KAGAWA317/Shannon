@@ -40,15 +40,16 @@ var (
 // Config holds circuit breaker configuration
 // Config 保存 circuit breaker 配置
 type Config struct {
-	MaxRequests      uint32        // Max requests in half-open state
-	Interval         time.Duration // Interval to clear request counter in closed state
-	Timeout          time.Duration // Time to wait before transitioning from open to half-open
-	FailureThreshold uint32        // Failure threshold in closed state
-	SuccessThreshold uint32        // Success threshold in half-open state to transition to closed
+	MaxRequests      uint32        // Max requests in half-open state 注：half-open 状态下允许的最大 request 数
+	Interval         time.Duration // Interval to clear request counter in closed state 注：closed 状态下清零 request 计数的周期
+	Timeout          time.Duration // Time to wait before transitioning from open to half-open 注：从 open 转为 half-open 前的等待时长
+	FailureThreshold uint32        // Failure threshold in closed state 注：closed 状态下的失败阈值
+	SuccessThreshold uint32        // Success threshold in half-open state to transition to closed 注：half-open 状态下转为 closed 所需的成功阈值
 	OnStateChange    func(name string, from State, to State)
 }
 
 // DefaultConfig returns sensible defaults for circuit breaker
+// DefaultConfig 返回 circuit breaker 的合理默认配置
 func DefaultConfig() Config {
 	return Config{
 		MaxRequests:      3,
@@ -61,6 +62,7 @@ func DefaultConfig() Config {
 }
 
 // Counts holds the circuit breaker statistics
+// Counts 保存 circuit breaker 的统计信息
 type Counts struct {
 	Requests             uint32
 	TotalSuccesses       uint32
@@ -84,6 +86,7 @@ type CircuitBreaker struct {
 }
 
 // NewCircuitBreaker creates a new circuit breaker
+// NewCircuitBreaker 创建一个新的 circuit breaker
 func NewCircuitBreaker(name string, config Config, logger *zap.Logger) *CircuitBreaker {
 	cb := &CircuitBreaker{
 		name:   name,
@@ -117,6 +120,7 @@ func (cb *CircuitBreaker) Execute(ctx context.Context, fn func() error) error {
 }
 
 // State returns the current state of the circuit breaker
+// State 返回 circuit breaker 的当前状态
 func (cb *CircuitBreaker) State() State {
 	cb.mutex.RLock()
 	defer cb.mutex.RUnlock()
@@ -124,6 +128,7 @@ func (cb *CircuitBreaker) State() State {
 }
 
 // Counts returns the current counts
+// Counts 返回当前计数
 func (cb *CircuitBreaker) Counts() Counts {
 	cb.mutex.RLock()
 	defer cb.mutex.RUnlock()
@@ -254,7 +259,7 @@ func (cb *CircuitBreaker) toNewGeneration(now time.Time) {
 		}
 	case StateOpen:
 		cb.expiry = now.Add(cb.config.Timeout)
-	default: // StateHalfOpen
+	default: // StateHalfOpen 注：即 StateHalfOpen 状态
 		cb.expiry = zero
 	}
 }

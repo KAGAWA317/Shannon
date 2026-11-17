@@ -190,7 +190,7 @@ def _format_web_search(output: Any, metadata: Optional[Dict[str, Any]]) -> Optio
     格式化 web_search 输出——需自定义处理嵌套结果与 HTML 反转义。"""
     if not isinstance(output, dict):
         if isinstance(output, list):
-            results = output  # fallback scrape path returns bare list
+            results = output  # fallback scrape path returns bare list 注：fallback 抓取路径返回裸 list
             # 回退抓取路径返回裸列表
         else:
             return None

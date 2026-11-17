@@ -15,12 +15,9 @@ import uuid
 
 # Rate limiting constants
 # rate limit 常量
-RATE_LIMIT_HIGH_THROUGHPUT_THRESHOLD = 60  # req/min - skip per-session tracking above this
-# req/min——超过此值跳过按 session 跟踪
-RATE_LIMIT_SKIP_THRESHOLD = 100  # req/min - skip rate limiting entirely above this
-# req/min——超过此值完全跳过 rate limit
-TRACKER_MAX_ENTRIES = 100  # Maximum entries in execution tracker before cleanup
-# 执行跟踪器清理前的最大条目数
+RATE_LIMIT_HIGH_THROUGHPUT_THRESHOLD = 60  # req/min - skip per-session tracking above this 注：req/min——超过此值跳过按 session 跟踪
+RATE_LIMIT_SKIP_THRESHOLD = 100  # req/min - skip rate limiting entirely above this 注：req/min——超过此值完全跳过 rate limit
+TRACKER_MAX_ENTRIES = 100  # Maximum entries in execution tracker before cleanup 注：执行跟踪器清理前的最大条目数
 
 
 class ToolParameterType(Enum):
@@ -33,7 +30,7 @@ class ToolParameterType(Enum):
     BOOLEAN = "boolean"
     ARRAY = "array"
     OBJECT = "object"
-    FILE = "file"  # For file paths or file content
+    FILE = "file"  # For file paths or file content 注：用于文件路径或文件内容
 
 
 @dataclass
@@ -46,11 +43,11 @@ class ToolParameter:
     description: str
     required: bool = True
     default: Any = None
-    enum: Optional[List[Any]] = None  # For enumerated values
+    enum: Optional[List[Any]] = None  # For enumerated values 注：用于枚举值
     min_value: Optional[Union[int, float]] = None
     max_value: Optional[Union[int, float]] = None
-    pattern: Optional[str] = None  # Regex pattern for validation
-    items: Optional[Dict[str, Any]] = None  # For ARRAY types: {"type": "string"}
+    pattern: Optional[str] = None  # Regex pattern for validation 注：用于校验的正则模式
+    items: Optional[Dict[str, Any]] = None  # For ARRAY types: {"type": "string"} 注：用于 ARRAY 类型：{"type": "string"}
 
 
 @dataclass
@@ -61,17 +58,17 @@ class ToolMetadata:
     name: str
     version: str
     description: str
-    category: str  # e.g., "search", "calculation", "file", "database"
+    category: str  # e.g., "search", "calculation", "file", "database" 注：例如 "search"、"calculation"、"file"、"database"
     author: str = "Shannon"
     requires_auth: bool = False
-    rate_limit: Optional[int] = None  # Requests per minute
+    rate_limit: Optional[int] = None  # Requests per minute 注：每分钟请求数
     timeout_seconds: int = 30
     memory_limit_mb: int = 512
-    sandboxed: bool = True  # Whether to run in sandbox
-    session_aware: bool = True  # Whether tool uses session context (default True to avoid footgun)
-    dangerous: bool = False  # Requires extra confirmation
-    cost_per_use: float = 0.0  # Cost in USD per invocation
-    input_examples: Optional[List[Dict[str, Any]]] = None  # Examples for tool usage (Anthropic-specific)
+    sandboxed: bool = True  # Whether to run in sandbox 注：是否在 sandbox 中运行
+    session_aware: bool = True  # Whether tool uses session context (default True to avoid footgun) 注：tool 是否使用 session context（默认 True 以避免误用）
+    dangerous: bool = False  # Requires extra confirmation 注：需要额外确认
+    cost_per_use: float = 0.0  # Cost in USD per invocation 注：每次调用的费用（USD）
+    input_examples: Optional[List[Dict[str, Any]]] = None  # Examples for tool usage (Anthropic-specific) 注：tool 用法示例（Anthropic 专用）
 
 
 @dataclass
@@ -86,7 +83,7 @@ class ToolResult:
     execution_time_ms: Optional[int] = None
     tokens_used: Optional[int] = None
     cost_usd: Optional[float] = None
-    cost_model: Optional[str] = None  # synthetic model name for cost attribution
+    cost_model: Optional[str] = None  # synthetic model name for cost attribution 注：用于费用归因的虚拟模型名称
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization
@@ -120,8 +117,10 @@ class Tool(ABC):
         self.parameters = self._get_parameters()
         self._execution_count = 0
         # Track rate limits per session/user instead of globally
+        # # 按 session/user 分别跟踪 rate limit，而不是全局跟踪。
         self._execution_tracker: Dict[str, datetime] = {}
         # Request-scoped ID for rate limiting when no session/agent context
+        # # 无 session/agent context 时用于 rate limit 的 request 级 ID。
         self._current_request_id: Optional[str] = None
 
     @abstractmethod
@@ -217,6 +216,8 @@ class Tool(ABC):
             self._execution_count += 1
             # Only track session/agent-scoped keys (request-scoped UUIDs can't be
             # rate-limited across requests anyway, so tracking them wastes memory)
+            # # 只跟踪 session/agent 级别的键（request 级 UUID 反正无法跨 request
+            # # 做 rate limit，跟踪它们只会浪费内存）
             if not tracker_key.startswith("request:"):
                 self._execution_tracker[tracker_key] = datetime.now()
 
@@ -371,7 +372,7 @@ class Tool(ABC):
             ToolParameterType.BOOLEAN: bool,
             ToolParameterType.ARRAY: list,
             ToolParameterType.OBJECT: dict,
-            ToolParameterType.FILE: str,  # File paths are strings
+            ToolParameterType.FILE: str,  # File paths are strings 注：文件路径用字符串表示
         }
 
         expected = type_map.get(expected_type)
@@ -479,8 +480,7 @@ class Tool(ABC):
             # Add items for ARRAY type (required by OpenAI schema validation)
             # 为 ARRAY 类型添加 items（OpenAI schema 校验要求）
             if param.type == ToolParameterType.ARRAY:
-                prop["items"] = {"type": "string"}  # Default to string, can be extended
-                # 默认字符串，可扩展
+                prop["items"] = {"type": "string"}  # Default to string, can be extended 注：默认字符串，可扩展
 
             if param.enum:
                 prop["enum"] = param.enum

@@ -3,24 +3,28 @@ package vectordb
 import "time"
 
 // Config controls Qdrant client behavior
+// Config 控制 Qdrant client 行为
 type Config struct {
 	Enabled bool
 	Host    string
 	Port    int
 	// Collections
+	// 集合配置
 	TaskEmbeddings string
 	ToolResults    string
 	Cases          string
 	DocumentChunks string
 	Summaries      string
 	// Search params
+	// 检索参数
 	TopK      int
 	Threshold float64
 	Timeout   time.Duration
 	// Validation
-	ExpectedEmbeddingDim int // Expected embedding dimension (e.g., 1536 for OpenAI ada-002)
-	// 期望的 embedding 维度（如 OpenAI ada-002 为 1536）
+	// 校验
+	ExpectedEmbeddingDim int // Expected embedding dimension (e.g., 1536 for OpenAI ada-002) 注：期望的 embedding 维度（如 OpenAI ada-002 为 1536）
 	// MMR (diversity) re-ranking
+	// MMR（多样性）重排
 	MMREnabled        bool
 	MMRLambda         float64
 	MMRPoolMultiplier int
@@ -55,6 +59,7 @@ type UpsertItem struct {
 }
 
 // UpsertResponse captures basic Qdrant upsert response
+// UpsertResponse 承载 Qdrant upsert 响应的基本信息
 type UpsertResponse struct {
 	Status string  `json:"status"`
 	Time   float64 `json:"time"`

@@ -19,6 +19,7 @@ import (
 )
 
 // StreamingWorkflow executes tasks with streaming output and typed state management
+// StreamingWorkflow 以流式输出与类型化状态管理执行任务
 func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting StreamingWorkflow",
@@ -28,6 +29,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	)
 
 	// Determine workflow ID for event streaming
+	// 确定用于事件流式传输的 workflow ID
 	workflowID := input.ParentWorkflowID
 	if workflowID == "" {
 		workflowID = workflow.GetInfo(ctx).WorkflowExecution.ID
@@ -36,6 +38,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	agentName := agents.GetAgentName(workflowID, 0)
 
 	// Initialize control signal handler for pause/resume/cancel
+	// 初始化用于 pause/resume/cancel 的控制信号处理器
 	emitCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Second,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
@@ -49,9 +52,11 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	controlHandler.Setup(ctx)
 
 	// Initialize typed state channel
+	// 初始化类型化状态通道
 	stateChannel := state.NewStateChannel("streaming-workflow")
 
 	// Set initial state
+	// 设置初始状态
 	agentState := &state.AgentState{
 		Query:   input.Query,
 		Context: input.Context,
@@ -71,6 +76,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	}
 
 	// Add state validation
+	// 添加状态校验
 	stateChannel.AddValidator(func(data any) error {
 		s, ok := data.(*state.AgentState)
 		if !ok {
@@ -87,15 +93,17 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	}
 
 	// Create checkpoint before execution
+	// 执行前创建 checkpoint
 	checkpointID, _ := stateChannel.Checkpoint(map[string]any{
 		"phase": "pre-execution",
 	})
 	logger.Info("State checkpoint created", "checkpoint_id", checkpointID)
 
 	// Configure activity options with longer timeout for streaming
+	// 配置 activity 选项，为流式输出延长超时
 	activityOptions := workflow.ActivityOptions{
-		StartToCloseTimeout: 5 * time.Minute,  // Longer timeout for streaming
-		HeartbeatTimeout:    30 * time.Second, // Heartbeat to track progress
+		StartToCloseTimeout: 5 * time.Minute,  // Longer timeout for streaming 注：流式输出需要更长的超时
+		HeartbeatTimeout:    30 * time.Second, // Heartbeat to track progress 注：用心跳跟踪进度
 		RetryPolicy: &temporal.RetryPolicy{
 			MaximumAttempts: 2,
 		},
@@ -103,17 +111,20 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
 	// Update state to running
+	// 把状态更新为 running
 	agentState.ExecutionState.Status = "running"
 	if err := stateChannel.Set(agentState); err != nil {
 		logger.Error("Failed to update state", "error", err)
 	}
 
 	// Check pause/cancel before execution
+	// 执行前检查 pause/cancel
 	if err := controlHandler.CheckPausePoint(ctx, "pre_execution"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
 
 	// Execute with streaming
+	// 以流式方式执行
 	streamingActivities := activities.NewStreamingActivities()
 	streamInput := activities.StreamExecuteInput{
 		Query:     input.Query,
@@ -125,6 +136,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	}
 
 	// Start streaming execution
+	// 启动流式执行
 	logger.Info("Starting streaming execution")
 
 	var streamRes activities.AgentExecutionResult
@@ -134,6 +146,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 		logger.Error("Streaming execution failed", "error", err)
 
 		// Update state with error
+		// 用错误更新状态
 		agentState.ExecutionState.Status = "failed"
 		agentState.AddError(state.ErrorRecord{
 			Timestamp:    workflow.Now(ctx),
@@ -150,12 +163,14 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	}
 
 	// Update state with result
+	// 用结果更新状态
 	agentState.IntermediateResults = append(agentState.IntermediateResults, streamRes.Response)
 	agentState.ExecutionState.Status = "completed"
 	agentState.PlanningState.CurrentStep = 1
 	agentState.PlanningState.Completed[0] = true
 
 	// Add tool result
+	// 添加 tool 结果
 	agentState.AddToolResult(state.ToolResult{
 		ToolName:      "streaming_llm",
 		Input:         input.Query,
@@ -171,6 +186,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	}
 
 	// Create final checkpoint
+	// 创建最终 checkpoint
 	finalCheckpointID, _ := stateChannel.Checkpoint(map[string]any{
 		"phase":  "completed",
 		"result": streamRes.Response,
@@ -184,6 +200,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	)
 
 	// Record token usage for streaming agent (non-budgeted path).
+	// 记录 streaming agent 的 token 用量（非预算路径）。
 	if input.UserID != "" && streamRes.TokensUsed > 0 {
 		recCtx := opts.WithTokenRecordOptions(ctx)
 		inTok := streamRes.InputTokens
@@ -218,11 +235,13 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	}
 
 	// Record tool-cost rows if streaming returned tool usage metadata.
+	// 若流式执行返回了 tool 用量 metadata，则记录 tool 成本行。
 	if input.UserID != "" {
 		opts.RecordToolCostEntries(ctx, streamRes, input.UserID, input.SessionID, workflowID)
 	}
 
 	// Update session with token usage
+	// 用 token 用量更新 session
 	if input.SessionID != "" {
 		var sessionUpdateResult activities.SessionUpdateResult
 		err := workflow.ExecuteActivity(ctx,
@@ -244,6 +263,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	}
 
 	// Build metadata and include model/provider + token breakdown (estimated 60/40 if missing)
+	// 构建 metadata，并包含 model/provider 与 token 拆分（缺失时按 60/40 估算）
 	meta := map[string]any{
 		"execution_time_ms": agentState.GetExecutionDuration().Milliseconds(),
 		"checkpoints":       stateChannel.ListCheckpoints(),
@@ -251,6 +271,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	}
 
 	// Prepare a single-agent result for aggregation
+	// 准备单 agent 结果用于聚合
 	ar := activities.AgentExecutionResult{
 		AgentID:      agentName,
 		ModelUsed:    streamRes.ModelUsed,
@@ -271,6 +292,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	maps.Copy(meta, agentMeta)
 
 	// Add cost estimate if tokens available
+	// 有 token 数据时加入成本估算
 	if streamRes.TokensUsed > 0 {
 		model := ""
 		if m, ok := meta["model"].(string); ok && m != "" {
@@ -280,12 +302,15 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 	}
 
 	// Check pause/cancel before completion
+	// 完成前检查 pause/cancel
 	if err := controlHandler.CheckPausePoint(ctx, "pre_completion"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
 
 	// Emit final clean LLM_OUTPUT for OpenAI-compatible streaming.
+	// 为 OpenAI 兼容的流式输出发出最终干净的 LLM_OUTPUT。
 	// Agent ID "final_output" signals the streamer to always show this content.
+	// Agent ID "final_output" 告知 streamer 始终展示该内容。
 	if streamRes.Response != "" {
 		_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: workflowID,
@@ -309,6 +334,7 @@ func StreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error
 }
 
 // ParallelStreamingWorkflow executes multiple streaming tasks in parallel
+// ParallelStreamingWorkflow 并行执行多个流式任务
 func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResult, error) {
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting ParallelStreamingWorkflow",
@@ -317,13 +343,16 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	)
 
 	// Determine workflow ID for event streaming
+	// 确定用于事件流式传输的 workflow ID
 	// Use parent workflow ID if this is a child workflow, otherwise use own ID
+	// 若为子 workflow 则使用父 workflow ID，否则使用自身 ID
 	workflowID := input.ParentWorkflowID
 	if workflowID == "" {
 		workflowID = workflow.GetInfo(ctx).WorkflowExecution.ID
 	}
 
 	// Initialize control signal handler for pause/resume/cancel
+	// 初始化用于 pause/resume/cancel 的控制信号处理器
 	emitCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Second,
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
@@ -337,6 +366,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	controlHandler.Setup(ctx)
 
 	// Configure activity options
+	// 配置 activity 选项
 	activityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Minute,
 		HeartbeatTimeout:    30 * time.Second,
@@ -347,6 +377,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
 	// Create multiple streaming inputs for parallel execution
+	// 为并行执行创建多个流式输入
 	streamingActivities := activities.NewStreamingActivities()
 	agent1 := agents.GetAgentName(workflowID, 0)
 	agent2 := agents.GetAgentName(workflowID, 1)
@@ -379,11 +410,13 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	}
 
 	// Check pause/cancel before execution
+	// 执行前检查 pause/cancel
 	if err := controlHandler.CheckPausePoint(ctx, "pre_execution"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
 
 	// Execute streams in parallel
+	// 并行执行多个流
 	var futures []workflow.Future
 	for _, streamInput := range inputs {
 		future := workflow.ExecuteActivity(ctx, streamingActivities.StreamExecute, streamInput)
@@ -391,6 +424,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	}
 
 	// Collect results
+	// 收集结果
 	var results []activities.AgentExecutionResult
 	totalTokens := 0
 
@@ -403,6 +437,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 				"error", err,
 			)
 			// Continue with other streams
+			// 继续处理其它流
 			continue
 		}
 		results = append(results, result)
@@ -418,6 +453,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 		for _, res := range results {
 			opts.RecordToolCostEntries(ctx, res, input.UserID, input.SessionID, workflowID)
 			// Skip zero-token runs to avoid noisy rows.
+			// 跳过零 token 的运行，避免产生噪声行。
 			if res.TokensUsed <= 0 && res.InputTokens <= 0 && res.OutputTokens <= 0 {
 				continue
 			}
@@ -436,6 +472,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 			}
 
 			// Fallbacks for missing model/provider
+			// model/provider 缺失时的兜底
 			model := res.ModelUsed
 			provider := res.Provider
 			if provider == "" {
@@ -460,6 +497,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	}
 
 	// Collect citations from streaming agent results (best-effort)
+	// 从各 streaming agent 结果中收集引用（尽力而为）
 	var collectedCitations []metadata.Citation
 	if len(results) > 0 {
 		var resultsForCitations []any
@@ -485,6 +523,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	}
 
 	// Prepare synthesis context (copy input context, set defaults, inject citations)
+	// 准备合成 context（复制输入 context、设置默认值、注入引用）
 	buildContext := func() map[string]any {
 		ctxMap := map[string]any{}
 		if input.Context != nil {
@@ -500,10 +539,12 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	}
 
 	// Synthesize results (LLM-first)
+	// 合成结果（优先用 LLM）
 	var synthesis activities.SynthesisResult
 	didSynthesisLLM := false
 
 	// Already have AgentExecutionResult from streaming
+	// 流式执行已经产出 AgentExecutionResult
 	agentResults := make([]activities.AgentExecutionResult, len(results))
 	copy(agentResults, results)
 
@@ -543,6 +584,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	}
 
 	// Record synthesis token usage when LLM synthesis ran
+	// LLM 合成实际执行时记录其 token 用量
 	if didSynthesisLLM && synthesis.TokensUsed > 0 {
 		inTok := synthesis.InputTokens
 		outTok := synthesis.CompletionTokens
@@ -575,6 +617,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	)
 
 	// Update session with token usage
+	// 用 token 用量更新 session
 	if input.SessionID != "" {
 		var sessionUpdateResult activities.SessionUpdateResult
 		err := workflow.ExecuteActivity(ctx,
@@ -602,11 +645,13 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	}
 
 	// Build metadata and include aggregate model/provider + token breakdown across streams
+	// 构建 metadata，并包含跨各流聚合的 model/provider 与 token 拆分
 	meta := map[string]any{
 		"num_streams": len(results),
 		"parallel":    true,
 	}
 	// Ensure each agent has input/output tokens (estimate 60/40 if missing)
+	// 确保每个 agent 都有 input/output token（缺失时按 60/40 估算）
 	agentResultsForMeta := make([]activities.AgentExecutionResult, 0, len(agentResults))
 	for _, r := range agentResults {
 		ar := r
@@ -625,6 +670,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	maps.Copy(meta, agentMeta)
 
 	// Add cost estimate if tokens available
+	// 有 token 数据时加入成本估算
 	if totalTokens > 0 {
 		model := ""
 		if m, ok := meta["model"].(string); ok && m != "" {
@@ -634,12 +680,15 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	}
 
 	// Check pause/cancel before completion
+	// 完成前检查 pause/cancel
 	if err := controlHandler.CheckPausePoint(ctx, "pre_completion"); err != nil {
 		return TaskResult{Success: false, ErrorMessage: err.Error()}, err
 	}
 
 	// Emit final clean LLM_OUTPUT for OpenAI-compatible streaming.
+	// 为 OpenAI 兼容的流式输出发出最终干净的 LLM_OUTPUT。
 	// Agent ID "final_output" signals the streamer to always show this content.
+	// Agent ID "final_output" 告知 streamer 始终展示该内容。
 	if synthesis.FinalResult != "" {
 		_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: workflowID,
@@ -654,6 +703,7 @@ func ParallelStreamingWorkflow(ctx workflow.Context, input TaskInput) (TaskResul
 	}
 
 	// Emit WORKFLOW_COMPLETED before returning
+	// 返回前发出 WORKFLOW_COMPLETED
 	_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 		WorkflowID: workflowID,
 		EventType:  activities.StreamEventWorkflowCompleted,

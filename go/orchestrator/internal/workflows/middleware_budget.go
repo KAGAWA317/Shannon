@@ -17,10 +17,13 @@ import (
 
 // BudgetPreflight performs a token budget check with optional backpressure delay.
 // It returns the full BackpressureResult so callers can decide how to proceed.
+// BudgetPreflight 执行 token 预算检查，可选地带上 backpressure 延迟。
+// 它返回完整的 BackpressureResult，以便调用方决定后续处理。
 func BudgetPreflight(ctx workflow.Context, input TaskInput, estimatedTokens int) (*budget.BackpressureResult, error) {
 	logger := workflow.GetLogger(ctx)
 
 	// Use short activity timeout; this should be fast
+	// 使用较短的 activity 超时；该调用应当很快
 	actx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
 	})
@@ -42,13 +45,14 @@ func BudgetPreflight(ctx workflow.Context, input TaskInput, estimatedTokens int)
 			"pressure_level", res.BudgetPressure,
 		)
 		if err := workflow.Sleep(ctx, time.Duration(res.BackpressureDelay)*time.Millisecond); err != nil {
-			return nil, err // Return error on cancellation
+			return nil, err // Return error on cancellation 注：取消时返回错误
 		}
 	}
 
 	rateControlVersion := workflow.GetVersion(ctx, "provider_rate_control_v1", workflow.DefaultVersion, 1)
 	if rateControlVersion >= 1 {
 		// Resolve runtime setting from features.yaml + env override
+		// 从 features.yaml + 环境变量覆盖中解析运行时设置
 		var f *config.Features
 		if feats, err := config.Load(); err == nil {
 			f = feats
@@ -61,6 +65,7 @@ func BudgetPreflight(ctx workflow.Context, input TaskInput, estimatedTokens int)
 			provider := resolveProviderFromContext(input.Context)
 
 			// If provider is unknown, infer from tier's primary provider (models.yaml priority 1)
+			// 若 provider 未知，则从该档位的首选 provider 推断（models.yaml priority 1）
 			if provider == "unknown" {
 				provider = inferProviderFromTier(tier)
 			}
@@ -73,9 +78,10 @@ func BudgetPreflight(ctx workflow.Context, input TaskInput, estimatedTokens int)
 					"delay_ms", delay.Milliseconds(),
 				)
 				// Record metric for rate limit delay
+				// 记录限流延迟的 metric
 				ometrics.RateLimitDelay.WithLabelValues(provider, tier).Observe(delay.Seconds())
 				if err := workflow.Sleep(ctx, delay); err != nil {
-					return nil, err // Return error on cancellation
+					return nil, err // Return error on cancellation 注：取消时返回错误
 				}
 			}
 		}
@@ -85,22 +91,28 @@ func BudgetPreflight(ctx workflow.Context, input TaskInput, estimatedTokens int)
 
 // WithAgentBudget returns a child context annotated with a per-agent budget.
 // Strategies can pass this context to budgeted activities.
+// WithAgentBudget 返回带每 agent 预算注解的子 context。
+// 各 strategy 可将该 context 传给带预算的 activity。
 func WithAgentBudget(ctx workflow.Context, maxTokens int) workflow.Context {
 	return workflow.WithValue(ctx, "agent_budget", maxTokens)
 }
 
 // EstimateTokens provides a coarse estimate of tokens needed for executing the plan.
 // It mirrors the logic used by the previous budgeted workflow and keeps it central.
+// EstimateTokens 粗略估算执行该计划所需的 token 数。
+// 它与此前带预算的 workflow 逻辑一致，并集中到此处。
 func EstimateTokens(decomp activities.DecompositionResult) int {
 	return EstimateTokensWithConfig(decomp, nil)
 }
 
 // EstimateTokensWithConfig provides a coarse estimate with configurable thresholds
+// EstimateTokensWithConfig 提供可配置阈值的粗略估算
 func EstimateTokensWithConfig(decomp activities.DecompositionResult, cfg *activities.WorkflowConfig) int {
 	base := 2000
 	mul := 1.0
 
 	// Use configurable thresholds with defaults
+	// 使用可配置阈值，未配置时取默认值
 	mediumThreshold := 0.5
 	if cfg != nil && cfg.ComplexityMediumThreshold > 0 {
 		mediumThreshold = cfg.ComplexityMediumThreshold
@@ -143,6 +155,9 @@ func resolveProviderFromContext(ctx map[string]any) string {
 // CapBudgetAtQuotaRemaining is a no-op in the open source version.
 // Enterprise version caps agentMax for free-tier users based on remaining quota.
 // Returns agentMax unchanged.
+// CapBudgetAtQuotaRemaining 在开源版中为空操作。
+// 企业版会按免费用户剩余配额限制 agentMax。
+// 原样返回 agentMax。
 // 开源版为空操作：企业版会按免费用户剩余配额限制 agentMax，此处原样返回。
 func CapBudgetAtQuotaRemaining(ctx workflow.Context, tenantID string, agentMax int) int {
 	return agentMax
@@ -151,21 +166,26 @@ func CapBudgetAtQuotaRemaining(ctx workflow.Context, tenantID string, agentMax i
 // inferProviderFromTier returns the most likely provider for a given tier.
 // Reads priority-1 provider from config/models.yaml to avoid config drift.
 // Falls back to hardcoded defaults if config unavailable.
+// inferProviderFromTier 返回给定档位最可能的 provider。
+// 从 config/models.yaml 读取 priority-1 的 provider，避免配置漂移。
+// 配置不可用时退回硬编码默认值。
 // 从 config/models.yaml 读取该档位 priority-1 的 provider，避免配置漂移；配置不可用时退回硬编码默认值。
 func inferProviderFromTier(tier string) string {
 	// Try to get from config first (data-driven)
+	// 优先从配置获取（数据驱动）
 	if provider := pricing.GetPriorityOneProvider(tier); provider != "" {
 		return provider
 	}
 
 	// Fallback to hardcoded defaults if config not available
+	// 配置不可用时退回硬编码默认值
 	switch tier {
 	case "small":
-		return "openai" // Default: gpt-5-nano-2025-08-07 is priority 1
+		return "openai" // Default: gpt-5-nano-2025-08-07 is priority 1 注：默认 gpt-5-nano-2025-08-07 为 priority 1
 	case "medium":
-		return "openai" // Default: gpt-5-2025-08-07 is priority 1
+		return "openai" // Default: gpt-5-2025-08-07 is priority 1 注：默认 gpt-5-2025-08-07 为 priority 1
 	case "large":
-		return "openai" // Default: gpt-4.1-2025-04-14 is priority 1
+		return "openai" // Default: gpt-4.1-2025-04-14 is priority 1 注：默认 gpt-4.1-2025-04-14 为 priority 1
 	default:
 		return "unknown"
 	}

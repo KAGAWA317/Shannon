@@ -187,6 +187,7 @@ async def test_sessions(client: AsyncShannonClient):
     await client.wait(handle.task_id, timeout=60)
 
     # List sessions
+    # 列出 session
     sessions, total = await client.list_sessions()
     report("list_sessions() returns list", len(sessions) > 0, f"total={total}")
 
@@ -205,6 +206,7 @@ async def test_sessions(client: AsyncShannonClient):
     )
 
     # Update title
+    # 更新标题
     new_title = "E2E Test Session"
     await client.update_session_title(session_id, new_title)
     session2 = await client.get_session(session_id)
@@ -215,10 +217,12 @@ async def test_sessions(client: AsyncShannonClient):
     )
 
     # Get history
+    # 获取 history
     history = await client.get_session_history(session_id)
     report("get_session_history() returns items", len(history) > 0, f"count={len(history)}")
 
     # Delete session
+    # 删除 session
     deleted = await client.delete_session(session_id)
     report("delete_session() succeeds", deleted is True)
 
@@ -248,6 +252,7 @@ async def test_tools_api(client: AsyncShannonClient):
     )
 
     # Get tool detail
+    # 获取 tool 详情
     detail = await client.get_tool(t.name)
     report(
         "get_tool() returns ToolDetail",
@@ -283,6 +288,7 @@ async def test_openai_compat(client: AsyncShannonClient):
     print("\n--- OpenAI-Compatible ---")
 
     # List models
+    # 列出 model
     models = await client.list_openai_models()
     report("list_openai_models() returns list", isinstance(models, list), f"count={len(models)}")
 
@@ -295,10 +301,12 @@ async def test_openai_compat(client: AsyncShannonClient):
         )
 
         # Get specific model
+        # 获取指定 model
         detail = await client.get_openai_model(m.id)
         report("get_openai_model() returns model", detail.id == m.id)
 
     # Chat completions
+    # 调用 chat completions
     messages = [{"role": "user", "content": "Say 'hello' and nothing else."}]
     completion = await client.create_chat_completion(messages=messages)
     report(
@@ -319,6 +327,7 @@ async def test_openai_compat(client: AsyncShannonClient):
         )
 
     # Streaming chat completions
+    # 流式 chat completions
     chunks = []
     async for chunk in client.stream_chat_completion(
         messages=[{"role": "user", "content": "Say 'hi'"}]
@@ -486,12 +495,14 @@ async def test_control_signals(client: AsyncShannonClient):
         return
 
     # Pause
+    # 暂停
     paused = await client.pause_task(handle.task_id, reason="E2E test pause")
     report("pause_task() succeeds", paused is True, f"returned: {paused}")
 
     await asyncio.sleep(1)
 
     # Check control state
+    # 查询 control state
     state = await client.get_control_state(handle.task_id)
     report(
         "get_control_state() shows paused",
@@ -500,6 +511,7 @@ async def test_control_signals(client: AsyncShannonClient):
     )
 
     # Resume
+    # 恢复
     resumed = await client.resume_task(handle.task_id, reason="E2E test resume")
     report("resume_task() succeeds", resumed is True, f"returned: {resumed}")
 

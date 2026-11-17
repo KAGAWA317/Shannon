@@ -7,33 +7,36 @@ import (
 )
 
 // ChunkingConfig controls text chunking behavior
+// ChunkingConfig 控制文本分块行为
 type ChunkingConfig struct {
 	Enabled       bool   `yaml:"Enabled"`
 	MaxTokens     int    `yaml:"MaxTokens"`
 	OverlapTokens int    `yaml:"OverlapTokens"`
-	TokenizerMode string `yaml:"TokenizerMode"` // "simple" | "tiktoken"
+	TokenizerMode string `yaml:"TokenizerMode"` // "simple" | "tiktoken" 注：取值 "simple" 或 "tiktoken"
 }
 
 // DefaultChunkingConfig returns sensible defaults
+// DefaultChunkingConfig 返回合理的默认值
 func DefaultChunkingConfig() ChunkingConfig {
 	return ChunkingConfig{
 		Enabled:       true,
-		MaxTokens:     1800,     // Safe for most models
-		OverlapTokens: 200,      // ~11% overlap
-		TokenizerMode: "simple", // Start with simple word-based
+		MaxTokens:     1800,     // Safe for most models 注：对多数模型安全
+		OverlapTokens: 200,      // ~11% overlap 注：约 11% 重叠
+		TokenizerMode: "simple", // Start with simple word-based 注：先用简单的基于词的分词
 	}
 }
 
 // Chunk represents a text chunk with metadata
 // Chunk 表示带 metadata 的文本分块
 type Chunk struct {
-	QAID       string // UUID for the Q&A pair
-	Text       string // The chunk text
-	Index      int    // 0-based chunk position
-	TotalCount int    // Total number of chunks
+	QAID       string // UUID for the Q&A pair 注：该 Q&A 对的 UUID
+	Text       string // The chunk text 注：分块文本
+	Index      int    // 0-based chunk position 注：分块位置，从 0 开始
+	TotalCount int    // Total number of chunks 注：分块总数
 }
 
 // Chunker handles text chunking with overlap
+// Chunker 处理带重叠的文本分块
 type Chunker struct {
 	maxTokens     int
 	overlapTokens int
@@ -68,6 +71,7 @@ func (c *Chunker) ChunkText(text string) []Chunk {
 	tokens := c.tokenize(text)
 
 	// No chunking needed if text fits
+	// 文本长度在限制内时无需分块
 	if len(tokens) <= c.maxTokens {
 		return nil
 	}
@@ -81,7 +85,7 @@ func (c *Chunker) ChunkText(text string) []Chunk {
 	// 计算步长（每个分块前进的 token 数）
 	step := c.maxTokens - c.overlapTokens
 	if step <= 0 {
-		step = c.maxTokens / 2 // Fallback to 50% overlap
+		step = c.maxTokens / 2 // Fallback to 50% overlap 注：回退到 50% 重叠
 	}
 
 	for i := 0; i < len(tokens); i += step {
@@ -95,12 +99,14 @@ func (c *Chunker) ChunkText(text string) []Chunk {
 		})
 
 		// Stop if we've reached the end
+		// 到达末尾即停止
 		if end == len(tokens) {
 			break
 		}
 	}
 
 	// Set total count for all chunks
+	// 为所有分块设置总数
 	for i := range chunks {
 		chunks[i].TotalCount = len(chunks)
 	}
@@ -130,6 +136,7 @@ func (c *Chunker) tokenize(text string) []string {
 }
 
 // detokenize joins tokens back into text
+// detokenize 把 token 重新拼接为文本
 func (c *Chunker) detokenize(tokens []string) string {
 	switch c.tokenizerMode {
 	case "tiktoken":
@@ -172,5 +179,5 @@ func (c *Chunker) simpleTokenize(text string) []string {
 // EstimateTokensForModel estimates tokens from word count; all models share the same rate today.
 // EstimateTokensForModel 按词数估算 token 数；当前所有模型使用同一比例。
 func EstimateTokensForModel(text string, model string) int {
-	return len(strings.Fields(text)) * 13 / 10 // 1.3 tokens per word
+	return len(strings.Fields(text)) * 13 / 10 // 1.3 tokens per word 注：每词 1.3 个 token
 }

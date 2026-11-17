@@ -29,9 +29,10 @@ type ClaimMetadata struct {
 }
 
 // ClaimManager coordinates message claims via Redis.
+// ClaimManager 通过 Redis 协调消息 claim。
 type ClaimManager struct {
 	rc       redis.Cmdable
-	claimTTL time.Duration // initial claim TTL (default 60s)
+	claimTTL time.Duration // initial claim TTL (default 60s) 注：初始 claim TTL（默认 60s）
 }
 
 func NewClaimManager(rc redis.Cmdable) *ClaimManager {
@@ -71,6 +72,7 @@ func (cm *ClaimManager) ExtendClaim(ctx context.Context, messageID string, ttl t
 }
 
 // GetClaim retrieves claim metadata.
+// GetClaim 读取 claim 元数据。
 func (cm *ClaimManager) GetClaim(ctx context.Context, messageID string) (ClaimMetadata, error) {
 	data, err := cm.rc.Get(ctx, claimKey(messageID)).Bytes()
 	if err != nil {

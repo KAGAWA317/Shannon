@@ -6,11 +6,13 @@ import (
 )
 
 // OpenAPIHandler serves the OpenAPI specification
+// OpenAPIHandler 提供 OpenAPI 规范
 type OpenAPIHandler struct {
 	spec map[string]any
 }
 
 // NewOpenAPIHandler creates a new OpenAPI handler
+// NewOpenAPIHandler 创建新的 OpenAPI handler
 func NewOpenAPIHandler() *OpenAPIHandler {
 	return &OpenAPIHandler{
 		spec: generateOpenAPISpec(),
@@ -18,6 +20,7 @@ func NewOpenAPIHandler() *OpenAPIHandler {
 }
 
 // ServeSpec handles GET /openapi.json
+// ServeSpec 处理 GET /openapi.json
 func (h *OpenAPIHandler) ServeSpec(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")

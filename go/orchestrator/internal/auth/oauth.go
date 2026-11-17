@@ -21,7 +21,7 @@ type GoogleUser struct {
 	EmailVerified bool
 	Name          string
 	Picture       string
-	Sub           string // Google user ID
+	Sub           string // Google user ID 注：Google 用户 ID
 }
 
 // iOSClientID is the Google OAuth client ID for iOS public client flows.
@@ -30,6 +30,7 @@ type GoogleUser struct {
 var iOSClientID = os.Getenv("IOS_GOOGLE_CLIENT_ID")
 
 // GoogleOAuthVerifier handles Google OAuth token verification
+// GoogleOAuthVerifier 处理 Google OAuth token 校验
 type GoogleOAuthVerifier struct {
 	clientID            string
 	clientSecret        string
@@ -119,6 +120,7 @@ func (v *GoogleOAuthVerifier) ExchangeAuthCode(ctx context.Context, authCode, re
 	}
 
 	// Exchange authorization code for tokens
+	// 用 authorization code 换取 token
 	tokenURL := "https://oauth2.googleapis.com/token"
 	values := url.Values{}
 	values.Set("code", authCode)
@@ -150,6 +152,7 @@ func (v *GoogleOAuthVerifier) ExchangeAuthCode(ctx context.Context, authCode, re
 	}
 
 	// Parse token response
+	// 解析 token 响应
 	var tokenResp struct {
 		IDToken string `json:"id_token"`
 	}
@@ -190,6 +193,7 @@ func (v *GoogleOAuthVerifier) selectCredentials(redirectURI string) (clientID, c
 	}
 
 	// Default to web credentials
+	// 默认使用 web 凭据
 	return v.clientID, v.clientSecret, false
 }
 

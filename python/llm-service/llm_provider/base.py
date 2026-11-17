@@ -26,12 +26,9 @@ class ModelTier(Enum):
     model tier 分类，用于成本优化。
     """
 
-    SMALL = "small"  # Fast, cheap models for simple tasks
-    # 用于 simple task 的快速、低成本模型
-    MEDIUM = "medium"  # Balanced performance/cost
-    # 性能/成本均衡
-    LARGE = "large"  # High-capability models for complex tasks
-    # 用于 complex task 的高能力模型
+    SMALL = "small"  # Fast, cheap models for simple tasks 注：用于 simple task 的快速、低成本模型
+    MEDIUM = "medium"  # Balanced performance/cost 注：性能/成本均衡
+    LARGE = "large"  # High-capability models for complex tasks 注：用于 complex task 的高能力模型
 
 
 @dataclass
@@ -131,8 +128,7 @@ class TokenUsage:
     cache_creation_tokens: int = 0
     cache_creation_5m_tokens: int = 0
     cache_creation_1h_tokens: int = 0
-    call_sequence: int = 0  # Monotonic counter: which LLM call within this provider session
-    # 单调递增计数器：标记本 provider session 内的第几次 LLM 调用
+    call_sequence: int = 0  # Monotonic counter: which LLM call within this provider session 注：单调递增计数器：标记本 provider session 内的第几次 LLM 调用
 
     def __add__(self, other: "TokenUsage") -> "TokenUsage":
         return TokenUsage(
@@ -160,8 +156,7 @@ class CompletionRequest:
     model: Optional[str] = None
     temperature: float = 0.7
     max_tokens: Optional[int] = None
-    top_p: Optional[float] = None  # None means API default; explicit 1.0 if needed
-    # None 表示使用 API 默认值；需要时显式设为 1.0
+    top_p: Optional[float] = None  # None means API default; explicit 1.0 if needed 注：None 表示使用 API 默认值；需要时显式设为 1.0
     frequency_penalty: float = 0.0
     presence_penalty: float = 0.0
     stop: Optional[List[str]] = None
@@ -178,12 +173,10 @@ class CompletionRequest:
     task_id: Optional[str] = None
     agent_id: Optional[str] = None
     cache_key: Optional[str] = None
-    cache_ttl: int = 3600  # 1 hour default
-    # 默认 1 小时
+    cache_ttl: int = 3600  # 1 hour default 注：默认 1 小时
     max_tokens_budget: Optional[int] = None
     complexity_score: Optional[float] = (
-        None  # Optional signal for dynamic API selection
-        # 可选信号，用于动态选择 API
+        None  # Optional signal for dynamic API selection 注：可选信号，用于动态选择 API
     )
     # Provider override (e.g., "openai", "anthropic"). Optional.
     # provider 覆盖（如 "openai"、"anthropic"）。可选。
@@ -269,13 +262,12 @@ class CompletionResponse:
 
     # Metadata
     # metadata
-    request_id: Optional[str] = None  # Also used as response_id for OpenAI Responses API chaining
-    # 同时用作 OpenAI Responses API 串联的 response_id
+    # 元数据
+    request_id: Optional[str] = None  # Also used as response_id for OpenAI Responses API chaining 注：同时用作 OpenAI Responses API 串联的 response_id
     created_at: datetime = None
     latency_ms: Optional[int] = None
     cached: bool = False
-    effective_max_completion: Optional[int] = None  # Actual max completion after provider headroom clamp
-    # 按 provider 预留空间裁剪后的实际最大 completion
+    effective_max_completion: Optional[int] = None  # Actual max completion after provider headroom clamp 注：按 provider 预留空间裁剪后的实际最大 completion
 
     def __post_init__(self):
         if self.created_at is None:
@@ -425,6 +417,7 @@ class LLMProvider(ABC):
         output_price = float(output_price) if output_price is not None else 0.0
 
         # Build capabilities
+        # 构建 capabilities
         capabilities = ModelCapabilities(
             supports_tools=bool(meta.get("supports_functions", True)),
             supports_json_mode=bool(meta.get("supports_json_mode", True)),
@@ -580,6 +573,7 @@ class CacheManager:
                 return response
             else:
                 # Expired, remove from cache
+                # 已过期，从缓存中移除
                 del self.cache[key]
 
         self.misses += 1
@@ -753,8 +747,7 @@ def sanitize_completion_messages(messages: list) -> list:
             for j in range(len(result) - 1, -1, -1):
                 prev = result[j]
                 if prev.get("role") == "tool":
-                    continue  # skip other tool results in this batch
-                    # 跳过本批次中的其他 tool result
+                    continue  # skip other tool results in this batch 注：跳过本批次中的其他 tool result
                 if prev.get("role") == "assistant":
                     if prev.get("tool_calls") or prev.get("function_call"):
                         has_preceding_tool_call = True
@@ -765,8 +758,7 @@ def sanitize_completion_messages(messages: list) -> list:
                         )
                 break
             if not has_preceding_tool_call:
-                continue  # drop orphaned tool result
-                # 丢弃孤立的 tool result
+                continue  # drop orphaned tool result 注：丢弃孤立的 tool result
         result.append(msg)
 
     # Merge consecutive same-role messages (keep last, except tool)
@@ -775,8 +767,7 @@ def sanitize_completion_messages(messages: list) -> list:
         merged = [result[0]]
         for msg in result[1:]:
             if msg.get("role") == merged[-1].get("role") and msg.get("role") != "tool":
-                merged[-1] = msg  # keep the later message
-                # 保留较后的一条消息
+                merged[-1] = msg  # keep the later message 注：保留较后的一条消息
             else:
                 merged.append(msg)
     else:
@@ -823,8 +814,7 @@ def sanitize_completion_messages(messages: list) -> list:
                 tc_id = next_msg.get("tool_call_id", "")
                 if tc_id:
                     result_ids.add(tc_id)
-                continue  # keep scanning for more tool results in this batch
-                # 继续在本批次中扫描更多 tool result
+                continue  # keep scanning for more tool results in this batch 注：继续在本批次中扫描更多 tool result
             if next_msg.get("role") == "user" and isinstance(next_msg.get("content"), list):
                 for b in next_msg["content"]:
                     if isinstance(b, dict) and b.get("type") == "tool_result":
@@ -832,8 +822,7 @@ def sanitize_completion_messages(messages: list) -> list:
                         if tu_id:
                             result_ids.add(tu_id)
                 break
-            break  # next message is something else entirely
-            # 下一条消息完全是其他内容
+            break  # next message is something else entirely 注：下一条消息完全是其他内容
 
         if tool_call_ids <= result_ids:
             # All tool calls have matching results
@@ -1108,8 +1097,7 @@ class TokenCounter:
                 for item in content:
                     if isinstance(item, dict):
                         if item.get("type") in ("image", "image_url"):
-                            image_tokens += 256  # midpoint: ~85 low-detail, ~765 high-detail
-                            # 中间值：low-detail 约 85，high-detail 约 765
+                            image_tokens += 256  # midpoint: ~85 low-detail, ~765 high-detail 注：中间值：low-detail 约 85，high-detail 约 765
                         elif "text" in item:
                             total_chars += len(item["text"])
 
@@ -1119,8 +1107,7 @@ class TokenCounter:
 
         # Add overhead for message structure
         # 为消息结构增加开销
-        message_overhead = len(messages) * 4  # ~4 tokens per message for role/structure
-        # 每条消息的角色/结构约 4 个 token
+        message_overhead = len(messages) * 4  # ~4 tokens per message for role/structure 注：每条消息的角色/结构约 4 个 token
 
         return base_tokens + message_overhead
 
@@ -1216,5 +1203,4 @@ class RateLimiter:
             try:
                 self._semaphore.release()
             except ValueError:
-                pass  # Already released
-                # 已释放
+                pass  # Already released 注：已释放

@@ -184,12 +184,15 @@ def main():
         list_models()
 
         # Simple chat
+        # 简单对话
         simple_chat()
 
         # Streaming chat
+        # 流式对话
         streaming_chat()
 
         # Multi-turn conversation
+        # 多轮对话
         multi_turn_conversation()
 
         # Uncomment for longer examples:

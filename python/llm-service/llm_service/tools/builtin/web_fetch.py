@@ -39,9 +39,9 @@ logger = logging.getLogger(__name__)
 
 # --- Prompt-guided extraction constants ---
 # --- Prompt 引导的提取相关常量 ---
-EXTRACTION_INTERNAL_MAX = 100000  # Internal max_length when extraction is enabled
-EXTRACTION_CONTENT_CAP = 400000   # Max chars sent to extraction LLM (context safety)
-EXTRACTION_TIMEOUT = 60           # Seconds before extraction call times out
+EXTRACTION_INTERNAL_MAX = 100000  # Internal max_length when extraction is enabled 注：启用提取时的内部 max_length
+EXTRACTION_CONTENT_CAP = 400000   # Max chars sent to extraction LLM (context safety) 注：发送给提取 LLM 的最大字符数（context 安全）
+EXTRACTION_TIMEOUT = 60           # Seconds before extraction call times out 注：提取调用 timeout 的秒数
 # 启用提取时的内部 max_length；发送给提取 LLM 的最大字符数（context 安全）；
 # 提取调用 timeout 秒数。
 
@@ -137,6 +137,13 @@ async def apply_extraction(
     When extract_prompt is provided, extraction is targeted to that query.
     When extract_prompt is None, generic content extraction is used.
     On extraction failure, falls back to hard truncation at original_max_length.
+
+    后处理 ToolResult：将超长内容替换为 LLM 提取结果。
+
+    内容超过 original_max_length 时总会执行——用小模型提取/压缩主内容，而不是盲目截断。
+    提供 extract_prompt 时，提取定向到该查询。
+    未提供 extract_prompt 时，使用通用内容提取。
+    提取失败时，回退为在 original_max_length 处硬截断。
     """
     if not result.success or not result.output:
         return result
@@ -242,11 +249,12 @@ async def extract_batch_with_llm(
         # Reserve some budget for prompt overhead (delimiters, instructions)
         # 限制单页内容，使合并后不超过 EXTRACTION_CONTENT_CAP
         # 为 prompt 开销（分隔符、指令）预留一部分 budget
-        overhead_budget = 1000  # for system/user prompt text + delimiters
+        overhead_budget = 1000  # for system/user prompt text + delimiters 注：用于 system/user prompt 文本 + 分隔符
         available = EXTRACTION_CONTENT_CAP - overhead_budget
         per_page_cap = max(available // n, 1000)
 
         # Build page blocks
+        # 构建 page 块
         page_blocks = []
         for p in pages:
             content = p.get("content", "")
@@ -406,6 +414,7 @@ def _is_meaningless_alt(alt: str) -> bool:
     alt_lower = alt.lower().strip()
 
     # Check blacklist
+    # 检查黑名单
     if alt_lower in ALT_BLACKLIST:
         return True
 
@@ -462,8 +471,10 @@ def clean_markdown_noise(content: str) -> str:
         return placeholder
 
     # Fenced code blocks ```...```
+    # 围栏代码块 ```...```
     content = re.sub(r'```[\s\S]*?```', save_code, content)
     # Inline code `...`
+    # 行内代码 `...`
     content = re.sub(r'`[^`]+`', save_code, content)
 
     # Step 1: Remove base64 early (performance optimization)
@@ -475,6 +486,7 @@ def clean_markdown_noise(content: str) -> str:
     def extract_meaningful_alt(m, group=1):
         alt = m.group(group).strip()
         # Filter meaningless alt text
+        # 过滤无意义的 alt 文本
         if _is_meaningless_alt(alt):
             return ''
         # Keep meaningful alt text (>5 chars, contains Chinese or English)
@@ -551,8 +563,8 @@ def clean_markdown_noise(content: str) -> str:
 
 
 CRAWL_DELAY_SECONDS = float(os.getenv("WEB_FETCH_CRAWL_DELAY", "0.5"))
-MAX_TOTAL_CRAWL_CHARS = int(os.getenv("WEB_FETCH_MAX_CRAWL_CHARS", "150000"))  # 150KB total
-CRAWL_TIMEOUT_SECONDS = int(os.getenv("WEB_FETCH_CRAWL_TIMEOUT", "90"))  # 90s total crawl timeout
+MAX_TOTAL_CRAWL_CHARS = int(os.getenv("WEB_FETCH_MAX_CRAWL_CHARS", "150000"))  # 150KB total 注：总计 150KB
+CRAWL_TIMEOUT_SECONDS = int(os.getenv("WEB_FETCH_CRAWL_TIMEOUT", "90"))  # 90s total crawl timeout 注：crawl 总 timeout 90s
 
 
 def sanitize_snippet(content: str, title: str, max_len: int = 500) -> str:
@@ -592,7 +604,7 @@ def sanitize_snippet(content: str, title: str, max_len: int = 500) -> str:
     # 查找句末标记：'. '、'! '、'? '
     for end_marker in ['. ', '! ', '? ', '。', '！', '？']:
         last_idx = snippet.rfind(end_marker)
-        if last_idx > 100:  # Keep at least 100 chars
+        if last_idx > 100:  # Keep at least 100 chars 注：至少保留 100 字符
             snippet = snippet[:last_idx + len(end_marker)]
             break
 
@@ -809,7 +821,8 @@ class FirecrawlFetchProvider(WebFetchProvider):
         # === 面向所有多页场景的统一 MAP+SCRAPE 策略 ===
         
         # Step 1: Prepare effective_paths
-        effective_paths = required_paths  # Explicit paths from Deep Research
+        # Step 1：准备 effective_paths
+        effective_paths = required_paths  # Explicit paths from Deep Research 注：来自 Deep Research 的显式路径
         
         # Step 2: Auto-infer from subpage_target if no explicit paths
         # 步骤 2：没有显式路径时，从 subpage_target 自动推断
@@ -820,6 +833,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
                 logger.info(f"Auto-inferred paths from '{subpage_target}': {inferred}")
         
         # Step 3: Log strategy
+        # Step 3：记录策略
         if effective_paths:
             logger.info(f"Using map+scrape with {len(effective_paths)} path hints for {url}")
         else:
@@ -917,11 +931,13 @@ class FirecrawlFetchProvider(WebFetchProvider):
                 content = clean_markdown_noise(content)
 
                 # Truncate if needed
+                # 如有需要则截断
                 if len(content) > max_length:
                     content = content[:max_length]
 
                 title = result_data.get("metadata", {}).get("title", "")
                 # P0-A: Detect blocked content
+                # P0-A：检测被拦截内容
                 blocked_reason = detect_blocked_reason(content, 200)
                 # P0-A：检测被拦截的内容
 
@@ -929,7 +945,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
                     "url": result_data.get("url", url),
                     "title": title,
                     "content": content,
-                    "snippet": sanitize_snippet(content, title),  # For citation extraction
+                    "snippet": sanitize_snippet(content, title),  # For citation extraction 注：用于 citation 提取
                     "author": result_data.get("metadata", {}).get("author"),
                     "published_date": result_data.get("metadata", {}).get("publishedDate"),
                     "word_count": len(content.split()),
@@ -937,9 +953,9 @@ class FirecrawlFetchProvider(WebFetchProvider):
                     "truncated": len(content) >= max_length,
                     "method": "firecrawl",
                     "pages_fetched": 1,
-                    "tool_source": "fetch",  # Citation V2: mark as fetch-origin
-                    "status_code": 200,  # P0-A: Firecrawl success = 200
-                    "blocked_reason": blocked_reason,  # P0-A: Content-based detection
+                    "tool_source": "fetch",  # Citation V2: mark as fetch-origin 注：Citation V2：标记为 fetch 来源
+                    "status_code": 200,  # P0-A: Firecrawl success = 200 注：P0-A：Firecrawl 成功 = 200
+                    "blocked_reason": blocked_reason,  # P0-A: Content-based detection 注：P0-A：基于内容检测
                 }
 
     async def _crawl(self, url: str, max_length: int, limit: int) -> Dict[str, Any]:
@@ -956,14 +972,16 @@ class FirecrawlFetchProvider(WebFetchProvider):
         }
 
         # Start crawl job
+        # 启动 crawl job
         payload = {
             "url": url,
-            "limit": min(limit + 1, MAX_SUBPAGES + 1),  # +1 for main page
+            "limit": min(limit + 1, MAX_SUBPAGES + 1),  # +1 for main page 注：+1 为主 page
             "scrapeOptions": {
                 "formats": ["markdown"],
                 "parsers": ["pdf"],
                 "onlyMainContent": True,
                 # Note: 'form' removed - some sites wrap main content in form tags
+                # 'form' 已移除——部分站点会将主内容包裹在 form 标签内
             "excludeTags": ["nav", "footer", "aside", "svg", "script", "style", "noscript"],
                 "removeBase64Images": True,
                 "blockAds": True,
@@ -973,6 +991,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
         timeout = aiohttp.ClientTimeout(total=self.DEFAULT_TIMEOUT)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             # Start crawl
+            # 启动 crawl
             logger.info(f"Firecrawl: Starting crawl job for {url} with limit={limit}")
             async with session.post(
                 self.crawl_url, json=payload, headers=headers
@@ -1001,7 +1020,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
             # Poll for crawl completion
             # 轮询爬取是否完成
             status_url = f"{self.crawl_url}/{crawl_id}"
-            max_polls = 60  # Max 60 polls (with 2s delay = 2 minutes max)
+            max_polls = 60  # Max 60 polls (with 2s delay = 2 minutes max) 注：最多 60 次轮询（2s 间隔 = 最多 2 分钟）
             # 最多轮询 60 次（间隔 2s，即最长 2 分钟）
             poll_delay = 2.0
 
@@ -1028,7 +1047,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
                         
                         # Debug: Log URLs from Firecrawl response
                         # 调试：记录 Firecrawl response 中的 URL
-                        for i, page_data in enumerate(results[:5]):  # Log first 5 URLs
+                        for i, page_data in enumerate(results[:5]):  # Log first 5 URLs 注：只记录前 5 个 URL
                             page_url = page_data.get("url", "")
                             logger.info(f"Firecrawl page {i+1} URL: {page_url}")
                         
@@ -1084,7 +1103,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
                 "content": "",
                 "method": "firecrawl",
                 "pages_fetched": 0,
-                "tool_source": "fetch",  # Citation V2: mark as fetch-origin
+                "tool_source": "fetch",  # Citation V2: mark as fetch-origin 注：Citation V2：标记为 fetch 来源
             }
         
         # Step 1: Filter failed pages (statusCode != 200)
@@ -1132,6 +1151,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
             
             seen_urls.add(page_url)
             # Update page_data with sanitized URL
+            # 用清洗后的 URL 更新 page_data
             page_data["url"] = page_url
             unique_pages.append(page_data)
         
@@ -1142,7 +1162,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
                 "content": "",
                 "method": "firecrawl",
                 "pages_fetched": 0,
-                "tool_source": "fetch",  # Citation V2: mark as fetch-origin
+                "tool_source": "fetch",  # Citation V2: mark as fetch-origin 注：Citation V2：标记为 fetch 来源
                 "metadata": {
                     "total_crawled": len(results),
                     "failed_pages": failed_count,
@@ -1155,7 +1175,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
         if len(unique_pages) == 1:
             result = unique_pages[0]
             content = result.get("markdown", "")
-            content = clean_markdown_noise(content)  # Clean noise before truncation
+            content = clean_markdown_noise(content)  # Clean noise before truncation 注：截断前先清理噪声
             if len(content) > max_length:
                 content = content[:max_length]
             
@@ -1170,7 +1190,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
                 "truncated": len(content) >= max_length,
                 "method": "firecrawl",
                 "pages_fetched": 1,
-                "tool_source": "fetch",  # Citation V2: mark as fetch-origin
+                "tool_source": "fetch",  # Citation V2: mark as fetch-origin 注：Citation V2：标记为 fetch 来源
             }
         
         # Step 4: Multiple pages - smart truncation
@@ -1187,13 +1207,15 @@ class FirecrawlFetchProvider(WebFetchProvider):
             page_url = page_data.get("url", "")
             page_title = page_data.get("metadata", {}).get("title", "")
             page_content = page_data.get("markdown", "")
-            page_content = clean_markdown_noise(page_content)  # Clean noise
+            page_content = clean_markdown_noise(page_content)  # Clean noise 注：清理噪声
 
             # Truncate individual page
+            # 截断单个 page
             if len(page_content) > per_page_limit:
                 page_content = page_content[:per_page_limit] + "\n\n[Content truncated...]"
             
             # Check total length limit
+            # 检查总长度上限
             if total_chars + len(page_content) > max_length:
                 logger.info(
                     f"Reached max_length limit at page {i+1}/{len(unique_pages)}, "
@@ -1229,7 +1251,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
             "truncated": pages_included < len(unique_pages),
             "method": "firecrawl",
             "pages_fetched": pages_included,
-            "tool_source": "fetch",  # Citation V2: mark as fetch-origin
+            "tool_source": "fetch",  # Citation V2: mark as fetch-origin 注：Citation V2：标记为 fetch 来源
             "metadata": {
                 "total_crawled": len(results),
                 "valid_pages": len(valid_pages),
@@ -1296,11 +1318,11 @@ class FirecrawlFetchProvider(WebFetchProvider):
                 "content": "",
                 "method": "firecrawl",
                 "pages_fetched": 0,
-                "tool_source": "fetch",  # Citation V2: mark as fetch-origin
+                "tool_source": "fetch",  # Citation V2: mark as fetch-origin 注：Citation V2：标记为 fetch 来源
             }
 
         max_retries = 2
-        retry_delay = 5  # seconds
+        retry_delay = 5  # seconds 注：秒
 
         # Scrape each URL with retry logic
         # 逐个抓取 URL，并带 retry 逻辑
@@ -1338,7 +1360,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
                     # Handle 429 rate limit - wait longer and retry
                     # 处理 429 rate limit——等待更久后 retry
                     elif "429" in error_msg:
-                        wait_time = retry_delay * (retry + 2)  # 10s, 15s, 20s
+                        wait_time = retry_delay * (retry + 2)  # 10s, 15s, 20s 注：10s、15s、20s
                         if retry < max_retries:
                             logger.warning(f"429 rate limit for {url}, waiting {wait_time}s, retry {retry+1}/{max_retries}")
                             await asyncio.sleep(wait_time)
@@ -1349,11 +1371,11 @@ class FirecrawlFetchProvider(WebFetchProvider):
                     else:
                         logger.warning(f"Failed to scrape {url}: {e}")
 
-                    break  # Don't retry for other errors
+                    break  # Don't retry for other errors 注：其他错误不重试
 
             # Rate limit: add delay between URLs to avoid triggering 429s
             # rate limit 保护：在 URL 之间加入延迟，避免触发 429
-            if success and url != urls[-1]:  # Skip delay after last URL
+            if success and url != urls[-1]:  # Skip delay after last URL 注：最后一个 URL 之后不再延迟
                 await asyncio.sleep(0.3)
 
         return self._merge_crawl_results(results, urls[0] if urls else "", max_length)
@@ -1393,21 +1415,21 @@ class FirecrawlFetchProvider(WebFetchProvider):
             for path in required_paths:
                 path_lower = path.lower()
                 if url_lower.endswith(path_lower) or f"{path_lower}/" in url_lower:
-                    score += 0.5  # Exact match
+                    score += 0.5  # Exact match 注：精确匹配
                     break
                 elif path_lower.strip('/') in url_lower:
-                    score += 0.3  # Partial match
+                    score += 0.3  # Partial match 注：部分匹配
                     break
         
         # Factor 2: URL depth (weight: 0.2)
         # Shallower URLs are generally more important
         # 因子 2：URL 深度（权重：0.2）
         # 层级更浅的 URL 通常更重要
-        depth = url.count('/') - 2  # -2 for https://
+        depth = url.count('/') - 2  # -2 for https:// 注：-2 为 https://
         if depth <= 1:
-            score += 0.2  # Top-level page
+            score += 0.2  # Top-level page 注：顶层 page
         elif depth == 2:
-            score += 0.1  # Second-level page
+            score += 0.1  # Second-level page 注：二级 page
         
         # Factor 3: URL length (weight: 0.1)
         # Shorter URLs tend to be more important
@@ -1432,7 +1454,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
         for keyword in important_keywords:
             if keyword in url_lower:
                 score += 0.05
-                break  # Only count once
+                break  # Only count once 注：只计一次
         
         # Factor 5: Website size adjustment (dynamic weight)
         # 因子 5：站点规模调整（动态权重）
@@ -1484,6 +1506,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
             required_paths: 可选，需要优先的路径（如 ["/about", "/ir"]）
         """
         # Step 1: Map to get all URLs
+        # Step 1：Map 拿到所有 URL
         all_urls = await self._map(url, limit=200)
 
         if not all_urls:
@@ -1492,6 +1515,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
         logger.info(f"Map found {len(all_urls)} URLs for {url}")
 
         # Step 2: Score all URLs by relevance
+        # Step 2：按相关性为所有 URL 打分
         urls_with_scores = []
         for page_url in all_urls:
             score = self._calculate_relevance_score(
@@ -1502,10 +1526,13 @@ class FirecrawlFetchProvider(WebFetchProvider):
             urls_with_scores.append((page_url, score))
 
         # Step 3: Sort by score (descending)
+        # Step 3：按分数排序（降序）
         urls_with_scores.sort(key=lambda x: x[1], reverse=True)
 
         # Step 4: Select top N URLs
         # Filter out very low scores (< 0.2)
+        # Step 4：选取前 N 个 URL
+        # 过滤掉极低分数（< 0.2）
         MIN_SCORE_THRESHOLD = 0.2
         selected_urls = [
             url_item for url_item, score in urls_with_scores[:limit]
@@ -1522,6 +1549,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
             selected_urls = [url_item for url_item, _ in urls_with_scores[:limit]]
 
         # Log selection summary
+        # 记录选择摘要
         avg_score = sum(s for _, s in urls_with_scores[:len(selected_urls)]) / len(selected_urls)
         logger.info(
             f"Selected {len(selected_urls)}/{len(all_urls)} URLs "
@@ -1529,6 +1557,7 @@ class FirecrawlFetchProvider(WebFetchProvider):
         )
 
         # Step 5: Batch scrape selected URLs
+        # Step 5：批量 scrape 选中的 URL
         return await self._batch_scrape(selected_urls, max_length)
 
 
@@ -1558,6 +1587,7 @@ class WebFetchTool(Tool):
 
     def __init__(self):
         # API keys
+        # API 密钥
         self.exa_api_key = os.getenv("EXA_API_KEY")
         self.firecrawl_api_key = os.getenv("FIRECRAWL_API_KEY")
 
@@ -1577,6 +1607,7 @@ class WebFetchTool(Tool):
 
 
         # Other settings
+        # 其他设置
         self.user_agent = os.getenv(
             "WEB_FETCH_USER_AGENT", "Shannon-Research/1.0 (+https://docs.shannon.run)"
         )
@@ -1585,7 +1616,7 @@ class WebFetchTool(Tool):
         # 安全限制
         self.max_response_bytes = int(
             os.getenv("WEB_FETCH_MAX_RESPONSE_BYTES", str(50 * 1024 * 1024))
-        )  # 50MB
+        )  # 50MB 注：50MB
         self.max_redirects = int(os.getenv("WEB_FETCH_MAX_REDIRECTS", "10"))
         super().__init__()
 
@@ -1597,12 +1628,12 @@ class WebFetchTool(Tool):
             active_providers.append("Exa")
         if self.firecrawl_provider:
             active_providers.append("Firecrawl")
-        active_providers.append("Python")  # Always available
+        active_providers.append("Python")  # Always available 注：始终可用
         provider_str = ", ".join(active_providers)
 
         return ToolMetadata(
             name="web_fetch",
-            version="3.1.0",  # Bumped for batch URL support
+            version="3.1.0",  # Bumped for batch URL support 注：为支持批量 URL 而提升
             description=(
                 "Fetch content from web pages. Supports single URL or batch mode.\n\n"
                 "SINGLE PAGE: web_fetch(url=\"https://...\")\n"
@@ -1630,7 +1661,7 @@ class WebFetchTool(Tool):
                 name="url",
                 type=ToolParameterType.STRING,
                 description="Single URL to fetch. Use this OR urls[], not both.",
-                required=False,  # Now optional - either url or urls required
+                required=False,  # Now optional - either url or urls required 注：现为可选——url 或 urls 二者其一
             ),
             ToolParameter(
                 name="urls",
@@ -1755,7 +1786,7 @@ class WebFetchTool(Tool):
         # provider 现在仅由 WEB_FETCH_PROVIDER 环境变量控制
         provider_name = self.default_provider
         max_length = kwargs.get("max_length", 10000)
-        extract_prompt = kwargs.get("extract_prompt")  # Optional: targeted extraction query
+        extract_prompt = kwargs.get("extract_prompt")  # Optional: targeted extraction query 注：可选：定向提取查询
 
         # Skip ALL LLM extraction in research mode (issue #43): OODA loop does many
         # fast fetches; extraction adds ~40-60s latency per call and 40%+ of total cost.
@@ -1811,6 +1842,7 @@ class WebFetchTool(Tool):
             return ToolResult(success=False, output=None, error="URL parameter required")
 
         # Validate URL
+        # 校验 URL
         try:
             parsed = urlparse(url)
             if not parsed.scheme or not parsed.netloc:
@@ -1819,6 +1851,7 @@ class WebFetchTool(Tool):
                 )
 
             # Only allow HTTP/HTTPS
+            # 仅允许 HTTP/HTTPS
             if parsed.scheme not in ["http", "https"]:
                 return ToolResult(
                     success=False,
@@ -1885,6 +1918,7 @@ class WebFetchTool(Tool):
 
         try:
             # Emit progress
+            # 上报进度
             observer = kwargs.get("observer")
             if observer:
                 try:
@@ -1934,6 +1968,7 @@ class WebFetchTool(Tool):
                             attempts[-1]["status"] = "sparse_fallback"
                             selected_provider = "python"
                             # Fall through to python path below
+                            # 继续走下方 python 路径
                         else:
                             attempts[-1]["status"] = "success"
                             firecrawl_result = ToolResult(success=True, output=result_data, metadata={"fetch_method": "firecrawl"})
@@ -1962,6 +1997,7 @@ class WebFetchTool(Tool):
                     selected_provider = "python"
 
             # Fallback to pure Python
+            # 回退到纯 Python
             attempts.append({"provider": "python", "status": "attempted"})
             result = await self._fetch_pure_python(url, internal_max_length, subpages)
             attempts[-1]["status"] = "success" if result.success else "failed"
@@ -1989,6 +2025,7 @@ class WebFetchTool(Tool):
         - 始终优先 Firecrawl > Exa > Python（Firecrawl 的 PDF 解析与内容提取更好）
         """
         # Handle explicit provider request
+        # 处理显式指定的 provider 请求
         if provider_name in ["exa", "firecrawl", "python"]:
             return provider_name
 
@@ -2003,6 +2040,7 @@ class WebFetchTool(Tool):
                 return "python"
 
         # Default fallback
+        # 默认回退
         return self.default_provider if self.default_provider != "auto" else "python"
 
     async def _fetch_batch(
@@ -2054,6 +2092,7 @@ class WebFetchTool(Tool):
         )
 
         # Validate URLs list
+        # 校验 urls 列表
         if not urls or not isinstance(urls, list):
             return ToolResult(
                 success=False,
@@ -2062,12 +2101,14 @@ class WebFetchTool(Tool):
             )
 
         # Filter and validate individual URLs
+        # 逐个过滤并校验 URL
         valid_urls = []
         for u in urls:
             if not isinstance(u, str) or not u.strip():
                 logger.warning(f"Skipping invalid URL in batch: {u}")
                 continue
             # Basic URL validation
+            # 基础 URL 校验
             try:
                 parsed = urlparse(u)
                 if parsed.scheme in ("http", "https") and parsed.netloc:
@@ -2095,6 +2136,7 @@ class WebFetchTool(Tool):
             per_url_budget = EXTRACTION_INTERNAL_MAX
 
         # Concurrency control
+        # 并发控制
         semaphore = asyncio.Semaphore(concurrency)
 
         async def fetch_one(url: str) -> Dict[str, Any]:
@@ -2104,6 +2146,7 @@ class WebFetchTool(Tool):
                 page_result = None
 
                 # Try Firecrawl first if available
+                # 若可用则优先尝试 Firecrawl
                 if self.firecrawl_provider:
                     try:
                         result_data = await self.firecrawl_provider._scrape(url, per_url_budget)
@@ -2125,11 +2168,12 @@ class WebFetchTool(Tool):
                                 "web_fetch batch: firecrawl sparse (%d chars) for %s, falling back to pure_python",
                                 page_result.get("char_count", 0), url,
                             )
-                            page_result = None  # Triggers existing pure_python fallback below
+                            page_result = None  # Triggers existing pure_python fallback below 注：触发下方已有的 pure_python 回退
                     except Exception as e:
                         logger.warning(f"Firecrawl batch fetch failed for {url}: {e}, falling back to pure_python")
 
                 # Fallback to pure_python
+                # 回退到 pure_python
                 if page_result is None:
                     try:
                         result = await self._fetch_pure_python(url, per_url_budget, subpages=0)
@@ -2167,12 +2211,14 @@ class WebFetchTool(Tool):
                 return page_result
 
         # Execute all fetches concurrently
+        # 并发执行所有 fetch
         results = await asyncio.gather(
             *[fetch_one(u) for u in valid_urls],
             return_exceptions=True
         )
 
         # Aggregate raw results into pages list
+        # 将原始结果汇总到 pages 列表
         pages = []
         succeeded = 0
         failed = 0
@@ -2204,12 +2250,14 @@ class WebFetchTool(Tool):
                 total_chars += content_len
 
                 # Check total chars cap
+                # 检查总字符数上限
                 if total_chars >= total_chars_cap:
                     logger.info(
                         f"Reached total_chars_cap ({total_chars_cap}), "
                         f"stopping at {i + 1}/{len(valid_urls)} URLs"
                     )
                     # Mark remaining URLs as skipped
+                    # 将剩余 URL 标记为 skipped
                     for remaining_url in valid_urls[i + 1:]:
                         pages.append({
                             "url": remaining_url,
@@ -2334,16 +2382,18 @@ class WebFetchTool(Tool):
         )
 
         # Build output
+        # 构建 output
         output = {
             "pages": pages,
             "succeeded": succeeded,
             "failed": failed,
             "total_chars": total_chars,
             "partial_success": succeeded > 0 and failed > 0,
-            "tool_source": "fetch",  # Citation V2: mark as fetch-origin
+            "tool_source": "fetch",  # Citation V2: mark as fetch-origin 注：Citation V2：标记为 fetch 来源
         }
 
         # Build metadata
+        # 构建 metadata
         metadata = {
             "fetch_method": "batch",
             "urls_requested": urls,
@@ -2386,9 +2436,11 @@ class WebFetchTool(Tool):
         parsed = urlparse(url)
         path = parsed.path or "/"
         # Remove trailing slash (except for root)
+        # 去掉末尾斜杠（根路径除外）
         if path != "/" and path.endswith("/"):
             path = path[:-1]
         # Build normalized URL
+        # 构建规范化 URL
         normalized = f"{parsed.scheme}://{parsed.netloc}{path}"
         # Sort query parameters properly using parse_qsl/urlencode
         # This handles duplicate params (?a=1&a=2) and encoded chars correctly
@@ -2409,7 +2461,7 @@ class WebFetchTool(Tool):
         """
         try:
             parsed = urlparse(url)
-            host = parsed.netloc.split(":")[0]  # Remove port if present
+            host = parsed.netloc.split(":")[0]  # Remove port if present 注：如有端口则移除
             return not _is_private_ip(host)
         except Exception:
             return False
@@ -2426,14 +2478,17 @@ class WebFetchTool(Tool):
             if not href or href.startswith(("#", "javascript:", "mailto:", "tel:", "data:", "ftp:", "file:")):
                 continue
             # Resolve relative URLs
+            # 解析相对 URL
             try:
                 full_url = urljoin(base_url, href)
                 parsed = urlparse(full_url)
             except Exception:
-                continue  # Skip malformed URLs
+                continue  # Skip malformed URLs 注：跳过格式错误的 URL
             # Only same-domain links with HTTP/HTTPS
+            # 仅保留同域且为 HTTP/HTTPS 的链接
             if parsed.netloc == root_domain and parsed.scheme in ("http", "https"):
                 # Normalize URL for deduplication
+                # 规范化 URL 以便去重
                 clean_url = self._normalize_url(full_url)
                 # SSRF protection for each extracted link
                 # 对每个提取出的链接做 SSRF 防护
@@ -2450,6 +2505,11 @@ class WebFetchTool(Tool):
         Returns None on failure (silent fail for subpages).
 
         Security: Validates redirect destination stays on same domain.
+
+        抓取单个 page 并返回结构化数据。
+        失败时返回 None（子 page 静默失败）。
+
+        安全：校验重定向目标仍在同一域名下。
         """
         try:
             headers = {"User-Agent": self.user_agent}
@@ -2463,18 +2523,22 @@ class WebFetchTool(Tool):
                     return None
 
                 # SSRF protection: Check redirect destination is same domain
+                # SSRF 防护：检查重定向目标是否为同域
                 final_host = response.url.host
                 if final_host != root_domain:
                     logger.debug(f"Redirect to different domain blocked: {url} -> {response.url}")
                     return None
 
                 # SSRF protection: Check final URL is not private IP
+                # SSRF 防护：检查最终 URL 不是私有 IP
                 if not self._is_safe_url(str(response.url)):
                     logger.debug(f"Redirect to unsafe URL blocked: {url} -> {response.url}")
                     return None
 
                 # Content-Type validation: skip explicitly non-HTML responses
                 # Allow missing Content-Type (attempt to parse anyway)
+                # Content-Type 校验：跳过明确非 HTML 的响应
+                # 允许缺失 Content-Type（仍然尝试解析）
                 content_type = response.headers.get("Content-Type", "")
                 if content_type and "text/html" not in content_type.lower() and "text/plain" not in content_type.lower():
                     logger.debug(f"Skipping non-HTML content: {url} ({content_type})")
@@ -2487,19 +2551,23 @@ class WebFetchTool(Tool):
                 soup = BeautifulSoup(html_content, "lxml")
 
                 # Extract metadata
+                # 提取 metadata
                 title = soup.find("title")
                 title = title.get_text().strip() if title else ""
 
                 # Extract links before removing elements
+                # 在移除元素之前提取链接
                 links = self._extract_same_domain_links(soup, str(response.url), root_domain)
 
                 # Remove unwanted elements
+                # 移除不需要的元素
                 for element in soup(
                     ["script", "style", "nav", "header", "footer", "aside", "iframe", "noscript"]
                 ):
                     element.decompose()
 
                 # Extract main content
+                # 提取主内容
                 main_content = (
                     soup.find("article")
                     or soup.find("main")
@@ -2510,6 +2578,7 @@ class WebFetchTool(Tool):
                 )
 
                 # Convert to markdown
+                # 转换为 markdown
                 h = html2text.HTML2Text()
                 h.ignore_links = False
                 h.ignore_images = False
@@ -2521,12 +2590,14 @@ class WebFetchTool(Tool):
                 markdown = h.handle(str(main_content))
 
                 # Clean up whitespace
+                # 清理空白字符
                 lines = [line.rstrip() for line in markdown.split("\n")]
                 markdown = "\n".join(lines)
                 while "\n\n\n" in markdown:
                     markdown = markdown.replace("\n\n\n", "\n\n")
 
                 # Truncate if needed
+                # 如有需要则截断
                 if len(markdown) > max_length:
                     markdown = markdown[:max_length]
 
@@ -2554,6 +2625,17 @@ class WebFetchTool(Tool):
         - URL normalization for deduplication
         - Total crawl timeout
         - Cumulative content size limit
+
+        以带页面数量限制的 BFS 抓取主 page 与子页面。
+        返回所有已抓取 page 合并后的 markdown 内容。
+
+        安全特性：
+        - 所有爬取的 URL 都做 SSRF 防护
+        - 重定向域名校验
+        - 请求之间限流（可配置延迟）
+        - URL 规范化以便去重
+        - crawl 总 timeout
+        - 累计内容大小限制
         """
         root_domain = urlparse(url).netloc
         visited = set()
@@ -2561,7 +2643,7 @@ class WebFetchTool(Tool):
         queue = [normalized_start]
         visited.add(normalized_start)
         pages = []
-        max_pages = subpages + 1  # Main page + N subpages
+        max_pages = subpages + 1  # Main page + N subpages 注：主 page + N 个子 page
         total_chars = 0
 
         logger.info(f"Starting pure-Python crawl: {url} (max_pages={max_pages})")
@@ -2571,12 +2653,14 @@ class WebFetchTool(Tool):
 
         while queue and len(pages) < max_pages:
             # Check total crawl timeout
+            # 检查 crawl 总 timeout
             elapsed = asyncio.get_event_loop().time() - crawl_start
             if elapsed > CRAWL_TIMEOUT_SECONDS:
                 logger.info(f"Crawl timeout reached ({CRAWL_TIMEOUT_SECONDS}s), stopping")
                 break
 
             # Check cumulative content size
+            # 检查累计内容大小
             if total_chars >= MAX_TOTAL_CRAWL_CHARS:
                 logger.info(f"Content size limit reached ({MAX_TOTAL_CRAWL_CHARS} chars), stopping")
                 break
@@ -2584,16 +2668,19 @@ class WebFetchTool(Tool):
             current_url = queue.pop(0)
 
             # Rate limiting: delay between requests (skip first request)
+            # 限流：请求之间加延迟（首个请求跳过）
             if not is_first_request:
                 await asyncio.sleep(CRAWL_DELAY_SECONDS)
             is_first_request = False
 
             # SSRF check before fetching
+            # fetch 前做 SSRF 检查
             if not self._is_safe_url(current_url):
                 logger.debug(f"Skipping unsafe URL (SSRF protection): {current_url}")
                 continue
 
             # Fetch the page (includes redirect domain validation)
+            # 抓取该 page（包含重定向域名校验）
             page_data = await self._fetch_single_page(session, current_url, max_length, root_domain)
             if page_data:
                 pages.append(page_data)
@@ -2601,9 +2688,10 @@ class WebFetchTool(Tool):
                 logger.debug(f"Crawled page {len(pages)}/{max_pages}: {current_url}")
 
                 # Add new links to queue (only what we need)
+                # 将新链接加入队列（仅所需数量）
                 if len(pages) < max_pages:
                     remaining_pages = max_pages - len(pages)
-                    new_links = page_data.get("links", [])[:remaining_pages * 3]  # Buffer for failed fetches
+                    new_links = page_data.get("links", [])[:remaining_pages * 3]  # Buffer for failed fetches 注：为失败的 fetch 预留缓冲
                     for link in new_links:
                         normalized_link = self._normalize_url(link)
                         if normalized_link not in visited:
@@ -2618,8 +2706,10 @@ class WebFetchTool(Tool):
             )
 
         # Merge pages into markdown format
+        # 将各 page 合并为 markdown 格式
         if len(pages) == 1:
             # Single page result
+            # 单个 page 结果
             page = pages[0]
             return ToolResult(
                 success=True,
@@ -2634,7 +2724,7 @@ class WebFetchTool(Tool):
                     "truncated": False,
                     "method": "pure_python",
                     "pages_fetched": 1,
-                    "tool_source": "fetch",  # Citation V2: mark as fetch-origin
+                    "tool_source": "fetch",  # Citation V2: mark as fetch-origin 注：Citation V2：标记为 fetch 来源
                 },
                 metadata={
                     "fetch_method": "pure_python_crawl",
@@ -2643,6 +2733,7 @@ class WebFetchTool(Tool):
             )
         else:
             # Multiple pages - merge with markdown separators
+            # 多个 page——用 markdown 分隔符合并
             merged_content = []
             total_words = 0
             total_chars = 0
@@ -2654,11 +2745,13 @@ class WebFetchTool(Tool):
 
                 if i == 0:
                     # Main page
+                    # 主 page
                     merged_content.append(f"# Main Page: {page_url}\n")
                     if page_title:
                         merged_content.append(f"**{page_title}**\n")
                 else:
                     # Subpage
+                    # 子 page
                     merged_content.append(f"\n---\n\n## Subpage {i}: {page_url}\n")
                     if page_title:
                         merged_content.append(f"**{page_title}**\n")
@@ -2683,7 +2776,7 @@ class WebFetchTool(Tool):
                     "truncated": False,
                     "method": "pure_python",
                     "pages_fetched": len(pages),
-                    "tool_source": "fetch",  # Citation V2: mark as fetch-origin
+                    "tool_source": "fetch",  # Citation V2: mark as fetch-origin 注：Citation V2：标记为 fetch 来源
                 },
                 metadata={
                     "fetch_method": "pure_python_crawl",
@@ -2704,8 +2797,19 @@ class WebFetchTool(Tool):
         - Max response size limit (prevents memory exhaustion)
         - Redirect loop protection
         - Resource leak prevention with proper session cleanup
+
+        使用纯 Python 抓取：requests + BeautifulSoup + html2text。
+        快速、免费，适用于大多数 page（80%）。
+
+        当 subpages > 0 时，会爬取同域链接直到指定数量。
+
+        安全特性：
+        - 最大响应大小限制（防止内存耗尽）
+        - 重定向环路防护
+        - 通过正确的 session 清理防止资源泄漏
         """
         # SSRF protection (batch mode calls this directly, so enforce here too).
+        # SSRF 防护（batch 模式会直接调用此处，因此这里也要强制校验）。
         try:
             parsed = urlparse(url)
             if not parsed.scheme or not parsed.netloc:
@@ -2727,16 +2831,19 @@ class WebFetchTool(Tool):
             return ToolResult(success=False, output=None, error=f"Invalid URL format: {str(e)}")
 
         # Configure session with security limits
+        # 按安全限制配置 session
         timeout = aiohttp.ClientTimeout(total=self.timeout)
         connector = aiohttp.TCPConnector(limit=10)
 
         async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
             try:
                 # Crawl mode: fetch main page + subpages
+                # crawl 模式：抓取主 page + 子 page
                 if subpages > 0:
                     return await self._crawl_with_subpages(session, url, max_length, subpages)
 
                 # Single page mode (original behavior)
+                # 单 page 模式（原有行为）
                 headers = {"User-Agent": self.user_agent}
 
                 async with session.get(
@@ -2753,6 +2860,7 @@ class WebFetchTool(Tool):
                         )
 
                     # SSRF protection: block redirects to private/internal hosts.
+                    # SSRF 防护：阻断重定向到私有/内部主机。
                     final_host = getattr(response.url, "host", None)
                     if final_host and _is_private_ip(final_host):
                         return ToolResult(
@@ -2762,6 +2870,7 @@ class WebFetchTool(Tool):
                         )
 
                     # Check content length before reading (if provided)
+                    # 读取前检查内容长度（如有提供）
                     content_length = response.headers.get("Content-Length")
                     if content_length and int(content_length) > self.max_response_bytes:
                         return ToolResult(
@@ -2771,11 +2880,13 @@ class WebFetchTool(Tool):
                         )
 
                     # Read with size limit
+                    # 按大小上限读取
                     html_content = await response.text(
                         errors="ignore"
-                    )  # Ignore encoding errors
+                    )  # Ignore encoding errors 注：忽略编码错误
 
                     # Check actual size after reading
+                    # 读取后检查实际大小
                     if len(html_content) > self.max_response_bytes:
                         return ToolResult(
                             success=False,
@@ -2784,19 +2895,23 @@ class WebFetchTool(Tool):
                         )
 
                     # Parse HTML (outside the response context manager to avoid blocking)
+                    # 解析 HTML（放在 response 上下文管理器之外，避免阻塞）
                     soup = BeautifulSoup(html_content, "lxml")
 
                 # Extract metadata
+                # 提取 metadata
                 title = soup.find("title")
                 title = title.get_text().strip() if title else ""
 
                 # Author
+                # 作者
                 meta_author = soup.find("meta", attrs={"name": "author"})
                 if not meta_author:
                     meta_author = soup.find("meta", property="article:author")
                 author = meta_author.get("content") if meta_author else None
 
                 # Published date
+                # 发布日期
                 meta_date = soup.find(
                     "meta", attrs={"property": "article:published_time"}
                 )
@@ -2807,6 +2922,7 @@ class WebFetchTool(Tool):
                 published_date = meta_date.get("content") if meta_date else None
 
                 # Remove unwanted elements
+                # 移除不需要的元素
                 for element in soup(
                     [
                         "script",
@@ -2822,6 +2938,7 @@ class WebFetchTool(Tool):
                     element.decompose()
 
                 # Extract main content (prioritize article > main > body)
+                # 提取主内容（优先 article > main > body）
                 main_content = (
                     soup.find("article")
                     or soup.find("main")
@@ -2832,40 +2949,45 @@ class WebFetchTool(Tool):
                 )
 
                 # Convert to markdown
+                # 转换为 markdown
                 h = html2text.HTML2Text()
                 h.ignore_links = False
                 h.ignore_images = False
                 h.ignore_emphasis = False
-                h.body_width = 0  # No line wrapping
-                h.unicode_snob = True  # Better character handling
+                h.body_width = 0  # No line wrapping 注：不自动换行
+                h.unicode_snob = True  # Better character handling 注：更好的字符处理
                 h.skip_internal_links = True
 
                 markdown = h.handle(str(main_content))
 
                 # Clean up excessive whitespace
+                # 清理多余空白
                 lines = [line.rstrip() for line in markdown.split("\n")]
                 markdown = "\n".join(lines)
 
                 # Remove excessive blank lines
+                # 移除多余空行
                 while "\n\n\n" in markdown:
                     markdown = markdown.replace("\n\n\n", "\n\n")
 
                 # Truncate if needed
+                # 如有需要则截断
                 truncated = False
                 if len(markdown) > max_length:
                     markdown = markdown[:max_length]
                     truncated = True
 
                 # P0-A: Detect blocked content for Citation V2 filtering
+                # P0-A：检测被拦截内容，供 Citation V2 过滤使用
                 blocked_reason = detect_blocked_reason(markdown, response.status)
 
                 return ToolResult(
                     success=True,
                     output={
-                        "url": str(response.url),  # Final URL after redirects
+                        "url": str(response.url),  # Final URL after redirects 注：重定向后的最终 URL
                         "title": title,
                         "content": markdown,
-                        "snippet": sanitize_snippet(markdown, title),  # For citation extraction
+                        "snippet": sanitize_snippet(markdown, title),  # For citation extraction 注：用于 citation 提取
                         "author": author,
                         "published_date": published_date,
                         "word_count": len(markdown.split()),
@@ -2873,9 +2995,9 @@ class WebFetchTool(Tool):
                         "truncated": truncated,
                         "method": "pure_python",
                         "pages_fetched": 1,
-                        "tool_source": "fetch",  # Citation V2: mark as fetch-origin
-                        "status_code": response.status,  # P0-A: HTTP status for Go filtering
-                        "blocked_reason": blocked_reason,  # P0-A: None if valid, reason string if blocked
+                        "tool_source": "fetch",  # Citation V2: mark as fetch-origin 注：Citation V2：标记为 fetch 来源
+                        "status_code": response.status,  # P0-A: HTTP status for Go filtering 注：P0-A：HTTP 状态码，供 Go 侧过滤
+                        "blocked_reason": blocked_reason,  # P0-A: None if valid, reason string if blocked 注：P0-A：有效时为 None，被拦截时为原因字符串
                     },
                     metadata={
                         "fetch_method": "pure_python",
@@ -2915,9 +3037,18 @@ class WebFetchTool(Tool):
         Supports fetching subpages when subpages > 0.
 
         Improved error handling with detailed logging for auth/rate limit failures.
+
+        使用 Exa content API 抓取。
+        高级：可处理 JS 重度站点，成本 $0.001/page。
+
+        当 subpages > 0 时支持抓取子 page。
+
+        改进的错误处理：对鉴权/限流失败输出详细日志。
         """
         # Exa requires searching first to get IDs, then fetching content
         # For direct URL fetch, we use a workaround: search for exact URL
+        # Exa 需要先搜索拿到 ID，再获取内容
+        # 对于直接 URL 抓取，我们用一个变通方案：搜索精确 URL
         timeout = aiohttp.ClientTimeout(total=30)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             try:
@@ -2927,6 +3058,7 @@ class WebFetchTool(Tool):
                 }
 
                 # Step 1: Search for the exact URL
+                # Step 1：搜索精确 URL
                 search_payload = {
                     "query": url,
                     "numResults": 1,
@@ -2934,14 +3066,15 @@ class WebFetchTool(Tool):
                 }
 
                 # Add subpages parameters if requested
+                # 如请求了子 page，则补充 subpages 参数
                 if subpages > 0:
                     search_payload["subpages"] = subpages
-                    search_payload["livecrawl"] = "preferred"  # Force fresh crawling for subpages
+                    search_payload["livecrawl"] = "preferred"  # Force fresh crawling for subpages 注：子 page 强制实时抓取
                     if subpage_target:
                         search_payload["subpageTarget"] = subpage_target
                     logger.info(f"Exa subpages enabled: count={subpages}, target={subpage_target}")
                 else:
-                    search_payload["livecrawl"] = "fallback"  # Use cached when possible for single pages
+                    search_payload["livecrawl"] = "fallback"  # Use cached when possible for single pages 注：单 page 尽量使用缓存
 
                 async with session.post(
                     "https://api.exa.ai/search",
@@ -2949,6 +3082,7 @@ class WebFetchTool(Tool):
                     headers=headers,
                 ) as search_response:
                     # Detailed error logging for auth/rate limit failures
+                    # 针对鉴权/限流失败输出详细错误日志
                     if search_response.status == 401:
                         logger.error("Exa API authentication failed (401 Unauthorized)")
                         logger.info("Falling back to pure Python mode")
@@ -2972,10 +3106,12 @@ class WebFetchTool(Tool):
                         return await self._fetch_pure_python(url, max_length)
 
                     # Collect all result IDs (main page + subpages if applicable)
+                    # 收集所有结果 ID（主 page + 子 page，如适用）
                     result_ids = [r.get("id") for r in results if r.get("id")]
                     logger.info(f"Exa search returned {len(result_ids)} result(s)")
 
                 # Step 2: Get full content using ID(s)
+                # Step 2：用 ID 获取完整内容
                 content_payload = {
                     "ids": result_ids,
                     "text": {
@@ -3016,12 +3152,15 @@ class WebFetchTool(Tool):
                         )
 
                     # Handle single page vs multiple pages (subpages)
+                    # 处理单 page 与多 page（子 page）两种情况
                     if len(results) == 1:
                         # Single page - return as before
+                        # 单 page——按原样返回
                         result = results[0]
                         content = result.get("text", "")
 
                         # P0-A: Detect blocked content
+                        # P0-A：检测被拦截内容
                         blocked_reason = detect_blocked_reason(content, 200)
                         return ToolResult(
                             success=True,
@@ -3029,7 +3168,7 @@ class WebFetchTool(Tool):
                                 "url": result.get("url", url),
                                 "title": result.get("title", ""),
                                 "content": content,
-                                "snippet": sanitize_snippet(content, result.get("title", "")),  # For citation extraction
+                                "snippet": sanitize_snippet(content, result.get("title", "")),  # For citation extraction 注：用于 citation 提取
                                 "author": result.get("author"),
                                 "published_date": result.get("publishedDate"),
                                 "word_count": len(content.split()),
@@ -3037,9 +3176,9 @@ class WebFetchTool(Tool):
                                 "truncated": len(content) >= max_length,
                                 "method": "exa",
                                 "pages_fetched": 1,
-                                "tool_source": "fetch",  # Citation V2: mark as fetch-origin
-                                "status_code": 200,  # P0-A: Exa success = 200
-                                "blocked_reason": blocked_reason,  # P0-A: Content-based detection
+                                "tool_source": "fetch",  # Citation V2: mark as fetch-origin 注：Citation V2：标记为 fetch 来源
+                                "status_code": 200,  # P0-A: Exa success = 200 注：P0-A：Exa 成功 = 200
+                                "blocked_reason": blocked_reason,  # P0-A: Content-based detection 注：P0-A：基于内容检测
                             },
                             metadata={
                                 "fetch_method": "exa",
@@ -3049,6 +3188,7 @@ class WebFetchTool(Tool):
                         )
                     else:
                         # Multiple pages - merge with markdown separators
+                        # 多个 page——用 markdown 分隔符合并
                         merged_content = []
                         total_words = 0
                         total_chars = 0
@@ -3060,11 +3200,13 @@ class WebFetchTool(Tool):
 
                             if i == 0:
                                 # Main page
+                                # 主 page
                                 merged_content.append(f"# Main Page: {page_url}\n")
                                 if page_title:
                                     merged_content.append(f"**{page_title}**\n")
                             else:
                                 # Subpage
+                                # 子 page
                                 merged_content.append(f"\n---\n\n## Subpage {i}: {page_url}\n")
                                 if page_title:
                                     merged_content.append(f"**{page_title}**\n")
@@ -3075,6 +3217,7 @@ class WebFetchTool(Tool):
 
                         final_content = "\n".join(merged_content)
                         # P0-A: Detect blocked content in merged result
+                        # P0-A：检测合并结果中的被拦截内容
                         blocked_reason = detect_blocked_reason(final_content, 200)
 
                         return ToolResult(
@@ -3088,9 +3231,9 @@ class WebFetchTool(Tool):
                                 "truncated": False,
                                 "method": "exa",
                                 "pages_fetched": len(results),
-                                "tool_source": "fetch",  # Citation V2: mark as fetch-origin
-                                "status_code": 200,  # P0-A: Exa success = 200
-                                "blocked_reason": blocked_reason,  # P0-A: Content-based detection
+                                "tool_source": "fetch",  # Citation V2: mark as fetch-origin 注：Citation V2：标记为 fetch 来源
+                                "status_code": 200,  # P0-A: Exa success = 200 注：P0-A：Exa 成功 = 200
+                                "blocked_reason": blocked_reason,  # P0-A: Content-based detection 注：P0-A：基于内容检测
                             },
                             metadata={
                                 "fetch_method": "exa",

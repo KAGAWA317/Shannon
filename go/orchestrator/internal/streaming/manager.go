@@ -29,7 +29,7 @@ type Event struct {
 	Payload    map[string]any `json:"payload,omitempty"`
 	Timestamp  time.Time      `json:"timestamp"`
 	Seq        uint64         `json:"seq"`
-	StreamID   string         `json:"stream_id,omitempty"` // Redis stream ID for deduplication
+	StreamID   string         `json:"stream_id,omitempty"` // Redis stream ID for deduplication 注：用于去重的 Redis stream ID
 }
 
 // subscription tracks a subscriber with its cancellation mechanism
@@ -124,6 +124,7 @@ func InitializeEventStore(store *db.Client, logger *zap.Logger) {
 	}
 	if defaultMgr.persistCh == nil {
 		// Configure batching from env
+		// 从环境变量配置 batching
 		bs := 100
 		if v := os.Getenv("EVENTLOG_BATCH_SIZE"); v != "" {
 			if n, err := strconv.Atoi(v); err == nil && n > 0 {
@@ -207,7 +208,7 @@ func (m *Manager) SubscribeFrom(workflowID string, buffer int, startID string) c
 // streamReaderFrom 从指定 ID 开始读取 Redis stream，支持 context
 func (m *Manager) streamReaderFrom(ctx context.Context, workflowID string, ch chan Event, startID string) {
 	defer m.wg.Done()
-	defer close(ch) // Always close channel when reader exits
+	defer close(ch) // Always close channel when reader exits 注：reader 退出时始终关闭 channel
 
 	if m.redis == nil {
 		// In-memory mode: keep channel open until cancelled
@@ -231,6 +232,7 @@ func (m *Manager) streamReaderFrom(ctx context.Context, workflowID string, ch ch
 
 	for {
 		// Check for context cancellation or shutdown
+		// 检查 context 是否取消或已关闭
 		select {
 		case <-ctx.Done():
 			m.logger.Debug("Stream reader stopping - context cancelled",
@@ -244,6 +246,7 @@ func (m *Manager) streamReaderFrom(ctx context.Context, workflowID string, ch ch
 		}
 
 		// Read from stream with blocking
+		// 以阻塞方式从 stream 读取
 		result, err := m.redis.XRead(ctx, &redis.XReadArgs{
 			Streams: []string{streamKey, lastID},
 			Count:   10,
@@ -259,6 +262,7 @@ func (m *Manager) streamReaderFrom(ctx context.Context, workflowID string, ch ch
 
 		if err != nil {
 			// Check if context was cancelled
+			// 检查 context 是否已取消
 			if ctx.Err() != nil {
 				return
 			}
@@ -271,6 +275,7 @@ func (m *Manager) streamReaderFrom(ctx context.Context, workflowID string, ch ch
 				zap.Error(err))
 
 			// Exponential backoff on errors
+			// 出错时指数退避
 			select {
 			case <-time.After(retryDelay):
 				retryDelay = min(retryDelay*2, maxRetryDelay)
@@ -283,9 +288,11 @@ func (m *Manager) streamReaderFrom(ctx context.Context, workflowID string, ch ch
 		}
 
 		// Success - reset retry delay
+		// 成功——重置 retry 延迟
 		retryDelay = time.Second
 
 		// Process messages
+		// 处理消息
 		for _, stream := range result {
 			for _, message := range stream.Messages {
 				lastID = message.ID
@@ -322,6 +329,7 @@ func (m *Manager) streamReaderFrom(ctx context.Context, workflowID string, ch ch
 						zap.String("stream_id", message.ID))
 				default:
 					// Escalate log severity for critical events
+					// 关键 event 提升日志级别
 					if isCriticalEvent(event.Type) {
 						m.logger.Error("CRITICAL: Dropped important event - subscriber slow",
 							zap.String("workflow_id", workflowID),
@@ -423,6 +431,7 @@ func (m *Manager) Publish(workflowID string, evt Event) {
 		ctx := context.Background()
 
 		// Increment sequence number
+		// 递增序列号
 		seq, err := m.redis.Incr(ctx, m.seqKey(workflowID)).Result()
 		if err != nil {
 			m.logger.Error("Failed to increment sequence",
@@ -433,6 +442,7 @@ func (m *Manager) Publish(workflowID string, evt Event) {
 		evt.Seq = uint64(seq)
 
 		// Add to Redis stream
+		// 写入 Redis stream
 		streamKey := m.streamKey(workflowID)
 		var payloadJSON string
 		if evt.Payload != nil {
@@ -460,7 +470,7 @@ func (m *Manager) Publish(workflowID string, evt Event) {
 				zap.String("workflow_id", workflowID),
 				zap.Error(err))
 		} else {
-			evt.StreamID = streamID // Store the Redis stream ID
+			evt.StreamID = streamID // Store the Redis stream ID 注：保存 Redis stream ID
 			m.logger.Debug("Published event to Redis stream",
 				zap.String("workflow_id", workflowID),
 				zap.String("type", evt.Type),
@@ -539,6 +549,7 @@ func (m *Manager) Publish(workflowID string, evt Event) {
 			case ch <- evt:
 			default:
 				// Drop if subscriber is slow
+				// 订阅者慢则丢弃
 			}
 		}
 	}
@@ -558,6 +569,7 @@ func (e Event) Marshal() []byte {
 func shouldPersistEvent(eventType string) bool {
 	switch eventType {
 	// ✅ Persist: Important workflow events
+	// ✅ 持久化：重要的 workflow event
 	case "WORKFLOW_COMPLETED",
 		"WORKFLOW_FAILED",
 		"AGENT_COMPLETED",
@@ -569,6 +581,7 @@ func shouldPersistEvent(eventType string) bool {
 		"LLM_OUTPUT",
 		"STREAM_END",
 		// Phase 2A: Multi-agent coordination events
+		// 阶段 2A：多 agent 协作 event
 		"ROLE_ASSIGNED",
 		"DELEGATION",
 		"BUDGET_THRESHOLD",
@@ -576,10 +589,11 @@ func shouldPersistEvent(eventType string) bool {
 		return true
 
 	// ❌ Don't persist: Streaming deltas and heartbeats
-	case "LLM_PARTIAL", // thread.message.delta events
+	// ❌ 不持久化：streaming 增量与心跳
+	case "LLM_PARTIAL", // thread.message.delta events 注：thread.message.delta 事件
 		"HEARTBEAT",
 		"PING",
-		"LLM_PROMPT": // Prompts are logged separately
+		"LLM_PROMPT": // Prompts are logged separately 注：prompt 单独记录日志
 		return false
 
 	// ✅ Persist AGENT_THINKING so timeline is consistent between live and history
@@ -639,6 +653,7 @@ func SanitizeBase64Image(s string) string {
 			}
 
 			// Find the closing quote
+			// 查找结束引号
 			endIdx := strings.Index(result[startIdx:], `"`)
 			if endIdx == -1 {
 				break
@@ -747,6 +762,7 @@ func sanitizePayloadForPersistence(eventType string, payload map[string]any) map
 	for k, v := range payload {
 		if k == "output" {
 			// Create sanitized output without screenshot base64
+			// 构建去掉截图 base64 的清洗后输出
 			sanitizedOutput := make(map[string]any)
 			for ok, ov := range output {
 				if ok == "screenshot" {
@@ -862,6 +878,7 @@ func (m *Manager) ReplaySince(workflowID string, since uint64) []Event {
 	streamKey := m.streamKey(workflowID)
 
 	// Read all messages from the stream
+	// 读取 stream 中的所有消息
 	messages, err := m.redis.XRange(ctx, streamKey, "-", "+").Result()
 	if err != nil {
 		m.logger.Error("Failed to read replay from Redis stream",
@@ -873,6 +890,7 @@ func (m *Manager) ReplaySince(workflowID string, since uint64) []Event {
 	var events []Event
 	for _, msg := range messages {
 		// Skip if not after 'since'
+		// 不在 'since' 之后则跳过
 		if seq, ok := streamSeq(msg); ok && seq <= since {
 			continue
 		}
@@ -980,9 +998,11 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 	m.logger.Info("Shutting down streaming manager")
 
 	// Signal shutdown to all stream readers
+	// 向所有 stream reader 发出关闭信号
 	close(m.shutdownCh)
 
 	// Cancel all subscriptions
+	// 取消所有订阅
 	m.mu.Lock()
 	for workflowID, subs := range m.subscribers {
 		for ch, sub := range subs {
@@ -1020,6 +1040,7 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 		m.persistMu.Unlock()
 
 		// Wait for persist worker to exit
+		// 等待 persist worker 退出
 		persistDone := make(chan struct{})
 		go func() {
 			m.persistWg.Wait()
@@ -1092,7 +1113,7 @@ func (m *Manager) GetBlob(ctx context.Context, key string) (string, error) {
 
 	data, err := m.redis.Get(ctx, key).Result()
 	if err == redis.Nil {
-		return "", nil // Not found or expired
+		return "", nil // Not found or expired 注：未找到或已过期
 	}
 	if err != nil {
 		m.logger.Error("Failed to get blob from Redis",

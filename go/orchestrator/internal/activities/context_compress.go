@@ -38,8 +38,8 @@ type CompressContextResult struct {
 	Summary          string `json:"summary"`
 	Stored           bool   `json:"stored"`
 	Error            string `json:"error,omitempty"`
-	OriginalTokens   int    `json:"original_tokens,omitempty"`   // Token count before compression
-	CompressedTokens int    `json:"compressed_tokens,omitempty"` // Token count after compression
+	OriginalTokens   int    `json:"original_tokens,omitempty"`   // Token count before compression 注：压缩前的 token 数
+	CompressedTokens int    `json:"compressed_tokens,omitempty"` // Token count after compression 注：压缩后的 token 数
 }
 
 // CompressAndStoreContext summarizes history via llm-service and stores it in Qdrant
@@ -121,7 +121,7 @@ func CompressAndStoreContext(ctx context.Context, in CompressContextInput) (Comp
 
 	// Estimate compressed tokens from summary
 	// 按 summary 估算压缩后的 token 数。
-	compressedTokens := len(summary)/4 + 10 // Conservative estimate + overhead
+	compressedTokens := len(summary)/4 + 10 // Conservative estimate + overhead 注：保守估算 + 额外开销
 
 	// Record compression ratio metric if we achieved compression
 	// 真正压下来了就记录 compression ratio 指标。
@@ -159,13 +159,13 @@ func CompressAndStoreContext(ctx context.Context, in CompressContextInput) (Comp
 			summaryID := uuid.New().String()
 			payload := map[string]any{
 				"session_id": in.SessionID,
-				"tenant_id":  in.TenantID, // Add tenant_id for filtering
+				"tenant_id":  in.TenantID, // Add tenant_id for filtering 注：加 tenant_id 以便过滤
 				// 带上 tenant_id 以便按租户过滤。
 				"type":       "summary",
 				"timestamp":  time.Now().Unix(),
-				"content":    summary,   // Changed from "text" to "content" for consistency
+				"content":    summary,   // Changed from "text" to "content" for consistency 注：由 "text" 改为 "content" 以保持一致
 				// 字段由 "text" 改为 "content"，与其他写入保持一致。
-				"summary_id": summaryID, // Add summary_id for dedup
+				"summary_id": summaryID, // Add summary_id for dedup 注：加 summary_id 以便去重
 				// 带 summary_id 以便去重。
 			}
 			if _, err := vdb.UpsertSummaryEmbedding(ctx, vec, payload); err != nil {
@@ -205,6 +205,7 @@ func redactPII(s string) string {
 	}
 
 	// Email addresses
+	// 邮箱地址
 	emailRe := regexp.MustCompile(`(?i)[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}`)
 	s = emailRe.ReplaceAllString(s, "[REDACTED_EMAIL]")
 
@@ -224,6 +225,7 @@ func redactPII(s string) string {
 	s = ccRe.ReplaceAllString(s, "[REDACTED_CC]")
 
 	// IP addresses (IPv4)
+	// IP 地址（IPv4）
 	ipRe := regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
 	s = ipRe.ReplaceAllString(s, "[REDACTED_IP]")
 

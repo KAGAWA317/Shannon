@@ -8,6 +8,7 @@ import (
 )
 
 // HTTPWrapper wraps an http.Client with a circuit breaker and records metrics consistently
+// HTTPWrapper 用 circuit breaker 包裹 http.Client，并以一致的方式记录 metrics。
 type HTTPWrapper struct {
 	client  *http.Client
 	cb      *CircuitBreaker
@@ -17,6 +18,7 @@ type HTTPWrapper struct {
 }
 
 // NewHTTPWrapper creates a new HTTP wrapper with circuit breaker and metrics
+// NewHTTPWrapper 创建带 circuit breaker 与 metrics 的 HTTP wrapper。
 func NewHTTPWrapper(client *http.Client, name, service string, logger *zap.Logger) *HTTPWrapper {
 	if client == nil {
 		client = &http.Client{Timeout: 5 * time.Second}
@@ -38,10 +40,12 @@ func (hw *HTTPWrapper) Do(req *http.Request) (*http.Response, error) {
 		var err2 error
 		resp, err2 = hw.client.Do(req)
 		// If transport error, propagate
+		// 若为 transport 错误，直接向上返回
 		if err2 != nil {
 			return err2
 		}
 		// Classify 5xx as breaker failures
+		// 把 5xx 归类为 breaker 失败
 		if resp.StatusCode >= 500 {
 			return &httpStatusError{code: resp.StatusCode}
 		}
@@ -49,6 +53,7 @@ func (hw *HTTPWrapper) Do(req *http.Request) (*http.Response, error) {
 	})
 
 	// Record metrics
+	// 记录 metrics
 	state := hw.cb.State()
 	success := err == nil
 	GlobalMetricsCollector.RecordRequest(hw.name, hw.service, state, success)
@@ -63,6 +68,7 @@ func (hw *HTTPWrapper) Do(req *http.Request) (*http.Response, error) {
 }
 
 // httpStatusError marks 5xx responses for breaker accounting
+// httpStatusError 标记 5xx 响应，供 breaker 计数使用。
 type httpStatusError struct{ code int }
 
 func (e *httpStatusError) Error() string { return http.StatusText(e.code) }

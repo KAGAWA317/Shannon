@@ -210,6 +210,7 @@ class BrowserTool(Tool):
     def _get_parameters(self) -> List[ToolParameter]:
         return [
             # --- Core parameter ---
+            # --- 核心参数 ---
             ToolParameter(
                 name="action",
                 type=ToolParameterType.STRING,
@@ -228,6 +229,7 @@ class BrowserTool(Tool):
                 enum=list(SAFE_ACTIONS),
             ),
             # --- navigate ---
+            # --- 导航 ---
             ToolParameter(
                 name="url",
                 type=ToolParameterType.STRING,
@@ -242,6 +244,7 @@ class BrowserTool(Tool):
                 default="domcontentloaded",
             ),
             # --- click ---
+            # --- 点击 ---
             ToolParameter(
                 name="selector",
                 type=ToolParameterType.STRING,
@@ -263,6 +266,7 @@ class BrowserTool(Tool):
                 default=1,
             ),
             # --- type ---
+            # --- 输入 ---
             ToolParameter(
                 name="text",
                 type=ToolParameterType.STRING,
@@ -270,6 +274,7 @@ class BrowserTool(Tool):
                 required=False,
             ),
             # --- screenshot ---
+            # --- 截图 ---
             ToolParameter(
                 name="full_page",
                 type=ToolParameterType.BOOLEAN,
@@ -278,6 +283,7 @@ class BrowserTool(Tool):
                 default=False,
             ),
             # --- extract ---
+            # --- 提取 ---
             ToolParameter(
                 name="extract_type",
                 type=ToolParameterType.STRING,
@@ -292,6 +298,7 @@ class BrowserTool(Tool):
                 required=False,
             ),
             # --- scroll ---
+            # --- 滚动 ---
             ToolParameter(
                 name="x",
                 type=ToolParameterType.INTEGER,
@@ -307,6 +314,7 @@ class BrowserTool(Tool):
                 default=0,
             ),
             # --- shared ---
+            # --- 通用 ---
             ToolParameter(
                 name="timeout_ms",
                 type=ToolParameterType.INTEGER,

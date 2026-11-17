@@ -3,31 +3,35 @@
 # 本文件配置资源上限、timeout 与服务设置
 
 # WASI Sandbox Configuration
+# WASI 沙箱配置
 wasi:
-  memory_limit_bytes: 268435456  # 256MB
+  memory_limit_bytes: 268435456  # 256MB 注：256 MB
   execution_timeout_secs: 30
-  max_fuel: 1000000000  # 1 billion
+  max_fuel: 1000000000  # 1 billion 注：10 亿
   enable_filesystem: true
   allowed_paths:
     - "/tmp"
     - "/data/cache"
 
 # Memory Pool Configuration
+# 内存池配置
 memory:
-  pool_size_bytes: 1073741824  # 1GB
-  max_allocation_bytes: 104857600  # 100MB
-  cache_ttl_secs: 3600  # 1 hour
+  pool_size_bytes: 1073741824  # 1GB 注：1 GB
+  max_allocation_bytes: 104857600  # 100MB 注：100 MB
+  cache_ttl_secs: 3600  # 1 hour 注：1 小时
   enable_pressure_monitoring: true
-  pressure_threshold: 0.9  # 90%
+  pressure_threshold: 0.9  # 90% 注：90%
 
 # Tool Execution Configuration
+# 工具执行配置
 tools:
   default_timeout_secs: 60
   max_concurrent_executions: 5
   enable_caching: true
-  cache_ttl_secs: 300  # 5 minutes
+  cache_ttl_secs: 300  # 5 minutes 注：5 分钟
 
 # LLM Service Configuration
+# LLM 服务配置
 llm:
   base_url: "http://llm-service:8000"
   request_timeout_secs: 30
@@ -35,19 +39,22 @@ llm:
   retry_delay_ms: 1000
 
 # FSM Configuration
+# FSM 配置
 fsm:
   max_iterations: 10
-  time_budget_ms: 30000  # 30 seconds
+  time_budget_ms: 30000  # 30 seconds 注：30 秒
   persist_belief_state: false
   transition_timeout_secs: 5
 
 # Metrics Configuration
+# Metrics 配置
 metrics:
   port: 2113
   enable_detailed: true
   collection_interval_secs: 10
 
 # Request enforcement configuration
+# 请求限制（enforcement）配置
 enforcement:
   per_request_timeout_secs: 30
   per_request_max_tokens: 4096
@@ -57,10 +64,18 @@ enforcement:
   circuit_breaker_min_requests: 20
 
 # Environment Variable Overrides:
+# 环境变量覆盖：
 # - WASI_MEMORY_LIMIT_MB: Override WASI memory limit in MB
+# - WASI_MEMORY_LIMIT_MB：以 MB 为单位覆盖 WASI 内存上限
 # - WASI_TIMEOUT_SECONDS: Override WASI execution timeout
+# - WASI_TIMEOUT_SECONDS：覆盖 WASI 执行超时
 # - MEMORY_POOL_SIZE_MB: Override memory pool size in MB
+# - MEMORY_POOL_SIZE_MB：以 MB 为单位覆盖内存池大小
 # - LLM_SERVICE_URL: Override LLM service URL
+# - LLM_SERVICE_URL：覆盖 LLM 服务地址
 # - LLM_TIMEOUT_SECONDS: Override LLM request timeout
+# - LLM_TIMEOUT_SECONDS：覆盖 LLM 请求超时
 # - METRICS_PORT: Override metrics server port
+# - METRICS_PORT：覆盖 metrics 服务端口
 # - AGENT_CONFIG_PATH: Path to this configuration file
+# - AGENT_CONFIG_PATH：本配置文件的路径

@@ -7,6 +7,7 @@ import (
 
 var (
 	// Workflow metrics
+	// 工作流指标
 	WorkflowsStarted = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "shannon_workflows_started_total",
@@ -33,6 +34,7 @@ var (
 	)
 
 	// Template metrics
+	// 模板指标
 	TemplatesLoaded = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "shannon_template_loaded_total",
@@ -42,12 +44,13 @@ var (
 	)
 
 	// Template fallback metrics
+	// 模板回退指标
 	TemplateFallbackTriggered = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "template_fallback_triggered_total",
 			Help: "Number of times execution fell back from template to AI",
 		},
-		[]string{"reason"}, // reason: error|unsuccessful
+		[]string{"reason"}, // reason: error|unsuccessful 注：取值 error|unsuccessful
 	)
 
 	TemplateFallbackSuccess = promauto.NewCounterVec(
@@ -82,6 +85,7 @@ var (
 	)
 
 	// Rate control metrics
+	// 速率控制指标
 	RateLimitDelay = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "shannon_rate_limit_delay_seconds",
@@ -92,6 +96,7 @@ var (
 	)
 
 	// Task metrics
+	// 任务指标
 	TasksSubmitted = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "shannon_tasks_submitted_total",
@@ -116,6 +121,7 @@ var (
 	)
 
 	// Agent metrics
+	// Agent 指标
 	AgentExecutions = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "shannon_agent_executions_total",
@@ -134,6 +140,7 @@ var (
 	)
 
 	// Session metrics
+	// 会话指标
 	SessionsCreated = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "shannon_sessions_created_total",
@@ -156,12 +163,13 @@ var (
 	)
 
 	// Memory metrics
+	// 内存指标
 	MemoryFetches = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "shannon_memory_fetches_total",
 			Help: "Total number of memory fetch operations",
 		},
-		[]string{"type", "source", "result"}, // type: session/semantic/hierarchical-recent, source: qdrant, result: hit/miss
+		[]string{"type", "source", "result"}, // type: session/semantic/hierarchical-recent, source: qdrant, result: hit/miss 注：type 取值 session/semantic/hierarchical-recent，source 取值 qdrant，result 取值 hit/miss
 		// Note: hierarchical-semantic reuses "semantic" type to avoid double-counting
 		// 注意：hierarchical-semantic 复用 "semantic" 类型，避免重复计数
 	)
@@ -185,7 +193,7 @@ var (
 			Name: "shannon_compression_events_total",
 			Help: "Total number of context compression events",
 		},
-		[]string{"status"}, // status: triggered/skipped/failed
+		[]string{"status"}, // status: triggered/skipped/failed 注：取值 triggered/skipped/failed
 	)
 
 	CompressionTokensSaved = promauto.NewHistogram(
@@ -205,6 +213,7 @@ var (
 	)
 
 	// gRPC metrics
+	// gRPC 指标
 	GRPCRequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "shannon_grpc_requests_total",
@@ -223,6 +232,7 @@ var (
 	)
 
 	// Cache metrics
+	// 缓存指标
 	CacheHits = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "shannon_cache_hits_total",
@@ -231,6 +241,7 @@ var (
 	)
 
 	// Session cache metrics
+	// 会话缓存指标
 	SessionCacheHits = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "shannon_session_cache_hits_total",
@@ -267,6 +278,7 @@ var (
 	)
 
 	// Vector DB metrics
+	// 向量数据库指标
 	VectorSearches = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "shannon_vector_search_total",
@@ -285,6 +297,7 @@ var (
 	)
 
 	// Pricing fallback metrics
+	// 定价回退指标
 	PricingFallbacks = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "shannon_pricing_fallback_total",
@@ -294,6 +307,7 @@ var (
 	)
 
 	// Embedding metrics
+	// 嵌入指标
 	EmbeddingRequests = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "shannon_embedding_requests_total",
@@ -312,6 +326,7 @@ var (
 	)
 
 	// Decomposition metrics
+	// 分解指标
 	DecompositionLatency = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "shannon_decomposition_latency_seconds",
@@ -328,6 +343,7 @@ var (
 	)
 
 	// Research query refinement metrics
+	// 研究查询细化指标
 	RefinementLatency = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "shannon_refinement_latency_seconds",
@@ -344,6 +360,7 @@ var (
 	)
 
 	// Decomposition pattern metrics
+	// 分解模式指标
 	DecompositionPatternCacheHits = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "shannon_decomposition_pattern_cache_hits_total",
@@ -367,6 +384,7 @@ var (
 	)
 
 	// Learning router metrics
+	// 学习路由指标
 	LearningRouterLatency = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "shannon_learning_router_latency_seconds",
@@ -407,6 +425,7 @@ var (
 	)
 
 	// Chunking metrics
+	// 分块指标
 	ChunksPerQA = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "shannon_chunks_per_qa",
@@ -449,6 +468,7 @@ var (
 	)
 
 	// Complexity metrics
+	// 复杂度指标
 	ComplexityLatency = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "shannon_complexity_latency_seconds",
@@ -468,10 +488,11 @@ var (
 			Name: "shannon_memory_writes_skipped_total",
 			Help: "Total number of memory writes skipped due to filtering",
 		},
-		[]string{"reason"}, // reason: duplicate, low_value, error
+		[]string{"reason"}, // reason: duplicate, low_value, error 注：取值 duplicate、low_value、error
 	)
 
 	// Prompt cache metrics (Anthropic prompt caching)
+	// Prompt 缓存指标（Anthropic prompt caching）
 	PromptCacheReadTokens = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "shannon_prompt_cache_read_tokens_total",
@@ -496,12 +517,13 @@ var (
 	)
 
 	// Model tier selection metrics (regression prevention)
+	// 模型档位选择指标（防止回归）
 	ModelTierRequested = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "shannon_model_tier_requested_total",
 			Help: "Total number of times each model tier was requested",
 		},
-		[]string{"tier"}, // tier: small/medium/large
+		[]string{"tier"}, // tier: small/medium/large 注：取值 small/medium/large
 	)
 
 	ModelTierSelected = promauto.NewCounterVec(
@@ -509,7 +531,7 @@ var (
 			Name: "shannon_model_tier_selected_total",
 			Help: "Total number of times each model tier was actually selected",
 		},
-		[]string{"tier", "provider"}, // tier: small/medium/large, provider: openai/anthropic/etc
+		[]string{"tier", "provider"}, // tier: small/medium/large, provider: openai/anthropic/etc 注：tier 取值 small/medium/large，provider 取值 openai/anthropic/etc
 	)
 
 	TierSelectionDrift = promauto.NewCounterVec(
@@ -517,7 +539,7 @@ var (
 			Name: "shannon_tier_selection_drift_total",
 			Help: "Number of times selected tier differed from requested tier",
 		},
-		[]string{"requested_tier", "selected_tier", "reason"}, // reason: provider_unavailable/tier_unavailable/fallback
+		[]string{"requested_tier", "selected_tier", "reason"}, // reason: provider_unavailable/tier_unavailable/fallback 注：取值 provider_unavailable/tier_unavailable/fallback
 	)
 
 	ProviderOverrideRequested = promauto.NewCounterVec(
@@ -525,7 +547,7 @@ var (
 			Name: "shannon_provider_override_requested_total",
 			Help: "Total number of times provider override was requested",
 		},
-		[]string{"provider"}, // provider: openai/anthropic/google/etc
+		[]string{"provider"}, // provider: openai/anthropic/google/etc 注：取值 openai/anthropic/google/etc
 	)
 
 	ProviderOverrideRespected = promauto.NewCounterVec(
@@ -541,7 +563,7 @@ var (
 			Name: "shannon_provider_selection_drift_total",
 			Help: "Number of times selected provider differed from requested provider",
 		},
-		[]string{"requested_provider", "selected_provider", "reason"}, // reason: unavailable/rate_limited/fallback
+		[]string{"requested_provider", "selected_provider", "reason"}, // reason: unavailable/rate_limited/fallback 注：取值 unavailable/rate_limited/fallback
 	)
 )
 
@@ -577,6 +599,7 @@ func RecordGRPCMetrics(service, method, status string, durationSeconds float64) 
 }
 
 // RecordSessionTokens increments the session tokens counter
+// RecordSessionTokens 递增会话 tokens 计数器
 func RecordSessionTokens(tokens int) {
 	if tokens > 0 {
 		SessionTokensTotal.Add(float64(tokens))
@@ -584,6 +607,7 @@ func RecordSessionTokens(tokens int) {
 }
 
 // RecordVectorSearchMetrics records vector search metrics
+// RecordVectorSearchMetrics 记录向量检索指标
 func RecordVectorSearchMetrics(collection, status string, durationSeconds float64) {
 	VectorSearches.WithLabelValues(collection, status).Inc()
 	if durationSeconds > 0 {
@@ -592,6 +616,7 @@ func RecordVectorSearchMetrics(collection, status string, durationSeconds float6
 }
 
 // RecordEmbeddingMetrics records embedding metrics
+// RecordEmbeddingMetrics 记录嵌入指标
 func RecordEmbeddingMetrics(model, status string, durationSeconds float64) {
 	EmbeddingRequests.WithLabelValues(model, status).Inc()
 	if durationSeconds > 0 {
@@ -620,6 +645,7 @@ func RecordRetrievalTokens(retrievalType string, tokens int) {
 }
 
 // RecordChunkAggregation records chunk aggregation latency
+// RecordChunkAggregation 记录分块聚合延迟
 func RecordChunkAggregation(durationSeconds float64) {
 	if durationSeconds > 0 {
 		ChunkAggregationLatency.Observe(durationSeconds)
@@ -670,6 +696,7 @@ func RecordProviderDrift(requestedProvider, selectedProvider, reason string) {
 }
 
 // RecordPromptCacheMetrics records prompt cache token metrics
+// RecordPromptCacheMetrics 记录 prompt 缓存 token 指标
 func RecordPromptCacheMetrics(provider, model string, readTokens, creationTokens int, savingsUSD float64) {
 	if readTokens > 0 {
 		PromptCacheReadTokens.WithLabelValues(provider, model).Add(float64(readTokens))

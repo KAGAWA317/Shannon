@@ -62,7 +62,7 @@ try:
     LLM_MANAGER_HEDGED_WINS = Counter(
         "llm_manager_hedged_wins_total",
         "Hedged request winner",
-        labelnames=("winner",),  # primary|fallback
+        labelnames=("winner",),  # primary|fallback 注：取值 primary|fallback
     )
 except Exception:
     _METRICS_ENABLED = False
@@ -248,7 +248,7 @@ class LLMManager:
             "providers": {},
             "routing": {
                 "default_provider": "openai",
-                "tier_preferences": {},  # Empty - requires models.yaml
+                "tier_preferences": {},  # Empty - requires models.yaml 注：为空，需要 models.yaml
             },
             "caching": {"enabled": True, "max_size": 1000, "default_ttl": 3600},
         }
@@ -806,6 +806,7 @@ class LLMManager:
                     )
                 except Exception:
                     # Restore original model before re-raising
+                    # 重新抛出前恢复原始 model
                     request.model = original_model
                     raise
 
@@ -931,7 +932,7 @@ class LLMManager:
                 f"Specific model '{request.model}' not found in any available provider, "
                 f"falling back to tier-based selection (tier={request.model_tier.value})"
             )
-            request.model = None  # Clear it so tier selection can proceed
+            request.model = None  # Clear it so tier selection can proceed 注：清空以便继续进行 tier 选择
 
         # Check tier preferences
         # 检查 tier 偏好
@@ -1202,8 +1203,7 @@ class LLMManager:
                 "1",
                 "true",
                 "yes",
-            ):  # default disabled
-                # 默认禁用
+            ):  # default disabled 注：默认禁用
                 return
         except Exception:
             # If env parsing fails, fail open (do not enforce here)
@@ -1219,8 +1219,7 @@ class LLMManager:
 
         # Enforce token budget limits
         # 执行 token budget 限制
-        max_tokens_per_session = 100000  # Default limit, should be configurable
-        # 默认限制，应可配置
+        max_tokens_per_session = 100000  # Default limit, should be configurable 注：默认限制，应可配置
         if hasattr(request, "max_tokens_budget"):
             max_tokens_per_session = request.max_tokens_budget
 
@@ -1304,8 +1303,7 @@ class LLMManager:
         status = {}
         for name, provider in self.registry.providers.items():
             status[name] = {
-                "available": True,  # Could add health checks
-                # 后续可加入健康检查
+                "available": True,  # Could add health checks 注：后续可加入健康检查
                 "models": list(provider.models.keys()),
                 "rate_limit": {
                     "requests_per_minute": self.rate_limiters[name].requests_per_minute
@@ -1539,8 +1537,9 @@ class _CircuitBreaker:
         self.failure_threshold = max(1, int(failure_threshold))
         self.recovery_timeout = float(recovery_timeout)
         self.failures = 0
-        self.state = "closed"  # closed | open | half-open
+        self.state = "closed"  # closed | open | half-open 注：状态 closed | open | half-open
         # closed | open | half-open
+        # 状态：closed | open | half-open
         self.opened_at = 0.0
         self._metrics = metrics_enabled
 

@@ -18,9 +18,9 @@ agents:
 # 策略引擎配置 - 测试环境下启用
 policy:
   enabled: true
-  mode: "dry-run"  # Start with dry-run mode for testing
+  mode: "dry-run"  # Start with dry-run mode for testing 注：先以 dry-run 模式开始，用于测试
   path: "/app/config/opa/policies"
-  fail_closed: false  # Allow requests if policy evaluation fails
+  fail_closed: false  # Allow requests if policy evaluation fails 注：策略评估失败时仍放行请求
   environment: "test"
   audit:
     enabled: true

@@ -25,20 +25,23 @@ var (
 )
 
 // RefineResearchQueryInput is the input for refining vague research queries
+// RefineResearchQueryInput 是精炼模糊 research query 的输入
 type RefineResearchQueryInput struct {
 	Query   string         `json:"query"`
 	Context map[string]any `json:"context"`
 }
 
 // ResearchDimension represents a structured research area with source guidance
+// ResearchDimension 表示一个带来源指引的结构化研究领域
 type ResearchDimension struct {
-	Dimension   string   `json:"dimension"`    // Name of the research dimension (e.g., "Entity Identity")
-	Questions   []string `json:"questions"`    // Specific questions to answer
-	SourceTypes []string `json:"source_types"` // Recommended source types (official, aggregator, news, academic)
-	Priority    string   `json:"priority"`     // high, medium, low
+	Dimension   string   `json:"dimension"`    // Name of the research dimension (e.g., "Entity Identity") 注：维度名称（如 "Entity Identity"）
+	Questions   []string `json:"questions"`    // Specific questions to answer 注：需要回答的具体问题
+	SourceTypes []string `json:"source_types"` // Recommended source types (official, aggregator, news, academic) 注：推荐来源类型（official、aggregator、news、academic）
+	Priority    string   `json:"priority"`     // high, medium, low 注：high、medium、low
 }
 
 // RefineResearchQueryResult contains the expanded research scope
+// RefineResearchQueryResult 包含扩展后的研究范围
 type RefineResearchQueryResult struct {
 	OriginalQuery    string   `json:"original_query"`
 	RefinedQuery     string   `json:"refined_query"`
@@ -47,36 +50,37 @@ type RefineResearchQueryResult struct {
 	TokensUsed       int      `json:"tokens_used"`
 	ModelUsed        string   `json:"model_used,omitempty"`
 	Provider         string   `json:"provider,omitempty"`
-	DetectedLanguage string   `json:"detected_language,omitempty"` // Language detected from query
+	DetectedLanguage string   `json:"detected_language,omitempty"` // Language detected from query 注：从 query 检测到的语言
 	// Entity disambiguation and search guidance
+	// 实体消歧与搜索指引
 	CanonicalName       string   `json:"canonical_name,omitempty"`
 	ExactQueries        []string `json:"exact_queries,omitempty"`
 	OfficialDomains     []string `json:"official_domains,omitempty"`
 	DisambiguationTerms []string `json:"disambiguation_terms,omitempty"`
 	// Deep Research 2.0: Dynamic dimension generation
-	QueryType            string              `json:"query_type,omitempty"`             // company, industry, scientific, comparative, exploratory
-	ResearchDimensions   []ResearchDimension `json:"research_dimensions,omitempty"`    // Structured dimensions with source guidance
-	LocalizationNeeded   bool                `json:"localization_needed,omitempty"`    // Whether to search in local languages
-	TargetLanguages      []string            `json:"target_languages,omitempty"`       // Languages to search (e.g., ["en", "zh", "ja"])
-	LocalizedNames       map[string][]string `json:"localized_names,omitempty"`        // Entity names in local languages
-	PrefetchSubpageLimit int                 `json:"prefetch_subpage_limit,omitempty"` // Recommended subpages per domain (5-20, default 15)
-	// 每个 domain 建议抓取的子页数（5-20，默认 15）。
+	// Deep Research 2.0：动态生成维度
+	QueryType            string              `json:"query_type,omitempty"`             // company, industry, scientific, comparative, exploratory 注：company、industry、scientific、comparative、exploratory
+	ResearchDimensions   []ResearchDimension `json:"research_dimensions,omitempty"`    // Structured dimensions with source guidance 注：带来源指引的结构化维度
+	LocalizationNeeded   bool                `json:"localization_needed,omitempty"`    // Whether to search in local languages 注：是否需要按本地语言检索
+	TargetLanguages      []string            `json:"target_languages,omitempty"`       // Languages to search (e.g., ["en", "zh", "ja"]) 注：要检索的语言（如 ["en", "zh", "ja"]）
+	LocalizedNames       map[string][]string `json:"localized_names,omitempty"`        // Entity names in local languages 注：实体在各语言下的名称
+	PrefetchSubpageLimit int                 `json:"prefetch_subpage_limit,omitempty"` // Recommended subpages per domain (5-20, default 15) 注：每个 domain 建议抓取的子页数（5-20，默认 15）。
 
 	// HITL: User intent from confirmed_plan (populated only when confirmed_plan exists)
 	// HITL：来自 confirmed_plan 的用户意图，仅在 confirmed_plan 存在时填充。
-	PriorityFocus   []string    `json:"priority_focus,omitempty"`    // Areas user wants deep research
-	SecondaryFocus  []string    `json:"secondary_focus,omitempty"`   // Areas for adequate coverage
-	SkipAreas       []string    `json:"skip_areas,omitempty"`        // Areas user explicitly excluded
-	UserIntent      *UserIntent `json:"user_intent,omitempty"`       // Structured user intent
-	HITLParseFailed bool        `json:"hitl_parse_failed,omitempty"` // True if HITL plan parsing failed (degraded mode)
-	// HITL plan 解析失败（降级模式）时为 true。
+	PriorityFocus   []string    `json:"priority_focus,omitempty"`    // Areas user wants deep research 注：用户希望深挖的领域
+	SecondaryFocus  []string    `json:"secondary_focus,omitempty"`   // Areas for adequate coverage 注：需要适度覆盖的领域
+	SkipAreas       []string    `json:"skip_areas,omitempty"`        // Areas user explicitly excluded 注：用户明确排除的领域
+	UserIntent      *UserIntent `json:"user_intent,omitempty"`       // Structured user intent 注：结构化的用户意图
+	HITLParseFailed bool        `json:"hitl_parse_failed,omitempty"` // True if HITL plan parsing failed (degraded mode) 注：HITL plan 解析失败（降级模式）时为 true。
 }
 
 // UserIntent captures the user's research purpose and preferences
+// UserIntent 记录用户的研究目的与偏好
 type UserIntent struct {
-	Purpose          string   `json:"purpose,omitempty"`           // learning, investment, interview_prep, etc.
-	Depth            string   `json:"depth,omitempty"`             // beginner, intermediate, expert
-	SourcePreference []string `json:"source_preference,omitempty"` // preferred source types
+	Purpose          string   `json:"purpose,omitempty"`           // learning, investment, interview_prep, etc. 注：learning、investment、interview_prep 等
+	Depth            string   `json:"depth,omitempty"`             // beginner, intermediate, expert 注：beginner、intermediate、expert
+	SourcePreference []string `json:"source_preference,omitempty"` // preferred source types 注：偏好的来源类型
 }
 
 // RefineResearchQuery expands vague queries into structured research plans
@@ -95,6 +99,7 @@ func (a *Activities) RefineResearchQuery(ctx context.Context, in RefineResearchQ
 	}
 
 	// Normal mode: existing logic unchanged
+	// 常规模式：沿用原有逻辑不变
 	base := os.Getenv("LLM_SERVICE_URL")
 	if base == "" {
 		base = "http://llm-service:8000"
@@ -102,6 +107,7 @@ func (a *Activities) RefineResearchQuery(ctx context.Context, in RefineResearchQ
 	url := fmt.Sprintf("%s/agent/query", base)
 
 	// Build prompt for query refinement with dynamic dimension generation
+	// 构建 query refinement prompt，含动态维度生成要求
 	refinementPrompt := fmt.Sprintf(`You are a research query expansion expert.
 
 IMPORTANT: This is the PLANNING stage only. Plan first; do NOT start writing the final report or conducting searches. Return ONLY a structured plan.
@@ -288,8 +294,7 @@ Constraints:
 	reqBody := map[string]any{
 		"query":      refinementPrompt,
 		"context":    ctxMap,
-		"max_tokens": 8192, // Refinement produces structured JSON output; 4096 default can truncate
-		// refinement 输出结构化 JSON，默认 4096 会截断，故加大到 8192。
+		"max_tokens": 8192, // Refinement produces structured JSON output; 4096 default can truncate 注：refinement 输出结构化 JSON，默认 4096 会截断，故加大到 8192。
 	}
 
 	body, err := json.Marshal(reqBody)
@@ -332,17 +337,21 @@ Constraints:
 			)
 
 			// Immediate retry for transient errors
+			// 瞬时错误立即重试
 			if attempt < maxRetries {
 				continue
 			}
 			// Final attempt failed
+			// 最后一次尝试仍失败
 			ometrics.RefinementErrors.Inc()
 			return nil, fmt.Errorf("failed to call LLM service after %d attempts: %w", maxRetries+1, err)
 		}
 
 		// Check status code
+		// 检查状态码
 		if resp.StatusCode >= 500 {
 			// Server error - retry
+			// 服务端错误——重试
 			resp.Body.Close()
 			logger.Warn("LLM service returned server error",
 				"attempt", attempt+1,
@@ -353,6 +362,7 @@ Constraints:
 				continue
 			}
 			// Final attempt failed
+			// 最后一次尝试仍失败
 			ometrics.RefinementErrors.Inc()
 			return nil, fmt.Errorf("LLM service returned status %d after %d attempts", resp.StatusCode, maxRetries+1)
 		}
@@ -366,6 +376,7 @@ Constraints:
 		}
 
 		// Success
+		// 成功
 		logger.Info("LLM service call succeeded",
 			"attempt", attempt+1,
 		)
@@ -374,6 +385,7 @@ Constraints:
 	defer resp.Body.Close()
 
 	// Parse response
+	// 解析 response
 	var llmResp struct {
 		Response   string `json:"response"`
 		TokensUsed int    `json:"tokens_used"`
@@ -413,6 +425,7 @@ Constraints:
 		OfficialDomains     []string `json:"official_domains"`
 		DisambiguationTerms []string `json:"disambiguation_terms"`
 		// Deep Research 2.0 fields
+		// Deep Research 2.0 字段
 		QueryType          string              `json:"query_type"`
 		ResearchDimensions []ResearchDimension `json:"research_dimensions"`
 		LocalizationNeeded bool                `json:"localization_needed"`
@@ -440,9 +453,11 @@ Constraints:
 	}
 
 	// Detect language from original query
+	// 从原始 query 检测语言
 	detectedLang := detectLanguage(in.Query)
 
 	// Validate language detection quality
+	// 校验语言检测质量
 	langConfidence := validateLanguageDetection(in.Query, detectedLang, logger)
 	if langConfidence < 0.5 {
 		logger.Warn("Low confidence in language detection - results may be unreliable",
@@ -462,9 +477,11 @@ Constraints:
 				switch v := val.(type) {
 				case string:
 					// Single string: convert to single-element array
+					// 单个字符串：转为单元素数组
 					localizedNames[lang] = []string{v}
 				case []any:
 					// Array of values: convert to string array
+					// 值数组：转为字符串数组
 					strs := make([]string, 0, len(v))
 					for _, elem := range v {
 						if s, ok := elem.(string); ok {
@@ -491,6 +508,7 @@ Constraints:
 		OfficialDomains:     refinedData.OfficialDomains,
 		DisambiguationTerms: refinedData.DisambiguationTerms,
 		// Deep Research 2.0 fields
+		// Deep Research 2.0 字段
 		QueryType:          refinedData.QueryType,
 		ResearchDimensions: refinedData.ResearchDimensions,
 		LocalizationNeeded: refinedData.LocalizationNeeded,
@@ -503,6 +521,7 @@ Constraints:
 	if result.CanonicalName == "" && len(result.ExactQueries) > 0 {
 		candidate := result.ExactQueries[0]
 		// Remove surrounding quotes if present (e.g., "\"Acme Analytics\"")
+		// 存在外层引号时去掉（如 "\"Acme Analytics\""）
 		for len(candidate) >= 2 {
 			if (candidate[0] == '"' && candidate[len(candidate)-1] == '"') ||
 				(candidate[0] == '\'' && candidate[len(candidate)-1] == '\'') {
@@ -517,6 +536,7 @@ Constraints:
 	}
 
 	// Record latency
+	// 记录 latency
 	ometrics.RefinementLatency.Observe(time.Since(start).Seconds())
 
 	return result, nil
@@ -546,40 +566,42 @@ func detectLanguage(query string) string {
 	}
 
 	// Count characters by Unicode range
+	// 按 Unicode 区间统计字符数
 	var cjk, cyrillic, arabic, latin int
 	for _, r := range query {
 		switch {
-		case r >= 0x4E00 && r <= 0x9FFF: // CJK Unified Ideographs
+		case r >= 0x4E00 && r <= 0x9FFF: // CJK Unified Ideographs 注：CJK 统一表意字符
 			cjk++
-		case r >= 0x3040 && r <= 0x309F: // Hiragana
+		case r >= 0x3040 && r <= 0x309F: // Hiragana 注：平假名
 			cjk++
-		case r >= 0x30A0 && r <= 0x30FF: // Katakana
+		case r >= 0x30A0 && r <= 0x30FF: // Katakana 注：片假名
 			cjk++
-		case r >= 0xAC00 && r <= 0xD7AF: // Hangul Syllables
+		case r >= 0xAC00 && r <= 0xD7AF: // Hangul Syllables 注：谚文音节
 			cjk++
-		case r >= 0x0400 && r <= 0x04FF: // Cyrillic
+		case r >= 0x0400 && r <= 0x04FF: // Cyrillic 注：西里尔字母
 			cyrillic++
-		case r >= 0x0600 && r <= 0x06FF: // Arabic
+		case r >= 0x0600 && r <= 0x06FF: // Arabic 注：阿拉伯字母
 			arabic++
-		case (r >= 0x0041 && r <= 0x005A) || (r >= 0x0061 && r <= 0x007A): // Latin
+		case (r >= 0x0041 && r <= 0x005A) || (r >= 0x0061 && r <= 0x007A): // Latin 注：拉丁字母
 			latin++
 		}
 	}
 
 	total := cjk + cyrillic + arabic + latin
 	if total == 0 {
-		return "English" // Default if no recognized characters
+		return "English" // Default if no recognized characters 注：无可识别字符时的默认值
 	}
 
 	// Determine language based on character composition
+	// 按字符构成判定语言
 	cjkPercent := float64(cjk) / float64(total)
 	if cjkPercent > 0.15 {
 		// Distinguish Chinese/Japanese/Korean by character patterns
+		// 依据字符特征区分中/日/韩
 		var hanzi, hiragana, katakana, hangul int
 		for _, r := range query {
 			if r >= 0x4E00 && r <= 0x9FFF {
-				hanzi++ // Pure CJK ideographs (shared by Chinese/Japanese)
-				// 纯 CJK 表意字符（中文/日文共用）。
+				hanzi++ // Pure CJK ideographs (shared by Chinese/Japanese) 注：纯 CJK 表意字符（中文/日文共用）。
 			}
 			if r >= 0x3040 && r <= 0x309F {
 				hiragana++
@@ -599,8 +621,7 @@ func detectLanguage(query string) string {
 			// Compare hanzi vs kana ratio: Chinese text may contain Japanese company names
 			// 比较 hanzi 与 kana 比例：中文文本里可能夹着日文公司名。
 			if hanzi > japaneseKana*2 {
-				return "Chinese" // Hanzi dominant, likely Chinese with Japanese terms
-				// hanzi 占优，判定为中文（夹带日文术语）。
+				return "Chinese" // Hanzi dominant, likely Chinese with Japanese terms 注：hanzi 占优，判定为中文（夹带日文术语）。
 			}
 			return "Japanese"
 		}
@@ -618,6 +639,7 @@ func detectLanguage(query string) string {
 	}
 
 	// Check for common non-English Latin script patterns
+	// 检查常见的非英文拉丁字母特征
 	lowerQuery := strings.ToLower(query)
 	if strings.Contains(lowerQuery, "ñ") || strings.Contains(lowerQuery, "¿") || strings.Contains(lowerQuery, "¡") {
 		return "Spanish"
@@ -636,6 +658,8 @@ func detectLanguage(query string) string {
 
 // validateLanguageDetection returns a confidence score (0.0-1.0) for language detection
 // and logs warnings if confidence is low
+// validateLanguageDetection 返回语言检测的置信度（0.0-1.0），
+// 置信度偏低时输出告警日志。
 func validateLanguageDetection(query string, detectedLang string, logger log.Logger) float64 {
 	if query == "" {
 		return 0.0
@@ -647,6 +671,7 @@ func validateLanguageDetection(query string, detectedLang string, logger log.Log
 	}
 
 	// Count characters by category
+	// 按类别统计字符数
 	var cjk, cyrillic, arabic, latin, other int
 	for _, r := range query {
 		switch {
@@ -669,11 +694,11 @@ func validateLanguageDetection(query string, detectedLang string, logger log.Log
 			"query_length", len(query),
 			"detected", detectedLang,
 		)
-		return 0.3 // Low confidence for unusual input
-		// 输入异常时给低置信度。
+		return 0.3 // Low confidence for unusual input 注：输入异常时给低置信度。
 	}
 
 	// Calculate confidence based on character distribution
+	// 按字符分布计算置信度
 	var confidence float64
 	switch detectedLang {
 	case "Chinese", "Japanese", "Korean":
@@ -708,6 +733,7 @@ func validateLanguageDetection(query string, detectedLang string, logger log.Log
 		latinPercent := float64(latin) / float64(total)
 		confidence = latinPercent
 		// For Latin-script languages, we expect high Latin percentage
+		// 拉丁字母语言预期 Latin 字符占比很高
 		if latinPercent < 0.7 {
 			logger.Warn("Language detection: low Latin percentage for Latin-script language",
 				"detected", detectedLang,
@@ -716,8 +742,7 @@ func validateLanguageDetection(query string, detectedLang string, logger log.Log
 			)
 		}
 	default:
-		confidence = 0.5 // Medium confidence for unknown language
-		// 未知语言给中等置信度。
+		confidence = 0.5 // Medium confidence for unknown language 注：未知语言给中等置信度。
 		logger.Warn("Language detection: unknown language detected",
 			"detected", detectedLang,
 		)
@@ -729,7 +754,7 @@ func validateLanguageDetection(query string, detectedLang string, logger log.Log
 		logger.Warn("Language detection: high proportion of non-linguistic characters",
 			"other_percent", float64(other)/float64(total+other),
 		)
-		confidence *= 0.8 // Reduce confidence
+		confidence *= 0.8 // Reduce confidence 注：降权
 	}
 
 	return confidence
@@ -747,6 +772,7 @@ func (a *Activities) refineWithHITL(ctx context.Context, in RefineResearchQueryI
 	url := fmt.Sprintf("%s/agent/query", base)
 
 	// Build conversation context (if available)
+	// 构建对话上下文（若有）
 	var conversationText strings.Builder
 	if convRaw, ok := in.Context["review_conversation"]; ok {
 		if convSlice, ok := convRaw.([]any); ok {
@@ -763,6 +789,7 @@ func (a *Activities) refineWithHITL(ctx context.Context, in RefineResearchQueryI
 	}
 
 	// Build prompt for HITL plan parsing
+	// 构建 HITL plan 解析用的 prompt
 	conversationSection := ""
 	if conversationText.String() != "" {
 		conversationSection = fmt.Sprintf("\nReview conversation (for additional context):\n%s", conversationText.String())
@@ -881,6 +908,7 @@ Return ONLY a JSON object:
 	}
 
 	// Parse the JSON response
+	// 解析 JSON response
 	result := &RefineResearchQueryResult{
 		OriginalQuery: in.Query,
 		TokensUsed:    llmResp.TokensUsed,
@@ -925,6 +953,7 @@ Return ONLY a JSON object:
 	}
 
 	// Populate result
+	// 填充 result
 	result.RefinedQuery = parsed.RefinedQuery
 	if result.RefinedQuery == "" {
 		result.RefinedQuery = in.Query

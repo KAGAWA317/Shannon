@@ -70,7 +70,7 @@ async def test_error_mapping_permission_and_ratelimit():
 @pytest.mark.asyncio
 async def test_timeout_wrapped(monkeypatch):
     class FakeClient:
-        async def get(self, *args, **kwargs):  # mimics httpx.AsyncClient.get
+        async def get(self, *args, **kwargs):  # mimics httpx.AsyncClient.get 注：模拟 httpx.AsyncClient.get
             raise httpx.ReadTimeout("timeout")
 
     c = AsyncShannonClient()

@@ -12,8 +12,10 @@ func compactTokens(tokens int) string {
 		return fmt.Sprintf("%d", tokens)
 	}
 	// one decimal precision for thousands
+	// 千位保留一位小数
 	k := float64(tokens) / 1000.0
 	// Trim trailing .0
+	// 去掉末尾的 .0
 	s := fmt.Sprintf("%.1fk", k)
 	s = strings.ReplaceAll(s, ".0k", "k")
 	return s
@@ -27,44 +29,55 @@ func msgTruncate(s string, maxLen int) string {
 
 // -----------------------------------------------------------------------------
 // Workflow Lifecycle Messages
+// 工作流生命周期消息
 // -----------------------------------------------------------------------------
 
 // MsgWorkflowStarted announces workflow initialization.
+// MsgWorkflowStarted 宣告 workflow 开始初始化。
 func MsgWorkflowStarted() string { return "Starting up" }
 
 // MsgWorkflowRouting indicates routing to a specific workflow type.
+// MsgWorkflowRouting 表示正在路由到某个具体的 workflow 类型。
 func MsgWorkflowRouting() string {
 	return "Planning the approach"
 }
 
 // MsgWorkflowCompleted announces successful workflow completion.
+// MsgWorkflowCompleted 宣告 workflow 成功完成。
 func MsgWorkflowCompleted() string { return "All done" }
 
 // MsgStreamEnd marks the end of streaming.
+// MsgStreamEnd 标记流式输出结束。
 func MsgStreamEnd() string { return "Done" }
 
 // -----------------------------------------------------------------------------
 // Task Processing Messages
+// 任务处理消息
 // -----------------------------------------------------------------------------
 
 // MsgThinking shows the system is analyzing the query.
+// MsgThinking 表示系统正在分析 query。
 func MsgThinking(query string) string {
 	truncated := msgTruncate(query, 50)
 	return fmt.Sprintf("Thinking about: %s", truncated)
 }
 
 // MsgProcessing indicates active processing.
+// MsgProcessing 表示正在处理中。
 func MsgProcessing() string { return "Working on it" }
 
 // MsgTaskDone indicates task completion.
+// MsgTaskDone 表示任务已完成。
 func MsgTaskDone() string { return "Done" }
 
 // MsgTaskFailed reports task failure with reason.
+// MsgTaskFailed 上报任务失败及原因。
 func MsgTaskFailed(reason string) string {
 	if reason == "" {
 		return "Something went wrong"
 	}
 	// Truncate long error messages
+	// 截断过长的错误消息
 	if len(reason) > 100 {
 		reason = reason[:100] + "..."
 	}
@@ -73,9 +86,11 @@ func MsgTaskFailed(reason string) string {
 
 // -----------------------------------------------------------------------------
 // Planning & Decomposition Messages
+// 规划与拆解消息
 // -----------------------------------------------------------------------------
 
 // MsgPlanCreated announces plan creation with step count.
+// MsgPlanCreated 宣告计划已创建，并带上步骤数。
 func MsgPlanCreated(steps int) string {
 	if steps == 1 {
 		return "Got a plan — 1 step"
@@ -84,24 +99,30 @@ func MsgPlanCreated(steps int) string {
 }
 
 // MsgUnderstandingRequest indicates decomposition is in progress.
+// MsgUnderstandingRequest 表示正在拆解请求。
 func MsgUnderstandingRequest() string { return "Understanding your request" }
 
 // MsgDecompositionFailed indicates fallback to simple execution.
+// MsgDecompositionFailed 表示已回退到简单执行。
 func MsgDecompositionFailed() string { return "Handling this directly" }
 
 // MsgRoleAssigned announces role assignment with available tools.
+// MsgRoleAssigned 宣告角色分配及可用工具。
 func MsgRoleAssigned(role string) string {
 	return fmt.Sprintf("Ready as %s", role)
 }
 
 // -----------------------------------------------------------------------------
 // Agent Messages
+// Agent 消息
 // -----------------------------------------------------------------------------
 
 // MsgContextPreparing returns a short status for context preparation.
+// MsgContextPreparing 返回上下文准备阶段的简短状态。
 func MsgContextPreparing(_ int, _ int) string { return "Gathering context" }
 
 // MsgAgentRunning announces an agent role starting work.
+// MsgAgentRunning 宣告某个 agent 角色开始工作。
 func MsgAgentRunning(role string) string {
 	if role == "" {
 		return "Agent working"
@@ -110,9 +131,11 @@ func MsgAgentRunning(role string) string {
 }
 
 // MsgAgentThinking indicates agent is analyzing.
+// MsgAgentThinking 表示 agent 正在分析。
 func MsgAgentThinking() string { return "Thinking" }
 
 // MsgAgentWorking indicates agent is actively working.
+// MsgAgentWorking 表示 agent 正在实际干活。
 func MsgAgentWorking(agentName string) string {
 	if agentName == "" {
 		return "Working"
@@ -140,6 +163,7 @@ func MsgProgress(step, total int) string {
 }
 
 // MsgBudget reports a simple budget usage.
+// MsgBudget 上报简单的预算使用情况。
 func MsgBudget(used, limit int) string {
 	if limit <= 0 {
 		return "Processing"
@@ -149,62 +173,78 @@ func MsgBudget(used, limit int) string {
 }
 
 // MsgTokensUsed reports token consumption.
+// MsgTokensUsed 上报 token 消耗。
 func MsgTokensUsed() string {
 	return "Processing complete"
 }
 
 // -----------------------------------------------------------------------------
 // Handoff Messages
+// Handoff 消息
 // -----------------------------------------------------------------------------
 
 // MsgHandoffTemplate announces handoff to a template workflow.
+// MsgHandoffTemplate 宣告交接给 template workflow。
 func MsgHandoffTemplate(templateName string) string {
 	return fmt.Sprintf("Running workflow: %s", templateName)
 }
 
 // MsgHandoffSimple announces handoff to simple task workflow.
+// MsgHandoffSimple 宣告交接给简单任务 workflow。
 func MsgHandoffSimple() string { return "Processing" }
 
 // MsgHandoffSupervisor announces handoff to supervisor workflow.
+// MsgHandoffSupervisor 宣告交接给 supervisor workflow。
 func MsgHandoffSupervisor() string { return "Coordinating agents" }
 
 // MsgHandoffTeamPlan announces handoff to team plan workflow.
+// MsgHandoffTeamPlan 宣告交接给 team plan workflow。
 func MsgHandoffTeamPlan() string { return "Running team plan" }
 
 // -----------------------------------------------------------------------------
 // Synthesis Messages
+// 综合（synthesis）消息
 // -----------------------------------------------------------------------------
 
 // MsgCompressionApplied notes that trimming was applied.
+// MsgCompressionApplied 说明已执行裁剪。
 func MsgCompressionApplied() string { return "Condensing the conversation" }
 
 // MsgCombiningResults announces synthesis.
+// MsgCombiningResults 宣告开始综合结果。
 func MsgCombiningResults() string { return "Pulling it all together" }
 
 // MsgSynthesizing indicates synthesis in progress.
+// MsgSynthesizing 表示正在综合。
 func MsgSynthesizing() string { return "Combining results" }
 
 // MsgFinalAnswer announces the final answer is ready.
+// MsgFinalAnswer 宣告最终答案已就绪。
 func MsgFinalAnswer() string { return "Answer ready" }
 
 // MsgSynthesisSummary reports synthesis completion with token count.
+// MsgSynthesisSummary 上报综合完成，并带上 token 数。
 func MsgSynthesisSummary() string {
 	return "Wrapping up"
 }
 
 // MsgSynthesisFallback warns that synthesis used a simpler approach.
+// MsgSynthesisFallback 提示综合走了更简单的兜底方式。
 func MsgSynthesisFallback(_ string) string {
 	return "Summarizing results"
 }
 
 // -----------------------------------------------------------------------------
 // Memory Messages
+// 记忆消息
 // -----------------------------------------------------------------------------
 
 // MsgWaiting reports a generic waiting status.
+// MsgWaiting 上报通用的等待状态。
 func MsgWaiting(_ string) string { return "Waiting on previous step" }
 
 // MsgMemoryRecalled reports number of memory items recalled.
+// MsgMemoryRecalled 上报召回的记忆条数。
 func MsgMemoryRecalled(items int) string {
 	if items == 1 {
 		return "Recalled 1 past note"
@@ -213,13 +253,16 @@ func MsgMemoryRecalled(items int) string {
 }
 
 // MsgSummaryAdded indicates a previous context summary was injected.
+// MsgSummaryAdded 表示已注入先前的上下文摘要。
 func MsgSummaryAdded() string { return "Loaded prior context" }
 
 // -----------------------------------------------------------------------------
 // Approval Messages
+// 审批消息
 // -----------------------------------------------------------------------------
 
 // MsgApprovalRequested indicates approval is needed.
+// MsgApprovalRequested 表示需要审批。
 func MsgApprovalRequested(reason, approvalID string) string {
 	if reason != "" {
 		return fmt.Sprintf("Needs approval: %s", reason)
@@ -228,6 +271,7 @@ func MsgApprovalRequested(reason, approvalID string) string {
 }
 
 // MsgApprovalProcessed reports approval decision.
+// MsgApprovalProcessed 上报审批决定。
 func MsgApprovalProcessed(decision string) string {
 	switch strings.ToLower(decision) {
 	case "approved":
@@ -241,50 +285,63 @@ func MsgApprovalProcessed(decision string) string {
 
 // -----------------------------------------------------------------------------
 // Supervisor Messages
+// Supervisor 消息
 // -----------------------------------------------------------------------------
 
 // MsgSupervisorStarted announces supervisor workflow start.
+// MsgSupervisorStarted 宣告 supervisor workflow 启动。
 func MsgSupervisorStarted() string { return "Coordinating agents" }
 
 // MsgSubtaskProgress reports subtask completion progress.
+// MsgSubtaskProgress 上报子任务完成进度。
 func MsgSubtaskProgress(completed, total int) string {
 	return fmt.Sprintf("%d of %d tasks done", completed, total)
 }
 
 // MsgSubtasksFailed reports too many subtask failures.
+// MsgSubtasksFailed 上报子任务失败过多。
 func MsgSubtasksFailed(failed, total int) string {
 	return fmt.Sprintf("Too many failures (%d/%d) — stopping", failed, total)
 }
 
 // -----------------------------------------------------------------------------
 // React Pattern Messages
+// React 模式消息
 // -----------------------------------------------------------------------------
 
 // MsgReactIteration reports React loop progress.
+// MsgReactIteration 上报 React 循环进度。
 func MsgReactIteration(current, max int) string {
 	return fmt.Sprintf("Thinking step %d of %d", current, max)
 }
 
 // MsgReactReasoning indicates reasoning phase started.
+// MsgReactReasoning 表示推理阶段开始。
 func MsgReactReasoning() string { return "Reflecting on progress" }
 
 // MsgReactReasoningDone indicates reasoning phase completed.
+// MsgReactReasoningDone 表示推理阶段已完成。
 func MsgReactReasoningDone() string { return "Decided next step" }
 
 // MsgReactActing indicates action phase started.
+// MsgReactActing 表示行动阶段开始。
 func MsgReactActing() string { return "Taking action" }
 
 // MsgReactActingDone indicates action phase completed.
+// MsgReactActingDone 表示行动阶段已完成。
 func MsgReactActingDone() string { return "Action done" }
 
 // MsgReactLoopDone indicates the React loop finished.
+// MsgReactLoopDone 表示 React 循环已结束。
 func MsgReactLoopDone() string { return "Finished thinking" }
 
 // -----------------------------------------------------------------------------
 // Tool Observation Messages
+// 工具观测消息
 // -----------------------------------------------------------------------------
 
 // MsgToolCompleted generates a human-readable message for tool completion.
+// MsgToolCompleted 为工具完成生成一条可读消息。
 func MsgToolCompleted(toolName string, response string) string {
 	if response == "" {
 		return fmt.Sprintf("%s done", humanizeToolName(toolName))
@@ -301,6 +358,7 @@ func MsgToolCompleted(toolName string, response string) string {
 }
 
 // MsgToolFailed generates a human-readable message for tool failure.
+// MsgToolFailed 为工具失败生成一条可读消息。
 func MsgToolFailed(toolName string) string {
 	return fmt.Sprintf("%s failed", humanizeToolName(toolName))
 }
@@ -345,21 +403,26 @@ func humanizeToolName(toolName string) string {
 }
 
 // HumanizeToolName is the exported version of humanizeToolName.
+// HumanizeToolName 是 humanizeToolName 的导出版本。
 func HumanizeToolName(toolName string) string {
 	return humanizeToolName(toolName)
 }
 
 // -----------------------------------------------------------------------------
 // Swarm Workflow Messages
+// Swarm workflow 消息
 // -----------------------------------------------------------------------------
 
 // MsgSwarmStarted announces swarm workflow initialization.
+// MsgSwarmStarted 宣告 swarm workflow 初始化。
 func MsgSwarmStarted() string { return "Assembling the team" }
 
 // MsgSwarmPlanning announces task decomposition.
+// MsgSwarmPlanning 宣告任务拆解。
 func MsgSwarmPlanning() string { return "Thinking about the approach..." }
 
 // MsgSwarmSpawning announces agents being assigned.
+// MsgSwarmSpawning 宣告正在分派 agent。
 func MsgSwarmSpawning(count int) string {
 	if count == 1 {
 		return "1 agent is on it"
@@ -368,27 +431,33 @@ func MsgSwarmSpawning(count int) string {
 }
 
 // MsgSwarmMonitoring announces agent coordination phase.
+// MsgSwarmMonitoring 宣告进入 agent 协同阶段。
 func MsgSwarmMonitoring() string { return "Agents working in parallel" }
 
 // MsgSwarmSynthesizing announces result combination.
+// MsgSwarmSynthesizing 宣告开始合并结果。
 func MsgSwarmSynthesizing(count int) string {
 	return fmt.Sprintf("Combining findings from %d agents", count)
 }
 
 // MsgSwarmCompleted announces swarm completion.
+// MsgSwarmCompleted 宣告 swarm 完成。
 func MsgSwarmCompleted() string { return "All done" }
 
 // MsgAgentStarted announces an agent beginning work.
+// MsgAgentStarted 宣告某个 agent 开始工作。
 func MsgAgentStarted(agentName string) string {
 	return fmt.Sprintf("%s is on it", agentName)
 }
 
 // MsgAgentCompleted announces an agent finishing work.
+// MsgAgentCompleted 宣告某个 agent 完成工作。
 func MsgAgentCompleted(agentName string) string {
 	return fmt.Sprintf("%s is done", agentName)
 }
 
 // humanizeAction converts a raw action name to user-friendly text.
+// humanizeAction 把原始 action 名转成对用户友好的文案。
 func humanizeAction(action string) string {
 	switch action {
 	case "tool_call":
@@ -411,6 +480,7 @@ func humanizeAction(action string) string {
 }
 
 // MsgAgentProgress reports agent iteration progress in UX-friendly terms.
+// MsgAgentProgress 用体验友好的措辞上报 agent 迭代进度。
 func MsgAgentProgress(agentName string, step, total int, action string) string {
 	friendly := humanizeAction(action)
 	return fmt.Sprintf("%s — %s (%d/%d)", agentName, friendly, step, total)
@@ -418,37 +488,47 @@ func MsgAgentProgress(agentName string, step, total int, action string) string {
 
 // -----------------------------------------------------------------------------
 // Citation Messages
+// 引用消息
 // -----------------------------------------------------------------------------
 
 // MsgCitationSkipped reports citation enrichment was skipped.
+// MsgCitationSkipped 上报跳过了引用补充。
 func MsgCitationSkipped() string { return "Skipping source attribution" }
 
 // -----------------------------------------------------------------------------
 // Browser Pattern Messages
+// Browser 模式消息
 // -----------------------------------------------------------------------------
 
 // MsgBrowserStarted announces browser automation start.
+// MsgBrowserStarted 宣告浏览器自动化开始。
 func MsgBrowserStarted() string { return "Opening browser" }
 
 // MsgBrowserAction reports browser iteration progress.
+// MsgBrowserAction 上报浏览器操作迭代进度。
 func MsgBrowserAction(step, total int) string {
 	return fmt.Sprintf("Browser action %d of %d", step, total)
 }
 
 // MsgBrowserAnalyzing indicates page analysis.
+// MsgBrowserAnalyzing 表示正在分析页面。
 func MsgBrowserAnalyzing() string { return "Analyzing page" }
 
 // MsgBrowserCompleted announces browser automation completion.
+// MsgBrowserCompleted 宣告浏览器自动化完成。
 func MsgBrowserCompleted() string { return "Browser task done" }
 
 // -----------------------------------------------------------------------------
 // Research Messages
+// 调研消息
 // -----------------------------------------------------------------------------
 
 // MsgResearchConfirmed announces research direction confirmed by user.
+// MsgResearchConfirmed 宣告用户已确认调研方向。
 func MsgResearchConfirmed() string { return "Got it — starting research" }
 
 // MsgResearchTimedOut announces research plan review timed out.
+// MsgResearchTimedOut 宣告调研方案审阅已超时。
 func MsgResearchTimedOut() string { return "Review timed out" }
 
 // extractSummary extracts a brief summary from response text.
@@ -483,9 +563,11 @@ func extractSummary(text string, maxLen int) string {
 
 // -----------------------------------------------------------------------------
 // Workflow Control Messages (pause/resume/cancel)
+// Workflow 控制消息（pause/resume/cancel）
 // -----------------------------------------------------------------------------
 
 // MsgWorkflowPausing formats a message when pause signal is received.
+// MsgWorkflowPausing 在收到 pause 信号时拼装消息。
 func MsgWorkflowPausing(reason string) string {
 	if reason == "" {
 		return "Pausing..."
@@ -494,11 +576,13 @@ func MsgWorkflowPausing(reason string) string {
 }
 
 // MsgWorkflowPaused formats a message when workflow is blocked at checkpoint.
+// MsgWorkflowPaused 在 workflow 于 checkpoint 被阻塞时拼装消息。
 func MsgWorkflowPaused() string {
 	return "Paused"
 }
 
 // MsgWorkflowResumed formats a message when workflow resumes.
+// MsgWorkflowResumed 在 workflow 恢复时拼装消息。
 func MsgWorkflowResumed(reason string) string {
 	if reason == "" {
 		return "Resuming"
@@ -507,6 +591,7 @@ func MsgWorkflowResumed(reason string) string {
 }
 
 // MsgWorkflowCancelling formats a message when cancel signal is received.
+// MsgWorkflowCancelling 在收到 cancel 信号时拼装消息。
 func MsgWorkflowCancelling(reason string) string {
 	if reason == "" {
 		return "Cancelling..."
@@ -515,6 +600,7 @@ func MsgWorkflowCancelling(reason string) string {
 }
 
 // MsgWorkflowCancelled formats a message when workflow is cancelled at checkpoint.
+// MsgWorkflowCancelled 在 workflow 于 checkpoint 被取消时拼装消息。
 func MsgWorkflowCancelled(reason string) string {
 	if reason == "" {
 		return "Cancelled"

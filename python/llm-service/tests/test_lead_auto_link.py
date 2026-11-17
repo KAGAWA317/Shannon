@@ -168,9 +168,9 @@ class TestExactSubstringMatch:
         精确子串匹配应胜过词重叠更高的候选。
         """
         available = {
-            "T1": "research pricing",          # 2/2 = 100% word overlap
+            "T1": "research pricing",          # 2/2 = 100% word overlap 注：2/2 = 100% 词重叠
             # 2/2 = 100% 词重叠
-            "T2": "analyze competitor pricing strategy",  # exact substring match
+            "T2": "analyze competitor pricing strategy",  # exact substring match 注：精确子串匹配
             # 精确子串匹配
         }
         claimed: set = set()

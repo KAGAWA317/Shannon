@@ -77,6 +77,5 @@ Rules:
 - If none found: {"domains": []}
 
 OUTPUT ONLY THE JSON OBJECT. NO OTHER TEXT.""",
-    "skip_output_validation": True,  # JSON output is short, skip length validation
-    # JSON 输出很短，跳过长度校验
+    "skip_output_validation": True,  # JSON output is short, skip length validation 注：JSON 输出较短，跳过长度校验
 }

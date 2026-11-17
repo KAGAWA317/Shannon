@@ -25,6 +25,7 @@ func LoadSkill(reader io.Reader) (*Skill, error) {
 	scanner.Buffer(make([]byte, 0, 64*1024), 2*1024*1024)
 
 	// Expect first line to be "---"
+	// 期望第一行是 "---"
 	if !scanner.Scan() {
 		if err := scanner.Err(); err != nil {
 			return nil, fmt.Errorf("failed to read skill file: %w", err)
@@ -38,6 +39,7 @@ func LoadSkill(reader io.Reader) (*Skill, error) {
 	}
 
 	// Read YAML frontmatter until second "---"
+	// 读取 YAML frontmatter，直到第二个 "---"
 	var frontmatter bytes.Buffer
 	foundEnd := false
 	for scanner.Scan() {
@@ -67,6 +69,7 @@ func LoadSkill(reader io.Reader) (*Skill, error) {
 	}
 
 	// Read remaining content as Markdown
+	// 把剩余内容作为 Markdown 读取
 	var content bytes.Buffer
 	for scanner.Scan() {
 		content.WriteString(scanner.Text() + "\n")
@@ -79,6 +82,7 @@ func LoadSkill(reader io.Reader) (*Skill, error) {
 	skill.Content = strings.TrimSpace(content.String())
 
 	// Validate required fields
+	// 校验必填字段
 	if err := validateSkill(&skill); err != nil {
 		return nil, err
 	}
@@ -94,6 +98,7 @@ func validateSkill(skill *Skill) error {
 	}
 
 	// Validate name format (alphanumeric, hyphens, underscores)
+	// 校验 name 格式（字母数字、连字符、下划线）
 	for _, r := range skill.Name {
 		if !isValidNameChar(r) {
 			return fmt.Errorf("skill name contains invalid character: %q (allowed: a-z, 0-9, -, _)", r)
@@ -101,6 +106,7 @@ func validateSkill(skill *Skill) error {
 	}
 
 	// Apply defaults
+	// 应用默认值
 	if skill.Version == "" {
 		skill.Version = "1.0.0"
 	}

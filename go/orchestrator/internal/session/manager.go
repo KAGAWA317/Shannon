@@ -23,23 +23,25 @@ type Manager struct {
 	client      *circuitbreaker.RedisWrapper
 	logger      *zap.Logger
 	ttl         time.Duration
-	maxHistory  int // Maximum messages to keep per session
+	maxHistory  int // Maximum messages to keep per session 注：每个 session 保留的最大消息数
 	mu          sync.RWMutex
-	localCache  map[string]*Session  // Local cache for performance
-	cacheAccess map[string]time.Time // Track last access time for LRU
+	localCache  map[string]*Session  // Local cache for performance 注：为提升性能的本地 cache
+	cacheAccess map[string]time.Time // Track last access time for LRU 注：记录最后访问时间，用于 LRU
 	maxSessions int
 }
 
 // ManagerConfig contains configuration for session manager
+// ManagerConfig 包含 session 管理器的配置
 type ManagerConfig struct {
-	MaxHistory int           // Maximum messages to keep per session (default: 500)
+	MaxHistory int           // Maximum messages to keep per session (default: 500) 注：每个 session 保留的最大消息数（默认 500）
 	// 每个 session 保留的最大消息数（默认 500）
-	TTL        time.Duration // Session expiry time (default: 30 days)
-	CacheSize  int           // Max sessions to keep in local cache (default: 10000)
+	TTL        time.Duration // Session expiry time (default: 30 days) 注：session 过期时间（默认 30 天）
+	CacheSize  int           // Max sessions to keep in local cache (default: 10000) 注：本地 cache 保留的最大 session 数（默认 10000）
 	// 本地 cache 保留的最大 session 数（默认 10000）
 }
 
 // NewManager creates a new session manager
+// NewManager 创建新的 session 管理器
 func NewManager(redisAddr string, logger *zap.Logger) (*Manager, error) {
 	return NewManagerWithConfig(redisAddr, logger, nil)
 }
@@ -48,21 +50,24 @@ func NewManager(redisAddr string, logger *zap.Logger) (*Manager, error) {
 // NewManagerWithConfig 使用指定配置创建 session 管理器
 func NewManagerWithConfig(redisAddr string, logger *zap.Logger, config *ManagerConfig) (*Manager, error) {
 	// Get Redis password from environment variable
+	// 从环境变量获取 Redis 密码
 	redisPassword := os.Getenv("REDIS_PASSWORD")
 
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:         redisAddr,
-		Password:     redisPassword, // Use environment variable
-		DB:           0,             // Default DB
+		Password:     redisPassword, // Use environment variable 注：使用环境变量
+		DB:           0,             // Default DB 注：默认 DB
 		DialTimeout:  5 * time.Second,
 		ReadTimeout:  3 * time.Second,
 		WriteTimeout: 3 * time.Second,
 	})
 
 	// Create circuit breaker wrapped client
+	// 创建带 circuit breaker 包装的 client
 	client := circuitbreaker.NewRedisWrapper(redisClient, logger)
 
 	// Test connection
+	// 测试连接
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -71,8 +76,9 @@ func NewManagerWithConfig(redisAddr string, logger *zap.Logger, config *ManagerC
 	}
 
 	// Apply defaults if no config provided
+	// 未提供配置时应用默认值
 	maxHistory := 500
-	ttl := 720 * time.Hour // 30 days default
+	ttl := 720 * time.Hour // 30 days default 注：默认 30 天
 	cacheSize := 10000
 
 	if config != nil {
@@ -99,6 +105,7 @@ func NewManagerWithConfig(redisAddr string, logger *zap.Logger, config *ManagerC
 }
 
 // CreateSession creates a new session
+// CreateSession 创建新 session
 func (m *Manager) CreateSession(ctx context.Context, userID string, tenantID string, metadata map[string]any) (*Session, error) {
 	sessionID := uuid.New().String()
 
@@ -115,11 +122,13 @@ func (m *Manager) CreateSession(ctx context.Context, userID string, tenantID str
 	}
 
 	// Store in Redis
+	// 存入 Redis
 	if err := m.saveSession(ctx, session); err != nil {
 		return nil, fmt.Errorf("failed to save session: %w", err)
 	}
 
 	// Cache locally
+	// 写入本地 cache
 	m.mu.Lock()
 	m.localCache[sessionID] = session
 	m.cleanupLocalCache()
@@ -153,6 +162,7 @@ func (m *Manager) CreateSessionWithID(ctx context.Context, sessionID string, use
 				zap.String("existing_owner", existing.UserID),
 			)
 			// Create new session with generated ID
+			// 用生成的 ID 创建新 session
 			return m.CreateSession(ctx, userID, tenantID, metadata)
 		}
 		// Session exists and belongs to same user - return existing
@@ -173,11 +183,13 @@ func (m *Manager) CreateSessionWithID(ctx context.Context, sessionID string, use
 	}
 
 	// Store in Redis
+	// 存入 Redis
 	if err := m.saveSession(ctx, session); err != nil {
 		return nil, fmt.Errorf("failed to save session: %w", err)
 	}
 
 	// Cache locally
+	// 写入本地 cache
 	m.mu.Lock()
 	m.localCache[sessionID] = session
 	m.cleanupLocalCache()
@@ -193,8 +205,10 @@ func (m *Manager) CreateSessionWithID(ctx context.Context, sessionID string, use
 }
 
 // GetSession retrieves a session by ID
+// GetSession 按 ID 获取 session
 func (m *Manager) GetSession(ctx context.Context, sessionID string) (*Session, error) {
 	// Check local cache first
+	// 先查本地 cache
 	m.mu.RLock()
 	if session, ok := m.localCache[sessionID]; ok {
 		m.mu.RUnlock()
@@ -204,6 +218,7 @@ func (m *Manager) GetSession(ctx context.Context, sessionID string) (*Session, e
 			return nil, ErrSessionExpired
 		}
 		// Update access time for LRU
+		// 更新访问时间，用于 LRU
 		m.mu.Lock()
 		m.cacheAccess[sessionID] = time.Now()
 		m.mu.Unlock()
@@ -213,6 +228,7 @@ func (m *Manager) GetSession(ctx context.Context, sessionID string) (*Session, e
 	metrics.SessionCacheMisses.Inc()
 
 	// Load from Redis
+	// 从 Redis 加载
 	key := m.sessionKey(sessionID)
 	data, err := m.client.Get(ctx, key).Bytes()
 	if err == redis.Nil {
@@ -227,6 +243,7 @@ func (m *Manager) GetSession(ctx context.Context, sessionID string) (*Session, e
 	}
 
 	// Check expiration
+	// 检查是否过期
 	if session.IsExpired() {
 		m.DeleteSession(ctx, sessionID)
 		return nil, ErrSessionExpired
@@ -237,6 +254,7 @@ func (m *Manager) GetSession(ctx context.Context, sessionID string) (*Session, e
 	if userCtx, err := authFromContext(ctx); err == nil && userCtx.TenantID != "" {
 		if session.TenantID != "" && session.TenantID != userCtx.TenantID {
 			// Do not leak existence
+			// 不泄露是否存在
 			return nil, ErrSessionNotFound
 		}
 	}
@@ -254,6 +272,7 @@ func (m *Manager) GetSession(ctx context.Context, sessionID string) (*Session, e
 }
 
 // UpdateSession updates an existing session
+// UpdateSession 更新已有 session
 func (m *Manager) UpdateSession(ctx context.Context, session *Session) error {
 	if session == nil {
 		return fmt.Errorf("session is nil")
@@ -262,11 +281,13 @@ func (m *Manager) UpdateSession(ctx context.Context, session *Session) error {
 	session.UpdatedAt = time.Now()
 
 	// Save to Redis
+	// 保存到 Redis
 	if err := m.saveSession(ctx, session); err != nil {
 		return fmt.Errorf("failed to save session: %w", err)
 	}
 
 	// Update local cache
+	// 更新本地 cache
 	m.mu.Lock()
 	m.localCache[session.ID] = session
 	m.mu.Unlock()
@@ -275,14 +296,17 @@ func (m *Manager) UpdateSession(ctx context.Context, session *Session) error {
 }
 
 // DeleteSession deletes a session
+// DeleteSession 删除 session
 func (m *Manager) DeleteSession(ctx context.Context, sessionID string) error {
 	// Remove from Redis
+	// 从 Redis 删除
 	key := m.sessionKey(sessionID)
 	if err := m.client.Del(ctx, key).Err(); err != nil {
 		return fmt.Errorf("failed to delete session: %w", err)
 	}
 
 	// Remove from local cache
+	// 从本地 cache 删除
 	m.mu.Lock()
 	delete(m.localCache, sessionID)
 	// Update cache size metric while holding the lock to avoid races
@@ -317,6 +341,7 @@ func (m *Manager) AddMessage(ctx context.Context, sessionID string, msg Message)
 	session.History = append(session.History, msg)
 
 	// Limit history size
+	// 限制历史长度
 	if len(session.History) > m.maxHistory {
 		session.History = session.History[len(session.History)-m.maxHistory:]
 	}
@@ -325,6 +350,7 @@ func (m *Manager) AddMessage(ctx context.Context, sessionID string, msg Message)
 }
 
 // UpdateContext updates session context
+// UpdateContext 更新 session context
 func (m *Manager) UpdateContext(ctx context.Context, sessionID string, key string, value any) error {
 	session, err := m.GetSession(ctx, sessionID)
 	if err != nil {
@@ -352,7 +378,7 @@ func (m *Manager) GetUserSessions(ctx context.Context, userID string) ([]*Sessio
 	for _, key := range keys {
 		data, err := m.client.Get(ctx, key).Bytes()
 		if err != nil {
-			continue // Skip failed sessions
+			continue // Skip failed sessions 注：跳过失败的 session
 		}
 
 		var session Session
@@ -361,6 +387,7 @@ func (m *Manager) GetUserSessions(ctx context.Context, userID string) ([]*Sessio
 		}
 
 		// Enforce tenant isolation if available
+		// 若可用则强制租户隔离
 		if userCtx, err := authFromContext(ctx); err == nil && userCtx.TenantID != "" {
 			if session.TenantID != "" && session.TenantID != userCtx.TenantID {
 				continue
@@ -376,6 +403,7 @@ func (m *Manager) GetUserSessions(ctx context.Context, userID string) ([]*Sessio
 }
 
 // CleanupExpired removes expired sessions
+// CleanupExpired 移除已过期的 session
 func (m *Manager) CleanupExpired(ctx context.Context) (int, error) {
 	pattern := "session:*"
 	keys, err := m.client.Keys(ctx, pattern).Result()
@@ -407,6 +435,7 @@ func (m *Manager) CleanupExpired(ctx context.Context) (int, error) {
 }
 
 // Private methods
+// 私有方法
 
 func (m *Manager) sessionKey(sessionID string) string {
 	return fmt.Sprintf("session:%s", sessionID)
@@ -432,6 +461,7 @@ func (m *Manager) cleanupLocalCache() {
 	// cache 过大时按 LRU 移除最旧的条目
 	if len(m.localCache) > m.maxSessions {
 		// Find the oldest accessed sessions
+		// 找出最久未访问的 session
 		type accessEntry struct {
 			id   string
 			time time.Time
@@ -449,6 +479,7 @@ func (m *Manager) cleanupLocalCache() {
 		}
 
 		// Sort by access time (oldest first)
+		// 按访问时间排序（最旧在前）
 		for i := 0; i < len(entries)-1; i++ {
 			for j := i + 1; j < len(entries); j++ {
 				if entries[j].time.Before(entries[i].time) {
@@ -458,6 +489,7 @@ func (m *Manager) cleanupLocalCache() {
 		}
 
 		// Remove the oldest half
+		// 移除最旧的一半
 		toRemove := m.maxSessions / 2
 		for i := 0; i < toRemove && i < len(entries); i++ {
 			delete(m.localCache, entries[i].id)
@@ -468,6 +500,7 @@ func (m *Manager) cleanupLocalCache() {
 }
 
 // Close closes the session manager
+// Close 关闭 session 管理器
 func (m *Manager) Close() error {
 	return m.client.Close()
 }

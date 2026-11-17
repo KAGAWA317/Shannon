@@ -16,10 +16,11 @@ import (
 )
 
 // Snippet length constants for citation extraction
+// 引用提取所用的 snippet 长度常量
 const (
-	MaxSnippetLength    = 4000 // Maximum characters for snippet content (V3: increased for better citation matching)
-	MinSnippetLength    = 30   // Minimum characters for a valid snippet
-	MinLLMSignalMatches = 2    // Required matches for weak signals and structured fields
+	MaxSnippetLength    = 4000 // Maximum characters for snippet content (V3: increased for better citation matching) 注：snippet 内容的最大字符数（V3：为提高引用匹配效果而调大）
+	MinSnippetLength    = 30   // Minimum characters for a valid snippet 注：有效 snippet 的最小字符数
+	MinLLMSignalMatches = 2    // Required matches for weak signals and structured fields 注：弱信号与结构化字段所需的匹配次数
 )
 
 // Citation represents a single source citation with quality metrics
@@ -27,21 +28,21 @@ const (
 type Citation struct {
 	URL              string     `json:"url"`
 	Title            string     `json:"title"`
-	Source           string     `json:"source"`      // domain name
-	SourceType       string     `json:"source_type"` // web|news|academic|social
-	ToolSource       string     `json:"tool_source"` // Citation V2: "search" or "fetch" (origin tool type)
+	Source           string     `json:"source"`      // domain name 注：域名
+	SourceType       string     `json:"source_type"` // web|news|academic|social 注：来源类型：web|news|academic|social
+	ToolSource       string     `json:"tool_source"` // Citation V2: "search" or "fetch" (origin tool type) 注：Citation V2：来源工具类型，"search" 或 "fetch"
 	RetrievedAt      time.Time  `json:"retrieved_at"`
 	PublishedDate    *time.Time `json:"published_date,omitempty"`
-	RelevanceScore   float64    `json:"relevance_score"`   // from search tool
-	QualityScore     float64    `json:"quality_score"`     // recency + completeness
-	CredibilityScore float64    `json:"credibility_score"` // domain reputation
+	RelevanceScore   float64    `json:"relevance_score"`   // from search tool 注：来自 search tool
+	QualityScore     float64    `json:"quality_score"`     // recency + completeness 注：时效性 + 完整性
+	CredibilityScore float64    `json:"credibility_score"` // domain reputation 注：域名信誉
 	AgentID          string     `json:"agent_id"`
 	Snippet          string     `json:"snippet"`
 	// P0-A: Fetch failure structuring for Citation V2
 	// P0-A：为 Citation V2 结构化抓取失败信息
-	StatusCode    int    `json:"status_code,omitempty"`    // HTTP status code (0 = unknown, 200 = success, 4xx/5xx = error)
-	BlockedReason string `json:"blocked_reason,omitempty"` // Non-empty if content was blocked/invalid
-	Content       string `json:"content,omitempty"`        // Full content for IsValid() check
+	StatusCode    int    `json:"status_code,omitempty"`    // HTTP status code (0 = unknown, 200 = success, 4xx/5xx = error) 注：HTTP 状态码（0 = 未知，200 = 成功，4xx/5xx = 出错）
+	BlockedReason string `json:"blocked_reason,omitempty"` // Non-empty if content was blocked/invalid 注：内容被拦截/无效时非空
+	Content       string `json:"content,omitempty"`        // Full content for IsValid() check 注：供 IsValid() 检查使用的完整内容
 }
 
 // IsValid returns true if the citation has valid, usable content for verification.
@@ -50,14 +51,17 @@ type Citation struct {
 // Citation V2 在 VerifyBatch 之前用它过滤无效来源。
 func (c *Citation) IsValid() bool {
 	// HTTP 4xx/5xx = invalid
+	// HTTP 4xx/5xx = 无效
 	if c.StatusCode >= 400 {
 		return false
 	}
 	// Blocked content = invalid
+	// 内容被拦截 = 无效
 	if c.BlockedReason != "" {
 		return false
 	}
 	// Content too short = invalid
+	// 内容过短 = 无效
 	contentLen := len(c.Content)
 	if contentLen == 0 {
 		contentLen = len(c.Snippet)
@@ -75,13 +79,14 @@ type CitationStats struct {
 	UniqueDomains   int     `json:"unique_domains"`
 	AvgQuality      float64 `json:"avg_quality"`
 	AvgCredibility  float64 `json:"avg_credibility"`
-	SourceDiversity float64 `json:"source_diversity"` // unique_domains / total_sources
+	SourceDiversity float64 `json:"source_diversity"` // unique_domains / total_sources 注：unique_domains / total_sources 即唯一域名数 / 来源总数
 
 	// P1-4: Extended metrics for observability
-	QualityBuckets map[string]int `json:"quality_buckets,omitempty"` // "low", "medium", "high" → count
-	TopDomains     []DomainCount  `json:"top_domains,omitempty"`     // Top 10 domains by count
-	DuplicateURLs  int            `json:"duplicate_urls,omitempty"`  // Number of duplicate URLs removed
-	PerAgentCount  map[string]int `json:"per_agent_count,omitempty"` // agent_id → citation count
+	// P1-4：为可观测性扩展的指标
+	QualityBuckets map[string]int `json:"quality_buckets,omitempty"` // "low", "medium", "high" → count 注："low"、"medium"、"high" → 数量
+	TopDomains     []DomainCount  `json:"top_domains,omitempty"`     // Top 10 domains by count 注：按数量排前 10 的域名
+	DuplicateURLs  int            `json:"duplicate_urls,omitempty"`  // Number of duplicate URLs removed 注：被移除的重复 URL 数量
+	PerAgentCount  map[string]int `json:"per_agent_count,omitempty"` // agent_id → citation count 注：agent_id → 引用数量
 }
 
 // DomainCount represents a domain and its citation count
@@ -92,6 +97,7 @@ type DomainCount struct {
 }
 
 // CredibilityConfig holds domain credibility scoring rules
+// CredibilityConfig 保存域名可信度评分规则
 type CredibilityConfig struct {
 	CredibilityRules struct {
 		TLDPatterns []struct {
@@ -237,29 +243,36 @@ func NormalizeURL(rawURL string) (string, error) {
 	}
 
 	// Validate URL has required components
+	// 校验 URL 是否具备必需组成部分
 	if parsed.Scheme == "" || parsed.Host == "" {
 		return "", fmt.Errorf("invalid URL: missing scheme or host")
 	}
 
 	// Only allow http/https schemes
+	// 只允许 http/https scheme
 	scheme := strings.ToLower(parsed.Scheme)
 	if scheme != "http" && scheme != "https" {
 		return "", fmt.Errorf("invalid URL scheme: %s", parsed.Scheme)
 	}
 
 	// Normalize scheme to lowercase
+	// 把 scheme 规范化为小写
 	parsed.Scheme = scheme
 
 	// Normalize host to lowercase
+	// 把 host 规范化为小写
 	parsed.Host = strings.ToLower(parsed.Host)
 
 	// Remove www. prefix for consistency
+	// 为保持一致性去掉 www. 前缀
 	parsed.Host = strings.TrimPrefix(parsed.Host, "www.")
 
 	// Remove fragment
+	// 去掉片段标识
 	parsed.Fragment = ""
 
 	// Remove tracking query parameters
+	// 去掉追踪类查询参数
 	if parsed.RawQuery != "" {
 		q := parsed.Query()
 		trackingParams := []string{
@@ -295,11 +308,13 @@ func ExtractDomain(rawURL string) (string, error) {
 	host := strings.ToLower(parsed.Host)
 
 	// Remove port if present
+	// 存在端口时去掉端口
 	if colonIndex := strings.Index(host, ":"); colonIndex != -1 {
 		host = host[:colonIndex]
 	}
 
 	// Remove www. prefix
+	// 去掉 www. 前缀
 	host = strings.TrimPrefix(host, "www.")
 
 	return host, nil
@@ -325,10 +340,12 @@ func ExtractDomain(rawURL string) (string, error) {
 // 完整性加分（有 published_date、title、snippet 时 +0.1）
 func ScoreQuality(relevance float64, publishedDate *time.Time, hasTitle, hasSnippet bool, now time.Time) float64 {
 	// Base score from relevance (70% weight)
+	// 基于相关性的基础分（权重 70%）
 	score := relevance * 0.7
 
 	// Recency score (30% weight)
-	recencyScore := 0.2 // default for old/unknown dates
+	// 时效性分（权重 30%）
+	recencyScore := 0.2 // default for old/unknown dates 注：日期较旧/未知时的默认值
 	if publishedDate != nil {
 		daysSincePublished := now.Sub(*publishedDate).Hours() / 24
 		switch {
@@ -345,6 +362,7 @@ func ScoreQuality(relevance float64, publishedDate *time.Time, hasTitle, hasSnip
 	score += recencyScore * 0.3
 
 	// Completeness bonus
+	// 完整性加分
 	completeness := 0.0
 	if publishedDate != nil {
 		completeness += 0.033
@@ -358,6 +376,7 @@ func ScoreQuality(relevance float64, publishedDate *time.Time, hasTitle, hasSnip
 	score += completeness
 
 	// Cap at 1.0
+	// 上限截到 1.0
 	if score > 1.0 {
 		score = 1.0
 	}
@@ -376,6 +395,7 @@ func ScoreCredibility(domain string) float64 {
 	domain = strings.ToLower(domain)
 
 	// Check TLD patterns first (highest priority)
+	// 先检查 TLD 模式（优先级最高）
 	for _, tldPattern := range config.CredibilityRules.TLDPatterns {
 		if strings.HasSuffix(domain, tldPattern.Suffix) {
 			return tldPattern.Score
@@ -399,6 +419,7 @@ func ScoreCredibility(domain string) float64 {
 	}
 
 	// Check domain groups
+	// 检查域名分组
 	for _, group := range config.CredibilityRules.DomainGroups {
 		for _, knownDomain := range group.Domains {
 			if domainMatches(domain, knownDomain) {
@@ -408,6 +429,7 @@ func ScoreCredibility(domain string) float64 {
 	}
 
 	// Return default score
+	// 返回默认分
 	if config.CredibilityRules.DefaultScore > 0 {
 		return config.CredibilityRules.DefaultScore
 	}
@@ -437,6 +459,7 @@ func CalculateSourceDiversity(citations []Citation) float64 {
 // extractCitationFromSearchResult 从 web_search 结果中提取 Citation
 func extractCitationFromSearchResult(result map[string]any, agentID string, now time.Time) (*Citation, error) {
 	// Extract required fields
+	// 提取必需字段
 	urlStr, ok := result["url"].(string)
 	if !ok || urlStr == "" {
 		return nil, fmt.Errorf("missing or invalid url")
@@ -453,27 +476,32 @@ func extractCitationFromSearchResult(result map[string]any, agentID string, now 
 	content, _ := result["content"].(string)
 
 	// Normalize URL for deduplication
+	// 规范化 URL 以便去重
 	normalizedURL, err := NormalizeURL(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to normalize URL: %w", err)
 	}
 
 	// Extract domain
+	// 提取域名
 	domain, err := ExtractDomain(normalizedURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract domain: %w", err)
 	}
 
 	// Ensure snippet is not empty
+	// 确保 snippet 非空
 	snippet = ensureSnippet(snippet, content, title, normalizedURL, MinSnippetLength)
 
 	// Extract scores and metadata
-	relevanceScore := 0.5 // default
+	// 提取评分与 metadata
+	relevanceScore := 0.5 // default 注：默认值
 	if score, ok := result["score"].(float64); ok {
 		relevanceScore = score
 	}
 
 	// Try to parse published date
+	// 尝试解析发布日期
 	var publishedDate *time.Time
 	if pubDateStr, ok := result["published_date"].(string); ok && pubDateStr != "" {
 		if parsed, err := time.Parse(time.RFC3339, pubDateStr); err == nil {
@@ -489,11 +517,13 @@ func extractCitationFromSearchResult(result map[string]any, agentID string, now 
 	}
 
 	// Calculate quality and credibility scores
+	// 计算质量分与可信度分
 	qualityScore := ScoreQuality(relevanceScore, publishedDate, title != "", snippet != "", now)
 	credibilityScore := ScoreCredibility(domain)
 
 	// Citation V2: extract tool_source field
-	toolSource := "search" // default for search results
+	// Citation V2：提取 tool_source 字段
+	toolSource := "search" // default for search results 注：search 结果的默认值
 	if ts, ok := result["tool_source"].(string); ok && ts != "" {
 		toolSource = ts
 	}
@@ -518,6 +548,7 @@ func extractCitationFromSearchResult(result map[string]any, agentID string, now 
 // extractCitationFromFetchResult 从 web_fetch 结果中提取 Citation
 func extractCitationFromFetchResult(result map[string]any, agentID string, now time.Time) (*Citation, error) {
 	// Extract required fields
+	// 提取必需字段
 	urlStr, ok := result["url"].(string)
 	if !ok || urlStr == "" {
 		return nil, fmt.Errorf("missing or invalid url")
@@ -536,21 +567,25 @@ func extractCitationFromFetchResult(result map[string]any, agentID string, now t
 	}
 
 	// Normalize URL
+	// 规范化 URL
 	normalizedURL, err := NormalizeURL(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to normalize URL: %w", err)
 	}
 
 	// Extract domain
+	// 提取域名
 	domain, err := ExtractDomain(normalizedURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract domain: %w", err)
 	}
 
 	// Ensure snippet is not empty
+	// 确保 snippet 非空
 	snippet = ensureSnippet(snippet, content, title, normalizedURL, MinSnippetLength)
 
 	// Try to parse published date
+	// 尝试解析发布日期
 	var publishedDate *time.Time
 	if pubDateStr, ok := result["published_date"].(string); ok && pubDateStr != "" {
 		if parsed, err := time.Parse(time.RFC3339, pubDateStr); err == nil {
@@ -563,18 +598,20 @@ func extractCitationFromFetchResult(result map[string]any, agentID string, now t
 	relevanceScore := 0.8
 
 	// Calculate quality and credibility scores
+	// 计算质量分与可信度分
 	qualityScore := ScoreQuality(relevanceScore, publishedDate, title != "", snippet != "", now)
 	credibilityScore := ScoreCredibility(domain)
 
 	// Citation V2: extract tool_source field
-	toolSource := "fetch" // default for fetch results
+	// Citation V2：提取 tool_source 字段
+	toolSource := "fetch" // default for fetch results 注：fetch 结果的默认值
 	if ts, ok := result["tool_source"].(string); ok && ts != "" {
 		toolSource = ts
 	}
 
 	// P0-A: Extract status_code and blocked_reason for validity filtering
 	// P0-A：提取 status_code 与 blocked_reason 用于有效性过滤
-	statusCode := 0 // 0 = unknown/legacy (treat as valid)
+	statusCode := 0 // 0 = unknown/legacy (treat as valid) 注：0 = 未知/历史数据（视为有效）
 	if sc, ok := result["status_code"].(float64); ok {
 		statusCode = int(sc)
 	} else if sc, ok := result["status_code"].(int); ok {
@@ -600,9 +637,10 @@ func extractCitationFromFetchResult(result map[string]any, agentID string, now t
 		AgentID:          agentID,
 		Snippet:          snippet,
 		// P0-A: Fetch failure fields
+		// P0-A：抓取失败相关字段
 		StatusCode:    statusCode,
 		BlockedReason: blockedReason,
-		Content:       content, // Store for IsValid() check
+		Content:       content, // Store for IsValid() check 注：供 IsValid() 检查使用
 	}, nil
 }
 
@@ -619,10 +657,11 @@ func extractCitationsFromResponse(response string, agentID string, now time.Time
 	// 常见格式：[{"url": "...", "title": "...", "snippet": "...", ...}, ...]
 	var results []map[string]any
 	if err := json.Unmarshal([]byte(response), &results); err != nil {
-		return citations // Not JSON array, no fallback possible
+		return citations // Not JSON array, no fallback possible 注：不是 JSON 数组，无法兜底
 	}
 
 	// Extract citations from parsed results
+	// 从解析结果中提取引用
 	for _, result := range results {
 		if citation, err := extractCitationFromSearchResult(result, agentID, now); err == nil {
 			citations = append(citations, *citation)
@@ -656,12 +695,12 @@ func containsLLMSignals(text string) bool {
 		"<parameter>", "</parameter>", "<invoke ",
 		"<web_fetch>", "</web_fetch>", "<web_search>", "</web_search>",
 		"<web_subpage_fetch>", "</web_subpage_fetch>",
-		"<attempt_", "</attempt_", // Generalized matching for <attempt_*> series
+		"<attempt_", "</attempt_", // Generalized matching for <attempt_*> series 注：对 <attempt_*> 系列的广义匹配
 
 		// Tool call structure residue (standalone words and JSON format)
 		// tool call 结构残留（独立词与 JSON 形式）
 		"tool_executions",
-		"web_subpage_fetch", // standalone match
+		"web_subpage_fetch", // standalone match 注：独立词匹配
 		`"tool": "web_fetch"`, `"tool": "web_search"`,
 		`'tool': 'web_fetch'`, `'tool': 'web_search'`,
 
@@ -674,14 +713,15 @@ func containsLLMSignals(text string) bool {
 
 		// Agent planning/meta-commentary statements (Phase 3)
 		// Agent 规划/元评论式语句（阶段 3）
-		"Direct fetch of",                  // Agent suggested action
-		"were not included in the initial", // Agent meta-commentary
-		"would be needed (these",           // Exact match with parenthesis
+		"Direct fetch of",                  // Agent suggested action 注：Agent 建议的动作
+		"were not included in the initial", // Agent meta-commentary 注：Agent 元评论
+		"would be needed (these",           // Exact match with parenthesis 注：带括号的精确匹配
 
 		// Agent structured output format
-		"**URL:**",              // Agent extracted URL field
-		"Key Business Products", // Agent analysis header
-		"Products Identified",   // Agent analysis header variant
+		// Agent 结构化输出格式
+		"**URL:**",              // Agent extracted URL field 注：Agent 提取出的 URL 字段
+		"Key Business Products", // Agent analysis header 注：Agent 分析标题
+		"Products Identified",   // Agent analysis header variant 注：Agent 分析标题的变体
 	}
 
 	for _, sig := range strongSignals {
@@ -694,10 +734,13 @@ func containsLLMSignals(text string) bool {
 	// 提取类关键词：弱信号必须与这些词同时出现才触发
 	extractionKeywords := []string{
 		// Chinese
+		// 中文
 		"提取", "抽取", "整理", "获取结果",
 		// Japanese
+		// 日文
 		"抽出", "取得",
 		// English
+		// 英文
 		"extract", "retriev",
 	}
 
@@ -753,7 +796,7 @@ func containsLLMSignals(text string) bool {
 	// Weak signals: require ≥2 matches + extraction keyword
 	// 弱信号：需要 ≥2 次匹配 + 提取类关键词
 	if !hasExtractionKeyword {
-		return false // No extraction keyword, weak signals don't trigger
+		return false // No extraction keyword, weak signals don't trigger 注：无提取类关键词时弱信号不触发
 	}
 
 	weakSignals := []string{
@@ -764,9 +807,11 @@ func containsLLMSignals(text string) bool {
 		"ツールで", "抽出しました", "取得しました",
 
 		// English weak signals
+		// 英文弱信号
 		"I found", "Let me", "Based on my", "Here is the",
 
 		// Markdown structure weak signals
+		// Markdown 结构弱信号
 		"## 基本", "## 概要", "## Summary",
 		"**公司", "**企業", "**Company",
 	}
@@ -796,11 +841,13 @@ func ensureSnippet(snippet, content, title, urlStr string, minLen int) string {
 	}
 
 	// Already has sufficient clean snippet
+	// 已有足够干净的 snippet
 	if len([]rune(snippet)) >= minLen {
 		return snippet
 	}
 
 	// Try content (also check for pollution)
+	// 尝试 content（同时检查是否含污染）
 	if len([]rune(content)) >= minLen && !containsLLMSignals(content) {
 		return truncateRunes(content, MaxSnippetLength)
 	}
@@ -841,6 +888,7 @@ func extractCitationsFromPlainTextResponse(response string, agentID string, now 
 	}
 
 	// Deduplicate per-response by normalized URL
+	// 按规范化 URL 在单次 response 内去重
 	seen := make(map[string]bool)
 
 	// Some models wrap URLs with tags like <url>...</url> or include encoded variants.
@@ -866,7 +914,9 @@ func extractCitationsFromPlainTextResponse(response string, agentID string, now 
 	}
 
 	// trimNonASCIISuffix truncates the URL at the first non-ASCII character
+	// trimNonASCIISuffix 在首个非 ASCII 字符处截断 URL
 	// This handles cases where Chinese text (e.g., "（个人介绍）") is attached to URLs
+	// 用于处理中文文本（如 "（个人介绍）"）紧跟在 URL 之后的情况
 	trimNonASCIISuffix := func(s string) string {
 		for i := 0; i < len(s); i++ {
 			if s[i] > 127 {
@@ -946,6 +996,7 @@ func extractCitationsFromPlainTextResponse(response string, agentID string, now 
 		// 在首个非 ASCII 字符处截断（如中文括号）
 		raw = trimNonASCIISuffix(raw)
 		// Normalize URL
+		// 规范化 URL
 		normalized, err := NormalizeURL(raw)
 		if err != nil || normalized == "" {
 			continue
@@ -969,16 +1020,17 @@ func extractCitationsFromPlainTextResponse(response string, agentID string, now 
 		snippet := getSnippet(start, end)
 
 		// Conservative relevance for narrative references
+		// 叙述性引用采用保守的相关度
 		relevance := 0.4
 		quality := ScoreQuality(relevance, nil, false, snippet != "", now)
 		credibility := ScoreCredibility(domain)
 
 		citations = append(citations, Citation{
 			URL:              normalized,
-			Title:            "", // Unknown in plain text; formatter will display URL/domain
+			Title:            "", // Unknown in plain text; formatter will display URL/domain 注：纯文本中未知；formatter 会展示 URL/域名
 			Source:           domain,
 			SourceType:       "web",
-			ToolSource:       "", // Citation V2: unknown origin (URL scan fallback)
+			ToolSource:       "", // Citation V2: unknown origin (URL scan fallback) 注：Citation V2：来源未知（URL 扫描兜底）
 			RetrievedAt:      now,
 			PublishedDate:    nil,
 			RelevanceScore:   relevance,
@@ -1049,6 +1101,7 @@ func extractCitationsFromToolOutput(toolName string, output any, agentID string,
 				for _, page := range pages {
 					if pageMap, ok := page.(map[string]any); ok {
 						// Only extract from successful pages
+						// 只从成功的页面中提取
 						if success, _ := pageMap["success"].(bool); success {
 							appendPage(pageMap)
 						}
@@ -1056,6 +1109,7 @@ func extractCitationsFromToolOutput(toolName string, output any, agentID string,
 				}
 			} else {
 				// Single page format (backward compatible)
+				// 单页格式（向后兼容）
 				appendPage(m)
 			}
 		}
@@ -1068,6 +1122,7 @@ func extractCitationsFromToolOutput(toolName string, output any, agentID string,
 				citations = append(citations, multi...)
 			} else {
 				// Fallback: treat as single page fetch
+				// 兜底：按单页抓取处理
 				appendPage(m)
 			}
 		}
@@ -1085,12 +1140,13 @@ func extractCitationsFromToolOutput(toolName string, output any, agentID string,
 // 返回前 N 条引用及汇总统计
 func CollectCitations(results []any, now time.Time, maxCitations int) ([]Citation, CitationStats) {
 	if maxCitations <= 0 {
-		maxCitations = 200 // default
+		maxCitations = 200 // default 注：默认值
 	}
 
 	var allCitations []Citation
 
 	// Step 1: Extract from tool executions
+	// 步骤 1：从 tool 执行记录中提取
 	for _, resultInterface := range results {
 		// Try to cast to map[string]interface{} first (common case)
 		// 先尝试断言为 map[string]interface{}（常见情况）
@@ -1137,11 +1193,13 @@ func CollectCitations(results []any, now time.Time, maxCitations int) ([]Citatio
 		// 同时尝试从 agent response 文本中提取（tool 载荷被截断或缺失时有用）
 		if responseStr, ok := resultMap["response"].(string); ok && strings.TrimSpace(responseStr) != "" {
 			// 1) Try structured JSON array fallback
+			// 1）尝试结构化 JSON 数组兜底
 			fallbackCitations := extractCitationsFromResponse(responseStr, agentID, now)
 			if len(fallbackCitations) > 0 {
 				allCitations = append(allCitations, fallbackCitations...)
 			} else {
 				// 2) Plain-text URL scan fallback
+				// 2）纯文本 URL 扫描兜底
 				plain := extractCitationsFromPlainTextResponse(responseStr, agentID, now)
 				allCitations = append(allCitations, plain...)
 			}
@@ -1157,6 +1215,7 @@ func CollectCitations(results []any, now time.Time, maxCitations int) ([]Citatio
 	allCitations = sanitizeCitations(allCitations)
 
 	// Step 2: Deduplicate by normalized URL
+	// 步骤 2：按规范化 URL 去重
 	dedupedCitations := deduplicateCitations(allCitations)
 
 	// Step 3: Enforce diversity (max N per domain)
@@ -1181,6 +1240,7 @@ func CollectCitations(results []any, now time.Time, maxCitations int) ([]Citatio
 	rankedCitations := rankAndLimit(filteredCitations, maxCitations)
 
 	// Step 5: Calculate aggregate stats
+	// 步骤 5：计算汇总统计
 	stats := calculateCitationStats(rankedCitations)
 
 	if isCitationsDebugEnabled() {
@@ -1188,6 +1248,7 @@ func CollectCitations(results []any, now time.Time, maxCitations int) ([]Citatio
 			len(rankedCitations), stats.UniqueDomains, stats.AvgQuality, stats.AvgCredibility)
 
 		// P1-4: Extended metrics logging
+		// P1-4：扩展指标日志
 		log.Printf("[citations] quality_buckets: low=%d medium=%d high=%d",
 			stats.QualityBuckets["low"], stats.QualityBuckets["medium"], stats.QualityBuckets["high"])
 
@@ -1198,7 +1259,7 @@ func CollectCitations(results []any, now time.Time, maxCitations int) ([]Citatio
 					topDomainsStr.WriteString(", ")
 				}
 				fmt.Fprintf(&topDomainsStr, "%s(%d)", d.Domain, d.Count)
-				if i >= 4 { // Show top 5 in log
+				if i >= 4 { // Show top 5 in log 注：日志中展示前 5 条
 					break
 				}
 			}
@@ -1258,6 +1319,7 @@ func deduplicateCitations(citations []Citation) []Citation {
 				deduped[idx].PublishedDate = citation.PublishedDate
 			}
 			// Relevance: prefer higher
+			// 相关度：取更高者
 			if citation.RelevanceScore > deduped[idx].RelevanceScore {
 				deduped[idx].RelevanceScore = citation.RelevanceScore
 			}
@@ -1326,8 +1388,10 @@ func extractArxivID(rawURL string) string {
 	}
 	last := parts[len(parts)-1]
 	// Strip .pdf if present
+	// 存在 .pdf 时去掉
 	last = strings.TrimSuffix(last, ".pdf")
 	// abs/<id> or pdf/<id>
+	// abs/<id> 或 pdf/<id>
 	if len(parts) >= 2 {
 		return last
 	}
@@ -1340,6 +1404,7 @@ func extractArxivID(rawURL string) string {
 // 识别：主机含 doi.org、查询参数 "doi"，或路径中的 DOI 模式
 func extractDOIFromURL(u *url.URL) string {
 	// doi.org host
+	// doi.org 主机
 	if strings.Contains(strings.ToLower(u.Host), "doi.org") {
 		doi := strings.Trim(u.Path, "/")
 		if doi != "" {
@@ -1440,11 +1505,13 @@ func rankAndLimit(citations []Citation, limit int) []Citation {
 	}
 
 	// Sort by combined score (quality * credibility)
+	// 按综合分（quality * credibility）排序
 	sorted := make([]Citation, len(citations))
 	copy(sorted, citations)
 	sortByScore(sorted)
 
 	// Limit to top N
+	// 截取前 N 条
 	if len(sorted) > limit {
 		sorted = sorted[:limit]
 	}
@@ -1458,11 +1525,12 @@ func sortByScore(citations []Citation) {
 	sort.Slice(citations, func(i, j int) bool {
 		scoreI := citations[i].QualityScore * citations[i].CredibilityScore
 		scoreJ := citations[j].QualityScore * citations[j].CredibilityScore
-		return scoreI > scoreJ // descending order
+		return scoreI > scoreJ // descending order 注：降序
 	})
 }
 
 // calculateCitationStats computes aggregate statistics
+// calculateCitationStats 计算汇总统计
 func calculateCitationStats(citations []Citation) CitationStats {
 	if len(citations) == 0 {
 		return CitationStats{}
@@ -1484,6 +1552,7 @@ func calculateCitationStats(citations []Citation) CitationStats {
 		totalCredibility += c.CredibilityScore
 
 		// P1-4: Quality buckets
+		// P1-4：质量分桶
 		switch {
 		case c.QualityScore < 0.3:
 			qualityBuckets["low"]++
@@ -1494,12 +1563,14 @@ func calculateCitationStats(citations []Citation) CitationStats {
 		}
 
 		// P1-4: Duplicate URL tracking
+		// P1-4：重复 URL 统计
 		if urlSet[c.URL] {
 			duplicateURLs++
 		}
 		urlSet[c.URL] = true
 
 		// P1-4: Per-agent count
+		// P1-4：按 agent 计数
 		if c.AgentID != "" {
 			perAgentCount[c.AgentID]++
 		}
@@ -1526,17 +1597,20 @@ func calculateCitationStats(citations []Citation) CitationStats {
 // getTopDomains 按引用数返回前 N 个域名
 func getTopDomains(domainCounts map[string]int, n int) []DomainCount {
 	// Convert to slice for sorting
+	// 转成切片以便排序
 	domains := make([]DomainCount, 0, len(domainCounts))
 	for domain, count := range domainCounts {
 		domains = append(domains, DomainCount{Domain: domain, Count: count})
 	}
 
 	// Sort by count descending
+	// 按数量降序排序
 	sort.Slice(domains, func(i, j int) bool {
 		return domains[i].Count > domains[j].Count
 	})
 
 	// Take top N
+	// 取前 N 个
 	if len(domains) > n {
 		domains = domains[:n]
 	}
@@ -1558,6 +1632,7 @@ func extractCitationsFromMultiPageResult(output map[string]any, agentID string, 
 	var citations []Citation
 
 	// 1. Get metadata.urls
+	// 1. 获取 metadata.urls
 	metadata, ok := output["metadata"].(map[string]any)
 	if !ok {
 		return nil
@@ -1568,6 +1643,7 @@ func extractCitationsFromMultiPageResult(output map[string]any, agentID string, 
 	}
 
 	// 2. Get merged content
+	// 2. 获取合并后的 content
 	content := ""
 	if c, ok := output["content"].(string); ok {
 		content = c
@@ -1584,6 +1660,7 @@ func extractCitationsFromMultiPageResult(output map[string]any, agentID string, 
 	}
 
 	// 4. Create citation for each URL
+	// 4. 为每个 URL 创建引用
 	for _, urlVal := range urlsRaw {
 		urlStr, ok := urlVal.(string)
 		if !ok || urlStr == "" {
@@ -1627,7 +1704,7 @@ func extractCitationsFromMultiPageResult(output map[string]any, agentID string, 
 		// Citation V2: extract tool_source from output
 		// 构建完整的 Citation 并正确评分
 		// Citation V2：从输出中提取 tool_source
-		toolSource := "fetch" // default for multi-page fetch
+		toolSource := "fetch" // default for multi-page fetch 注：多页抓取的默认值
 		if ts, ok := output["tool_source"].(string); ok && ts != "" {
 			toolSource = ts
 		}
@@ -1639,7 +1716,7 @@ func extractCitationsFromMultiPageResult(output map[string]any, agentID string, 
 			SourceType:     "web",
 			ToolSource:     toolSource,
 			RetrievedAt:    now,
-			RelevanceScore: 0.8, // fetch tools get fixed 0.8
+			RelevanceScore: 0.8, // fetch tools get fixed 0.8 注：fetch 类 tool 固定 0.8
 			AgentID:        agentID,
 			Snippet:        snippet,
 		}
@@ -1682,14 +1759,16 @@ func parseMultiPageContent(content string) map[string]pageInfo {
 		}
 
 		// Extract URL from the header
+		// 从标题行中提取 URL
 		urlStart, urlEnd := match[2], match[3]
 		pageURL := strings.TrimSpace(content[urlStart:urlEnd])
 
 		// Determine content range for this page
-		contentStart := match[1] // end of header line
+		// 确定本页的内容范围
+		contentStart := match[1] // end of header line 注：标题行结束位置
 		contentEnd := len(content)
 		if i+1 < len(matches) {
-			contentEnd = matches[i+1][0] // start of next header
+			contentEnd = matches[i+1][0] // start of next header 注：下一个标题的起始位置
 		}
 
 		pageContent := content[contentStart:contentEnd]
@@ -1726,6 +1805,7 @@ func extractTitleFromPageContent(content string) string {
 			continue
 		}
 		// Look for **title** pattern
+		// 查找 **title** 模式
 		if strings.HasPrefix(line, "**") && strings.HasSuffix(line, "**") {
 			return strings.Trim(line, "*")
 		}
@@ -1749,6 +1829,7 @@ func extractSnippetFromPageContent(content string, maxLen int) string {
 			continue
 		}
 		// Skip title line if present
+		// 存在标题行时跳过
 		if skipFirstLines && strings.HasPrefix(line, "**") && strings.HasSuffix(line, "**") {
 			skipFirstLines = false
 			continue
@@ -1756,6 +1837,7 @@ func extractSnippetFromPageContent(content string, maxLen int) string {
 		skipFirstLines = false
 
 		// Skip markdown separators
+		// 跳过 markdown 分隔线
 		if line == "---" || strings.HasPrefix(line, "# ") || strings.HasPrefix(line, "## ") {
 			continue
 		}
@@ -1818,6 +1900,7 @@ func shouldSkipURL(urlStr string) bool {
 	// 跳过低价值页面类型（authentication、搜索、错误、法务、表单）
 	lowValuePatterns := []string{
 		// Authentication pages
+		// 认证页面
 		"/login", "/signin", "/sign-in", "/auth",
 		"/register", "/signup", "/sign-up",
 		"/logout", "/signout", "/sign-out",
@@ -1825,6 +1908,7 @@ func shouldSkipURL(urlStr string) bool {
 		// 搜索/结果页（通常不适合作为引用）
 		"/search", "/results",
 		// Error pages
+		// 错误页面
 		"/404", "/error", "not-found", "/500",
 		// Legal/policy pages (boilerplate, not useful for research)
 		// 法务/政策页（样板文本，对研究无用）
@@ -1845,6 +1929,7 @@ func shouldSkipURL(urlStr string) bool {
 	}
 
 	// Skip URLs with search query parameters
+	// 跳过带搜索查询参数的 URL
 	if strings.Contains(lower, "?q=") || strings.Contains(lower, "?search=") || strings.Contains(lower, "?query=") {
 		return true
 	}
@@ -1890,8 +1975,8 @@ func FilterValidCitations(citations []Citation) ([]Citation, int, []string) {
 // CitationWithID wraps Citation with a sequential ID for verification tracking
 // CitationWithID 为 Citation 包装顺序 ID，便于校验时跟踪
 type CitationWithID struct {
-	ID       int      `json:"id"`       // Sequential ID (1, 2, 3...)
-	Citation Citation `json:"citation"` // Original citation data
+	ID       int      `json:"id"`       // Sequential ID (1, 2, 3...) 注：顺序 ID（1, 2, 3...）
+	Citation Citation `json:"citation"` // Original citation data 注：原始引用数据
 }
 
 // assignSequentialIDs wraps citations with 1-indexed sequential IDs, preserving order.
@@ -1900,7 +1985,7 @@ func assignSequentialIDs(citations []Citation) []CitationWithID {
 	result := make([]CitationWithID, len(citations))
 	for i, c := range citations {
 		result[i] = CitationWithID{
-			ID:       i + 1, // 1-indexed
+			ID:       i + 1, // 1-indexed 注：从 1 开始编号
 			Citation: c,
 		}
 	}
@@ -1922,6 +2007,7 @@ func assignSequentialIDs(citations []Citation) []CitationWithID {
 // 返回按 quality*credibility 降序排序、ID 从 1 开始递增的引用
 func FilterFetchOnlyAndAssignIDs(citations []Citation) []CitationWithID {
 	// Filter to fetch-only citations
+	// 过滤为仅 fetch 来源的引用
 	var fetchCitations []Citation
 	for _, c := range citations {
 		if c.ToolSource == "fetch" {
@@ -1934,6 +2020,7 @@ func FilterFetchOnlyAndAssignIDs(citations []Citation) []CitationWithID {
 	sortByScore(fetchCitations)
 
 	// Assign sequential IDs (1-indexed)
+	// 分配顺序 ID（从 1 开始）
 	result := assignSequentialIDs(fetchCitations)
 
 	if isCitationsDebugEnabled() {
@@ -1964,6 +2051,7 @@ func AssignIDsToAllCitations(citations []Citation) []CitationWithID {
 	sortByScore(sortedCitations)
 
 	// Assign sequential IDs (1-indexed)
+	// 分配顺序 ID（从 1 开始）
 	result := assignSequentialIDs(sortedCitations)
 
 	if isCitationsDebugEnabled() {
@@ -1985,12 +2073,14 @@ func FilterByIDs(citations []CitationWithID, ids []int) []CitationWithID {
 	}
 
 	// Build ID lookup set
+	// 构建 ID 查找集合
 	idSet := make(map[int]bool, len(ids))
 	for _, id := range ids {
 		idSet[id] = true
 	}
 
 	// Filter to matching IDs
+	// 过滤出匹配的 ID
 	var result []CitationWithID
 	for _, c := range citations {
 		if idSet[c.ID] {

@@ -18,6 +18,7 @@ import (
 )
 
 // SessionServiceImpl implements the Session gRPC service
+// SessionServiceImpl 实现 Session gRPC 服务
 type SessionServiceImpl struct {
 	pb.UnimplementedSessionServiceServer
 	manager *session.Manager
@@ -25,6 +26,7 @@ type SessionServiceImpl struct {
 }
 
 // NewSessionService creates a new session service
+// NewSessionService 创建新的 session 服务
 func NewSessionService(manager *session.Manager, logger *zap.Logger) *SessionServiceImpl {
 	return &SessionServiceImpl{
 		manager: manager,
@@ -33,6 +35,7 @@ func NewSessionService(manager *session.Manager, logger *zap.Logger) *SessionSer
 }
 
 // CreateSession creates a new session
+// CreateSession 创建新 session
 func (s *SessionServiceImpl) CreateSession(ctx context.Context, req *pb.CreateSessionRequest) (*pb.CreateSessionResponse, error) {
 	s.logger.Info("Creating new session",
 		zap.String("user_id", req.UserId),
@@ -41,12 +44,14 @@ func (s *SessionServiceImpl) CreateSession(ctx context.Context, req *pb.CreateSe
 	)
 
 	// Convert protobuf struct to map
+	// 把 protobuf struct 转换为 map
 	initialContext := make(map[string]any)
 	if req.InitialContext != nil {
 		initialContext = req.InitialContext.AsMap()
 	}
 
 	// Set max history if provided
+	// 若提供了 max history 则设置
 	if req.MaxHistory > 0 {
 		initialContext["max_history"] = req.MaxHistory
 	}
@@ -59,6 +64,7 @@ func (s *SessionServiceImpl) CreateSession(ctx context.Context, req *pb.CreateSe
 	}
 
 	// Create session (tenant-aware)
+	// 创建 session（支持租户）
 	sess, err := s.manager.CreateSession(ctx, req.UserId, tenantID, initialContext)
 	if err != nil {
 		s.logger.Error("Failed to create session", zap.Error(err))
@@ -69,7 +75,8 @@ func (s *SessionServiceImpl) CreateSession(ctx context.Context, req *pb.CreateSe
 	}
 
 	// Calculate expiration time
-	expiresAt := time.Now().Add(720 * time.Hour) // Default 30 days
+	// 计算过期时间
+	expiresAt := time.Now().Add(720 * time.Hour) // Default 30 days 注：默认 30 天
 	if req.TtlSeconds > 0 {
 		expiresAt = time.Now().Add(time.Duration(req.TtlSeconds) * time.Second)
 	}
@@ -84,6 +91,7 @@ func (s *SessionServiceImpl) CreateSession(ctx context.Context, req *pb.CreateSe
 }
 
 // GetSession retrieves session details
+// GetSession 获取 session 详情
 func (s *SessionServiceImpl) GetSession(ctx context.Context, req *pb.GetSessionRequest) (*pb.GetSessionResponse, error) {
 	s.logger.Info("Getting session",
 		zap.String("session_id", req.SessionId),
@@ -106,6 +114,7 @@ func (s *SessionServiceImpl) GetSession(ctx context.Context, req *pb.GetSessionR
 	}
 
 	// Convert session to protobuf
+	// 把 session 转换为 protobuf
 	pbSession := s.sessionToProto(sess, req.IncludeHistory)
 
 	return &pb.GetSessionResponse{
@@ -116,6 +125,7 @@ func (s *SessionServiceImpl) GetSession(ctx context.Context, req *pb.GetSessionR
 }
 
 // UpdateSession updates session context
+// UpdateSession 更新 session context
 func (s *SessionServiceImpl) UpdateSession(ctx context.Context, req *pb.UpdateSessionRequest) (*pb.UpdateSessionResponse, error) {
 	s.logger.Info("Updating session",
 		zap.String("session_id", req.SessionId),
@@ -123,6 +133,7 @@ func (s *SessionServiceImpl) UpdateSession(ctx context.Context, req *pb.UpdateSe
 	)
 
 	// Get existing session
+	// 获取已有 session
 	sess, err := s.manager.GetSession(ctx, req.SessionId)
 	if err != nil {
 		if err == session.ErrSessionNotFound {
@@ -140,6 +151,7 @@ func (s *SessionServiceImpl) UpdateSession(ctx context.Context, req *pb.UpdateSe
 	}
 
 	// Update context if provided
+	// 若提供了 context 则更新
 	if req.ContextUpdates != nil {
 		updates := req.ContextUpdates.AsMap()
 		if sess.Context == nil {
@@ -149,6 +161,7 @@ func (s *SessionServiceImpl) UpdateSession(ctx context.Context, req *pb.UpdateSe
 	}
 
 	// Extend TTL if requested
+	// 若请求则延长 TTL
 	var newExpires time.Time
 	if req.ExtendTtlSeconds > 0 {
 		ttlDuration := time.Duration(req.ExtendTtlSeconds) * time.Second
@@ -166,6 +179,7 @@ func (s *SessionServiceImpl) UpdateSession(ctx context.Context, req *pb.UpdateSe
 	}
 
 	// Update session
+	// 更新 session
 	err = s.manager.UpdateSession(ctx, sess)
 	if err != nil {
 		s.logger.Error("Failed to update session", zap.Error(err))
@@ -185,6 +199,7 @@ func (s *SessionServiceImpl) UpdateSession(ctx context.Context, req *pb.UpdateSe
 }
 
 // DeleteSession deletes a session
+// DeleteSession 删除 session
 func (s *SessionServiceImpl) DeleteSession(ctx context.Context, req *pb.DeleteSessionRequest) (*pb.DeleteSessionResponse, error) {
 	s.logger.Info("Deleting session", zap.String("session_id", req.SessionId))
 
@@ -213,6 +228,7 @@ func (s *SessionServiceImpl) DeleteSession(ctx context.Context, req *pb.DeleteSe
 }
 
 // ListSessions lists user sessions
+// ListSessions 列出用户的 session
 func (s *SessionServiceImpl) ListSessions(ctx context.Context, req *pb.ListSessionsRequest) (*pb.ListSessionsResponse, error) {
 	s.logger.Info("Listing sessions",
 		zap.String("user_id", req.UserId),
@@ -241,6 +257,7 @@ func (s *SessionServiceImpl) AddMessage(ctx context.Context, req *pb.AddMessageR
 	)
 
 	// Convert protobuf message to internal format
+	// 把 protobuf 消息转换为内部格式
 	msg := session.Message{
 		ID:        req.Message.Id,
 		Role:      req.Message.Role,
@@ -266,6 +283,7 @@ func (s *SessionServiceImpl) AddMessage(ctx context.Context, req *pb.AddMessageR
 	}
 
 	// Get updated history size
+	// 获取更新后的历史长度
 	sess, _ := s.manager.GetSession(ctx, req.SessionId)
 	historySize := 0
 	if sess != nil {
@@ -281,6 +299,7 @@ func (s *SessionServiceImpl) AddMessage(ctx context.Context, req *pb.AddMessageR
 }
 
 // ClearHistory clears session message history
+// ClearHistory 清空 session 的消息历史
 func (s *SessionServiceImpl) ClearHistory(ctx context.Context, req *pb.ClearHistoryRequest) (*pb.ClearHistoryResponse, error) {
 	s.logger.Info("Clearing session history",
 		zap.String("session_id", req.SessionId),
@@ -288,6 +307,7 @@ func (s *SessionServiceImpl) ClearHistory(ctx context.Context, req *pb.ClearHist
 	)
 
 	// Get session
+	// 获取 session
 	sess, err := s.manager.GetSession(ctx, req.SessionId)
 	if err != nil {
 		if err == session.ErrSessionNotFound {
@@ -305,14 +325,17 @@ func (s *SessionServiceImpl) ClearHistory(ctx context.Context, req *pb.ClearHist
 	}
 
 	// Clear history
+	// 清空历史
 	sess.History = []session.Message{}
 
 	// Clear context if requested
+	// 若请求则清空 context
 	if !req.KeepContext {
 		sess.Context = make(map[string]any)
 	}
 
 	// Update session
+	// 更新 session
 	err = s.manager.UpdateSession(ctx, sess)
 	if err != nil {
 		s.logger.Error("Failed to clear history", zap.Error(err))
@@ -338,16 +361,18 @@ func (s *SessionServiceImpl) sessionToProto(sess *session.Session, includeHistor
 		UserId:     sess.UserID,
 		CreatedAt:  timestamppb.New(sess.CreatedAt),
 		LastActive: timestamppb.New(sess.UpdatedAt),
-		ExpiresAt:  timestamppb.New(sess.CreatedAt.Add(720 * time.Hour)), // Default 30 days
+		ExpiresAt:  timestamppb.New(sess.CreatedAt.Add(720 * time.Hour)), // Default 30 days 注：默认 30 天
 	}
 
 	// Convert context to protobuf struct
+	// 把 context 转换为 protobuf struct
 	if sess.Context != nil {
 		pbContext, _ := structpb.NewStruct(sess.Context)
 		pbSession.Context = pbContext
 	}
 
 	// Include history if requested
+	// 若请求则包含历史
 	if includeHistory {
 		pbSession.History = make([]*pb.Message, len(sess.History))
 		for i, msg := range sess.History {
@@ -361,6 +386,7 @@ func (s *SessionServiceImpl) sessionToProto(sess *session.Session, includeHistor
 	}
 
 	// Add metrics (from session totals)
+	// 添加指标（取自 session 累计值）
 	pbSession.Metrics = &pb.SessionMetrics{
 		TotalMessages: int32(len(sess.History)),
 		TotalTokens:   int32(sess.TotalTokensUsed),

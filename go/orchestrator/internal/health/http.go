@@ -47,12 +47,13 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	overall := h.manager.GetOverallHealth(ctx)
 
 	// Set HTTP status based on health
+	// 依据健康状态设置 HTTP status
 	var statusCode int
 	switch overall.Status {
 	case StatusHealthy:
 		statusCode = http.StatusOK
 	case StatusDegraded:
-		statusCode = http.StatusOK // Still OK but with warning
+		statusCode = http.StatusOK // Still OK but with warning 注：仍为 OK，但带告警
 	case StatusUnhealthy:
 		statusCode = http.StatusServiceUnavailable
 	default:
@@ -160,6 +161,7 @@ func (h *HTTPHandler) handleDetailedHealth(w http.ResponseWriter, r *http.Reques
 	ctx := r.Context()
 
 	// Check for cached results parameter
+	// 检查 cached results 参数
 	cached := r.URL.Query().Get("cached") == "true"
 
 	var detailed DetailedHealth
@@ -171,6 +173,7 @@ func (h *HTTPHandler) handleDetailedHealth(w http.ResponseWriter, r *http.Reques
 		maps.Copy(components, lastResults)
 
 		// Calculate summary from cached results
+		// 从缓存结果计算摘要
 		summary := HealthSummary{Total: len(components)}
 		for _, result := range components {
 			switch result.Status {
@@ -225,6 +228,7 @@ func (h *HTTPHandler) handleDetailedHealth(w http.ResponseWriter, r *http.Reques
 }
 
 // writeError writes an error response
+// writeError 写入错误响应
 func (h *HTTPHandler) writeError(w http.ResponseWriter, statusCode int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)

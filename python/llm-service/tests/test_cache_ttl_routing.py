@@ -143,7 +143,7 @@ class TestCacheTtlFieldIgnored:
             messages=[{"role": "user", "content": "hi"}],
             model="claude-sonnet-4-6",
             cache_source="webhook",
-            cache_ttl=3600,  # would imply 1h under naive interpretation
+            cache_ttl=3600,  # would imply 1h under naive interpretation 注：按直觉解读会得出 1h
             # 按朴素理解会推出 1h
         )
         # webhook source still routes to short regardless of cache_ttl=3600

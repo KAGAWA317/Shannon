@@ -29,10 +29,8 @@ logger = logging.getLogger(__name__)
 # Defaults (overridable via env)
 # 默认值（可通过 env 覆盖）
 _DEFAULT_MODEL = "grok-4-1-fast-non-reasoning"
-_DEFAULT_RATE_LIMIT = 30  # req/min
-# 每分钟 request 数
-_DEFAULT_TIMEOUT = 60  # seconds
-# 秒
+_DEFAULT_RATE_LIMIT = 30  # req/min 注：每分钟 request 数
+_DEFAULT_TIMEOUT = 60  # seconds 注：秒
 
 # xAI Responses API x_search pricing: $5 / 1K calls = $0.005 per call
 # xAI Responses API x_search 定价：$5 / 1K 次调用 = 每次 $0.005
@@ -42,9 +40,9 @@ _X_SEARCH_COST_PER_CALL = 0.005
 # Source of truth is config/models.yaml; these mirror grok-4-1-fast as of 2026-04.
 # models.yaml 不可用时的回退 token 价格（每 1K）。
 # 事实来源是 config/models.yaml；此处与 2026-04 的 grok-4-1-fast 一致。
-_FALLBACK_INPUT_PER_1K = 0.0002   # $0.20 / 1M
+_FALLBACK_INPUT_PER_1K = 0.0002   # $0.20 / 1M 注：每 100 万 input token 0.20 美元
 # $0.20 / 1M
-_FALLBACK_OUTPUT_PER_1K = 0.0005  # $0.50 / 1M
+_FALLBACK_OUTPUT_PER_1K = 0.0005  # $0.50 / 1M 注：每 100 万 output token 0.50 美元
 # $0.50 / 1M
 
 _XAI_PRICING_CACHE: Optional[Dict[str, Dict[str, float]]] = None

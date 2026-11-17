@@ -334,6 +334,7 @@ class ProviderManager:
         params = dict(kwargs)
 
         # ModelTier is now unified - no conversion needed
+        # ModelTier 现已统一，无需转换
         tier = tier or ModelTier.SMALL
 
         manager_kwargs: Dict[str, Any] = {}
@@ -542,7 +543,7 @@ class ProviderManager:
                         workflow_id,
                         "LLM_PROMPT",
                         agent_id=agent_id,
-                        message=prompt_text[:500],  # Industry standard: 500 chars max
+                        message=prompt_text[:500],  # Industry standard: 500 chars max 注：业界惯例上限 500 字符
                         payload=payload,
                     )
                 except Exception:

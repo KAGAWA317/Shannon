@@ -13,19 +13,24 @@ import (
 )
 
 // AgentWorkflowInput is the input for AgentWorkflow
+// AgentWorkflowInput 是 AgentWorkflow 的 input。
 type AgentWorkflowInput struct {
 	AgentID  string         `json:"agent_id"`
 	Input    map[string]any `json:"input"`
 	UserID   string         `json:"user_id"`
 	TenantID string         `json:"tenant_id"`
 	// Optional: stream output events
+	// 可选：流式输出事件。
 	Stream bool `json:"stream,omitempty"`
 	// ParentWorkflowID is used for unified event streaming when running as child workflow.
+	// ParentWorkflowID 用于作为 child workflow 运行时的统一事件流。
 	// If set, events are emitted to the parent's workflow ID instead of this workflow's ID.
+	// 设置后，事件会发往父 workflow 的 ID，而不是本 workflow 的 ID。
 	ParentWorkflowID string `json:"parent_workflow_id,omitempty"`
 }
 
 // AgentWorkflowOutput is the output from AgentWorkflow
+// AgentWorkflowOutput 是 AgentWorkflow 的 output。
 type AgentWorkflowOutput struct {
 	Success       bool    `json:"success"`
 	Output        any     `json:"output"`
@@ -38,12 +43,16 @@ type AgentWorkflowOutput struct {
 }
 
 // AgentWorkflow executes a single agent deterministically
+// AgentWorkflow 以确定性方式执行单个 agent，
 // It wraps a tool call in a Temporal workflow for consistency and observability
+// 把 tool 调用包在 Temporal workflow 中，以获得一致性与可观测性。
 func AgentWorkflow(ctx workflow.Context, input AgentWorkflowInput) (*AgentWorkflowOutput, error) {
 	logger := workflow.GetLogger(ctx)
 
 	// Use parent workflow ID for event streaming if this is a child workflow,
+	// 作为 child workflow 时，事件流使用父 workflow ID，
 	// otherwise use own workflow ID. This ensures events appear in parent's SSE stream.
+	// 否则使用自己的 workflow ID。这样事件才会出现在父级的 SSE stream 中。
 	workflowID := input.ParentWorkflowID
 	if workflowID == "" {
 		workflowID = workflow.GetInfo(ctx).WorkflowExecution.ID
@@ -56,7 +65,9 @@ func AgentWorkflow(ctx workflow.Context, input AgentWorkflowInput) (*AgentWorkfl
 	)
 
 	// Set up activity options with appropriate timeout
+	// 设置 activity 选项及合适的 timeout。
 	// LP analyze agents need longer timeouts for full-page captures with OCR
+	// LP analyze agent 需要更长的 timeout，以便做带 OCR 的整页截图。
 	timeout := 5 * time.Minute
 	heartbeat := 3 * time.Minute
 	if strings.HasPrefix(input.AgentID, "lp-") {
@@ -81,11 +92,13 @@ func AgentWorkflow(ctx workflow.Context, input AgentWorkflowInput) (*AgentWorkfl
 	ctx = workflow.WithActivityOptions(ctx, activityOpts)
 
 	// Emit activity context for progress events
+	// 为进度事件准备 activity context。
 	emitCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 10 * time.Second,
 	})
 
 	// Emit workflow started event
+	// 发出 workflow started 事件。
 	_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 		WorkflowID: workflowID,
 		EventType:  activities.StreamEventWorkflowStarted,
@@ -98,6 +111,7 @@ func AgentWorkflow(ctx workflow.Context, input AgentWorkflowInput) (*AgentWorkfl
 	}).Get(ctx, nil)
 
 	// Execute the agent activity
+	// 执行 agent activity。
 	execInput := activities.ExecuteAgentInput{
 		AgentID:    input.AgentID,
 		Input:      input.Input,
@@ -112,6 +126,7 @@ func AgentWorkflow(ctx workflow.Context, input AgentWorkflowInput) (*AgentWorkfl
 		logger.Error("Agent execution activity failed", "error", err)
 
 		// Emit error event
+		// 发出错误事件。
 		_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: workflowID,
 			EventType:  activities.StreamEventErrorOccurred,
@@ -128,10 +143,12 @@ func AgentWorkflow(ctx workflow.Context, input AgentWorkflowInput) (*AgentWorkfl
 	}
 
 	// Handle agent execution failure (non-activity error)
+	// 处理 agent 执行失败（非 activity 错误）。
 	if !execOutput.Success {
 		logger.Warn("Agent execution returned error", "error", execOutput.Error)
 
 		// Emit error event
+		// 发出错误事件。
 		_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 			WorkflowID: workflowID,
 			EventType:  activities.StreamEventErrorOccurred,
@@ -150,6 +167,7 @@ func AgentWorkflow(ctx workflow.Context, input AgentWorkflowInput) (*AgentWorkfl
 	}
 
 	// Emit completion event
+	// 发出完成事件。
 	_ = workflow.ExecuteActivity(emitCtx, "EmitTaskUpdate", activities.EmitTaskUpdateInput{
 		WorkflowID: workflowID,
 		EventType:  activities.StreamEventWorkflowCompleted,
@@ -183,7 +201,9 @@ func AgentWorkflow(ctx workflow.Context, input AgentWorkflowInput) (*AgentWorkfl
 }
 
 // ConvertAgentInputFromTask converts TaskInput to AgentWorkflowInput
+// ConvertAgentInputFromTask 把 TaskInput 转换为 AgentWorkflowInput，
 // This is used when routing from the orchestrator
+// 用于从 orchestrator 路由时。
 func ConvertAgentInputFromTask(input TaskInput) (*AgentWorkflowInput, error) {
 	if input.Context == nil {
 		return nil, fmt.Errorf("context is required for agent workflow")
@@ -195,29 +215,35 @@ func ConvertAgentInputFromTask(input TaskInput) (*AgentWorkflowInput, error) {
 	}
 
 	// Load agent definition to get allowed fields from schema
+	// 加载 agent 定义，取得 schema 允许的字段。
 	agentDef, err := activities.GetAgentDefinition(agentID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load agent definition: %w", err)
 	}
 
 	// Build set of allowed fields and their schema definitions
+	// 构建允许字段集合及其 schema 定义。
 	schemaProperties := getSchemaProperties(agentDef.InputSchema)
 
 	agentInput := make(map[string]any)
 
 	// Merge agent_input from context with type validation.
+	// 合并 context 中的 agent_input，并做类型校验。
 	if ai, ok := input.Context["agent_input"].(map[string]any); ok && ai != nil {
 		for k, v := range ai {
 			// Only copy fields that are defined in the agent's schema
+			// 只拷贝 agent schema 中定义的字段。
 			propSchema, allowed := schemaProperties[k]
 			if !allowed {
 				continue
 			}
 			// Validate type matches schema
+			// 校验类型与 schema 匹配。
 			if err := validateSchemaFieldType(k, v, propSchema); err == nil {
 				agentInput[k] = v
 			}
 			// Silently skip fields with wrong type to prevent injection
+			// 类型不符的字段静默跳过，防止注入。
 		}
 	}
 
@@ -228,6 +254,7 @@ func ConvertAgentInputFromTask(input TaskInput) (*AgentWorkflowInput, error) {
 		if v, ok := input.Context[field]; ok {
 			if existing, exists := agentInput[field]; !exists || existing == nil {
 				// Validate type before accepting
+				// 接受前先校验类型。
 				if err := validateSchemaFieldType(field, v, propSchema); err == nil {
 					agentInput[field] = v
 				}
@@ -236,7 +263,9 @@ func ConvertAgentInputFromTask(input TaskInput) (*AgentWorkflowInput, error) {
 	}
 
 	// If query is provided, map it to the expected primary input for the agent.
+	// 提供了 query 时，把它映射到 agent 期望的 primary input。
 	// Always map query to primary input field if that field is not already set.
+	// 只要该字段尚未设置，就总是把 query 映射到 primary input 字段。
 	if input.Query != "" {
 		switch agentID {
 		case "serp-ads":
@@ -270,6 +299,7 @@ func ConvertAgentInputFromTask(input TaskInput) (*AgentWorkflowInput, error) {
 				agentInput["url"] = input.Query
 			}
 		// Financial agents
+		// 金融类 agent
 		case "sec-filings", "twitter-sentiment":
 			if v, ok := agentInput["ticker"]; !ok || v == nil {
 				agentInput["ticker"] = input.Query
@@ -282,6 +312,7 @@ func ConvertAgentInputFromTask(input TaskInput) (*AgentWorkflowInput, error) {
 	}
 
 	// Agent-specific defaults.
+	// agent 专属默认值。
 	switch agentID {
 	case "competitor-discover":
 		if v, ok := agentInput["country"]; !ok || v == nil {
@@ -297,6 +328,7 @@ func ConvertAgentInputFromTask(input TaskInput) (*AgentWorkflowInput, error) {
 	normalizeAgentInput(agentID, agentInput)
 
 	// Minimal required-field validation for agents that cannot infer parameters from query.
+	// 对无法从 query 推断参数的 agent 做最小必填校验。
 	switch agentID {
 	case "serp-ads":
 		kw, ok := agentInput["keywords"].(string)
@@ -347,6 +379,7 @@ func ConvertAgentInputFromTask(input TaskInput) (*AgentWorkflowInput, error) {
 }
 
 // AgentWorkflowOutputToTaskResult converts AgentWorkflowOutput to TaskResult
+// AgentWorkflowOutputToTaskResult 把 AgentWorkflowOutput 转换为 TaskResult。
 func AgentWorkflowOutputToTaskResult(output *AgentWorkflowOutput) TaskResult {
 	if !output.Success {
 		return TaskResult{
@@ -356,6 +389,7 @@ func AgentWorkflowOutputToTaskResult(output *AgentWorkflowOutput) TaskResult {
 	}
 
 	// Convert output to JSON string for result
+	// 把 output 转为 JSON 字符串作为 result。
 	var resultStr string
 	if outputBytes, err := json.Marshal(output.Output); err == nil {
 		resultStr = string(outputBytes)
@@ -377,7 +411,9 @@ func AgentWorkflowOutputToTaskResult(output *AgentWorkflowOutput) TaskResult {
 }
 
 // getSchemaProperties extracts property definitions from an InputSchema
+// getSchemaProperties 从 InputSchema 中提取属性定义，
 // Returns a map of field name -> property schema for type validation
+// 返回 字段名 -> 属性 schema 的 map，用于类型校验。
 func getSchemaProperties(schema map[string]any) map[string]map[string]any {
 	result := make(map[string]map[string]any)
 	if schema == nil {
@@ -398,15 +434,17 @@ func getSchemaProperties(schema map[string]any) map[string]map[string]any {
 }
 
 // validateSchemaFieldType validates a value against its schema definition
+// validateSchemaFieldType 按 schema 定义校验一个值，
 // Returns nil if valid, error if type mismatch
+// 合法返回 nil，类型不匹配返回 error。
 func validateSchemaFieldType(fieldName string, value any, propSchema map[string]any) error {
 	if value == nil {
-		return nil // nil values are acceptable (will be caught by required check)
+		return nil // nil values are acceptable (will be caught by required check) 注：nil 值可以接受（会由必填校验兜住）
 	}
 
 	expectedType, ok := propSchema["type"].(string)
 	if !ok {
-		return nil // No type specified, allow any
+		return nil // No type specified, allow any 注：未指定类型，任意类型均允许
 	}
 
 	actualType := reflect.TypeOf(value)
@@ -421,6 +459,7 @@ func validateSchemaFieldType(fieldName string, value any, propSchema map[string]
 			valid = true
 		case float64:
 			// JSON numbers come as float64, accept if whole number
+			// JSON 数字会解析为 float64，是整数则接受。
 			valid = v == float64(int64(v))
 		}
 	case "number":
@@ -435,7 +474,7 @@ func validateSchemaFieldType(fieldName string, value any, propSchema map[string]
 	case "object":
 		_, valid = value.(map[string]any)
 	default:
-		valid = true // Unknown type, allow
+		valid = true // Unknown type, allow 注：未知类型，一律允许
 	}
 
 	if !valid {
@@ -445,7 +484,9 @@ func validateSchemaFieldType(fieldName string, value any, propSchema map[string]
 }
 
 // normalizeToFullURL ensures a URL has a scheme (https:// by default).
+// normalizeToFullURL 确保 URL 带 scheme（默认 https://）。
 // Used for tools that require full URLs (browser-screenshot, lp-analyze, lp-batch-analyze).
+// 用于要求完整 URL 的 tool（browser-screenshot、lp-analyze、lp-batch-analyze）。
 func normalizeToFullURL(input string) string {
 	input = strings.TrimSpace(input)
 	if input == "" {
@@ -459,22 +500,28 @@ func normalizeToFullURL(input string) string {
 }
 
 // normalizeToDomain extracts just the domain from a URL or domain string.
+// normalizeToDomain 从 URL 或域名串中只提取域名，
 // Used for tools that expect domain-only input (ads-transparency).
+// 用于只接受域名输入的 tool（ads-transparency）。
 func normalizeToDomain(input string) string {
 	input = strings.TrimSpace(input)
 	if input == "" {
 		return input
 	}
 	// Remove scheme
+	// 去掉 scheme
 	input = strings.TrimPrefix(input, "https://")
 	input = strings.TrimPrefix(input, "http://")
 	// Remove www.
+	// 去掉 www.
 	input = strings.TrimPrefix(input, "www.")
 	// Remove path (everything after first /)
+	// 去掉 path（第一个 / 之后的内容）
 	if idx := strings.Index(input, "/"); idx > 0 {
 		input = input[:idx]
 	}
 	// Remove query string
+	// 去掉 query string
 	if idx := strings.Index(input, "?"); idx > 0 {
 		input = input[:idx]
 	}
@@ -482,10 +529,13 @@ func normalizeToDomain(input string) string {
 }
 
 // normalizeAgentInput applies URL/domain normalization based on agent type.
+// normalizeAgentInput 按 agent 类型做 URL/域名规范化，
 // This ensures users can provide URLs in any format and the backend handles it correctly.
+// 确保用户可用任意格式提供 URL，由后端正确处理。
 func normalizeAgentInput(agentID string, agentInput map[string]any) {
 	switch agentID {
 	// URL-required tools: ensure full URL with scheme
+	// 需要 URL 的 tool：确保是带 scheme 的完整 URL
 	case "browser-screenshot", "lp-visual-analyze":
 		if url, ok := agentInput["url"].(string); ok && url != "" {
 			agentInput["url"] = normalizeToFullURL(url)
@@ -504,6 +554,7 @@ func normalizeAgentInput(agentID string, agentInput map[string]any) {
 			agentInput["urls"] = normalized
 		}
 		// Also handle []string case
+		// 同时处理 []string 的情况
 		if urls, ok := agentInput["urls"].([]string); ok {
 			normalized := make([]string, len(urls))
 			for i, u := range urls {
@@ -513,6 +564,7 @@ func normalizeAgentInput(agentID string, agentInput map[string]any) {
 		}
 
 	// Domain-only tools: strip scheme and path
+	// 只接受域名的 tool：去掉 scheme 与 path
 	case "ads-transparency":
 		if domain, ok := agentInput["domain"].(string); ok && domain != "" {
 			agentInput["domain"] = normalizeToDomain(domain)

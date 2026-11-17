@@ -90,11 +90,9 @@ class OpenAIProvider(LLMProvider):
         # Token counting logic based on OpenAI's guidelines
         # 基于 OpenAI 指南的 token 计数逻辑
         tokens_per_message = (
-            3  # Every message follows <im_start>{role/name}\n{content}<im_end>\n
-            # 每条消息都遵循 <im_start>{role/name}\n{content}<im_end>\n
+            3  # Every message follows <im_start>{role/name}\n{content}<im_end>\n 注：每条消息都遵循 <im_start>{role/name}\n{content}<im_end>\n
         )
-        tokens_per_name = 1  # If there's a name, the role is omitted
-        # 若存在 name 字段，则省略 role
+        tokens_per_name = 1  # If there's a name, the role is omitted 注：若存在 name 字段，则省略 role
 
         num_tokens = 0
         for message in messages:
@@ -116,8 +114,7 @@ class OpenAIProvider(LLMProvider):
                         elif isinstance(block, str):
                             num_tokens += len(encoder.encode(block))
 
-        num_tokens += 3  # Every reply is primed with <im_start>assistant<im_sep>
-        # 每个回复都以 <im_start>assistant<im_sep> 作为起始
+        num_tokens += 3  # Every reply is primed with <im_start>assistant<im_sep> 注：每个回复都以 <im_start>assistant<im_sep> 作为起始
         return num_tokens
 
     @retry(
@@ -147,14 +144,18 @@ class OpenAIProvider(LLMProvider):
                     return await self._complete_responses_api(request, model)
                 except Exception as e:
                     # Log the actual error from Responses API
+                    # 记录来自 Responses API 的实际错误
                     logger.warning(
                         f"Responses API failed for model {model}, falling back to Chat Completions API. "
                         f"Error: {type(e).__name__}: {str(e)}"
                     )
                     # Fall through to Chat Completions API
+                    # 转为走 Chat Completions API
             # If Responses not available, fall through to chat
+            # 若 Responses 不可用，则转为走 chat
 
         # Fallback: Chat Completions API
+        # 兜底：Chat Completions API
         import time
 
         api_request = {
@@ -207,6 +208,7 @@ class OpenAIProvider(LLMProvider):
             )
 
         # Debug logging for token limits
+        # token 上限的调试日志
         if adjusted_max < 100:
             logger.warning(
                 f"Very low max_completion_tokens for model {model}: adjusted_max={adjusted_max}, "
@@ -215,6 +217,7 @@ class OpenAIProvider(LLMProvider):
             )
 
         # GPT-5 and reasoning models use max_completion_tokens instead of max_tokens
+        # GPT-5 与推理模型使用 max_completion_tokens 而非 max_tokens
         if adjusted_max:
             if is_gpt5_chat or is_reasoning_model:
                 api_request["max_completion_tokens"] = adjusted_max
@@ -285,9 +288,11 @@ class OpenAIProvider(LLMProvider):
         message = choice.message
 
         # Debug: Log raw message structure for GPT-5 models
+        # 调试：记录 GPT-5 模型的原始消息结构
         if model.startswith("gpt-5"):
             raw_content = getattr(message, "content", None)
             # Get all message attributes to see what's available
+            # 获取全部消息属性，以便了解可用字段
             msg_attrs = [attr for attr in dir(message) if not attr.startswith('_')]
             logger.info(
                 f"GPT-5 message attributes: {msg_attrs}"
@@ -299,6 +304,7 @@ class OpenAIProvider(LLMProvider):
                 f"value_preview={raw_content[:200] if raw_content else '(empty or None)'}"
             )
             # Check for alternative content fields
+            # 检查可选的 content 字段
             for alt_field in ['reasoning_content', 'thinking', 'internal_thoughts', 'output', 'text']:
                 if hasattr(message, alt_field):
                     alt_value = getattr(message, alt_field, None)
@@ -314,46 +320,56 @@ class OpenAIProvider(LLMProvider):
                 content = getattr(msg, "content", None)
 
                 # 1. Plain string content
+                # 1. 普通字符串 content
                 if isinstance(content, str) and content.strip():
                     return content
 
                 # 2. List of content parts (each may have a .text attribute or be a dict)
+                # 2. content 分片列表（每片可能带 .text 属性，或是 dict）
                 if isinstance(content, list):
                     parts: List[str] = []
                     for part in content:
                         try:
                             # Try part.text attribute
+                            # 尝试 part.text 属性
                             text = getattr(part, "text", None)
                             # Try part["text"] dict key
+                            # 尝试 part["text"] 字典键
                             if not text and isinstance(part, dict):
                                 text = part.get("text")
                             # Try part["output_text"] for GPT-5
+                            # GPT-5 情形下尝试 part["output_text"]
                             if not text and isinstance(part, dict):
                                 text = part.get("output_text")
                             if isinstance(text, str) and text.strip():
                                 parts.append(text.strip())
                         except Exception:
                             # Be permissive; ignore malformed parts
+                            # 保持宽松，忽略格式错误的分片
                             pass
                     if parts:
                         return "\n\n".join(parts).strip()
 
                 # 3. Some SDK variants expose a single object with .text
+                # 3. 部分 SDK 变体暴露一个带 .text 的单一对象
                 if hasattr(content, "text"):
                     txt = getattr(content, "text", "")
                     if txt:
                         return txt
 
                 # 4. GPT-5 fallback: try model_dump() to inspect structured content
+                # 4. GPT-5 兜底：尝试 model_dump() 检查结构化 content
                 if hasattr(msg, "model_dump"):
                     try:
                         dump = msg.model_dump()
                         # Check if content is a list in the dump
+                        # 检查 dump 中的 content 是否为列表
                         if isinstance(dump.get("content"), list):
                             parts: List[str] = []
                             for item in dump["content"]:
                                 if isinstance(item, dict):
                                     # Try output_text, text, or any text field
+                                    # 尝试 output_text、text 或任意文本字段
                                     for field in ["output_text", "text", "content"]:
                                         if field in item and isinstance(item[field], str) and item[field].strip():
                                             parts.append(item[field].strip())
@@ -365,6 +381,7 @@ class OpenAIProvider(LLMProvider):
                         logger.warning(f"Failed to extract from model_dump(): {e}")
 
                 # 5. GPT-5 reasoning fields
+                # 5. GPT-5 推理字段
                 for alt_field in ["reasoning_content", "output", "thinking"]:
                     if hasattr(msg, alt_field):
                         alt_value = getattr(msg, alt_field, None)
@@ -373,6 +390,7 @@ class OpenAIProvider(LLMProvider):
                             return alt_value
                         elif isinstance(alt_value, list):
                             # Handle list of reasoning parts
+                            # 处理推理分片列表
                             parts: List[str] = []
                             for part in alt_value:
                                 if isinstance(part, dict) and "text" in part:
@@ -397,6 +415,7 @@ class OpenAIProvider(LLMProvider):
         if not content_text or not content_text.strip():
             if choice.finish_reason in ["function_call", "tool_calls"]:
                 # Try new format first (tool_calls array)
+                # 先尝试新格式（tool_calls 数组）
                 tool_calls = getattr(message, "tool_calls", None)
                 if tool_calls and len(tool_calls) > 0:
                     tool_descriptions = []
@@ -412,6 +431,7 @@ class OpenAIProvider(LLMProvider):
                         logger.info(f"Extracted {len(tool_calls)} tool calls from message.tool_calls for finish_reason={choice.finish_reason}")
 
                 # Try old format if new format didn't work (function_call object)
+                # 新格式无效时再尝试旧格式（function_call 对象）
                 if not content_text or not content_text.strip():
                     function_call = getattr(message, "function_call", None)
                     if function_call:
@@ -455,6 +475,7 @@ class OpenAIProvider(LLMProvider):
                     f"completion_tokens: {completion_tokens_actual}"
                 )
                 # Dump message structure for debugging
+                # 转储消息结构以便调试
                 if hasattr(message, "model_dump"):
                     try:
                         dump = message.model_dump()
@@ -462,12 +483,14 @@ class OpenAIProvider(LLMProvider):
                     except Exception as e:
                         logger.error(f"Failed to dump message: {e}")
                 # This is an error condition - content should exist with non-zero tokens
+                # 属于错误状态——token 数非零时 content 本应存在
                 raise Exception(
                     f"GPT-5 model {model} returned {completion_tokens_actual} completion tokens "
                     f"but content extraction failed. finish_reason={choice.finish_reason}"
                 )
 
         # Debug logging for empty responses (only when completion_tokens == 0 or None content in function_call)
+        # 空响应的调试日志（仅在 completion_tokens == 0，或 function_call 中 content 为 None 时）
         if not content_text or not content_text.strip():
             logger.warning(
                 f"Empty response from Chat Completions API for model {model}. "
@@ -615,6 +638,7 @@ class OpenAIProvider(LLMProvider):
             api_request["presence_penalty"] = request.presence_penalty
 
         # GPT-5 and reasoning models use max_completion_tokens instead of max_tokens
+        # GPT-5 与推理模型使用 max_completion_tokens 而非 max_tokens
         if request.max_tokens:
             if is_gpt5_chat or is_reasoning_model:
                 api_request["max_completion_tokens"] = request.max_tokens
@@ -663,11 +687,13 @@ class OpenAIProvider(LLMProvider):
             从 streaming delta 中提取文本内容，处理 GPT-5 格式。
             """
             # 1. Standard delta.content (string)
+            # 1. 标准 delta.content（字符串）
             content = getattr(delta, "content", None)
             if isinstance(content, str) and content:
                 return content
 
             # 2. delta.content as list (GPT-5 may return structured content)
+            # 2. delta.content 为列表（GPT-5 可能返回结构化 content）
             if isinstance(content, list):
                 parts = []
                 for part in content:
@@ -682,6 +708,7 @@ class OpenAIProvider(LLMProvider):
                     return "".join(parts)
 
             # 3. GPT-5 reasoning/output fields
+            # 3. GPT-5 推理/output 字段
             for field in ["reasoning_content", "output", "thinking"]:
                 value = getattr(delta, field, None)
                 if isinstance(value, str) and value:
@@ -1005,8 +1032,7 @@ class OpenAIProvider(LLMProvider):
                 params["input"] = inputs
         else:
             params["input"] = inputs
-            params["store"] = True  # Enable server-side storage for future chaining
-            # 启用服务端存储，供后续串联使用
+            params["store"] = True  # Enable server-side storage for future chaining 注：启用服务端存储，供后续串联使用
 
         if request.reasoning_effort and any(model.startswith(p) for p in ("o1", "o3", "o4")):
             params["reasoning"] = {"effort": request.reasoning_effort}

@@ -3,6 +3,7 @@ package models
 import "time"
 
 // Execution modes
+// 执行模式
 const (
 	ModeSimple   = "simple"
 	ModeStandard = "standard"
@@ -10,6 +11,7 @@ const (
 )
 
 // Task statuses
+// 任务状态
 const (
 	StatusPending   = "pending"
 	StatusRunning   = "running"
@@ -19,6 +21,7 @@ const (
 )
 
 // Model tiers
+// 模型层级（tier）
 const (
 	TierSmall  = "small"
 	TierMedium = "medium"
@@ -26,6 +29,7 @@ const (
 )
 
 // TaskRequest represents an incoming task request
+// TaskRequest 表示一条入站 task 请求
 type TaskRequest struct {
 	TaskID      string         `json:"task_id"`
 	UserID      string         `json:"user_id"`
@@ -83,6 +87,7 @@ type AgentResult struct {
 }
 
 // ExecutionMetrics contains metrics about task execution
+// ExecutionMetrics 包含 task 执行的指标
 type ExecutionMetrics struct {
 	LatencyMs  int64       `json:"latency_ms"`
 	TokenUsage *TokenUsage `json:"token_usage,omitempty"`
@@ -93,6 +98,7 @@ type ExecutionMetrics struct {
 }
 
 // TokenUsage tracks token consumption
+// TokenUsage 记录 token 消耗
 type TokenUsage struct {
 	PromptTokens     int32   `json:"prompt_tokens"`
 	CompletionTokens int32   `json:"completion_tokens"`
@@ -104,6 +110,7 @@ type TokenUsage struct {
 }
 
 // SessionContext maintains context across requests
+// SessionContext 跨请求维护 context
 type SessionContext struct {
 	SessionID   string         `json:"session_id"`
 	UserID      string         `json:"user_id"`

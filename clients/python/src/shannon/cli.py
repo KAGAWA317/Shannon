@@ -1,4 +1,7 @@
-"""Shannon CLI tool."""
+"""Shannon CLI tool.
+
+Shannon CLI 工具。
+"""
 
 import argparse
 import json
@@ -31,6 +34,7 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
 
     # Submit command
+    # submit 命令
     submit_parser = subparsers.add_parser("submit", help="Submit a task")
     submit_parser.add_argument("query", help="Task query")
     submit_parser.add_argument("--session-id", help="Session ID")
@@ -50,6 +54,7 @@ def main():
         help="Execution mode hint",
     )
     # Strategy presets and tuning (Phase 6)
+    # strategy 预设与调优（Phase 6）
     submit_parser.add_argument(
         "--force-research",
         action="store_true",
@@ -87,6 +92,7 @@ def main():
     
 
     # Citation toggle
+    # citation 开关
     cit_group = submit_parser.add_mutually_exclusive_group()
     cit_group.add_argument(
         "--enable-citations",
@@ -108,25 +114,30 @@ def main():
     )
 
     # Status command
+    # status 命令
     status_parser = subparsers.add_parser("status", help="Get task status")
     status_parser.add_argument("task_id", help="Task ID")
 
     # Cancel command
+    # cancel 命令
     cancel_parser = subparsers.add_parser("cancel", help="Cancel a task")
     cancel_parser.add_argument("task_id", help="Task ID")
     cancel_parser.add_argument("--reason", help="Cancellation reason")
 
     # Pause command
+    # pause 命令
     pause_parser = subparsers.add_parser("pause", help="Pause a task at checkpoints")
     pause_parser.add_argument("task_id", help="Task ID")
     pause_parser.add_argument("--reason", help="Pause reason")
 
     # Resume command
+    # resume 命令
     resume_parser = subparsers.add_parser("resume", help="Resume a paused task")
     resume_parser.add_argument("task_id", help="Task ID")
     resume_parser.add_argument("--reason", help="Resume reason")
 
     # Stream command
+    # stream 命令
     stream_parser = subparsers.add_parser("stream", help="Stream task events")
     stream_parser.add_argument("workflow_id", help="Workflow ID")
     stream_parser.add_argument(
@@ -138,12 +149,14 @@ def main():
     stream_parser.add_argument("--traceparent", help="W3C traceparent header for distributed tracing")
 
     # Control state command
+    # control-state 命令
     control_state_parser = subparsers.add_parser(
         "control-state", help="Get pause/cancel control state for a task"
     )
     control_state_parser.add_argument("task_id", help="Task ID")
 
     # Approve command
+    # approve 命令
     approve_parser = subparsers.add_parser("approve", help="Approve pending request")
     approve_parser.add_argument("approval_id", help="Approval ID")
     approve_parser.add_argument("workflow_id", help="Workflow ID")
@@ -153,6 +166,7 @@ def main():
     approve_parser.add_argument("--feedback", help="Approval feedback")
 
     # Review commands (HITL)
+    # review 命令（HITL）
     review_get = subparsers.add_parser("review-get", help="Get HITL review state")
     review_get.add_argument("workflow_id", help="Workflow ID")
 
@@ -166,6 +180,7 @@ def main():
     review_approve.add_argument("--version", type=int, help="Version for optimistic concurrency")
 
     # Tool commands
+    # tool 命令
     tools_list = subparsers.add_parser("tools-list", help="List direct-execution tools")
     tools_list.add_argument("--category", help="Filter by category")
 
@@ -182,6 +197,7 @@ def main():
     tool_exec.add_argument("--session-id", help="Optional session ID for tool context")
 
     # Workspace and memory file commands
+    # workspace 与 memory file 命令
     session_files = subparsers.add_parser("session-files", help="List session workspace files")
     session_files.add_argument("session_id", help="Session ID")
     session_files.add_argument("--path", help="Optional workspace subdirectory")
@@ -196,6 +212,7 @@ def main():
     memory_file_get.add_argument("path", help="Memory file path")
 
     # Agent and swarm commands
+    # agent 与 swarm 命令
     agents_list = subparsers.add_parser("agents-list", help="List deterministic agents")
 
     agent_get = subparsers.add_parser("agent-get", help="Get deterministic agent details")
@@ -216,6 +233,7 @@ def main():
     swarm_message.add_argument("message", help="Message to send")
 
     # Skills commands
+    # skills 命令
     skills_list = subparsers.add_parser("skills-list", help="List available skills")
     skills_list.add_argument("--category", help="Filter by category")
 
@@ -226,6 +244,7 @@ def main():
     skill_versions.add_argument("name", help="Skill name")
 
     # Session commands (HTTP)
+    # session 命令（HTTP）
     sess_get = subparsers.add_parser("session-get", help="Get a session")
     sess_get.add_argument("session_id", help="Session ID")
     sess_get.add_argument("--no-history", action="store_true", help="Do not include history")
@@ -237,11 +256,13 @@ def main():
     sess_delete = subparsers.add_parser("session-delete", help="Delete a session")
     sess_delete.add_argument("session_id", help="Session ID")
     # Optional: session title update
+    # 可选：更新 session 标题
     sess_title = subparsers.add_parser("session-title", help="Update session title")
     sess_title.add_argument("session_id", help="Session ID")
     sess_title.add_argument("title", help="New title")
 
     # Schedule commands
+    # schedule 命令
     sched_create = subparsers.add_parser("schedule-create", help="Create a scheduled task")
     sched_create.add_argument("name", help="Schedule name")
     sched_create.add_argument("cron", help="Cron expression (e.g., '0 9 * * 1-5' for weekdays at 9am)")
@@ -299,6 +320,7 @@ def main():
         sys.exit(1)
 
     # Initialize client
+    # 初始化 client
     client = ShannonClient(
         base_url=args.base_url,
         api_key=args.api_key if args.api_key else None,
@@ -402,6 +424,7 @@ def main():
 
         elif args.command == "stream":
             # Parse event types filter
+            # 解析 event types 过滤条件
             event_types = None
             if args.types:
                 event_types = [t.strip() for t in args.types.split(",")]
@@ -420,6 +443,7 @@ def main():
                     print(f"{timestamp} {agent}{event.type}: {event.message}")
 
                     # Exit on completion
+                    # 完成后退出
                     if event.type == EventType.WORKFLOW_COMPLETED.value:
                         break
 
@@ -695,6 +719,7 @@ def main():
 
         elif args.command == "schedule-create":
             # Build task context
+            # 构建 task context
             task_ctx = {}
             if args.force_research:
                 task_ctx["force_research"] = "true"

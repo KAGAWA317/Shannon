@@ -26,6 +26,7 @@ execution_modes:
     dag_orchestration: true
 
 # Agent configuration
+# Agent 配置
 agent:
   max_concurrent: 10
   memory_limit_mb: 1024
@@ -44,6 +45,7 @@ agent:
     sandbox_required: true
 
 # Orchestration settings
+# 编排设置
 orchestration:
   engine: temporal
   task_queue: shannon-tasks
@@ -64,40 +66,43 @@ orchestration:
     context_size_kb: 200
 
 # Workflow enhancements
+# Workflow 增强项
 workflows:
   reflection:
-    enabled: false  # Default OFF - opt-in feature for self-evaluation
-    max_retries: 2  # Maximum retry attempts after reflection
-    confidence_threshold: 0.7  # Minimum acceptable confidence score
-    criteria:  # Evaluation criteria for reflection
-      - completeness  # Is the answer complete?
-      - accuracy      # Is the answer accurate?
-      - relevance     # Is the answer relevant to the query?
-    timeout_ms: 5000  # Timeout for reflection evaluation
+    enabled: false  # Default OFF - opt-in feature for self-evaluation 注：默认关闭 —— 需主动开启的自评功能
+    max_retries: 2  # Maximum retry attempts after reflection 注：反思之后的最大重试次数
+    confidence_threshold: 0.7  # Minimum acceptable confidence score 注：可接受的最低置信度
+    criteria:  # Evaluation criteria for reflection 注：反思的评估标准
+      - completeness  # Is the answer complete? 注：答案是否完整？
+      - accuracy      # Is the answer accurate? 注：答案是否准确？
+      - relevance     # Is the answer relevant to the query? 注：答案是否与 query 相关？
+    timeout_ms: 5000  # Timeout for reflection evaluation 注：反思评估的超时时间
 
   synthesis:
-    bypass_single_result: true  # Skip extra synthesis when only one answer is produced
+    bypass_single_result: true  # Skip extra synthesis when only one answer is produced 注：只产出一个答案时跳过多余的 synthesis
 
   tool_execution:
-    parallelism: 5              # Maximum concurrent tool executions
-    auto_selection: true        # Allow automatic tool selection
+    parallelism: 5              # Maximum concurrent tool executions 注：工具并发执行上限
+    auto_selection: true        # Allow automatic tool selection 注：允许自动选择 tool
 
   # Complexity thresholds for model tier selection
   # 用于选择 model tier 的复杂度阈值
   complexity:
-    simple_threshold: 0.3         # < 0.3 = small model tier
-    medium_threshold: 0.5         # 0.3-0.5 = medium model tier, > 0.5 = large model tier
+    simple_threshold: 0.3         # < 0.3 = small model tier 注：小于 0.3 使用 small model tier
+    medium_threshold: 0.5         # 0.3-0.5 = medium model tier, > 0.5 = large model tier 注：0.3-0.5 使用 medium model tier，大于 0.5 使用 large model tier
 
   # DAG workflow configuration
+  # DAG workflow 配置
   dag:
-    simple_threshold: 0.3         # Complexity < this = simple task (single agent)
-    max_parallel_agents: 5        # Maximum concurrent agents in DAG execution
+    simple_threshold: 0.3         # Complexity < this = simple task (single agent) 注：复杂度低于该值即为简单 task（单 agent）
+    max_parallel_agents: 5        # Maximum concurrent agents in DAG execution 注：DAG 执行中的 agent 并发上限
 
   # Approval workflow configuration
+  # 审批 workflow 配置
   approval:
-    enabled: false                # Enable human-in-the-loop approval
-    complexity_threshold: 0.5     # Complexity >= this triggers approval
-    dangerous_tools:              # Tools requiring approval
+    enabled: false                # Enable human-in-the-loop approval 注：启用 human-in-the-loop 审批
+    complexity_threshold: 0.5     # Complexity >= this triggers approval 注：复杂度达到该值即触发审批
+    dangerous_tools:              # Tools requiring approval 注：需要审批的 tool
       - file_system
       - code_execution
       - bash
@@ -113,35 +118,37 @@ workflows:
   # P2P Coordination for task dependencies
   # 用于 task 依赖的 P2P 协调
   p2p:
-    enabled: false  # Set to true to enable P2P coordination between agents
-    timeout_seconds: 600  # Maximum wait time for dependencies (10 minutes default)
+    enabled: false  # Set to true to enable P2P coordination between agents 注：设为 true 可启用 agent 间的 P2P 协调
+    timeout_seconds: 600  # Maximum wait time for dependencies (10 minutes default) 注：等待依赖的最长时间（默认 10 分钟）
 
   # Swarm Agent Architecture (persistent multi-turn agents with inter-agent messaging)
   # Swarm Agent 架构（持久化的多轮 Agent，支持 Agent 间消息传递）
   swarm:
-    enabled: true  # Set to true to enable swarm agent architecture
-    max_agents: 10  # Maximum total agents (initial + dynamically spawned)
-    max_iterations_per_agent: 25  # Max reason-act loops per agent (safety net; prompt targets 8-10 tool calls)
-    agent_timeout_seconds: 1800  # Per-agent timeout — must cover idle wait between phases (match max_wall_clock_minutes)
+    enabled: true  # Set to true to enable swarm agent architecture 注：设为 true 可启用 swarm agent 架构
+    max_agents: 10  # Maximum total agents (initial + dynamically spawned) 注：agent 总数上限（初始 + 动态派生）
+    max_iterations_per_agent: 25  # Max reason-act loops per agent (safety net; prompt targets 8-10 tool calls) 注：单个 agent 的 reason-act 循环上限（安全兜底；prompt 目标是 8-10 次 tool 调用）
+    agent_timeout_seconds: 1800  # Per-agent timeout — must cover idle wait between phases (match max_wall_clock_minutes) 注：单 agent 超时 —— 必须覆盖各阶段间的空闲等待（与 max_wall_clock_minutes 对齐）
     # Collaboration guardrails
-    max_messages_per_agent: 20  # Max direct messages an agent can send per workflow
-    workspace_snippet_chars: 800  # Max chars per KV workspace entry shown in prompt
-    workspace_max_entries: 5  # Max recent KV entries shown per topic
+    # 协作护栏
+    max_messages_per_agent: 20  # Max direct messages an agent can send per workflow 注：单个 agent 在每个 workflow 内可发送的直接消息上限
+    workspace_snippet_chars: 800  # Max chars per KV workspace entry shown in prompt 注：prompt 中每条 KV workspace 条目的最大字符数
+    workspace_max_entries: 5  # Max recent KV entries shown per topic 注：每个 topic 展示的最近 KV 条目上限
     # Global budget controls (D9)
-    max_total_llm_calls: 200    # Safety net for dynamic spawn + idle + Lead overhead
-    max_total_tokens: 1000000   # Total LLM tokens across all agents + Lead (scraper tokens excluded)
-    max_wall_clock_minutes: 30  # Hard wall-clock limit for entire swarm workflow
+    # 全局 budget 控制（D9）
+    max_total_llm_calls: 200    # Safety net for dynamic spawn + idle + Lead overhead 注：动态派生 + 空闲 + Lead 开销的安全兜底
+    max_total_tokens: 1000000   # Total LLM tokens across all agents + Lead (scraper tokens excluded) 注：所有 agent + Lead 的 LLM token 总量（不含 scraper 的 token）
+    max_wall_clock_minutes: 30  # Hard wall-clock limit for entire swarm workflow 注：整个 swarm workflow 的硬性实际耗时上限
 
 # Citation V2 configuration (DEPRECATED - V2 abandoned, using optimized Legacy)
 # Citation V2 配置（已废弃 - V2 已放弃，改用优化后的 Legacy 方案）
 citation:
-  v2_enabled: false             # V2 disabled - simplified to Legacy approach (PR #124)
-  v2_strict_mode: false         # true = disable V1 supplement, use V2 only
-  v2_min_support_rate: 0.1      # 10% - below this, enable V1 supplement
-  v2_min_citations: 3           # Minimum inline citations to consider V2 sufficient
-  v2_min_claims_required: 5     # Minimum claims to trigger supplement check
-  v2_adaptive_topk: true        # Use adaptive Top-K based on sources/claims count
-  v2_base_topk: 5               # Base Top-K when adaptive is disabled
+  v2_enabled: false             # V2 disabled - simplified to Legacy approach (PR #124) 注：V2 已关闭 —— 简化为 Legacy 方案（PR #124）
+  v2_strict_mode: false         # true = disable V1 supplement, use V2 only 注：true 表示关闭 V1 补充，只用 V2
+  v2_min_support_rate: 0.1      # 10% - below this, enable V1 supplement 注：10% —— 低于该值则启用 V1 补充
+  v2_min_citations: 3           # Minimum inline citations to consider V2 sufficient 注：判定 V2 足够所需的最少行内引用数
+  v2_min_claims_required: 5     # Minimum claims to trigger supplement check 注：触发补充检查所需的最少 claim 数
+  v2_adaptive_topk: true        # Use adaptive Top-K based on sources/claims count 注：按 sources/claims 数量自适应选择 Top-K
+  v2_base_topk: 5               # Base Top-K when adaptive is disabled 注：未启用自适应时的基础 Top-K
 
 # Enforcement defaults (applies to rate limiting and circuit breaking)
 # 执行约束默认值（适用于 rate limit 与 circuit breaker）
@@ -156,7 +163,7 @@ enforcement:
     # are enforced elsewhere (e.g., at the gateway or provider SDK level).
     # 设为 false 时，禁用 workflow 中基于 provider 的速率控制等待。
     # 这可在开发期间降低延迟，也适用于 rate limit 已在别处（如网关或 provider SDK 层）实施的情况。
-    provider_rate_control_enabled: false  # Set to false to disable provider rate limiting delays
+    provider_rate_control_enabled: false  # Set to false to disable provider rate limiting delays 注：设为 false 可关闭 provider 速率限制带来的等待
 
   circuit_breaker:
     error_threshold: 0.5
@@ -164,8 +171,9 @@ enforcement:
     window_seconds: 30
 
 # Learning system
+# 学习系统
 continuous_learning:
-  enabled: false  # Disabled by default
+  enabled: false  # Disabled by default 注：默认关闭
   
   case_memory:
     max_cases: 100000
@@ -184,13 +192,14 @@ continuous_learning:
     user_consent_required: false
 
 # Security features
+# 安全功能
 security:
   authentication:
-    enabled: false  # Set to true in production
+    enabled: false  # Set to true in production 注：生产环境请设为 true
     method: jwt
     
   authorization:
-    enabled: false  # Set to true in production
+    enabled: false  # Set to true in production 注：生产环境请设为 true
     rbac: true
     
   policy_engine:
@@ -213,10 +222,12 @@ security:
     burst_size: 20
 
 # Gateway defaults
+# Gateway 默认值
 gateway:
-  skip_auth: true  # OSS default: auth disabled for local dev. Set to false + configure JWT for production.
+  skip_auth: true  # OSS default: auth disabled for local dev. Set to false + configure JWT for production. 注：OSS 默认值：本地开发关闭鉴权。生产环境请设为 false 并配置 JWT。
 
 # Storage configuration
+# 存储配置
 storage:
   postgres:
     enabled: true
@@ -227,11 +238,12 @@ storage:
     persistence: true
     
   vector_db:
-    provider: qdrant  # qdrant, pgvector, weaviate, pinecone
+    provider: qdrant  # qdrant, pgvector, weaviate, pinecone 注：可选值：qdrant、pgvector、weaviate、pinecone
     collection_size: 1000000
     dimension: 1536
 
 # Vector intelligence configuration
+# 向量智能配置
 vector:
   enabled: true
   host: ""
@@ -249,6 +261,7 @@ vector:
     max_file_size_mb: 100
 
 # Observability
+# 可观测性
 observability:
   tracing:
     enabled: true
@@ -290,6 +303,7 @@ experimental:
     audio: false
 
 # Environment-specific overrides
+# 环境相关覆盖项
 environments:
   development:
     debug: true
@@ -308,6 +322,7 @@ environments:
     experimental.web3_integration.enabled: false
 
 # Daemon command channel configuration
+# Daemon 命令通道配置
 daemon:
   enabled: false
   claim_timeout_seconds: 10

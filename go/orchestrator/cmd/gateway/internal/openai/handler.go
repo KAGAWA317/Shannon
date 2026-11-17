@@ -27,6 +27,7 @@ import (
 )
 
 // Handler handles OpenAI-compatible API requests.
+// Handler 处理 OpenAI 兼容的 API request。
 type Handler struct {
 	orchClient     orchpb.OrchestratorServiceClient
 	db             *sqlx.DB
@@ -35,12 +36,13 @@ type Handler struct {
 	registry       *Registry
 	translator     *Translator
 	sessionManager *SessionManager
-	adminURL       string // URL for SSE streaming (e.g., "http://orchestrator:8081")
+	adminURL       string // URL for SSE streaming (e.g., "http://orchestrator:8081") 注：SSE streaming 使用的 URL（如 "http://orchestrator:8081"）
 	llmServiceURL  string
 	attStore       *attachments.Store
 }
 
 // NewHandler creates a new OpenAI API handler.
+// NewHandler 创建 OpenAI API handler。
 func NewHandler(
 	orchClient orchpb.OrchestratorServiceClient,
 	db *sqlx.DB,
@@ -73,6 +75,7 @@ func NewHandler(
 }
 
 // Close gracefully shuts down the handler and its dependencies.
+// Close 优雅关闭 handler 及其依赖。
 func (h *Handler) Close() {
 	if h.sessionManager != nil {
 		h.sessionManager.Close()
@@ -80,10 +83,12 @@ func (h *Handler) Close() {
 }
 
 // ChatCompletions handles POST /v1/chat/completions
+// ChatCompletions 处理 POST /v1/chat/completions 请求。
 func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user context from auth middleware
+	// 从 auth middleware 获取 user context。
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", ErrorTypeAuthentication, ErrorCodeInvalidAPIKey, http.StatusUnauthorized)
@@ -96,6 +101,7 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, attachments.MaxMultimodalBodyBytes)
 
 	// Parse request body
+	// 解析 request 体。
 	var req ChatCompletionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.sendError(w, fmt.Sprintf("Invalid request body: %v", err), ErrorTypeInvalidRequest, ErrorCodeInvalidRequest, http.StatusBadRequest)
@@ -103,12 +109,14 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate model
+	// 校验 model。
 	modelName := req.Model
 	if modelName == "" {
 		modelName = h.registry.GetDefaultModel()
 	}
 
 	// Initialize metrics recorder
+	// 初始化 metrics 记录器。
 	metrics := NewMetricsRecorder(modelName, "chat_completions", req.Stream)
 
 	if !h.registry.IsValidModel(modelName) {
@@ -118,6 +126,7 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Resolve session (with collision handling)
+	// 解析 session（含冲突处理）。
 	providedSessionID := r.Header.Get(HeaderSessionID)
 	sessionResult, err := h.sessionManager.ResolveSession(
 		ctx,
@@ -129,12 +138,15 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Error("Session resolution failed", zap.Error(err))
 		// Continue with derived session on error
+		// 出错时继续使用推导出的 session。
 	}
 
 	// Echo back X-Session-ID if there was a collision or new session
+	// 发生冲突或是新建 session 时回写 X-Session-ID。
 	if sessionResult != nil && (sessionResult.WasCollision || sessionResult.IsNew) {
 		w.Header().Set(HeaderSessionID, sessionResult.SessionID)
 		// Also return the full Shannon session ID for history/events lookups
+		// 同时返回完整的 Shannon session ID，供历史/事件查询使用。
 		w.Header().Set("X-Shannon-Session-ID", sessionResult.ShannonSession)
 		if sessionResult.IsNew {
 			RecordSessionCreated()
@@ -156,6 +168,7 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Translate to Shannon request (use resolved session)
+	// 转换为 Shannon request（使用已解析的 session）。
 	translated, err := h.translator.TranslateWithSession(&req, userCtx.UserID.String(), userCtx.TenantID.String(), sessionResult)
 	if err != nil {
 		metrics.RecordError(ErrorTypeInvalidRequest, ErrorCodeInvalidRequest)
@@ -184,9 +197,11 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add gRPC metadata
+	// 添加 gRPC metadata。
 	ctx = h.withGRPCMetadata(ctx, r)
 
 	// Submit task to orchestrator
+	// 提交 task 给 orchestrator。
 	resp, err := h.orchClient.SubmitTask(ctx, translated.GRPCRequest)
 	if err != nil {
 		metrics.RecordError(ErrorTypeServer, ErrorCodeInternalError)
@@ -212,6 +227,7 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Handle streaming vs non-streaming response
+	// 处理 streaming 与非 streaming 两种 response。
 	if translated.Stream {
 		h.handleStreamingResponse(ctx, w, r, resp.WorkflowId, translated.ModelName, &req, metrics)
 	} else {
@@ -220,20 +236,34 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleStreamingResponse connects to Shannon SSE and streams OpenAI-format chunks.
+// handleStreamingResponse 连接 Shannon SSE，并按 OpenAI 格式流式输出 chunk。
 func (h *Handler) handleStreamingResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, workflowID, modelName string, req *ChatCompletionRequest, metrics *MetricsRecorder) {
 	// Build SSE URL - include agent events for rich UI experiences
+	// 构造 SSE URL——包含 agent 事件，以支持更丰富的 UI 体验
 	// LLM events: LLM_PARTIAL (streaming), LLM_OUTPUT (final)
+	// LLM 事件：LLM_PARTIAL（streaming）、LLM_OUTPUT（最终）
 	// Stream lifecycle: STREAM_END
+	// Stream 生命周期：STREAM_END
 	// Subscribe to all event types that the streamer forwards:
+	// 订阅 streamer 转发的所有事件类型：
 	// - LLM events: LLM_PARTIAL, LLM_OUTPUT
+	// - LLM 事件：LLM_PARTIAL、LLM_OUTPUT
 	// - Stream lifecycle: STREAM_END
+	// - Stream 生命周期：STREAM_END
 	// - Workflow lifecycle: WORKFLOW_STARTED, WORKFLOW_COMPLETED, WORKFLOW_FAILED, WORKFLOW_PAUSING, WORKFLOW_PAUSED, WORKFLOW_RESUMED, WORKFLOW_CANCELLING, WORKFLOW_CANCELLED
+	// - Workflow 生命周期：WORKFLOW_STARTED, WORKFLOW_COMPLETED, WORKFLOW_FAILED, WORKFLOW_PAUSING, WORKFLOW_PAUSED, WORKFLOW_RESUMED, WORKFLOW_CANCELLING, WORKFLOW_CANCELLED
 	// - Agent lifecycle: AGENT_STARTED, AGENT_COMPLETED, AGENT_THINKING
+	// - Agent 生命周期：AGENT_STARTED, AGENT_COMPLETED, AGENT_THINKING
 	// - Tool events: TOOL_INVOKED, TOOL_OBSERVATION
+	// - Tool 事件：TOOL_INVOKED, TOOL_OBSERVATION
 	// - Progress: PROGRESS, DATA_PROCESSING, WAITING, ERROR_RECOVERY
+	// - 进度：PROGRESS, DATA_PROCESSING, WAITING, ERROR_RECOVERY
 	// - Team/coordination: TEAM_RECRUITED, TEAM_RETIRED, TEAM_STATUS, ROLE_ASSIGNED, DELEGATION, DEPENDENCY_SATISFIED
+	// - Team/协作：TEAM_RECRUITED, TEAM_RETIRED, TEAM_STATUS, ROLE_ASSIGNED, DELEGATION, DEPENDENCY_SATISFIED
 	// - Budget/approval: BUDGET_THRESHOLD, APPROVAL_REQUESTED, APPROVAL_DECISION
+	// - 预算/审批：BUDGET_THRESHOLD, APPROVAL_REQUESTED, APPROVAL_DECISION
 	// - Errors: ERROR_OCCURRED
+	// - 错误：ERROR_OCCURRED
 	sseEventTypes := "LLM_PARTIAL,LLM_OUTPUT,STREAM_END," +
 		"WORKFLOW_STARTED,WORKFLOW_COMPLETED,WORKFLOW_FAILED,WORKFLOW_PAUSING,WORKFLOW_PAUSED,WORKFLOW_RESUMED,WORKFLOW_CANCELLING,WORKFLOW_CANCELLED," +
 		"AGENT_STARTED,AGENT_COMPLETED,AGENT_THINKING," +
@@ -245,6 +275,7 @@ func (h *Handler) handleStreamingResponse(ctx context.Context, w http.ResponseWr
 	sseURL := fmt.Sprintf("%s/stream/sse?workflow_id=%s&types=%s", h.adminURL, workflowID, sseEventTypes)
 
 	// Create SSE request
+	// 创建 SSE request。
 	sseReq, err := http.NewRequestWithContext(ctx, http.MethodGet, sseURL, nil)
 	if err != nil {
 		metrics.RecordError(ErrorTypeServer, ErrorCodeInternalError)
@@ -253,6 +284,7 @@ func (h *Handler) handleStreamingResponse(ctx context.Context, w http.ResponseWr
 	}
 
 	// Copy auth headers
+	// 复制 auth 头。
 	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
 		sseReq.Header.Set("Authorization", authHeader)
 	}
@@ -269,11 +301,11 @@ func (h *Handler) handleStreamingResponse(ctx context.Context, w http.ResponseWr
 	client := &http.Client{
 		Transport: &http.Transport{
 			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second, // Connection timeout
+				Timeout:   30 * time.Second, // Connection timeout 注：连接 timeout
 				KeepAlive: 30 * time.Second,
 			}).DialContext,
 			TLSHandshakeTimeout:   10 * time.Second,
-			ResponseHeaderTimeout: 30 * time.Second, // Wait for response headers
+			ResponseHeaderTimeout: 30 * time.Second, // Wait for response headers 注：等待 response 头
 			IdleConnTimeout:       90 * time.Second,
 		},
 	}
@@ -296,6 +328,7 @@ func (h *Handler) handleStreamingResponse(ctx context.Context, w http.ResponseWr
 	}
 
 	// Create streamer and transform events
+	// 创建 streamer 并转换事件。
 	includeUsage := req.StreamOptions != nil && req.StreamOptions.IncludeUsage
 	streamer := NewStreamerWithMetrics(h.logger, modelName, metrics)
 
@@ -303,6 +336,7 @@ func (h *Handler) handleStreamingResponse(ctx context.Context, w http.ResponseWr
 		h.logger.Error("Stream error", zap.Error(err))
 		metrics.RecordStreamError("stream_interrupted")
 		// Error already written to stream
+		// 错误已写入 stream。
 	} else {
 		metrics.RecordSuccess()
 		metrics.RecordStreamComplete()
@@ -318,8 +352,10 @@ func (h *Handler) handleStreamingResponse(ctx context.Context, w http.ResponseWr
 }
 
 // handleNonStreamingResponse waits for completion and returns full response.
+// handleNonStreamingResponse 轮询等待完成并返回完整 response。
 func (h *Handler) handleNonStreamingResponse(ctx context.Context, w http.ResponseWriter, taskID, workflowID, modelName string, metrics *MetricsRecorder) {
 	// Poll for completion
+	// 轮询等待完成。
 	var result string
 	var usage *Usage
 
@@ -343,6 +379,7 @@ func (h *Handler) handleNonStreamingResponse(ctx context.Context, w http.Respons
 			return
 		case <-ticker.C:
 			// Check task status
+			// 检查 task 状态。
 			statusResp, err := h.orchClient.GetTaskStatus(ctx, &orchpb.GetTaskStatusRequest{TaskId: taskID})
 			if err != nil {
 				h.logger.Error("Failed to get task status", zap.Error(err))
@@ -353,6 +390,7 @@ func (h *Handler) handleNonStreamingResponse(ctx context.Context, w http.Respons
 			case orchpb.TaskStatus_TASK_STATUS_COMPLETED:
 				result = statusResp.Result
 				// Try to get usage from database
+				// 尝试从数据库获取用量。
 				usage = h.getUsageFromDB(ctx, workflowID)
 				if usage != nil && usage.TotalTokens > 0 {
 					metrics.RecordTokens(usage.PromptTokens, usage.CompletionTokens)
@@ -373,6 +411,7 @@ func (h *Handler) handleNonStreamingResponse(ctx context.Context, w http.Respons
 respond:
 	metrics.RecordSuccess()
 	// Build response
+	// 构造 response。
 	response := &ChatCompletionResponse{
 		ID:      GenerateCompletionID(),
 		Object:  "chat.completion",
@@ -396,8 +435,10 @@ respond:
 }
 
 // ListModels handles GET /v1/models
+// ListModels 处理 GET /v1/models 请求。
 func (h *Handler) ListModels(w http.ResponseWriter, r *http.Request) {
 	// Auth check (optional for models endpoint, but good practice)
+	// auth 检查（models 端点可选，但建议保留）。
 	if _, ok := r.Context().Value(auth.UserContextKey).(*auth.UserContext); !ok {
 		h.sendError(w, "Unauthorized", ErrorTypeAuthentication, ErrorCodeInvalidAPIKey, http.StatusUnauthorized)
 		return
@@ -414,6 +455,7 @@ func (h *Handler) ListModels(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetModel handles GET /v1/models/{model}
+// GetModel 处理 GET /v1/models/{model} 请求。
 func (h *Handler) GetModel(w http.ResponseWriter, r *http.Request) {
 	modelID := r.PathValue("model")
 	if modelID == "" {
@@ -435,6 +477,7 @@ func (h *Handler) GetModel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add description in a non-standard but useful way
+	// 以非标准但实用的方式附加 description。
 	if model.Description != "" {
 		w.Header().Set("X-Model-Description", model.Description)
 	}
@@ -444,6 +487,7 @@ func (h *Handler) GetModel(w http.ResponseWriter, r *http.Request) {
 }
 
 // getUsageFromDB retrieves usage statistics from the database.
+// getUsageFromDB 从数据库读取用量统计。
 func (h *Handler) getUsageFromDB(ctx context.Context, workflowID string) *Usage {
 	var totalTokens, promptTokens, completionTokens int
 	err := h.db.QueryRowxContext(ctx, `
@@ -468,10 +512,12 @@ func (h *Handler) getUsageFromDB(ctx context.Context, workflowID string) *Usage 
 }
 
 // withGRPCMetadata adds authentication metadata to gRPC context.
+// withGRPCMetadata 向 gRPC context 添加 authentication metadata。
 func (h *Handler) withGRPCMetadata(ctx context.Context, r *http.Request) context.Context {
 	md := metadata.New(nil)
 
 	// Forward user ID
+	// 透传 user ID。
 	if userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext); ok {
 		md.Set("x-user-id", userCtx.UserID.String())
 		md.Set("x-tenant-id", userCtx.TenantID.String())
@@ -496,6 +542,7 @@ func (h *Handler) withGRPCMetadata(ctx context.Context, r *http.Request) context
 	}
 
 	// Forward trace headers
+	// 透传 trace 头。
 	if traceID := r.Header.Get("traceparent"); traceID != "" {
 		md.Set("traceparent", traceID)
 	}
@@ -519,6 +566,7 @@ func isLikelyJWT(token string) bool {
 }
 
 // handleGRPCError converts gRPC errors to OpenAI error responses.
+// handleGRPCError 把 gRPC 错误转换为 OpenAI 错误 response。
 func (h *Handler) handleGRPCError(w http.ResponseWriter, err error) {
 	if st, ok := status.FromError(err); ok {
 		switch st.Code() {
@@ -541,6 +589,7 @@ func (h *Handler) handleGRPCError(w http.ResponseWriter, err error) {
 }
 
 // sendError sends an OpenAI-compatible error response.
+// sendError 发送 OpenAI 兼容的错误 response。
 func (h *Handler) sendError(w http.ResponseWriter, message, errType, code string, httpStatus int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(httpStatus)
@@ -558,6 +607,7 @@ func (h *Handler) sendError(w http.ResponseWriter, message, errType, code string
 // 并返回轻量引用；URL 附件原样透传。
 func (h *Handler) extractAndStoreAttachments(ctx context.Context, req *ChatCompletionRequest, session *SessionResult) ([]any, error) {
 	// Find the last user message (same scan order as extractQuery).
+	// 查找最后一条 user 消息（扫描顺序与 extractQuery 一致）。
 	for i := len(req.Messages) - 1; i >= 0; i-- {
 		msg := &req.Messages[i]
 		if msg.Role != "user" || len(msg.RawAttachments) == 0 {
@@ -604,17 +654,20 @@ func mustNewList(items []any) *structpb.ListValue {
 	list, err := structpb.NewList(items)
 	if err != nil {
 		// Should never happen after sanitization, but handle gracefully.
+		// 清洗后不应发生，但仍做优雅处理。
 		return &structpb.ListValue{}
 	}
 	return list
 }
 
 // completionsRequestPeek is used to peek at the stream flag before proxying.
+// completionsRequestPeek 用于在代理前窥视 stream 标记。
 type completionsRequestPeek struct {
 	Stream bool `json:"stream"`
 }
 
 // llmCompletionUsage represents token usage from the LLM service.
+// llmCompletionUsage 表示 LLM service 返回的 token 用量。
 type llmCompletionUsage struct {
 	InputTokens           int     `json:"input_tokens"`
 	OutputTokens          int     `json:"output_tokens"`
@@ -627,6 +680,7 @@ type llmCompletionUsage struct {
 }
 
 // llmCompletionResponse represents the LLM service /completions/ response.
+// llmCompletionResponse 表示 LLM service /completions/ 的 response。
 type llmCompletionResponse struct {
 	Provider string              `json:"provider"`
 	Model    string              `json:"model"`
@@ -642,6 +696,7 @@ func (h *Handler) Completions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get user context from auth middleware
+	// 从 auth middleware 获取 user context。
 	userCtx, ok := ctx.Value(auth.UserContextKey).(*auth.UserContext)
 	if !ok {
 		h.sendError(w, "Unauthorized", ErrorTypeAuthentication, ErrorCodeInvalidAPIKey, http.StatusUnauthorized)
@@ -649,6 +704,7 @@ func (h *Handler) Completions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read and buffer request body
+	// 读取并缓冲 request 体。
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		h.sendError(w, "Failed to read request body", ErrorTypeInvalidRequest, ErrorCodeInvalidRequest, http.StatusBadRequest)
@@ -656,13 +712,16 @@ func (h *Handler) Completions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Peek-parse stream flag before proxying
+	// 代理前先窥视解析 stream 标记。
 	var reqPeek completionsRequestPeek
 	_ = json.Unmarshal(body, &reqPeek)
 
 	// Generate tracking ID
+	// 生成 tracking ID。
 	requestID := uuid.New().String()
 
 	// Build proxy request to LLM service
+	// 构造发往 LLM service 的代理 request。
 	proxyURL := h.llmServiceURL + "/completions/"
 	proxyReq, err := http.NewRequestWithContext(ctx, http.MethodPost, proxyURL, bytes.NewReader(body))
 	if err != nil {
@@ -693,6 +752,7 @@ func (h *Handler) Completions(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	// If LLM returned error, forward as-is
+	// LLM 返回错误时原样透传。
 	if resp.StatusCode >= 400 {
 		errBody, _ := io.ReadAll(resp.Body)
 		w.Header().Set("Content-Type", "application/json")
@@ -709,6 +769,7 @@ func (h *Handler) Completions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Non-streaming: read full response, record usage, forward
+	// 非 streaming：读取完整 response、记录用量后转发。
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		h.logger.Error("Failed to read LLM response", zap.Error(err))
@@ -717,6 +778,7 @@ func (h *Handler) Completions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Best-effort parse response for usage recording
+	// 尽力解析 response 以记录用量。
 	var llmResp llmCompletionResponse
 	if err := json.Unmarshal(respBody, &llmResp); err != nil {
 		h.logger.Warn("Failed to parse LLM completion response for usage", zap.Error(err))
@@ -740,6 +802,7 @@ func (h *Handler) Completions(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Forward response to client as-is
+	// 原样转发 response 给客户端。
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	w.Write(respBody)
@@ -762,6 +825,7 @@ func (h *Handler) handleCompletionsStream(
 	}
 
 	// Set SSE headers
+	// 设置 SSE 头。
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -787,6 +851,7 @@ func (h *Handler) handleCompletionsStream(
 		line := scanner.Text()
 
 		// Track data lines for usage extraction
+		// 跟踪 data 行以便提取用量。
 		if after, ok0 := strings.CutPrefix(line, "data: "); ok0 {
 			payload := after
 			prevDataLine = lastDataLine
@@ -794,6 +859,7 @@ func (h *Handler) handleCompletionsStream(
 		}
 
 		// Forward every line to client as-is
+		// 原样转发每一行给客户端。
 		fmt.Fprintf(w, "%s\n", line)
 		flusher.Flush()
 	}
@@ -811,6 +877,7 @@ func (h *Handler) handleCompletionsStream(
 	}
 
 	// Extract usage from the done event
+	// 从 done event 中提取用量。
 	if usageLine != "" {
 		var doneEvent struct {
 			Type     string              `json:"type"`

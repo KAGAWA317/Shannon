@@ -67,7 +67,7 @@ class EventEmitter:
         try:
             self._q.put_nowait(data)
         except asyncio.QueueFull:
-            pass  # drop silently
+            pass  # drop silently 注：静默丢弃
 
     async def _worker(self):
         headers = {"Content-Type": "application/json"}

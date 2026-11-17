@@ -11,8 +11,8 @@ import (
 // DefaultSkillDirs 是搜索 skill 的默认目录。
 // 按顺序尝试；缺失的目录跳过。
 var DefaultSkillDirs = []string{
-	"config/skills/core",      // Development: relative to working directory
-	"/app/config/skills/core", // Container: mounted config path
+	"config/skills/core",      // Development: relative to working directory 注：开发环境：相对于工作目录
+	"/app/config/skills/core", // Container: mounted config path 注：容器环境：挂载的 config 路径
 }
 
 // ResolveSkillDirs returns the skill directories to scan.

@@ -72,7 +72,7 @@ func FetchSemanticMemoryChunked(ctx context.Context, in FetchSemanticMemoryInput
 
 	// Fetch more results to account for chunking using configured multiplier
 	// 按配置的倍数多取一些结果，抵消 chunk 切分带来的影响。
-	poolMultiplier := 3 // Default multiplier
+	poolMultiplier := 3 // Default multiplier 注：默认倍数
 	if cfg := vdb.GetConfig(); cfg.MMRPoolMultiplier > 0 {
 		poolMultiplier = cfg.MMRPoolMultiplier
 	}

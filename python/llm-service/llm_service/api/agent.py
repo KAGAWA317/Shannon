@@ -36,8 +36,8 @@ router = APIRouter()
 #
 # 继续调大后的症状: 当 (MAX_PROMPT_CHARS - attachment_text_chars) 变为负数时,
 # query_text 会被裁剪到最小 1_000 字符.
-MAX_TEXT_PER_FILE = 400_000  # ~100K tokens per file
-MAX_TEXT_TOTAL = 800_000     # ~200K tokens total across all text attachments
+MAX_TEXT_PER_FILE = 400_000  # ~100K tokens per file 注：~每个文件约 100K token
+MAX_TEXT_TOTAL = 800_000     # ~200K tokens total across all text attachments 注：跨全部文本附件约 200K token
 
 # MAX_PROMPT_CHARS is the soft cap on the assembled prompt body (user query +
 # attachment text) sent to the LLM. Raised in lockstep with MAX_TEXT_TOTAL
@@ -101,6 +101,7 @@ async def _resolve_attachments(context: Optional[Dict], redis_client, session_id
         return []
 
     # Downstream agents already have upstream conclusions — skip binary attachments
+    # 下游 agent 已持有上游结论 —— 跳过二进制附件
     if context.get("dependency_results"):
         logger.info("Skipping attachment resolution: agent has dependency_results")
         return []
@@ -313,8 +314,7 @@ def filter_relevant_results(
     # 按相关性得分排序
     scored_results.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
 
-    return scored_results[:5]  # Return top 5 most relevant
-    # 返回最相关的前 5 条
+    return scored_results[:5]  # Return top 5 most relevant 注：返回最相关的前 5 条
 
 
 # ============================================================================
@@ -445,8 +445,7 @@ def should_use_source_format(role: Optional[str]) -> bool:
 DATA_ONLY_TOOLS = frozenset({
     "file_list", "file_read", "file_search", "file_write",
     "publish_data",
-    "web_search",  # Search snippets are short structured data
-    # 搜索片段是短小的结构化数据
+    "web_search",  # Search snippets are short structured data 注：搜索片段是短小的结构化数据
     # web_fetch/web_subpage_fetch REMOVED: swarm_fast_path skips the LLM call,
     # so the agent never sees full fetch content — only a 2K history fragment.
     # Letting the agent process fetch results inline produces better decisions
@@ -508,8 +507,7 @@ def generate_tool_digest(tool_results: str, tool_records: List[Dict[str, Any]], 
         if tool_name == "web_search":
             lines.append("## Search Results")
             results = output.get("results", []) if isinstance(output, dict) else []
-            for i, r in enumerate(results[:5]):  # Top 5 results
-            # 前 5 条结果
+            for i, r in enumerate(results[:5]):  # Top 5 results 注：前 5 条结果
                 title = r.get("title", "")
                 snippet = r.get("snippet", "")
                 url = r.get("url", "")
@@ -710,6 +708,7 @@ def aggregate_tool_results(tool_records: List[Dict[str, Any]], max_chars: int = 
 
         if tool_name == "web_search":
             # Handle both dict format {"results": [...]} and direct array format [...]
+            # 兼容 dict 格式 {"results": [...]} 与直接数组格式 [...]
             if isinstance(output, dict):
                 results = output.get("results", [])
             elif isinstance(output, list):
@@ -733,27 +732,32 @@ def aggregate_tool_results(tool_records: List[Dict[str, Any]], max_chars: int = 
 
             if isinstance(output, dict):
                 # Check if this is batch mode (has "pages" key) or single URL mode
+                # 判断是 batch 模式 (含 "pages" key) 还是单 URL 模式
                 if "pages" in output:
                     # Batch mode: {pages: [...], succeeded, failed, ...}
+                    # batch 模式: {pages: [...], succeeded, failed, ...}
                     pages = output.get("pages", [])
                     for page in pages:
-                        if not page.get("success", True):  # Default to True if not specified
+                        if not page.get("success", True):  # Default to True if not specified 注：未指定时默认为 True
                             continue
                         title = page.get("title", "Untitled")
                         content = page.get("content", "")
                         url = page.get("url", "")
 
                         # Skip binary content (PDFs)
+                        # 跳过二进制内容 (PDF)
                         if content and not content.startswith("%PDF"):
                             content_preview = content[:6000] if len(content) > 6000 else content
                             part_content += f"**{title}** ({url}):\n{content_preview}\n\n"
                 else:
                     # Single URL mode: {url, title, content, ...}
+                    # 单 URL 模式: {url, title, content, ...}
                     title = output.get("title", "Untitled")
                     content = output.get("content", "")
                     url = output.get("url", "")
 
                     # Skip binary content (PDFs)
+                    # 跳过二进制内容 (PDF)
                     if content and not content.startswith("%PDF"):
                         content_preview = content[:8000] if len(content) > 8000 else content
                         part_content = f"**{title}** ({url}):\n{content_preview}\n\n"
@@ -768,6 +772,9 @@ def aggregate_tool_results(tool_records: List[Dict[str, Any]], max_chars: int = 
             # web_subpage_fetch returns merged multi-page content with separators
             # Critical: Extract content from EACH subpage, not just truncate from start
             # This ensures important pages like /leadership (often at end) are preserved
+            # web_subpage_fetch 返回带分隔符的多页合并内容
+            # 关键: 从每个子页各自提取内容, 而不是只从开头截断
+            # 这样 /leadership 等重要页面 (常在末尾) 才能被保留
             if isinstance(output, dict):
                 title = output.get("title", "")
                 content = output.get("content", "")
@@ -779,36 +786,45 @@ def aggregate_tool_results(tool_records: List[Dict[str, Any]], max_chars: int = 
                     import re
                     # Parse content by subpage separators to extract each page
                     # Format: "# Main Page: URL\n...\n---\n\n## Subpage N: URL\n..."
+                    # 按子页分隔符解析内容, 逐页提取
+                    # 格式: "# Main Page: URL\n...\n---\n\n## Subpage N: URL\n..."
                     page_sections = []
 
                     # Split by subpage markers: "---\n\n## Subpage" or "# Main Page:"
+                    # 按子页标记切分: "---\n\n## Subpage" 或 "# Main Page:"
                     main_match = re.search(r'^# Main Page: ([^\n]+)\n(.+?)(?=\n---\n\n## Subpage|$)', content, re.DOTALL)
                     if main_match:
                         main_url = main_match.group(1)
                         main_content = main_match.group(2).strip()
                         # Limit main page to 4000 chars (increased for domain prefetch)
+                        # 主页限制 4000 字符 (为域名预取提高)
                         page_sections.append(f"**Main ({main_url})**: {main_content[:4000]}")
 
                     # Extract subpages - these often contain important info
+                    # 提取子页 —— 这些页面常含重要信息
                     subpage_pattern = re.compile(r'## Subpage \d+: ([^\n]+)\n(?:\*\*[^*]+\*\*\n)?\n(.+?)(?=\n---\n\n## Subpage|$)', re.DOTALL)
                     for match in subpage_pattern.finditer(content):
                         sub_url = match.group(1)
                         sub_content = match.group(2).strip()
                         # Prioritize key paths with more content (leadership, team, about)
+                        # 优先给内容更多的关键路径 (leadership, team, about)
                         priority_paths = ['/leadership', '/team', '/management', '/about', '/executive']
                         is_priority = any(p in sub_url.lower() for p in priority_paths)
                         max_sub_chars = 5000 if is_priority else 3000
                         page_sections.append(f"**{sub_url}**: {sub_content[:max_sub_chars]}")
 
                     # Build final content preserving snippets from all pages
+                    # 组装最终内容, 保留各页面的片段
                     if page_sections:
                         part_content = "\n\n".join(page_sections)
                         # Total limit for multi-page (increased for domain prefetch: 10 pages × 3K)
+                        # 多页总上限 (为域名预取提高: 10 页 × 3K)
                         if len(part_content) > 30000:
                             part_content = part_content[:30000] + "..."
                         part = part_header + f"**{title}** ({url}, {pages_fetched} pages):\n{part_content}\n\n"
                     else:
                         # Fallback if parsing fails
+                        # 解析失败时的兜底
                         part = part_header + f"**{title}** ({url}, {pages_fetched} pages):\n{content[:6000]}\n\n"
                 else:
                     part = part_header + f"**{title}** ({url}): No readable content\n"
@@ -819,6 +835,9 @@ def aggregate_tool_results(tool_records: List[Dict[str, Any]], max_chars: int = 
             # web_crawl returns comprehensive multi-page crawl results
             # Format: "# Main Page: URL\n...\n---\n\n## Page N: URL\n..."
             # Critical: Extract content from EACH page to preserve blog posts, articles etc.
+            # web_crawl 返回完整的多次爬取结果
+            # 格式: "# Main Page: URL\n...\n---\n\n## Page N: URL\n..."
+            # 关键: 从每个页面提取内容, 以保留博客文章等
             if isinstance(output, dict):
                 title = output.get("title", "")
                 content = output.get("content", "")
@@ -833,45 +852,56 @@ def aggregate_tool_results(tool_records: List[Dict[str, Any]], max_chars: int = 
                     page_sections = []
 
                     # Parse main page: "# Main Page: URL\n..."
+                    # 解析主页: "# Main Page: URL\n..."
                     main_match = re.search(r'^# Main Page: ([^\n]+)\n(.+?)(?=\n---\n\n## Page \d+:|$)', content, re.DOTALL)
                     if main_match:
                         main_url = main_match.group(1)
                         main_content = main_match.group(2).strip()
                         # Main page gets more space (5000 chars)
+                        # 主页分配更多空间 (5000 字符)
                         page_sections.append(f"**Main ({main_url})**: {main_content[:5000]}")
 
                     # Parse subsequent pages: "## Page N: URL\n..."
+                    # 解析后续页面: "## Page N: URL\n..."
                     page_pattern = re.compile(r'## Page \d+: ([^\n]+)\n(.+?)(?=\n---\n\n## Page \d+:|$)', re.DOTALL)
                     for match in page_pattern.finditer(content):
                         page_url = match.group(1)
                         page_content = match.group(2).strip()
 
                         # Prioritize important pages with more content
+                        # 优先给重要页面更多内容
                         priority_paths = ['/blog', '/article', '/post', '/about', '/team', '/leadership']
                         is_priority = any(p in page_url.lower() for p in priority_paths)
 
                         # Skip sitemap.xml raw content (usually not useful for interpretation)
+                        # 跳过 sitemap.xml 原始内容 (通常对解释无用)
                         is_sitemap = 'sitemap.xml' in page_url.lower()
 
                         if is_sitemap:
                             # Just note the sitemap exists, don't include raw XML
+                            # 仅注明 sitemap 存在, 不包含原始 XML
                             page_sections.append(f"**{page_url}**: (sitemap with {len(crawled_urls)} URLs)")
                         elif is_priority:
                             # Priority pages get 4000 chars each
+                            # 优先页面各 4000 字符
                             page_sections.append(f"**{page_url}**: {page_content[:4000]}")
                         else:
                             # Other pages get 2000 chars each
+                            # 其他页面各 2000 字符
                             page_sections.append(f"**{page_url}**: {page_content[:2000]}")
 
                     # Build final content
+                    # 组装最终内容
                     if page_sections:
                         part_content = "\n\n".join(page_sections)
                         # Total limit for crawl: 40000 chars (crawl typically fetches more pages)
+                        # 爬取总上限: 40000 字符 (爬取通常页数更多)
                         if len(part_content) > 40000:
                             part_content = part_content[:40000] + "\n\n[...truncated, see full crawl output]"
                         part = part_header + f"**{title}** ({url}, {pages_fetched} pages, {char_count} chars):\n{part_content}\n\n"
                     else:
                         # Fallback if parsing fails - still preserve substantial content
+                        # 解析失败时的兜底 —— 仍保留可观的正文
                         part = part_header + f"**{title}** ({url}, {pages_fetched} pages):\n{content[:10000]}\n\n"
                 else:
                     part = part_header + f"**{title}** ({url}): No readable content\n"
@@ -880,6 +910,7 @@ def aggregate_tool_results(tool_records: List[Dict[str, Any]], max_chars: int = 
 
         else:
             # Generic output
+            # 通用输出
             if isinstance(output, dict):
                 part = part_header + json.dumps(output, ensure_ascii=False, indent=2)[:1500]
             else:
@@ -1134,7 +1165,10 @@ class MockProvider:
         }
 
     async def generate(self, query: str, **kwargs) -> Dict[str, Any]:
-        """Generate a mock response."""
+        """Generate a mock response.
+
+        生成一个 mock response.
+        """
         # Simple keyword matching for deterministic responses
         # 用简单的关键词匹配得到确定性 response
         response_text = self.responses.get("default")
@@ -1145,8 +1179,7 @@ class MockProvider:
 
         return {
             "response": response_text,
-            "tokens_used": len(response_text.split()) * 2,  # Rough token estimate
-            # 粗略 token 估算
+            "tokens_used": len(response_text.split()) * 2,  # Rough token estimate 注：粗略 token 估算
             "model_used": "mock-model-v1",
         }
 
@@ -1223,8 +1256,7 @@ async def agent_query(request: Request, query: AgentQuery):
                 # Check for system_prompt in context first, then fall back to preset
                 # 先检查 context 中的 system_prompt, 再回退到 preset
                 system_prompt = None
-                raw_system_prompt = None  # Track raw template for cache optimization
-                # 保留原始模板以优化 cache
+                raw_system_prompt = None  # Track raw template for cache optimization 注：保留原始模板以优化 cache
                 if isinstance(query.context, dict) and "system_prompt" in query.context:
                     system_prompt = str(query.context.get("system_prompt"))
                     raw_system_prompt = system_prompt
@@ -1395,8 +1427,7 @@ async def agent_query(request: Request, query: AgentQuery):
                 cap_overrides = preset.get("caps") or {}
                 # GPT-5 models need more tokens for reasoning + output (default 4096 instead of 2048)
                 # GPT-5 模型需要更多 token 用于推理 + 输出 (默认 4096 而非 2048)
-                default_max_tokens = 4096  # Increased for GPT-5 reasoning models
-                # 为 GPT-5 推理模型提高
+                default_max_tokens = 4096  # Increased for GPT-5 reasoning models 注：为 GPT-5 推理模型提高
                 try:
                     # Check query.max_tokens, then context.max_tokens (set by budget.go), then role caps
                     # 依次检查 query.max_tokens, context.max_tokens (由 budget.go 设置), 最后是 role caps
@@ -1510,13 +1541,14 @@ async def agent_query(request: Request, query: AgentQuery):
                     return _truncate_text(str(value), 20000)
 
                 session_allowed = {
-                    "agent_memory",        # Conversation memory items (injected by workflows)
-                    "context_summary",     # Compressed context history (injected by workflows)
-                    "user_memory",         # User persistent memory recall (auto-injected, Phase 3)
-                    "user_memory_prompt",  # System instructions for /memory directory access
+                    "agent_memory",        # Conversation memory items (injected by workflows) 注：对话记忆条目 (由 workflow 注入)
+                    "context_summary",     # Compressed context history (injected by workflows) 注：压缩后的 context 历史 (由 workflow 注入)
+                    "user_memory",         # User persistent memory recall (auto-injected, Phase 3) 注：用户长期记忆召回 (自动注入, Phase 3)
+                    "user_memory_prompt",  # System instructions for /memory directory access 注：/memory 目录访问的系统指令
                 }
                 task_allowed = {
                     # ReAct / dependency context (transient)
+                    # ReAct / 依赖 context (临时)
                     "observations",
                     "thoughts",
                     "actions",
@@ -1524,14 +1556,17 @@ async def agent_query(request: Request, query: AgentQuery):
                     "iteration",
                     "previous_results",
                     # Research hints (transient)
+                    # 研究提示 (临时)
                     "exact_queries",
                     "official_domains",
                     "disambiguation_terms",
                     "canonical_name",
                     # Template workflow: upstream node outputs
+                    # 模板 workflow: 上游节点输出
                     "template_results",
                     "dependency_results",
                     # Research planning context (from Refiner)
+                    # 研究规划 context (来自 Refiner)
                     "research_areas",
                     "research_dimensions",
                     "target_languages",
@@ -1549,6 +1584,7 @@ async def agent_query(request: Request, query: AgentQuery):
                         "research_strategy",
                         "previous_results",
                         # Template workflow markers
+                        # 模板 workflow 标记
                         "template_results",
                         "dependency_results",
                         "template_node_id",
@@ -1915,7 +1951,7 @@ async def agent_query(request: Request, query: AgentQuery):
                     # 非研究模式: 关闭后续 tool 调用以避免重复
                     effective_allowed_tools = []
                     tools_param = None
-                    loop_function_call = None  # Must clear — OpenAI rejects tool_choice without tools
+                    loop_function_call = None  # Must clear — OpenAI rejects tool_choice without tools 注：必须清空 —— OpenAI 在没有 tools 时会拒绝 tool_choice
                     logger.info("Forced tool execution completed, disabling further tool calls")
 
                     # ── SWARM FAST PATH ──────────────────────────────────────
@@ -2033,6 +2069,7 @@ async def agent_query(request: Request, query: AgentQuery):
                             continue
                         if isinstance(chunk, dict):
                             # Optional structured chunk with usage/model info
+                            # 可选的带 usage/model 信息的结构化 chunk
                             delta = chunk.get("delta") or chunk.get("content") or ""
                             if chunk.get("usage"):
                                 usage = chunk["usage"]
@@ -2123,12 +2160,9 @@ async def agent_query(request: Request, query: AgentQuery):
             # 研究模式: 使用较高的上限以避免过早截断
             # LLM 通过 prompt 中的 research budget 控制实际用量
             if research_mode:
-                default_iterations = 20  # Sufficient headroom for OODA loop
-                # 为 OODA 循环留足余量
-                default_total_calls = 25  # Support parallel tool calls
-                # 支持并行 tool 调用
-                default_output_chars = 300000  # Rich tool outputs
-                # 丰富的 tool 输出
+                default_iterations = 20  # Sufficient headroom for OODA loop 注：为 OODA 循环留足余量
+                default_total_calls = 25  # Support parallel tool calls 注：支持并行 tool 调用
+                default_output_chars = 300000  # Rich tool outputs 注：丰富的 tool 输出
 
             max_tool_iterations = _get_budget("max_tool_iterations", default_iterations)
             max_total_tool_calls = _get_budget("max_total_tool_calls", default_total_calls)
@@ -2168,12 +2202,9 @@ async def agent_query(request: Request, query: AgentQuery):
 
             # P0 Fix: Track unique URLs for fetch ratio enforcement (Codex approved)
             # P0 修复: 跟踪去重后的 URL, 用于强制抓取比例 (Codex 已确认)
-            fetched_urls: set = set()  # Successfully fetched URLs
-            # 成功抓取的 URL
-            failed_fetch_urls: set = set()  # Failed fetch URLs (exclude from retry)
-            # 抓取失败的 URL (不再 retry)
-            search_count = 0  # Count of successful web_search calls
-            # 成功的 web_search 调用次数
+            fetched_urls: set = set()  # Successfully fetched URLs 注：成功抓取的 URL
+            failed_fetch_urls: set = set()  # Failed fetch URLs (exclude from retry) 注：抓取失败的 URL (不再 retry)
+            search_count = 0  # Count of successful web_search calls 注：成功的 web_search 调用次数
 
             # Strategy-specific fetch ratios (Codex recommendation)
             # 按策略区分抓取比例 (Codex 建议)
@@ -2256,8 +2287,7 @@ async def agent_query(request: Request, query: AgentQuery):
                             elif tool_name == 'web_fetch':
                                 tool_calls_from_output.append({"name": tool_name, "arguments": {"urls": [extracted_arg]}})
                             logger.info(f"🔧 Recovered XML tool call: {tool_name} from output_text")
-                            break  # Only recover one tool call per iteration
-                            # 每轮只恢复一个 tool 调用
+                            break  # Only recover one tool call per iteration 注：每轮只恢复一个 tool 调用
 
                 if not tool_calls_from_output or not effective_allowed_tools:
                     stop_reason = "no_tool_call"
@@ -2281,8 +2311,7 @@ async def agent_query(request: Request, query: AgentQuery):
                 for rr in raw_records:
                     if rr.get("tool") == "web_search" and rr.get("success"):
                         search_urls.extend(_extract_urls_from_search_output(rr.get("output")))
-                        search_count += 1  # P0 Fix: Track search count for ratio
-                        # P0 修复: 记录搜索次数用于计算比例
+                        search_count += 1  # P0 Fix: Track search count for ratio 注：P0 修复: 记录搜索次数用于计算比例
 
                     # P0 Fix: Track unique fetched/failed URLs for ratio enforcement
                     # P0 修复: 跟踪去重后的已抓取/失败 URL, 用于强制比例
@@ -2414,7 +2443,7 @@ async def agent_query(request: Request, query: AgentQuery):
             # 保护: 仅当 search_count >= 3 时强制比例 (Codex 建议)
             # 保护: 防止除零
             needs_more_fetch = (
-                search_count == 0 or  # Early guard per Codex
+                search_count == 0 or  # Early guard per Codex 注：按 Codex 建议的提前保护
                 not fetch_success or
                 (search_count >= 3 and unique_fetch_count / search_count < min_fetch_ratio)
             )
@@ -2510,8 +2539,7 @@ async def agent_query(request: Request, query: AgentQuery):
             # 这样 tool 结果才会被汇总进 Response, 而不是只留下 "I'll execute..."
             # 注意: domain_discovery 现在也通过 interpretation_pass 生成最终 JSON
             # (此前会跳过, 导致输出 "I'll execute..." 而不是 JSON)
-            skip_interpretation_roles: set[str] = set()  # No roles skip interpretation
-            # 没有 role 跳过解释
+            skip_interpretation_roles: set[str] = set()  # No roles skip interpretation 注：没有 role 跳过解释
             role = query.context.get("role") if isinstance(query.context, dict) else None
             # A3: Skip interpretation when ALL executed tools are data-only (file_list, file_read, etc.)
             # These tools return structured data that doesn't benefit from LLM summarization.
@@ -2536,7 +2564,7 @@ async def agent_query(request: Request, query: AgentQuery):
 
             has_successful_tool = any(r.get("success") for r in tool_execution_records)
             if not skip_interpretation and tool_execution_records and (
-                has_successful_tool  # Any successful tool execution requires summarization
+                has_successful_tool  # Any successful tool execution requires summarization 注：任何成功的 tool 执行都需要汇总
                 or stop_reason != "no_tool_call"
                 or did_forced_fetch
                 or not (response_text and str(response_text).strip())
@@ -2613,7 +2641,7 @@ async def agent_query(request: Request, query: AgentQuery):
                     max_tokens=max_tokens,
                     temperature=temperature,
                     response_format=response_format,
-                    tools=None,  # No tools for interpretation pass
+                    tools=None,  # No tools for interpretation pass 注：解释阶段不传 tools
                     workflow_id=request.headers.get("X-Workflow-ID")
                     or request.headers.get("x-workflow-id"),
                     agent_id=query.agent_id,
@@ -2662,8 +2690,7 @@ async def agent_query(request: Request, query: AgentQuery):
                     fallback_digest = generate_tool_digest(
                         last_tool_results or "",
                         tool_execution_records,
-                        max_chars=30000  # Increased from default 3000 to avoid truncation
-                        # 从默认 3000 提高以避免截断
+                        max_chars=30000  # Increased from default 3000 to avoid truncation 注：从默认 3000 提高以避免截断
                     )
                     response_text = fallback_digest if fallback_digest else raw_interpretation
                     logger.warning(
@@ -2738,7 +2765,7 @@ async def agent_query(request: Request, query: AgentQuery):
                         max_tokens=max_tokens,
                         temperature=temperature,
                         response_format=response_format,
-                        tools=None,  # No tools for cleanup pass
+                        tools=None,  # No tools for cleanup pass 注：清理阶段不传 tools
                         workflow_id=request.headers.get("X-Workflow-ID")
                         or request.headers.get("x-workflow-id"),
                         agent_id=query.agent_id,
@@ -2952,7 +2979,10 @@ async def _execute_and_format_tools(
     }
 
     def _humanize_tool(tool_name: str, args: dict = None) -> str:
-        """Convert raw tool name to user-friendly action text with context."""
+        """Convert raw tool name to user-friendly action text with context.
+
+        将原始 tool 名转换为带 context、对用户友好的操作描述.
+        """
         # 将原始 tool 名转换为带 context、面向用户的操作描述.
         if args:
             if tool_name == "web_search":
@@ -2988,7 +3018,10 @@ async def _execute_and_format_tools(
         max_depth: int = 4,
         redact_keys: Optional[List[str]] = None,
     ) -> Any:
-        """Recursively sanitize payloads to avoid secret leaks and stream floods."""
+        """Recursively sanitize payloads to avoid secret leaks and stream floods.
+
+        递归清洗 payload, 避免密钥泄漏与 streaming 输出洪水.
+        """
         # 递归清洗 payload, 避免密钥泄漏与 streaming 输出洪水.
         if redact_keys is None:
             redact_keys = ["api_key", "token", "secret", "password", "credential", "auth"]
@@ -3198,8 +3231,7 @@ async def _execute_and_format_tools(
                 safe_keys = {
                     "session_id",
                     "user_id",
-                    "agent_id",  # For tool rate limiting fallback key
-                    # 作为 tool rate limit 的回退 key
+                    "agent_id",  # For tool rate limiting fallback key 注：作为 tool rate limit 的回退 key
                     "prompt_params",
                     "official_domains",
                     # Controls for auto-fetch in web_search
@@ -3563,27 +3595,39 @@ def _extract_urls_from_search_output(output: Any) -> List[str]:
 
 
 class OutputFormatSpec(BaseModel):
-    """Deep Research 2.0: Expected output structure for a subtask."""
+    """Deep Research 2.0: Expected output structure for a subtask.
+
+    Deep Research 2.0: subtask 的预期输出结构.
+    """
     type: str = Field(default="narrative", description="'structured', 'narrative', or 'list'")
     required_fields: List[str] = Field(default_factory=list, description="Fields that must be present")
     optional_fields: List[str] = Field(default_factory=list, description="Nice-to-have fields")
 
 
 class SourceGuidanceSpec(BaseModel):
-    """Deep Research 2.0: Source type recommendations for a subtask."""
+    """Deep Research 2.0: Source type recommendations for a subtask.
+
+    Deep Research 2.0: subtask 的来源类型建议.
+    """
     required: List[str] = Field(default_factory=list, description="Must use these source types")
     optional: List[str] = Field(default_factory=list, description="May use these source types")
     avoid: List[str] = Field(default_factory=list, description="Should not use these source types")
 
 
 class SearchBudgetSpec(BaseModel):
-    """Deep Research 2.0: Search limits for a subtask."""
+    """Deep Research 2.0: Search limits for a subtask.
+
+    Deep Research 2.0: subtask 的搜索上限.
+    """
     max_queries: int = Field(default=10, description="Maximum web_search calls")
     max_fetches: int = Field(default=20, description="Maximum web_fetch calls")
 
 
 class BoundariesSpec(BaseModel):
-    """Deep Research 2.0: Scope boundaries for a subtask."""
+    """Deep Research 2.0: Scope boundaries for a subtask.
+
+    Deep Research 2.0: subtask 的范围边界.
+    """
     in_scope: List[str] = Field(default_factory=list, description="Topics explicitly within scope")
     out_of_scope: List[str] = Field(default_factory=list, description="Topics to avoid")
 
@@ -3597,10 +3641,12 @@ class Subtask(BaseModel):
         default="", description="Optional structured subtask type, e.g., 'synthesis'"
     )
     # Optional grouping for research-area-driven decomposition
+    # 可选分组, 用于按研究领域驱动分解
     parent_area: Optional[str] = Field(
         default="", description="Top-level research area that this subtask belongs to"
     )
     # LLM-native tool selection
+    # 由 LLM 自主选择 tool
     suggested_tools: List[str] = Field(
         default_factory=list, description="Tools suggested by LLM for this subtask"
     )
@@ -3608,6 +3654,7 @@ class Subtask(BaseModel):
         default_factory=dict, description="Pre-structured parameters for tool execution"
     )
     # Deep Research 2.0: Task Contract fields
+    # Deep Research 2.0: Task Contract 字段
     output_format: Optional[OutputFormatSpec] = Field(
         default=None, description="Expected output structure"
     )
@@ -3621,6 +3668,7 @@ class Subtask(BaseModel):
         default=None, description="Scope boundaries"
     )
     # P2P Coordination fields (populated when p2p_enabled=true)
+    # P2P 协同字段 (p2p_enabled=true 时填充)
     produces: List[str] = Field(
         default_factory=list, description="Topics this subtask produces"
     )
@@ -3635,6 +3683,7 @@ class DecompositionResponse(BaseModel):
     subtasks: List[Subtask]
     total_estimated_tokens: int
     # Extended planning schema (plan_schema_v2)
+    # 扩展规划 schema (plan_schema_v2)
     execution_strategy: str = Field(
         default="parallel", description="parallel|sequential|hybrid"
     )
@@ -3642,6 +3691,7 @@ class DecompositionResponse(BaseModel):
     concurrency_limit: int = Field(default=5)
     token_estimates: Dict[str, int] = Field(default_factory=dict)
     # Cognitive routing fields for intelligent strategy selection
+    # 用于智能策略选择的认知路由字段
     cognitive_strategy: str = Field(
         default="decompose", description="direct|decompose|exploratory|react|research"
     )
@@ -3652,6 +3702,7 @@ class DecompositionResponse(BaseModel):
         default="decompose", description="Fallback if primary strategy fails"
     )
     # Usage and provider/model metadata (optional; used for accurate cost tracking)
+    # usage 与 provider/model 元数据 (可选; 用于精确成本核算)
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
@@ -3674,10 +3725,8 @@ class AgentLoopTurn(BaseModel):
     action: str = ""
     result: Optional[Any] = None
     decision_summary: str = ""
-    assistant_replay: str = ""      # Compact deterministic JSON of LLM action (for multi-turn cache)
-    # LLM 动作的精简确定性 JSON (用于多轮 cache)
-    observation_text: str = ""      # Frozen tool result digest (for multi-turn cache)
-    # 冻结的 tool 结果摘要 (用于多轮 cache)
+    assistant_replay: str = ""      # Compact deterministic JSON of LLM action (for multi-turn cache) 注：LLM 动作的精简确定性 JSON (用于多轮 cache)
+    observation_text: str = ""      # Frozen tool result digest (for multi-turn cache) 注：冻结的 tool 结果摘要 (用于多轮 cache)
 
 
 class AgentMailboxMsg(BaseModel):
@@ -3759,27 +3808,36 @@ class AgentLoopStepResponse(BaseModel):
     action: str = Field(..., description="Action type: tool_call, send_message, publish_data, request_help, done")
     decision_summary: str = Field(default="", description="1-3 sentence reasoning for this action (max 500 chars)")
     # tool_call
+    # tool 调用
     tool: str = ""
     tool_params: Dict[str, Any] = Field(default_factory=dict)
     # send_message
+    # 发送消息
     to: str = ""
     message_type: str = ""
     payload: Dict[str, Any] = Field(default_factory=dict)
     # publish_data
+    # 发布数据
     topic: str = ""
     data: str = ""
     # request_help
+    # 请求协助
     help_description: str = ""
     help_skills: List[str] = Field(default_factory=list)
     # complete_task / claim_task
+    # 完成任务 / 领取任务
     task_id: str = ""
     # create_task
+    # 创建任务
     task_description: str = ""
     # done
+    # 完成
     response: str = ""
     # done — structured completion report for Lead visibility
+    # done —— 供 Lead 查看的结构化完成报告
     completion_report: Dict[str, Any] = Field(default_factory=dict, description="Structured report: {summary, files_written, key_findings}")
     # usage
+    # 用量
     tokens_used: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
@@ -3787,9 +3845,9 @@ class AgentLoopStepResponse(BaseModel):
     cache_creation_tokens: int = 0
     model_used: str = ""
     provider: str = ""
-    response_id: str = ""  # OpenAI Responses API ID for chaining
-    notes: str = ""  # Agent's updated running notes for next iteration
-    assistant_replay: str = ""  # Compact deterministic JSON for multi-turn cache replay
+    response_id: str = ""  # OpenAI Responses API ID for chaining 注：用于串联的 OpenAI Responses API ID
+    notes: str = ""  # Agent's updated running notes for next iteration 注：agent 为下一轮更新的累积笔记
+    assistant_replay: str = ""  # Compact deterministic JSON for multi-turn cache replay 注：用于多轮 cache 重放的精简确定性 JSON
 
 
 # Import swarm prompts from roles/swarm/ — single source of truth
@@ -3935,6 +3993,7 @@ def _build_volatile_sections(body: AgentLoopStepRequest) -> list:
         parts.append("## Inbox Messages\n" + "\n".join(msg_lines))
 
     # Budget
+    # 预算 (budget)
     tool_call_count = body.cumulative_tool_calls if body.cumulative_tool_calls > 0 else sum(1 for t in body.history if (t.action or "").startswith("tool_call"))
     has_file_write = any("file_write" in (t.action or "") for t in body.history) if body.history else False
     TOOL_CALL_TARGET = 15
@@ -4008,6 +4067,24 @@ def _build_multi_turn_messages(
     payload, identical across iterations so they cache cleanly. Without this,
     user attachments were silently dropped on every Sonnet+/multi-turn loop
     step — they only made it through the legacy single-message path.
+    为 Anthropic prompt cache 构建只追加的多轮消息.
+
+    结构:
+      system: role_prompt + protocol
+      user: bootstrap_static (Task + Team + OriginalQuery + ATTACHMENTS —— 不可变)
+      user: "Begin your task." (observation_0)
+      assistant: replay_1 (上一轮 LLM response 的冻结精简 JSON)
+      user: observation_1 (冻结的 tool 结果)
+      ...
+      user: observation_LATEST + 易变状态 (Board/Budget/Knowledge)
+
+    history 中的每个 assistant/user 对都是冻结的 —— 跨迭代字节完全一致.
+    只有最后一条 user 消息会变化. Anthropic 的反向前缀匹配会找到最长的已缓存前缀
+    → 缓存命中率 60-80%.
+
+    附件 (若有) 随 bootstrap 消息以 list-of-blocks payload 的形式发送, 跨迭代完全一致,
+    因而能干净地缓存. 没有这一点时, 用户附件在每次 Sonnet+/多轮循环步骤中会被静默丢弃
+    —— 它们只能走原来的单消息老路径.
     """
     messages = [{"role": "system", "content": system_prompt}]
 
@@ -4122,13 +4199,13 @@ def _build_multi_turn_messages(
     while total_chars > max_prompt_chars and len(messages) > 5:
         for idx in range(3, len(messages) - 2):
             if messages[idx]["role"] == "assistant":
-                messages.pop(idx)  # assistant
+                messages.pop(idx)  # assistant 注：助手
                 if idx < len(messages) and messages[idx]["role"] == "user":
-                    messages.pop(idx)  # user observation
+                    messages.pop(idx)  # user observation 注：用户观测
                 break
         new_total = sum(_measure_chars(m["content"]) for m in messages)
         if new_total >= total_chars:
-            break  # No progress, stop trimming
+            break  # No progress, stop trimming 注：无进展, 停止裁剪
         total_chars = new_total
         logger.info(f"AgentLoop: trimmed oldest turn pair for context (agent={body.agent_id})")
 
@@ -4251,8 +4328,7 @@ def build_agent_messages(body: AgentLoopStepRequest, raw_attachments=None) -> li
     # 可 cache 前缀 (system ~2700t + 稳定 user 部分) 能越过 Haiku 的 4096t 阈值,
     # 从而在稳定部分足够大的轮次命中 prompt cache.
     user_parts.append("<!-- cache_break -->")
-    history_lines = []  # Initialized here so trimming loop below can reference it
-    # 在此初始化, 供下方裁剪循环引用
+    history_lines = []  # Initialized here so trimming loop below can reference it 注：在此初始化, 供下方裁剪循环引用
     if body.history:
         # Tool-type-aware truncation: file_read/file_edit results are the agent's
         # working memory — truncating them forces wasteful re-reads. Web results
@@ -4260,9 +4336,8 @@ def build_agent_messages(body: AgentLoopStepRequest, raw_attachments=None) -> li
         # 按 tool 类型区分截断: file_read/file_edit 的结果是 agent 的工作记忆,
         # 截断它们会导致代价高昂的重复读取. Web 结果体积大, 但跨轮次
         # 很少需要完整内容.
-        HISTORY_FILE_MAX = 15000   # file_read, file_edit, file_list — working memory
-        # 工作记忆
-        HISTORY_DEFAULT_MAX = 3000  # web_search, web_fetch, calculator, etc.
+        HISTORY_FILE_MAX = 15000   # file_read, file_edit, file_list — working memory 注：工作记忆
+        HISTORY_DEFAULT_MAX = 3000  # web_search, web_fetch, calculator, etc. 注：web_search, web_fetch, calculator 等
         _FILE_OPS = ("file_read", "file_edit", "file_list")
         for turn in body.history:
             action_str = turn.action or ""
@@ -4307,8 +4382,7 @@ def build_agent_messages(body: AgentLoopStepRequest, raw_attachments=None) -> li
     ) if body.history else False
     TOOL_CALL_TARGET = 15
     TOOL_CALL_NUDGE = 10
-    TOOL_CALL_RESERVE = 13  # Reserve last 2 calls for file_write + idle
-    # 为 file_write + idle 保留最后 2 次调用
+    TOOL_CALL_RESERVE = 13  # Reserve last 2 calls for file_write + idle 注：为 file_write + idle 保留最后 2 次调用
     budget_text = f"## Budget: {tool_call_count}/{TOOL_CALL_TARGET} tool calls used\n"
     if has_file_write:
         # Agent already wrote file — push toward idle, not another file_write
@@ -4483,9 +4557,10 @@ async def agent_loop_step(request: Request, body: AgentLoopStepRequest) -> Agent
         cache_creation_tokens = int(usage.get("cache_creation_tokens") or 0)
         model_used = result.get("model", "") or ""
         provider_name = result.get("provider", "") or ""
-        resp_id = result.get("request_id", "") or ""  # Responses API ID for chaining
+        resp_id = result.get("request_id", "") or ""  # Responses API ID for chaining 注：用于串联的 Responses API ID
 
         # Parse LLM JSON response
+        # 解析 LLM 返回的 JSON
         cleaned = strip_markdown_json_wrapper(raw_text, expect_json=True).strip()
         try:
             action_data = json_module.loads(cleaned)
@@ -4496,6 +4571,10 @@ async def agent_loop_step(request: Request, body: AgentLoopStepRequest) -> Agent
         # (e.g. tool_params JSON then action JSON). json.loads() either fails on the
         # combined string (JSONDecodeError) or parses only the first object which may
         # lack "action". Scan backwards for the real action object in either case.
+        # GPT-5.1 有时会把多个 JSON 对象用换行拼接输出
+        # (例如先 tool_params JSON 再 action JSON). json.loads() 要么在拼接后的字符串上
+        # 失败 (JSONDecodeError), 要么只解析出第一个对象, 而该对象可能缺少
+        # "action". 两种情况下都从后往前扫描真正的 action 对象.
         if (action_data is None or "action" not in action_data) and "\n" in cleaned:
             for candidate in reversed(cleaned.split("\n")):
                 candidate = candidate.strip()
@@ -4528,28 +4607,35 @@ async def agent_loop_step(request: Request, body: AgentLoopStepRequest) -> Agent
         action = action_data.get("action") or action_data.get("type") or "idle"
         # Normalize: prompt only defines "idle" (not "done") for completion,
         # but LLMs sometimes return "done" anyway. Map to idle in swarm mode.
+        # 归一化: prompt 只定义 "idle" (不含 "done") 作为完成动作,
+        # 但 LLM 有时仍返回 "done". 在 swarm 模式下映射为 idle.
         if action == "done" and body.is_swarm:
             logger.info(f"Mapped done→idle for swarm agent {body.agent_id}")
             action = "idle"
 
         # Extract and truncate decision_summary (D7: max 500 chars)
+        # 提取并截断 decision_summary (D7: 最多 500 字符)
         decision_summary = str(action_data.get("decision_summary", ""))[:500]
 
         # Debug: log every agent decision for tracing double-write and other issues
+        # 调试: 记录每次 agent 决策, 用于排查重复写入等问题
         tool_name = action_data.get("tool", "")
         tool_path = ""
         if action == "tool_call" and isinstance(action_data.get("tool_params"), dict):
             tool_path = action_data["tool_params"].get("path", "")
         logger.info(f"[agent_decision] agent={body.agent_id} action={action} tool={tool_name} path={tool_path} summary={decision_summary[:200]}")
         # Trace idle-with-tool anomaly: Sonnet outputs idle but fills tool/tool_params
+        # 追踪 idle 却带 tool 的异常: Sonnet 输出 idle 但仍填了 tool/tool_params
         if action == "idle" and tool_name:
             logger.warning(f"[agent_idle_anomaly] agent={body.agent_id} action=idle but tool={tool_name} present. raw_keys={list(action_data.keys())} raw_json={json_module.dumps(action_data, ensure_ascii=False)[:500]}")
 
         # Normalize tool_params to be more tolerant of schema drift in LLM JSON.
+        # 归一化 tool_params, 以容忍 LLM JSON 的 schema 漂移.
         tool_params = action_data.get("tool_params", {}) or {}
         if not isinstance(tool_params, dict):
             tool_params = {}
         # Common fields that models sometimes emit at top-level instead of under tool_params.
+        # 模型有时会把这些常见字段放在顶层而不是 tool_params 下.
         for k in (
             "role",
             "additional_spawns",
@@ -4565,6 +4651,7 @@ async def agent_loop_step(request: Request, body: AgentLoopStepRequest) -> Agent
                 tool_params[k] = action_data[k]
 
         # Normalize publish_data.data: LLM sometimes returns dict instead of string
+        # 归一化 publish_data.data: LLM 有时返回 dict 而非字符串
         publish_data_val = action_data.get("data", "")
         if isinstance(publish_data_val, dict):
             publish_data_val = json_module.dumps(publish_data_val, ensure_ascii=False)
@@ -4581,9 +4668,11 @@ async def agent_loop_step(request: Request, body: AgentLoopStepRequest) -> Agent
         )
 
         # Build structured completion report for done/idle actions
+        # 为 done/idle 动作构建结构化完成报告
         completion_report = {}
         if action in ("done", "idle"):
             # Agent-generated summary (from response field, capped at 1000 chars)
+            # agent 生成的摘要 (取自 response 字段, 最多 1000 字符)
             raw_response = str(action_data.get("response", ""))
             if raw_response and not (raw_response.strip().startswith("{") and "tool_params" in raw_response):
                 completion_report["summary"] = raw_response[:1000]
@@ -4591,9 +4680,11 @@ async def agent_loop_step(request: Request, body: AgentLoopStepRequest) -> Agent
                 completion_report["summary"] = decision_summary
 
             # Extract key_findings if agent provided them
+            # 提取 agent 提供的 key_findings
             completion_report["key_findings"] = action_data.get("key_findings", [])
 
         # Extract running notes — agent's cumulative memory (cap at 6000 chars)
+        # 提取累积笔记 —— agent 的累积记忆 (最多 6000 字符)
         notes = str(action_data.get("notes", ""))[:6000]
         if action == "tool_call" and tool_name == "file_write":
             logger.info(f"[agent_decision_notes] agent={body.agent_id} file_write notes={notes[:500]}")
@@ -4601,6 +4692,9 @@ async def agent_loop_step(request: Request, body: AgentLoopStepRequest) -> Agent
         # Build compact deterministic assistant_replay for multi-turn cache.
         # Go stores this in history and sends it back on the next iteration,
         # so Python can reconstruct the multi-turn message sequence.
+        # 为多轮 cache 构建精简、字节确定的 assistant_replay.
+        # Go 将其存入 history 并在下一轮回传,
+        # 使 Python 能重建多轮消息序列.
         import json as json_module_for_replay
         replay_data = {"action": action, "decision_summary": decision_summary}
         if action == "tool_call":
@@ -4616,28 +4710,37 @@ async def agent_loop_step(request: Request, body: AgentLoopStepRequest) -> Agent
             action=action,
             decision_summary=decision_summary,
             # tool_call
+            # tool 调用
             tool=action_data.get("tool", ""),
             tool_params=tool_params,
             # send_message / assign_task target
+            # send_message / assign_task 的目标
             to=action_data.get("to", "") or action_data.get("agent_id", ""),
             message_type=action_data.get("message_type", "") or action_data.get("role", ""),
             payload=action_data.get("payload", {}),
             # publish_data
+            # 发布数据
             topic=action_data.get("topic", ""),
             data=publish_data_val,
             # request_help
+            # 请求协助
             help_description=action_data.get("help_description", ""),
             help_skills=action_data.get("help_skills", []),
             # complete_task / claim_task
+            # 完成任务 / 领取任务
             task_id=action_data.get("task_id", ""),
             # create_task
+            # 创建任务
             task_description=task_description,
             # done
+            # 完成
             response=action_data.get("response", ""),
             completion_report=completion_report,
             # running notes
+            # 累积笔记
             notes=notes,
             # usage
+            # 用量
             tokens_used=tokens_used,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
@@ -4981,6 +5084,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
 
         # ================================================================
         # PROMPT CONSTANTS: Identity prompts + Common decomposition suffix
+        # PROMPT 常量: identity prompt + 通用分解后缀
         # ================================================================
 
         # Common decomposition instructions (appended to all identity prompts)
@@ -5205,6 +5309,15 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
         # Therefore, we skip role preset selection and fall through to the general
         # planning identity. Role information (allowed_tools) is still respected
         # via the available_tools filtering done earlier in this function.
+        # 注意: 分解阶段不使用 role preset
+        # role 专用 prompt 是为 agent 执行 (回答问题) 设计的,
+        # 不是为任务分解设计的. 在此使用 role preset 会造成冲突 —— 例如,
+        # 某些专用 role 明确要求自定义输出格式,
+        # 与分解所需的 "subtasks" 格式冲突.
+        #
+        # 因此这里跳过 role preset 选择, 回退到通用
+        # 规划 identity. role 信息 (allowed_tools) 依然被尊重,
+        # 通过本函数前面已完成的 available_tools 过滤.
 
         # 因此这里跳过 role preset 选择, 直接落到通用规划身份.
         # role 信息 (allowed_tools) 仍会通过本函数前面完成的 available_tools
@@ -5498,8 +5611,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
             result = await providers.generate_completion(
                 messages=messages,
                 tier=decompose_tier,
-                max_tokens=8192,  # Increased from 4096 to prevent truncation on complex decompositions
-                # 从 4096 提高以避免复杂分解被截断
+                max_tokens=8192,  # Increased from 4096 to prevent truncation on complex decompositions 注：从 4096 提高以避免复杂分解被截断
                 temperature=0.1,
                 response_format={"type": "json_object"},
                 specific_model=(
@@ -5521,6 +5633,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
             except Exception as parse_err:
                 logger.warning(f"JSON parse error: {parse_err}, response_length={len(raw)}, starts_with_brace={raw.strip().startswith('{') if raw else False}")
                 # Try to find first {...} in response
+                # 尝试在 response 中找到第一个 {...}
                 import re
 
                 match = re.search(r"\{.*\}", raw, re.DOTALL)
@@ -5532,23 +5645,28 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
 
             if not data:
                 # Log only metadata to avoid PII exposure
+                # 仅记录元数据, 避免泄漏 PII
                 logger.error(f"Decomposition failed: LLM did not return valid JSON. response_length={len(raw)}, response_type={'empty' if not raw else 'text' if not raw.strip().startswith('{') else 'malformed_json'}")
                 raise ValueError("LLM did not return valid JSON")
 
             # Extract fields with defaults
+            # 提取字段并填默认值
             mode = data.get("mode", "standard")
             score = float(data.get("complexity_score", 0.5))
             subtasks_raw = data.get("subtasks", [])
             # Parse subtasks
+            # 解析 subtasks
             subtasks = []
             total_tokens = 0
 
             # Validation: Check if subtasks is null or empty but complexity suggests it should have tasks
+            # 校验: subtasks 为空但 complexity 表明应当有任务
             if (not subtasks_raw or subtasks_raw is None) and score >= 0.3:
                 logger.warning(
                     f"Invalid decomposition: complexity={score} but no subtasks. Creating fallback subtask."
                 )
                 # Create a generic subtask without pattern matching - let LLM decide tools
+                # 创建一个通用 subtask, 不做模式匹配 —— 由 LLM 决定 tool
                 subtasks_raw = [
                     {
                         "id": "task-1",
@@ -5565,20 +5683,24 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
                     continue
 
                 # Extract tool information if present
+                # 若存在则提取 tool 信息
                 suggested_tools = st.get("suggested_tools", [])
                 tool_params = st.get("tool_parameters", {})
                 deps = st.get("dependencies", []) or []
 
                 # Log tool analysis by LLM
+                # 记录 LLM 的 tool 分析
                 if suggested_tools:
                     logger.info(
                         f"LLM tool analysis: suggested_tools={suggested_tools}, tool_parameters={tool_params}"
                     )
                     # For dependent subtasks, clear tool_parameters to avoid placeholders
+                    # 对有依赖的 subtask 清空 tool_parameters, 避免留下占位符
                     if isinstance(deps, list) and len(deps) > 0:
                         tool_params = {}
                     else:
                         # Add the tool name to parameters if not present and tools are suggested
+                        # 若参数中缺少 tool 名且已建议 tools, 则补上
                         if (
                             suggested_tools
                             and "tool" not in tool_params
@@ -5587,6 +5709,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
                             tool_params["tool"] = suggested_tools[0]
 
                 # Determine structured task type when available or infer for synthesis-like tasks
+                # 确定结构化 task 类型 (若可得), 或为综合类任务推断类型
                 task_type = str(st.get("task_type") or "")
                 if not task_type:
                     desc_lower = str(st.get("description", "")).strip().lower()
@@ -5601,8 +5724,10 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
                         task_type = "synthesis"
 
                 # Keep tool_params as-is without template resolution
+                # tool_params 原样保留, 不做模板解析
 
                 # Deep Research 2.0: Parse task contract fields
+                # Deep Research 2.0: 解析 task contract 字段
                 parsed: Dict[str, Any] = {}
                 for field, spec in (
                     ("output_format", OutputFormatSpec),
@@ -5637,6 +5762,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
                 total_tokens += subtask.estimated_tokens
 
                 # Log task contract fields for debugging
+                # 记录 task contract 字段以便调试
                 if any(parsed.values()):
                     logger.info(
                         f"Deep Research 2.0 task contract for {subtask.id}: "
@@ -5648,6 +5774,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
 
 
             # Extract extended fields
+            # 提取扩展字段
             exec_strategy = data.get("execution_strategy", "sequential")
             agent_types = data.get("agent_types", [])
             concurrency_limit = data.get("concurrency_limit", 1)
@@ -5655,8 +5782,10 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
 
             # ================================================================
             # Option 3: Post-parse backfill for missing Task Contract fields
+            # 方案 3: 解析后回填缺失的 Task Contract 字段
             # ================================================================
             # Ensure research workflows have complete contract fields even if LLM omits them
+            # 确保研究 workflow 即使 LLM 遗漏也拥有完整的 contract 字段
             is_research_workflow = (
                 query.context
                 and isinstance(query.context, dict)
@@ -5675,6 +5804,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
 
                 for subtask in subtasks:
                     # Backfill output_format if missing
+                    # 缺失时回填 output_format
                     if not subtask.output_format:
                         subtask.output_format = OutputFormatSpec(
                             type="narrative", required_fields=[], optional_fields=[]
@@ -5685,6 +5815,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
                         backfilled_count += 1
 
                     # Backfill search_budget if missing
+                    # 缺失时回填 search_budget
                     if not subtask.search_budget:
                         subtask.search_budget = SearchBudgetSpec(
                             max_queries=10, max_fetches=20
@@ -5700,12 +5831,14 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
                     )
 
             # P2P post-processing: derive produces/consumes from dependencies
+            # P2P 后处理: 由依赖关系推导 produces/consumes
             p2p_enabled = isinstance(query.context, dict) and query.context.get("p2p_enabled")
             if p2p_enabled and subtasks:
                 has_any_deps = any(st.dependencies for st in subtasks)
                 needs_backfill = has_any_deps and not any(st.produces or st.consumes for st in subtasks)
                 if needs_backfill:
                     # Build produces: each task with dependents produces "output-{id}"
+                    # 构建 produces: 每个有下游依赖的 task 产出 "output-{id}"
                     depended_on = set()
                     for st in subtasks:
                         for dep in st.dependencies:
@@ -5718,6 +5851,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
                     logger.info(f"P2P backfill: derived produces/consumes from dependencies for {len(subtasks)} subtasks")
 
             # Extract cognitive routing fields from data
+            # 从 data 中提取认知路由字段
             cognitive_strategy = data.get("cognitive_strategy", "decompose")
             confidence = data.get("confidence", 0.8)
             fallback_strategy = data.get("fallback_strategy", "decompose")
@@ -5757,6 +5891,7 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
         except Exception as e:
             logger.error(f"LLM decomposition failed: {e}")
             # Return error instead of using heuristics
+            # 返回错误, 而不是改用启发式
             raise HTTPException(
                 status_code=503,
                 detail=f"LLM service unavailable for decomposition: {str(e)}",
@@ -5771,7 +5906,10 @@ async def decompose_task(request: Request, query: AgentQuery) -> DecompositionRe
 
 @router.get("/agent/models")
 async def list_models(request: Request):
-    """List available models and their tiers."""
+    """List available models and their tiers.
+
+    列出可用模型及其 tier.
+    """
     return {
         "models": {
             "small": ["mock-model-v1", "gpt-5-nano-2025-08-07"],
@@ -5785,11 +5923,15 @@ async def list_models(request: Request):
 
 @router.get("/roles")
 async def list_roles() -> JSONResponse:
-    """Expose role presets for cross-service sync (roles_v1)."""
+    """Expose role presets for cross-service sync (roles_v1).
+
+    暴露 role preset 供跨服务同步 (roles_v1).
+    """
     try:
         from ..roles.presets import _PRESETS as PRESETS
 
         # Return safe subset: system_prompt, allowed_tools, caps
+        # 仅返回安全子集: system_prompt, allowed_tools, caps
         out = {}
         for name, cfg in PRESETS.items():
             out[name] = {

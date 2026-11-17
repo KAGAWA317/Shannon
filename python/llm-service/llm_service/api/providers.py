@@ -38,6 +38,7 @@ async def list_provider_models(
         raise HTTPException(status_code=503, detail="Provider manager not initialized")
 
     # Optional tier filter
+    # 可选的 tier 过滤条件
     tier_enum: Optional[ModelTier] = None
     if tier:
         v = tier.lower()

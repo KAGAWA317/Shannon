@@ -127,10 +127,12 @@ async def analyze_complexity(
     providers = getattr(request.app.state, "providers", None)
 
     # If no providers configured, use heuristics
+    # 未配置 provider 时使用启发式规则
     if not providers or not providers.is_configured():
         return _heuristic_analysis(body)
 
     # Build a tight classification prompt
+    # 构造紧凑的分类 prompt
     sys = (
         "You classify tasks into simple, standard, or complex. "
         "IMPORTANT: Tasks requiring calculations or tool usage must be 'standard' mode (not 'simple'). "
@@ -164,6 +166,7 @@ async def analyze_complexity(
         data = _extract_json_block(raw)
         if not data:
             # fallback to heuristic if model response isn't parseable
+            # 模型响应无法解析时回退到启发式规则
             heur = _heuristic_analysis(body)
             if debug:
                 heur.raw_output = raw
@@ -239,6 +242,7 @@ def _heuristic_task_analysis(task: str) -> TaskAnalysisResponse:
     lower_task = task.lower()
 
     # Classify task type
+    # 判定 task 类型
     if any(
         word in lower_task for word in ["what", "who", "when", "where", "why", "how"]
     ):
@@ -263,30 +267,34 @@ def _heuristic_task_analysis(task: str) -> TaskAnalysisResponse:
     # Calculate complexity score (matching Rust logic)
     # 计算复杂度评分（与 Rust 逻辑保持一致）
     complexity = 0.0
-    complexity += min(len(task) / 500.0, 0.3)  # Length factor
+    complexity += min(len(task) / 500.0, 0.3)  # Length factor 注：长度因子
     word_count = len(task.split())
-    complexity += min(word_count / 50.0, 0.2)  # Word count factor
+    complexity += min(word_count / 50.0, 0.2)  # Word count factor 注：词数因子
     special_chars = sum(1 for c in task if not c.isalnum() and not c.isspace())
-    complexity += min(special_chars / 20.0, 0.2)  # Special characters
+    complexity += min(special_chars / 20.0, 0.2)  # Special characters 注：特殊字符
     questions = task.count("?")
-    complexity += min(questions / 3.0, 0.3)  # Question marks
+    complexity += min(questions / 3.0, 0.3)  # Question marks 注：问号数量
     complexity = min(complexity, 1.0)
 
     # Extract entities (simple version)
+    # 抽取实体（简单版）
     entities = []
     # Extract quoted strings
+    # 抽取引号内的字符串
     import re
 
     quoted = re.findall(r'"([^"]+)"', task)
     entities.extend(quoted)
     # Extract capitalized words (potential proper nouns)
+    # 抽取首字母大写的词（可能是专有名词）
     words = task.split()
     for word in words:
         if word and word[0].isupper() and len(word) > 2:
             entities.append(word.strip(".,!?"))
-    entities = list(set(entities))  # Remove duplicates
+    entities = list(set(entities))  # Remove duplicates 注：去重
 
     # Identify required capabilities
+    # 确定所需能力
     capabilities = []
     if "search" in lower_task or "find" in lower_task:
         capabilities.append("search")
@@ -302,6 +310,7 @@ def _heuristic_task_analysis(task: str) -> TaskAnalysisResponse:
         capabilities.append("general")
 
     # Extract constraints (simple heuristics)
+    # 抽取约束（简单启发式）
     constraints = []
     if "must" in lower_task:
         constraints.append("Contains mandatory requirements")
@@ -311,6 +320,7 @@ def _heuristic_task_analysis(task: str) -> TaskAnalysisResponse:
         constraints.append("Has time constraints")
 
     # Identify success criteria
+    # 确定成功标准
     success_criteria = []
     if task_type == "Query":
         success_criteria.append("Provide accurate answer")
@@ -347,10 +357,12 @@ async def analyze_task(request: Request, body: TaskAnalysisRequest):
     providers = getattr(request.app.state, "providers", None)
 
     # If no providers configured, use heuristics
+    # 未配置 provider 时使用启发式规则
     if not providers or not providers.is_configured():
         return _heuristic_task_analysis(body.task)
 
     # Build prompt for model-based analysis
+    # 为基于模型的分析构造 prompt
     sys_prompt = (
         "You are a task analyzer. Analyze the given task and provide structured information. "
         "Respond with JSON containing: "
@@ -387,6 +399,7 @@ async def analyze_task(request: Request, body: TaskAnalysisRequest):
             return _heuristic_task_analysis(body.task)
 
         # Validate and normalize task_type
+        # 校验并归一化 task_type
         task_type = str(data.get("task_type", "Unknown"))
         if task_type not in [
             "Query",
@@ -410,4 +423,5 @@ async def analyze_task(request: Request, body: TaskAnalysisRequest):
         )
     except Exception:
         # Fallback to heuristic on any error
+        # 任何错误都回退到启发式规则
         return _heuristic_task_analysis(body.task)

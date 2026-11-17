@@ -11,58 +11,75 @@ import (
 // ShannonConfig 表示 Shannon orchestrator 的主配置
 type ShannonConfig struct {
 	// Service configuration
+	// Service 配置
 	Service ServiceConfig `json:"service" yaml:"service"`
 
 	// Authentication configuration
+	// Authentication 配置
 	Auth AuthConfig `json:"auth" yaml:"auth"`
 
 	// Circuit breaker configurations
+	// Circuit breaker 配置
 	CircuitBreakers CircuitBreakersConfig `json:"circuit_breakers" yaml:"circuit_breakers"`
 
 	// Degradation system configuration
+	// 降级系统配置
 	Degradation DegradationConfig `json:"degradation" yaml:"degradation"`
 
 	// Health check configuration
+	// 健康检查配置
 	Health HealthConfig `json:"health" yaml:"health"`
 
 	// Agent management configuration
+	// Agent 管理配置
 	Agents AgentsConfig `json:"agents" yaml:"agents"`
 
 	// Temporal workflow configuration
+	// Temporal workflow 配置
 	Temporal TemporalConfig `json:"temporal" yaml:"temporal"`
 
 	// Logging configuration
+	// 日志配置
 	Logging LoggingConfig `json:"logging" yaml:"logging"`
 
 	// Policy engine configuration
+	// 策略引擎配置
 	Policy PolicyConfig `json:"policy" yaml:"policy"`
 
 	// Vector/Embedding configuration
+	// 向量/Embedding 配置
 	Vector VectorConfig `json:"vector" yaml:"vector"`
 
 	// Embeddings service configuration
+	// Embeddings 服务配置
 	Embeddings EmbeddingsConfig `json:"embeddings" yaml:"embeddings"`
 
 	// Tracing configuration
+	// Tracing 配置
 	Tracing TracingConfig `json:"tracing" yaml:"tracing"`
 
 	// Streaming configuration (v1)
+	// Streaming 配置（v1）
 	Streaming StreamingConfig `json:"streaming" yaml:"streaming"`
 
 	// Workflow orchestration behavior (evaluation/synthesis toggles)
+	// Workflow 编排行为（评估/汇总开关）
 	Workflow WorkflowConfig `json:"workflow" yaml:"workflow"`
 
 	// Session management configuration
+	// Session 管理配置
 	Session SessionConfig `json:"session" yaml:"session"`
 
 	// Feature flags for optional/private features
+	// 可选/私有功能的特性开关
 	Features FeatureFlagsConfig `json:"features" yaml:"features"`
 }
 
 // AuthConfig contains authentication configuration
+// AuthConfig 包含认证配置
 type AuthConfig struct {
 	Enabled                  bool          `json:"enabled" yaml:"enabled"`
-	SkipAuth                 bool          `json:"skip_auth" yaml:"skip_auth"` // Development mode
+	SkipAuth                 bool          `json:"skip_auth" yaml:"skip_auth"` // Development mode 注：开发模式
 	JWTSecret                string        `json:"jwt_secret" yaml:"jwt_secret"`
 	AccessTokenExpiry        time.Duration `json:"access_token_expiry" yaml:"access_token_expiry"`
 	RefreshTokenExpiry       time.Duration `json:"refresh_token_expiry" yaml:"refresh_token_expiry"`
@@ -73,6 +90,7 @@ type AuthConfig struct {
 }
 
 // ServiceConfig contains basic service configuration
+// ServiceConfig 包含基础服务配置
 type ServiceConfig struct {
 	Port            int           `json:"port" yaml:"port"`
 	HealthPort      int           `json:"health_port" yaml:"health_port"`
@@ -83,6 +101,7 @@ type ServiceConfig struct {
 }
 
 // CircuitBreakersConfig contains all circuit breaker configurations
+// CircuitBreakersConfig 包含所有 circuit breaker 配置
 type CircuitBreakersConfig struct {
 	Redis    CircuitBreakerConfig `json:"redis" yaml:"redis"`
 	Database CircuitBreakerConfig `json:"database" yaml:"database"`
@@ -90,6 +109,7 @@ type CircuitBreakersConfig struct {
 }
 
 // CircuitBreakerConfig represents circuit breaker settings
+// CircuitBreakerConfig 表示 circuit breaker 设置
 type CircuitBreakerConfig struct {
 	MaxRequests   uint32        `json:"max_requests" yaml:"max_requests"`
 	Interval      time.Duration `json:"interval" yaml:"interval"`
@@ -100,6 +120,7 @@ type CircuitBreakerConfig struct {
 }
 
 // DegradationConfig contains degradation system settings
+// DegradationConfig 包含降级系统设置
 type DegradationConfig struct {
 	Enabled           bool                  `json:"enabled" yaml:"enabled"`
 	CheckInterval     time.Duration         `json:"check_interval" yaml:"check_interval"`
@@ -128,6 +149,7 @@ type DegradationLevelThreshold struct {
 }
 
 // ModeDowngradeConfig contains mode downgrade settings
+// ModeDowngradeConfig 包含模式降级设置
 type ModeDowngradeConfig struct {
 	Enabled                  bool                          `json:"enabled" yaml:"enabled"`
 	MinorDegradationRules    ModeDowngradeRules            `json:"minor_degradation_rules" yaml:"minor_degradation_rules"`
@@ -146,6 +168,7 @@ type ModeDowngradeRules struct {
 }
 
 // PartialResultsConfig contains partial results settings
+// PartialResultsConfig 包含部分结果设置
 type PartialResultsConfig struct {
 	Enabled           bool                       `json:"enabled" yaml:"enabled"`
 	SuccessThresholds map[string]float64         `json:"success_thresholds" yaml:"success_thresholds"`
@@ -159,10 +182,11 @@ type PartialResultsConfig struct {
 type AggregationRule struct {
 	MinimumResults   int     `json:"minimum_results" yaml:"minimum_results"`
 	SuccessThreshold float64 `json:"success_threshold" yaml:"success_threshold"`
-	Strategy         string  `json:"strategy" yaml:"strategy"` // "first_success", "best_effort", "consensus"
+	Strategy         string  `json:"strategy" yaml:"strategy"` // "first_success", "best_effort", "consensus" 注：可选值："first_success"、"best_effort"、"consensus"
 }
 
 // HealthConfig contains health check settings
+// HealthConfig 包含健康检查设置
 type HealthConfig struct {
 	Enabled       bool          `json:"enabled" yaml:"enabled"`
 	CheckInterval time.Duration `json:"check_interval" yaml:"check_interval"`
@@ -170,10 +194,12 @@ type HealthConfig struct {
 	Port          int           `json:"port" yaml:"port"`
 
 	// Individual check configurations
+	// 各项单独检查的配置
 	Checks map[string]HealthCheckConfig `json:"checks" yaml:"checks"`
 }
 
 // HealthCheckConfig represents individual health check settings
+// HealthCheckConfig 表示单个健康检查设置
 type HealthCheckConfig struct {
 	Enabled  bool          `json:"enabled" yaml:"enabled"`
 	Critical bool          `json:"critical" yaml:"critical"`
@@ -182,6 +208,7 @@ type HealthCheckConfig struct {
 }
 
 // AgentsConfig contains agent management settings
+// AgentsConfig 包含 agent 管理设置
 type AgentsConfig struct {
 	MaxConcurrent   int           `json:"max_concurrent" yaml:"max_concurrent"`
 	DefaultTimeout  time.Duration `json:"default_timeout" yaml:"default_timeout"`
@@ -190,11 +217,13 @@ type AgentsConfig struct {
 	RetryBackoff    time.Duration `json:"retry_backoff" yaml:"retry_backoff"`
 
 	// Service endpoints
+	// 服务端点
 	AgentCoreEndpoint  string `json:"agent_core_endpoint" yaml:"agent_core_endpoint"`
 	LLMServiceEndpoint string `json:"llm_service_endpoint" yaml:"llm_service_endpoint"`
 }
 
 // TemporalConfig contains Temporal workflow settings
+// TemporalConfig 包含 Temporal workflow 设置
 type TemporalConfig struct {
 	HostPort    string            `json:"host_port" yaml:"host_port"`
 	Namespace   string            `json:"namespace" yaml:"namespace"`
@@ -204,6 +233,7 @@ type TemporalConfig struct {
 }
 
 // RetryPolicyConfig contains retry policy settings
+// RetryPolicyConfig 包含重试策略设置
 type RetryPolicyConfig struct {
 	InitialInterval    time.Duration `json:"initial_interval" yaml:"initial_interval"`
 	BackoffCoefficient float64       `json:"backoff_coefficient" yaml:"backoff_coefficient"`
@@ -212,12 +242,14 @@ type RetryPolicyConfig struct {
 }
 
 // LoggingConfig contains logging settings
+// LoggingConfig 包含日志设置
 type LoggingConfig struct {
 	Level       string `json:"level" yaml:"level"`
 	Development bool   `json:"development" yaml:"development"`
-	Encoding    string `json:"encoding" yaml:"encoding"` // "json" or "console"
+	Encoding    string `json:"encoding" yaml:"encoding"` // "json" or "console" 注："json" 或 "console"
 
 	// Log output configuration
+	// 日志输出配置
 	OutputPaths      []string `json:"output_paths" yaml:"output_paths"`
 	ErrorOutputPaths []string `json:"error_output_paths" yaml:"error_output_paths"`
 }
@@ -227,6 +259,7 @@ type LoggingConfig struct {
 type VectorConfig struct {
 	Enabled bool `json:"enabled" yaml:"enabled"`
 	// Qdrant
+	// Qdrant（向量库）
 	Host           string        `json:"host" yaml:"host"`
 	Port           int           `json:"port" yaml:"port"`
 	TaskEmbeddings string        `json:"task_embeddings" yaml:"task_embeddings"`
@@ -238,6 +271,7 @@ type VectorConfig struct {
 	Threshold      float64       `json:"threshold" yaml:"threshold"`
 	Timeout        time.Duration `json:"timeout" yaml:"timeout"`
 	// Embeddings service
+	// Embeddings 服务
 	DefaultModel         string        `json:"default_model" yaml:"default_model"`
 	CacheTTL             time.Duration `json:"cache_ttl" yaml:"cache_ttl"`
 	ExpectedEmbeddingDim int           `json:"expected_embedding_dim" yaml:"expected_embedding_dim"`
@@ -245,12 +279,14 @@ type VectorConfig struct {
 	RedisAddr            string        `json:"redis_addr" yaml:"redis_addr"`
 
 	// MMR re-ranking (diversity)
+	// MMR 重排序（多样性）
 	MmrEnabled        bool    `json:"mmr_enabled" yaml:"mmr_enabled"`
 	MmrLambda         float64 `json:"mmr_lambda" yaml:"mmr_lambda"`
 	MmrPoolMultiplier int     `json:"mmr_pool_multiplier" yaml:"mmr_pool_multiplier"`
 }
 
 // EmbeddingsConfig contains embeddings service settings
+// EmbeddingsConfig 包含 embeddings 服务设置
 type EmbeddingsConfig struct {
 	BaseURL      string                   `json:"base_url" yaml:"base_url"`
 	DefaultModel string                   `json:"default_model" yaml:"default_model"`
@@ -261,6 +297,7 @@ type EmbeddingsConfig struct {
 }
 
 // EmbeddingsChunkingConfig contains chunking settings for embeddings
+// EmbeddingsChunkingConfig 包含 embeddings 的分块设置
 type EmbeddingsChunkingConfig struct {
 	Enabled        bool `json:"enabled" yaml:"enabled"`
 	MaxTokens      int  `json:"max_tokens" yaml:"max_tokens"`
@@ -269,6 +306,7 @@ type EmbeddingsChunkingConfig struct {
 }
 
 // TracingConfig contains OpenTelemetry tracing settings
+// TracingConfig 包含 OpenTelemetry tracing 设置
 type TracingConfig struct {
 	Enabled      bool   `json:"enabled" yaml:"enabled"`
 	ServiceName  string `json:"service_name" yaml:"service_name"`
@@ -276,16 +314,17 @@ type TracingConfig struct {
 }
 
 // StreamingConfig contains streaming settings (ring buffer)
+// StreamingConfig 包含 streaming 设置（ring buffer）
 type StreamingConfig struct {
 	RingCapacity int `json:"ring_capacity" yaml:"ring_capacity"`
 }
 
 // SessionConfig contains session management settings
+// SessionConfig 包含 session 管理设置
 type SessionConfig struct {
-	MaxHistory int           `json:"max_history" yaml:"max_history"` // Maximum messages to keep in Redis per session
-	TTL        time.Duration `json:"ttl" yaml:"ttl"`                 // Session expiry time
-	CacheSize  int           `json:"cache_size" yaml:"cache_size"`   // Max sessions to keep in local cache
-	// 本地 cache 保留的最大 session 数
+	MaxHistory int           `json:"max_history" yaml:"max_history"` // Maximum messages to keep in Redis per session 注：每个 session 在 Redis 中保留的最大消息数
+	TTL        time.Duration `json:"ttl" yaml:"ttl"`                 // Session expiry time 注：session 过期时间
+	CacheSize  int           `json:"cache_size" yaml:"cache_size"`   // Max sessions to keep in local cache 注：本地 cache 保留的最大 session 数
 
 	// Context window presets for server-side history retrieval
 	// 服务端历史检索的 context 窗口预设
@@ -293,10 +332,12 @@ type SessionConfig struct {
 	ContextWindowDebugging int `json:"context_window_debugging" yaml:"context_window_debugging"`
 
 	// Token budgets (guidance for planning/enforcement)
+	// Token 预算（用于规划/约束的指引）
 	TokenBudgetPerAgent int `json:"token_budget_per_agent" yaml:"token_budget_per_agent"`
 	TokenBudgetPerTask  int `json:"token_budget_per_task" yaml:"token_budget_per_task"`
 
 	// Sliding-window shaping parameters
+	// 滑动窗口整形参数
 	PrimersCount int `json:"primers_count" yaml:"primers_count"`
 	RecentsCount int `json:"recents_count" yaml:"recents_count"`
 }
@@ -307,6 +348,7 @@ type FeatureFlagsConfig struct {
 }
 
 // WorkflowConfig controls workflow behavior
+// WorkflowConfig 控制 workflow 行为
 type WorkflowConfig struct {
 	// BypassSingleResult: skip synthesis if only one successful result
 	// BypassSingleResult：只有一个成功结果时跳过汇总
@@ -314,9 +356,10 @@ type WorkflowConfig struct {
 }
 
 // PolicyConfig contains policy engine settings
+// PolicyConfig 包含策略引擎设置
 type PolicyConfig struct {
 	Enabled     bool              `json:"enabled" yaml:"enabled"`
-	Mode        string            `json:"mode" yaml:"mode"` // "off", "dry-run", "enforce"
+	Mode        string            `json:"mode" yaml:"mode"` // "off", "dry-run", "enforce" 注："off"、"dry-run"、"enforce"
 	Path        string            `json:"path" yaml:"path"`
 	FailClosed  bool              `json:"fail_closed" yaml:"fail_closed"`
 	Environment string            `json:"environment" yaml:"environment"`
@@ -324,6 +367,7 @@ type PolicyConfig struct {
 }
 
 // PolicyAuditConfig contains policy audit settings
+// PolicyAuditConfig 包含策略审计设置
 type PolicyAuditConfig struct {
 	Enabled         bool   `json:"enabled" yaml:"enabled"`
 	LogLevel        string `json:"log_level" yaml:"log_level"`
@@ -332,6 +376,7 @@ type PolicyAuditConfig struct {
 }
 
 // DefaultShannonConfig returns the default configuration
+// DefaultShannonConfig 返回默认配置
 func DefaultShannonConfig() *ShannonConfig {
 	return &ShannonConfig{
 		Auth: AuthConfig{
@@ -339,7 +384,7 @@ func DefaultShannonConfig() *ShannonConfig {
 			SkipAuth:                 true,
 			JWTSecret:                "change-this-to-a-secure-32-char-minimum-secret",
 			AccessTokenExpiry:        1 * time.Hour,
-			RefreshTokenExpiry:       30 * 24 * time.Hour, // 30 days
+			RefreshTokenExpiry:       30 * 24 * time.Hour, // 30 days 注：30 天
 			APIKeyRateLimit:          1000,
 			DefaultTenantLimit:       10000,
 			EnableRegistration:       true,
@@ -351,7 +396,7 @@ func DefaultShannonConfig() *ShannonConfig {
 			GracefulTimeout: 30 * time.Second,
 			ReadTimeout:     10 * time.Second,
 			WriteTimeout:    10 * time.Second,
-			MaxHeaderBytes:  1 << 20, // 1MB
+			MaxHeaderBytes:  1 << 20, // 1MB 注：1MB
 		},
 		CircuitBreakers: CircuitBreakersConfig{
 			Redis: CircuitBreakerConfig{
@@ -429,10 +474,10 @@ func DefaultShannonConfig() *ShannonConfig {
 			PartialResults: PartialResultsConfig{
 				Enabled: true,
 				SuccessThresholds: map[string]float64{
-					"simple":    1.0, // Need 100% for simple
-					"standard":  0.5, // Need 50% for standard
-					"complex":   0.6, // Need 60% for complex
-					"agent_dag": 0.4, // Need 40% for agent DAG
+					"simple":    1.0, // Need 100% for simple 注：simple 需要 100%
+					"standard":  0.5, // Need 50% for standard 注：standard 需要 50%
+					"complex":   0.6, // Need 60% for complex 注：complex 需要 60%
+					"agent_dag": 0.4, // Need 40% for agent DAG 注：agent DAG 需要 40%
 				},
 				TimeoutOverride: 5 * time.Second,
 				MaxWaitTime:     30 * time.Second,
@@ -528,13 +573,14 @@ func DefaultShannonConfig() *ShannonConfig {
 			DocumentChunks: "document_chunks",
 			Summaries:      "",
 			TopK:           5,
-			Threshold:      0.75, // Standardized default threshold for semantic search
+			Threshold:      0.75, // Standardized default threshold for semantic search 注：语义检索统一使用的默认阈值
 			Timeout:        3 * time.Second,
 			DefaultModel:   "text-embedding-3-small",
 			CacheTTL:       time.Hour,
 			UseRedisCache:  false,
 			RedisAddr:      "redis:6379",
 			// MMR defaults
+			// MMR 默认值
 			MmrEnabled:        false,
 			MmrLambda:         0.7,
 			MmrPoolMultiplier: 3,
@@ -578,6 +624,7 @@ func DefaultShannonConfig() *ShannonConfig {
 }
 
 // ValidateShannonConfig validates the Shannon configuration
+// ValidateShannonConfig 校验 Shannon 配置
 func ValidateShannonConfig(config map[string]any) error {
 	// Convert to ShannonConfig struct for validation (placeholder for future unmarshalling)
 	// shannonConfig := &ShannonConfig{}
@@ -600,6 +647,7 @@ func ValidateShannonConfig(config map[string]any) error {
 		if enabled, ok := degradation["enabled"].(bool); ok && enabled {
 			if thresholds, ok := degradation["thresholds"].(map[string]any); ok {
 				// Validate threshold configuration
+				// 校验阈值配置
 				levels := []string{"minor", "moderate", "severe"}
 				for _, level := range levels {
 					if levelConfig, ok := thresholds[level].(map[string]any); ok {
@@ -627,6 +675,7 @@ func ValidateShannonConfig(config map[string]any) error {
 	// 校验 session 相关的 context 窗口与 token budget
 	if session, ok := config["session"].(map[string]any); ok {
 		// Context windows must be [5, 200]
+		// Context 窗口必须在 [5, 200] 范围内
 		inWindow := func(v float64) bool { return v >= 5 && v <= 200 }
 		if v, ok := session["context_window_default"].(float64); ok {
 			if !inWindow(v) {
@@ -699,6 +748,7 @@ func NewShannonConfigManager(configManager *ConfigManager, logger *zap.Logger) *
 }
 
 // GetConfig returns the current Shannon configuration
+// GetConfig 返回当前 Shannon 配置
 func (scm *ShannonConfigManager) GetConfig() *ShannonConfig {
 	// Return a copy to prevent external modification
 	// 返回副本，防止外部修改
@@ -710,14 +760,17 @@ func (scm *ShannonConfigManager) GetConfig() *ShannonConfig {
 // Initialize 初始化 Shannon 的配置管理
 func (scm *ShannonConfigManager) Initialize() error {
 	// Register validator for shannon.yaml
+	// 为 shannon.yaml 注册校验器
 	scm.configManager.RegisterValidator("shannon.yaml", ValidateShannonConfig)
 	scm.configManager.RegisterValidator("shannon.json", ValidateShannonConfig)
 
 	// Register handler for configuration changes
+	// 注册配置变更处理函数
 	scm.configManager.RegisterHandler("shannon.yaml", scm.handleConfigChange)
 	scm.configManager.RegisterHandler("shannon.json", scm.handleConfigChange)
 
 	// Try to load existing configuration
+	// 尝试加载已有配置
 	if config, exists := scm.configManager.GetConfig("shannon.yaml"); exists {
 		if err := scm.updateConfigFromMap(config); err != nil {
 			scm.logger.Error("Failed to load shannon.yaml", zap.Error(err))
@@ -732,6 +785,7 @@ func (scm *ShannonConfigManager) Initialize() error {
 }
 
 // handleConfigChange processes Shannon configuration changes
+// handleConfigChange 处理 Shannon 配置变更
 func (scm *ShannonConfigManager) handleConfigChange(event ChangeEvent) error {
 	scm.logger.Info("Shannon configuration changed",
 		zap.String("file", event.File),
@@ -740,6 +794,7 @@ func (scm *ShannonConfigManager) handleConfigChange(event ChangeEvent) error {
 
 	if event.Action == "delete" {
 		// Revert to default configuration
+		// 回退到默认配置
 		scm.currentConfig = DefaultShannonConfig()
 		scm.logger.Info("Reverted to default Shannon configuration")
 		return nil
@@ -763,6 +818,7 @@ func (scm *ShannonConfigManager) updateConfigFromMap(configMap map[string]any) e
 	newConfig := DefaultShannonConfig()
 
 	// Update service config
+	// 更新 service 配置
 	if service, ok := configMap["service"].(map[string]any); ok {
 		if port, ok := service["port"].(float64); ok {
 			newConfig.Service.Port = int(port)
@@ -776,46 +832,55 @@ func (scm *ShannonConfigManager) updateConfigFromMap(configMap map[string]any) e
 	}
 
 	// Update circuit breaker configs
+	// 更新 circuit breaker 配置
 	if cb, ok := configMap["circuit_breakers"].(map[string]any); ok {
 		scm.updateCircuitBreakerConfig(cb, &newConfig.CircuitBreakers)
 	}
 
 	// Update degradation config
+	// 更新降级配置
 	if degradation, ok := configMap["degradation"].(map[string]any); ok {
 		scm.updateDegradationConfig(degradation, &newConfig.Degradation)
 	}
 
 	// Update health config
+	// 更新健康检查配置
 	if health, ok := configMap["health"].(map[string]any); ok {
 		scm.updateHealthConfig(health, &newConfig.Health)
 	}
 
 	// Update agents config
+	// 更新 agents 配置
 	if agents, ok := configMap["agents"].(map[string]any); ok {
 		scm.updateAgentsConfig(agents, &newConfig.Agents)
 	}
 
 	// Update temporal config
+	// 更新 temporal 配置
 	if temporal, ok := configMap["temporal"].(map[string]any); ok {
 		scm.updateTemporalConfig(temporal, &newConfig.Temporal)
 	}
 
 	// Update logging config
+	// 更新日志配置
 	if logging, ok := configMap["logging"].(map[string]any); ok {
 		scm.updateLoggingConfig(logging, &newConfig.Logging)
 	}
 
 	// Update auth config
+	// 更新认证配置
 	if auth, ok := configMap["auth"].(map[string]any); ok {
 		scm.updateAuthConfig(auth, &newConfig.Auth)
 	}
 
 	// Update policy config
+	// 更新策略配置
 	if policy, ok := configMap["policy"].(map[string]any); ok {
 		scm.updatePolicyConfig(policy, &newConfig.Policy)
 	}
 
 	// Update streaming config
+	// 更新 streaming 配置
 	if streaming, ok := configMap["streaming"].(map[string]any); ok {
 		if capv, ok := streaming["ring_capacity"].(float64); ok {
 			if capv > 0 {
@@ -825,6 +890,7 @@ func (scm *ShannonConfigManager) updateConfigFromMap(configMap map[string]any) e
 	}
 
 	// Update workflow config
+	// 更新 workflow 配置
 	if wf, ok := configMap["workflow"].(map[string]any); ok {
 		if v, ok := wf["bypass_single_result"].(bool); ok {
 			newConfig.Workflow.BypassSingleResult = v
@@ -832,6 +898,7 @@ func (scm *ShannonConfigManager) updateConfigFromMap(configMap map[string]any) e
 	}
 
 	// Update session config
+	// 更新 session 配置
 	if session, ok := configMap["session"].(map[string]any); ok {
 		if v, ok := session["max_history"].(float64); ok {
 			newConfig.Session.MaxHistory = int(v)
@@ -861,11 +928,13 @@ func (scm *ShannonConfigManager) updateConfigFromMap(configMap map[string]any) e
 	}
 
 	// Update vector config
+	// 更新向量库配置
 	if vector, ok := configMap["vector"].(map[string]any); ok {
 		scm.updateVectorConfig(vector, &newConfig.Vector)
 	}
 
 	// Update embeddings config
+	// 更新 embeddings 配置
 	if embeddings, ok := configMap["embeddings"].(map[string]any); ok {
 		scm.updateEmbeddingsConfig(embeddings, &newConfig.Embeddings)
 	}
@@ -875,15 +944,18 @@ func (scm *ShannonConfigManager) updateConfigFromMap(configMap map[string]any) e
 	scm.logger.Info("Shannon configuration updated successfully")
 
 	// Trigger change notifications for significant changes
+	// 对重大变更触发变更通知
 	scm.notifyConfigChanges(oldConfig, newConfig)
 
 	// Trigger callbacks for configuration updates
+	// 对配置更新触发回调
 	scm.triggerCallbacks(oldConfig, newConfig)
 
 	return nil
 }
 
 // updateCircuitBreakerConfig updates circuit breaker configuration
+// updateCircuitBreakerConfig 更新 circuit breaker 配置
 func (scm *ShannonConfigManager) updateCircuitBreakerConfig(cbMap map[string]any, config *CircuitBreakersConfig) {
 	if redis, ok := cbMap["redis"].(map[string]any); ok {
 		scm.updateSingleCircuitBreakerConfig(redis, &config.Redis)
@@ -913,6 +985,7 @@ func (scm *ShannonConfigManager) updateSingleCircuitBreakerConfig(cbMap map[stri
 }
 
 // updateDegradationConfig updates degradation configuration
+// updateDegradationConfig 更新降级配置
 func (scm *ShannonConfigManager) updateDegradationConfig(degMap map[string]any, config *DegradationConfig) {
 	if enabled, ok := degMap["enabled"].(bool); ok {
 		config.Enabled = enabled
@@ -920,16 +993,19 @@ func (scm *ShannonConfigManager) updateDegradationConfig(degMap map[string]any, 
 	setDuration(degMap, "check_interval", &config.CheckInterval)
 
 	// Update thresholds
+	// 更新阈值
 	if thresholds, ok := degMap["thresholds"].(map[string]any); ok {
 		scm.updateDegradationThresholds(thresholds, &config.ThresholdConfig)
 	}
 
 	// Update partial results config
+	// 更新部分结果配置
 	if partial, ok := degMap["partial_results"].(map[string]any); ok {
 		scm.updatePartialResultsConfig(partial, &config.PartialResults)
 	}
 
 	// Update fallback behaviors
+	// 更新降级兜底行为
 	if behaviors, ok := degMap["fallback_behaviors"].(map[string]any); ok {
 		config.FallbackBehaviors = make(map[string]string)
 		for k, v := range behaviors {
@@ -941,6 +1017,7 @@ func (scm *ShannonConfigManager) updateDegradationConfig(degMap map[string]any, 
 }
 
 // updateDegradationThresholds updates degradation threshold configuration
+// updateDegradationThresholds 更新降级阈值配置
 func (scm *ShannonConfigManager) updateDegradationThresholds(thresholds map[string]any, config *DegradationThresholds) {
 	if minor, ok := thresholds["minor"].(map[string]any); ok {
 		scm.updateSingleThreshold(minor, &config.Minor)
@@ -954,6 +1031,7 @@ func (scm *ShannonConfigManager) updateDegradationThresholds(thresholds map[stri
 }
 
 // updateSingleThreshold updates a single degradation threshold
+// updateSingleThreshold 更新单个降级阈值
 func (scm *ShannonConfigManager) updateSingleThreshold(threshold map[string]any, config *DegradationLevelThreshold) {
 	if cb, ok := threshold["circuit_breakers_open"].(float64); ok {
 		config.CircuitBreakersOpen = int(cb)
@@ -973,6 +1051,7 @@ func (scm *ShannonConfigManager) updateSingleThreshold(threshold map[string]any,
 }
 
 // updatePartialResultsConfig updates partial results configuration
+// updatePartialResultsConfig 更新部分结果配置
 func (scm *ShannonConfigManager) updatePartialResultsConfig(partial map[string]any, config *PartialResultsConfig) {
 	if enabled, ok := partial["enabled"].(bool); ok {
 		config.Enabled = enabled
@@ -988,6 +1067,7 @@ func (scm *ShannonConfigManager) updatePartialResultsConfig(partial map[string]a
 }
 
 // updateHealthConfig updates health configuration
+// updateHealthConfig 更新健康检查配置
 func (scm *ShannonConfigManager) updateHealthConfig(healthMap map[string]any, config *HealthConfig) {
 	if enabled, ok := healthMap["enabled"].(bool); ok {
 		config.Enabled = enabled
@@ -999,6 +1079,7 @@ func (scm *ShannonConfigManager) updateHealthConfig(healthMap map[string]any, co
 	}
 
 	// Update per-check configuration
+	// 更新每项检查的配置
 	if checks, ok := healthMap["checks"].(map[string]any); ok {
 		config.Checks = make(map[string]HealthCheckConfig)
 		for checkName, checkData := range checks {
@@ -1019,6 +1100,7 @@ func (scm *ShannonConfigManager) updateHealthConfig(healthMap map[string]any, co
 }
 
 // updateAgentsConfig updates agents configuration
+// updateAgentsConfig 更新 agents 配置
 func (scm *ShannonConfigManager) updateAgentsConfig(agentsMap map[string]any, config *AgentsConfig) {
 	if maxConcurrent, ok := agentsMap["max_concurrent"].(float64); ok {
 		config.MaxConcurrent = int(maxConcurrent)
@@ -1040,6 +1122,7 @@ func (scm *ShannonConfigManager) updateAgentsConfig(agentsMap map[string]any, co
 }
 
 // updateTemporalConfig updates temporal configuration
+// updateTemporalConfig 更新 temporal 配置
 func (scm *ShannonConfigManager) updateTemporalConfig(temporalMap map[string]any, config *TemporalConfig) {
 	if hostPort, ok := temporalMap["host_port"].(string); ok {
 		config.HostPort = hostPort
@@ -1054,6 +1137,7 @@ func (scm *ShannonConfigManager) updateTemporalConfig(temporalMap map[string]any
 }
 
 // updateLoggingConfig updates logging configuration
+// updateLoggingConfig 更新日志配置
 func (scm *ShannonConfigManager) updateLoggingConfig(loggingMap map[string]any, config *LoggingConfig) {
 	if level, ok := loggingMap["level"].(string); ok {
 		config.Level = level
@@ -1083,6 +1167,7 @@ func (scm *ShannonConfigManager) updateLoggingConfig(loggingMap map[string]any, 
 }
 
 // updateAuthConfig updates authentication configuration
+// updateAuthConfig 更新认证配置
 func (scm *ShannonConfigManager) updateAuthConfig(authMap map[string]any, config *AuthConfig) {
 	if enabled, ok := authMap["enabled"].(bool); ok {
 		config.Enabled = enabled
@@ -1122,6 +1207,7 @@ func (scm *ShannonConfigManager) updateAuthConfig(authMap map[string]any, config
 }
 
 // notifyConfigChanges triggers notifications for configuration changes
+// notifyConfigChanges 触发配置变更通知
 func (scm *ShannonConfigManager) notifyConfigChanges(oldConfig, newConfig *ShannonConfig) {
 	// Check for endpoint changes that require service restarts or reconnections
 	// 检查需要重启服务或重连的端点变更
@@ -1147,6 +1233,7 @@ func (scm *ShannonConfigManager) notifyConfigChanges(oldConfig, newConfig *Shann
 	}
 
 	// Check for health check configuration changes
+	// 检查健康检查配置变更
 	if oldConfig.Health.Enabled != newConfig.Health.Enabled ||
 		oldConfig.Health.CheckInterval != newConfig.Health.CheckInterval {
 		scm.logger.Info("Health check global settings changed")
@@ -1169,6 +1256,7 @@ func (scm *ShannonConfigManager) RegisterCallback(callback ConfigurationCallback
 }
 
 // updatePolicyConfig updates policy configuration
+// updatePolicyConfig 更新策略配置
 func (scm *ShannonConfigManager) updatePolicyConfig(policyMap map[string]any, config *PolicyConfig) {
 	if enabled, ok := policyMap["enabled"].(bool); ok {
 		config.Enabled = enabled
@@ -1187,6 +1275,7 @@ func (scm *ShannonConfigManager) updatePolicyConfig(policyMap map[string]any, co
 	}
 
 	// Update audit config
+	// 更新审计配置
 	if audit, ok := policyMap["audit"].(map[string]any); ok {
 		if enabled, ok := audit["enabled"].(bool); ok {
 			config.Audit.Enabled = enabled
@@ -1204,6 +1293,7 @@ func (scm *ShannonConfigManager) updatePolicyConfig(policyMap map[string]any, co
 }
 
 // updateVectorConfig updates vector configuration
+// updateVectorConfig 更新向量库配置
 func (scm *ShannonConfigManager) updateVectorConfig(vectorMap map[string]any, config *VectorConfig) {
 	if enabled, ok := vectorMap["enabled"].(bool); ok {
 		config.Enabled = enabled
@@ -1252,6 +1342,7 @@ func (scm *ShannonConfigManager) updateVectorConfig(vectorMap map[string]any, co
 }
 
 // updateEmbeddingsConfig updates embeddings configuration
+// updateEmbeddingsConfig 更新 embeddings 配置
 func (scm *ShannonConfigManager) updateEmbeddingsConfig(embeddingsMap map[string]any, config *EmbeddingsConfig) {
 	if baseURL, ok := embeddingsMap["base_url"].(string); ok {
 		config.BaseURL = baseURL
@@ -1265,6 +1356,7 @@ func (scm *ShannonConfigManager) updateEmbeddingsConfig(embeddingsMap map[string
 		config.MaxLRU = int(maxLRU)
 	}
 	// Parse chunking configuration
+	// 解析分块配置
 	if chunking, ok := embeddingsMap["chunking"].(map[string]any); ok {
 		if enabled, ok := chunking["enabled"].(bool); ok {
 			config.Chunking.Enabled = enabled

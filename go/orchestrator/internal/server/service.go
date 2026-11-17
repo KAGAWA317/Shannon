@@ -61,6 +61,7 @@ func validateCronSchedule(cronExpr string) error {
 	// 支持 Temporal 兼容描述符（如 @every 1h、@hourly、@daily）
 	if strings.HasPrefix(cronExpr, "@") {
 		// Use parser with descriptor support
+		// 使用支持描述符的 parser
 		parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
 		_, err := parser.Parse(cronExpr)
 		return err
@@ -74,6 +75,7 @@ func validateCronSchedule(cronExpr string) error {
 }
 
 // OrchestratorService implements the Orchestrator gRPC service
+// OrchestratorService 实现 Orchestrator gRPC 服务
 type OrchestratorService struct {
 	pb.UnimplementedOrchestratorServiceServer
 	temporalClient  client.Client
@@ -86,6 +88,7 @@ type OrchestratorService struct {
 	scheduleManager *schedules.Manager
 
 	// Optional typed configuration snapshot for defaults
+	// 可选的 typed 配置快照，用于提供默认值
 	shCfg *cfg.ShannonConfig
 
 	// Provider for per-request default workflow flags
@@ -200,6 +203,7 @@ func workflowStartStatusError(err error) error {
 }
 
 // Shutdown gracefully stops all background services
+// Shutdown 优雅停止所有后台服务
 func (s *OrchestratorService) Shutdown() error {
 	if s.degradeMgr != nil {
 		if err := s.degradeMgr.Stop(); err != nil {
@@ -324,6 +328,7 @@ func NewOrchestratorService(temporalClient client.Client, dbClient *db.Client, l
 			break
 		}
 		// Exponential-ish backoff capped at 5s
+		// 近似指数退避，上限 5s
 		delay := min(time.Duration(attempt), 5)
 		logger.Warn("Redis not ready for session manager, retrying",
 			zap.Int("attempt", attempt),
@@ -349,11 +354,13 @@ func NewOrchestratorService(temporalClient client.Client, dbClient *db.Client, l
 	}
 
 	// Load workflow configuration
+	// 加载 workflow 配置
 	ctx := context.Background()
 	workflowCfg, err := activities.GetWorkflowConfig(ctx)
 	if err != nil {
 		logger.Warn("Failed to load workflow config, using defaults", zap.Error(err))
 		// Use default config with standard thresholds
+		// 使用带标准阈值的默认配置
 		workflowCfg = &activities.WorkflowConfig{
 			ComplexitySimpleThreshold: 0.3,
 			ComplexityMediumThreshold: 0.5,
@@ -371,8 +378,9 @@ func NewOrchestratorService(temporalClient client.Client, dbClient *db.Client, l
 	}
 
 	// Start degradation manager background monitoring
+	// 启动 degradation manager 后台监控
 	if service.degradeMgr != nil {
-		ctx := context.Background() // Background context for service lifecycle
+		ctx := context.Background() // Background context for service lifecycle 注：服务生命周期使用的 background context
 		if err := service.degradeMgr.Start(ctx); err != nil {
 			logger.Warn("Failed to start degradation manager", zap.Error(err))
 		} else {
@@ -390,6 +398,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 		return nil, status.Error(codes.Unavailable, "Temporal not ready")
 	}
 	// gRPC metrics timing
+	// gRPC 指标计时
 	grpcStart := time.Now()
 	defer func() {
 		ometrics.RecordGRPCMetrics("orchestrator", "SubmitTask", "OK", time.Since(grpcStart).Seconds())
@@ -425,17 +434,17 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 	}
 
 	sessionID := req.Metadata.GetSessionId()
-	dbSessionID := sessionID // Use the requested ID for DB persistence/metrics
-	// 使用 request 中的 ID 做 DB 持久化/指标
-	runtimeSessionID := sessionID // Session ID used for Redis/session manager/history
-	// 用于 Redis/session 管理器/历史的 session ID
+	dbSessionID := sessionID // Use the requested ID for DB persistence/metrics 注：使用 request 中的 ID 做 DB 持久化/指标
+	runtimeSessionID := sessionID // Session ID used for Redis/session manager/history 注：用于 Redis/session 管理器/历史的 session ID
 
 	// Get or create session
+	// 获取或创建 session
 	var sess *session.Session
 	var err error
 
 	if sessionID != "" {
 		// Try to retrieve existing session
+		// 尝试取回已存在的 session
 		sess, err = s.sessionManager.GetSession(ctx, sessionID)
 		if err != nil && err != session.ErrSessionNotFound {
 			s.logger.Warn("Failed to retrieve session", zap.Error(err))
@@ -469,6 +478,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 		}
 
 		// SECURITY: Validate session ownership
+		// SECURITY：校验 session 归属
 		if sess != nil && sess.UserID != userID {
 			s.logger.Warn("User attempted to access another user's session",
 				zap.String("requesting_user", userID),
@@ -484,9 +494,11 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 	}
 
 	// Prepare session context for PostgreSQL persistence
+	// 准备用于 PostgreSQL 持久化的 session context
 	var sessionContext map[string]any
 
 	// Create new session if needed
+	// 如需要则创建新 session
 	if sess == nil {
 		var createErr error
 
@@ -509,10 +521,11 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 			// 显式保留 role 字段以便快速访问
 			if role, ok := taskCtx["role"].(string); ok && role != "" {
 				sessionContext["role"] = role
-				sessionContext["first_task_mode"] = role // Use role as first_task_mode
+				sessionContext["first_task_mode"] = role // Use role as first_task_mode 注：用 role 作为 first_task_mode
 			}
 
 			// Preserve research mode flags
+			// 保留 research 模式标志
 			if forceResearch, ok := taskCtx["force_research"].(bool); ok {
 				sessionContext["force_research"] = forceResearch
 			}
@@ -525,9 +538,11 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 		// 若 request 指定了 session ID 则使用它，否则新建
 		if sessionID != "" {
 			// Create session with the requested ID
+			// 按请求的 ID 创建 session
 			sess, createErr = s.sessionManager.CreateSessionWithID(ctx, sessionID, userID, tenantID, sessionContext)
 		} else {
 			// Generate new session ID
+			// 生成新的 session ID
 			sess, createErr = s.sessionManager.CreateSession(ctx, userID, tenantID, sessionContext)
 			sessionID = sess.ID
 		}
@@ -569,6 +584,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 				zap.String("session_id", dbSessionID),
 				zap.Error(err))
 			// Continue anyway - Redis session is available
+			// 仍然继续——Redis session 可用
 		}
 	} else if s.dbClient == nil {
 		s.logger.Debug("dbClient is nil; skipping session persistence")
@@ -640,6 +656,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 	}
 
 	// Create workflow ID
+	// 创建 workflow ID
 	workflowID := fmt.Sprintf("task-%s-%d", userID, time.Now().Unix())
 
 	// Build session context for workflow
@@ -751,6 +768,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 		}
 	} else if preset, ok := ctxMap["use_case_preset"].(string); ok && strings.EqualFold(preset, "debugging") {
 		// Debugging preset uses a larger default
+		// debugging preset 使用更大的默认值
 		if v := os.Getenv("HISTORY_WINDOW_DEBUG_MESSAGES"); v != "" {
 			if n, err := strconv.Atoi(v); err == nil {
 				desiredWindow = n
@@ -823,6 +841,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 	})
 
 	// Prepare workflow input with session context
+	// 用 session context 准备 workflow input
 	input := workflows.TaskInput{
 		Query:           req.Query,
 		UserID:          userID,
@@ -836,7 +855,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 		History:         convertHistoryForWorkflow(history),
 		SessionCtx:      sess.Context,
 		RequireApproval: req.RequireApproval,
-		ApprovalTimeout: 1800, // Default 30 minutes
+		ApprovalTimeout: 1800, // Default 30 minutes 注：默认 30 分钟
 	}
 
 	// Apply deterministic workflow behavior flags from provider/env
@@ -886,6 +905,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 	}
 
 	// Start appropriate workflow based on mode
+	// 根据 mode 启动相应的 workflow
 	var workflowExecution client.WorkflowRun
 	workflowType := "OrchestratorWorkflow"
 	modeStr := "standard"
@@ -909,13 +929,14 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 	}
 
 	// Determine priority from metadata labels (optional)
+	// 从 metadata label 确定优先级（可选）
 	queue := "shannon-tasks"
-	priority := "normal"   // Track priority for logging
-	workflowOverride := "" // Optional workflow override via label
-	forcedModeLabel := ""  // Optional mode override for router (standard|complex)
-	// 可选的 router 模式覆盖（standard|complex）
+	priority := "normal"   // Track priority for logging 注：记录优先级用于日志
+	workflowOverride := "" // Optional workflow override via label 注：通过 label 可选的 workflow 覆盖
+	forcedModeLabel := ""  // Optional mode override for router (standard|complex) 注：可选的 router 模式覆盖（standard|complex）
 
 	// Check if priority queues are enabled
+	// 检查是否启用了优先级队列
 	priorityQueuesEnabled := strings.EqualFold(os.Getenv("PRIORITY_QUEUES"), "on") ||
 		os.Getenv("PRIORITY_QUEUES") == "1" ||
 		strings.EqualFold(os.Getenv("PRIORITY_QUEUES"), "true")
@@ -936,7 +957,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 					case "high":
 						queue = "shannon-tasks-high"
 					case "normal":
-						queue = "shannon-tasks" // Explicitly handle normal priority
+						queue = "shannon-tasks" // Explicitly handle normal priority 注：显式处理 normal 优先级
 					case "low":
 						queue = "shannon-tasks-low"
 					default:
@@ -946,7 +967,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 							zap.String("priority", p),
 							zap.String("valid_values", "critical, high, normal, low"),
 							zap.String("workflow_id", workflowID))
-						priority = "normal" // Reset to normal for invalid priorities
+						priority = "normal" // Reset to normal for invalid priorities 注：非法优先级时重置为 normal
 					}
 				} else if priorityLower != "normal" {
 					// Priority queues disabled, log override to default queue
@@ -975,6 +996,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 		}
 	}
 	// Log queue selection for debugging
+	// 记录队列选择以便调试
 	if queue != "shannon-tasks" {
 		s.logger.Info("Task routed to priority queue",
 			zap.String("workflow_id", workflowID),
@@ -994,6 +1016,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 		if labels := req.Metadata.GetLabels(); labels != nil {
 			if cronSchedule, ok := labels["cron_schedule"]; ok && cronSchedule != "" {
 				// Normalize and validate cron expression
+				// 规范化并校验 cron 表达式
 				cronSchedule = strings.TrimSpace(cronSchedule)
 				if err := validateCronSchedule(cronSchedule); err != nil {
 					s.logger.Error("Invalid cron schedule",
@@ -1032,6 +1055,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 		s.logger.Info("Starting SimpleTaskWorkflow", zap.String("workflow_id", workflowID))
 	case "", "dag":
 		// Default: route through OrchestratorWorkflow
+		// 默认：经 OrchestratorWorkflow 路由
 		if forcedModeLabel == "complex" || (forcedModeLabel == "" && mode == common.ExecutionMode_EXECUTION_MODE_COMPLEX) {
 			setMode("complex")
 		} else {
@@ -1042,6 +1066,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 			zap.String("initial_mode", modeStr))
 	default:
 		// Unknown override: fall back to DAG
+		// 未知的覆盖值：回退到 DAG
 		s.logger.Warn("Unknown workflow override; falling back to router", zap.String("override", workflowOverride))
 		setMode("standard")
 		workflowType = "OrchestratorWorkflow"
@@ -1122,6 +1147,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 	}
 
 	// Create response with session info
+	// 创建带 session 信息的 response
 	response := &pb.SubmitTaskResponse{
 		WorkflowId: workflowID,
 		TaskId:     workflowExecution.GetID(),
@@ -1129,8 +1155,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 		Message:    fmt.Sprintf("Task submitted successfully. Session: %s", sessionID),
 		Decomposition: &pb.TaskDecomposition{
 			Mode:            mode,
-			ComplexityScore: 0.5, // Default/estimated score - actual will be determined during workflow execution
-			// 默认/估算分——实际分数在 workflow 执行期间确定
+			ComplexityScore: 0.5, // Default/estimated score - actual will be determined during workflow execution 注：默认/估算分——实际分数在 workflow 执行期间确定
 		},
 		// Session ID is tracked internally, not returned in response for now
 		// session ID 目前仅在内部跟踪，不在 response 中返回
@@ -1143,6 +1168,7 @@ func (s *OrchestratorService) SubmitTask(ctx context.Context, req *pb.SubmitTask
 	)
 
 	// Increment workflows started metric
+	// 递增 workflows started 指标
 	ometrics.WorkflowsStarted.WithLabelValues(workflowType, modeStr).Inc()
 
 	return response, nil
@@ -1158,6 +1184,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 	s.logger.Info("Received GetTaskStatus request", zap.String("task_id", req.TaskId))
 
 	// Describe workflow for non-blocking status
+	// Describe workflow 以非阻塞地获取状态
 	desc, err := s.temporalClient.DescribeWorkflowExecution(ctx, req.TaskId, "")
 	if err != nil || desc == nil || desc.WorkflowExecutionInfo == nil {
 		// Only fallback to DB for NotFound errors (Temporal retention expired)
@@ -1185,6 +1212,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 				if uc, err := auth.GetUserContext(ctx); err == nil && uc != nil {
 					if uc.TenantID.String() != memoTenant {
 						// Don't leak existence
+						// 不泄漏是否存在
 						return nil, status.Error(codes.NotFound, "task not found")
 					}
 				}
@@ -1193,10 +1221,12 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 	}
 
 	// Extract workflow metadata
+	// 提取 workflow metadata
 	workflowStartTime := desc.WorkflowExecutionInfo.StartTime
 	workflowID := req.TaskId
 
 	// Map Temporal status to API status
+	// 把 Temporal 状态映射为 API 状态
 	var statusOut pb.TaskStatus
 	var statusStr string
 	switch desc.WorkflowExecutionInfo.Status {
@@ -1346,6 +1376,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 		dataConverter := converter.GetDefaultDataConverter()
 
 		// Extract user_id from memo
+		// 从 memo 提取 user_id
 		if userField, ok := desc.WorkflowExecutionInfo.Memo.Fields["user_id"]; ok && userField != nil {
 			var userIDStr string
 			if err := dataConverter.FromPayload(userField, &userIDStr); err == nil && userIDStr != "" {
@@ -1356,6 +1387,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 		}
 
 		// Extract tenant_id from memo
+		// 从 memo 提取 tenant_id
 		if tenantField, ok := desc.WorkflowExecutionInfo.Memo.Fields["tenant_id"]; ok && tenantField != nil {
 			var tenantIDStr string
 			if err := dataConverter.FromPayload(tenantField, &tenantIDStr); err == nil && tenantIDStr != "" {
@@ -1366,16 +1398,19 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 		}
 
 		// Extract session_id from memo
+		// 从 memo 提取 session_id
 		if sessionField, ok := desc.WorkflowExecutionInfo.Memo.Fields["session_id"]; ok && sessionField != nil {
 			_ = dataConverter.FromPayload(sessionField, &sessionID)
 		}
 
 		// Extract query from memo
+		// 从 memo 提取 query
 		if queryField, ok := desc.WorkflowExecutionInfo.Memo.Fields["query"]; ok && queryField != nil {
 			_ = dataConverter.FromPayload(queryField, &query)
 		}
 
 		// Extract mode from memo
+		// 从 memo 提取 mode
 		if modeField, ok := desc.WorkflowExecutionInfo.Memo.Fields["mode"]; ok && modeField != nil {
 			_ = dataConverter.FromPayload(modeField, &mode)
 		}
@@ -1390,6 +1425,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 	var hasDBMetrics bool
 
 	// Persist to database if terminal state
+	// 若为终态则持久化到数据库
 	if isTerminal && s.dbClient != nil {
 
 		// Extract from result metadata if not in memo
@@ -1416,8 +1452,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 			Mode:        mode,
 			Status:      statusStr,
 			StartedAt:   workflowStartTime.AsTime(),
-			TotalTokens: result.TokensUsed, // Will be overridden by metadata if available
-			// 若 metadata 可用则会被其覆盖
+			TotalTokens: result.TokensUsed, // Will be overridden by metadata if available 注：若 metadata 可用则会被其覆盖
 			Result:       &result.Result,
 			ErrorMessage: &result.ErrorMessage,
 		}
@@ -1428,6 +1463,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 		taskExecution.CompletedAt = &completedAt
 
 		// Calculate duration
+		// 计算耗时
 		if !workflowStartTime.AsTime().IsZero() {
 			end := completedAt
 			durationMs := int(end.Sub(workflowStartTime.AsTime()).Milliseconds())
@@ -1435,6 +1471,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 		}
 
 		// Extract metadata from result
+		// 从 result 提取 metadata
 		if result.Metadata != nil {
 			if complexity, ok := result.Metadata["complexity_score"].(float64); ok {
 				taskExecution.ComplexityScore = complexity
@@ -1444,6 +1481,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 			}
 
 			// Extract model and provider
+			// 提取 model 与 provider
 			if model, ok := result.Metadata["model"].(string); ok && model != "" {
 				taskExecution.ModelUsed = model
 			} else if model, ok := result.Metadata["model_used"].(string); ok && model != "" {
@@ -1454,10 +1492,12 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 				taskExecution.Provider = provider
 			} else if taskExecution.ModelUsed != "" {
 				// Fallback: detect provider from model name
+				// 兜底：从 model 名称识别 provider
 				taskExecution.Provider = detectProviderFromModel(taskExecution.ModelUsed)
 			}
 
 			// Extract token breakdown (prompt vs completion)
+			// 提取 token 明细（prompt 与 completion）
 			if inputTokens, ok := result.Metadata["input_tokens"].(float64); ok {
 				taskExecution.PromptTokens = int(inputTokens)
 			} else if inputTokens, ok := result.Metadata["input_tokens"].(int); ok {
@@ -1486,16 +1526,19 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 			}
 
 			// Extract cost
+			// 提取 cost
 			if cost, ok := result.Metadata["cost_usd"].(float64); ok {
 				taskExecution.TotalCostUSD = cost
 			} else if cost, ok := result.Metadata["total_cost"].(float64); ok {
 				taskExecution.TotalCostUSD = cost
 			} else if result.TokensUsed > 0 {
 				// Fallback: calculate cost from tokens
+				// 兜底：按 token 计算 cost
 				taskExecution.TotalCostUSD = calculateTokenCost(result.TokensUsed, result.Metadata)
 			}
 
 			// Extract tools_invoked count
+			// 提取 tools_invoked 次数
 			if toolsInvoked, ok := result.Metadata["tools_invoked"].(int); ok {
 				taskExecution.ToolsInvoked = toolsInvoked
 			} else if toolsInvoked, ok := result.Metadata["tools_invoked"].(float64); ok {
@@ -1804,6 +1847,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 		// 构建统一 response 并存入 response JSONB 列
 		if result.Result != "" {
 			// Compute execution time from task duration
+			// 按 task 耗时计算执行时间
 			var execTimeMs int64
 			if taskExecution.DurationMs != nil {
 				execTimeMs = int64(*taskExecution.DurationMs)
@@ -1900,6 +1944,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 		}
 
 		// Queue async write to database
+		// 把异步写入排入队列
 		err := s.dbClient.QueueWrite(db.WriteTypeTaskExecution, taskExecution, func(err error) {
 			if err != nil {
 				s.logger.Error("Failed to persist task execution",
@@ -1972,6 +2017,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 		}
 
 		// Extract metadata values if available
+		// 可用时提取 metadata 字段值
 		if result.Metadata != nil {
 			// Populate model/provider into metrics when available
 			// 有模型/provider 时填入指标
@@ -1984,9 +2030,10 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 				metrics.TokenUsage.Provider = p
 			}
 			// Get execution mode (using configurable thresholds)
+			// 获取执行 mode（使用可配置阈值）
 			if complexity, ok := result.Metadata["complexity_score"].(float64); ok {
-				simpleThreshold := 0.3 // default
-				mediumThreshold := 0.5 // default
+				simpleThreshold := 0.3 // default 注：默认值
+				mediumThreshold := 0.5 // default 注：默认值
 				if s.workflowConfig != nil {
 					if s.workflowConfig.ComplexitySimpleThreshold > 0 {
 						simpleThreshold = s.workflowConfig.ComplexitySimpleThreshold
@@ -2008,11 +2055,13 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 			}
 
 			// Get agent count
+			// 获取 agent 数量
 			if agentsUsed, ok := result.Metadata["num_agents"].(int); ok {
 				metrics.AgentsUsed = int32(agentsUsed)
 			}
 
 			// Get cache metrics if available
+			// 可用时获取 cache 指标
 			if cacheHit, ok := result.Metadata["cache_hit"].(bool); ok {
 				metrics.CacheHit = cacheHit
 			}
@@ -2031,8 +2080,10 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 	}
 
 	// Record completed workflow metrics if terminal
+	// 若为终态则记录已完成 workflow 的指标
 	if isTerminal {
 		// Derive mode string for labels
+		// 推导用于 label 的 mode 字符串
 		modeStr := "standard"
 		if metrics != nil {
 			switch metrics.Mode {
@@ -2045,6 +2096,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 			}
 		}
 		// Cost
+		// 成本
 		cost := 0.0
 		if metrics != nil && metrics.TokenUsage != nil {
 			cost = metrics.TokenUsage.CostUsd
@@ -2063,6 +2115,7 @@ func (s *OrchestratorService) GetTaskStatus(ctx context.Context, req *pb.GetTask
 }
 
 // authorizeTaskAccess resolves the caller and verifies workflow-memo ownership.
+// authorizeTaskAccess 解析调用方并校验 workflow memo 的归属。
 func (s *OrchestratorService) authorizeTaskAccess(ctx context.Context, taskID, runID string) (*auth.UserContext, *workflowservice.DescribeWorkflowExecutionResponse, error) {
 	uc, err := auth.GetUserContext(ctx)
 	if err != nil || uc == nil {
@@ -2093,6 +2146,7 @@ func (s *OrchestratorService) authorizeTaskAccess(ctx context.Context, taskID, r
 }
 
 // CancelTask cancels a running task
+// CancelTask 取消运行中的 task
 func (s *OrchestratorService) CancelTask(ctx context.Context, req *pb.CancelTaskRequest) (*pb.CancelTaskResponse, error) {
 	s.logger.Info("Received CancelTask request",
 		zap.String("task_id", req.TaskId),
@@ -2162,6 +2216,7 @@ func (s *OrchestratorService) PauseTask(ctx context.Context, req *pb.PauseTaskRe
 		return nil, status.Error(codes.FailedPrecondition, "cannot pause timed out task")
 	case enumspb.WORKFLOW_EXECUTION_STATUS_RUNNING:
 		// Check if already paused
+		// 检查是否已经暂停
 		if ctrlResp, qErr := s.temporalClient.QueryWorkflow(ctx, req.TaskId, "", workflows.QueryControlState); qErr == nil {
 			var ctrlState workflows.WorkflowControlState
 			if ctrlResp.Get(&ctrlState) == nil && ctrlState.IsPaused {
@@ -2171,6 +2226,7 @@ func (s *OrchestratorService) PauseTask(ctx context.Context, req *pb.PauseTaskRe
 	}
 
 	// Send pause signal to Temporal
+	// 向 Temporal 发送 pause signal
 	pauseReq := workflows.PauseRequest{
 		Reason:      req.Reason,
 		RequestedBy: uc.UserID.String(),
@@ -2181,6 +2237,7 @@ func (s *OrchestratorService) PauseTask(ctx context.Context, req *pb.PauseTaskRe
 	}
 
 	// Update task status in DB
+	// 更新 DB 中的 task 状态
 	if s.dbClient != nil {
 		_ = s.dbClient.UpdateTaskStatus(ctx, req.TaskId, "PAUSED")
 	}
@@ -2222,6 +2279,7 @@ func (s *OrchestratorService) ResumeTask(ctx context.Context, req *pb.ResumeTask
 		return nil, status.Error(codes.FailedPrecondition, "cannot resume timed out task")
 	case enumspb.WORKFLOW_EXECUTION_STATUS_RUNNING:
 		// Check if task is actually paused
+		// 检查 task 是否确实处于暂停状态
 		isPaused := false
 		if ctrlResp, qErr := s.temporalClient.QueryWorkflow(ctx, req.TaskId, "", workflows.QueryControlState); qErr == nil {
 			var ctrlState workflows.WorkflowControlState
@@ -2244,6 +2302,7 @@ func (s *OrchestratorService) ResumeTask(ctx context.Context, req *pb.ResumeTask
 	}
 
 	// Update task status back to RUNNING
+	// 把 task 状态改回 RUNNING
 	if s.dbClient != nil {
 		_ = s.dbClient.UpdateTaskStatus(ctx, req.TaskId, "RUNNING")
 	}
@@ -2268,6 +2327,7 @@ func (s *OrchestratorService) GetControlState(ctx context.Context, req *pb.GetCo
 	}
 
 	// Query Temporal workflow for control state
+	// 查询 Temporal workflow 的 control state
 	resp, err := s.temporalClient.QueryWorkflow(ctx, req.TaskId, "", workflows.QueryControlState)
 	if err != nil {
 		// Workflow may have completed - return default state
@@ -2275,7 +2335,7 @@ func (s *OrchestratorService) GetControlState(ctx context.Context, req *pb.GetCo
 		return &pb.GetControlStateResponse{
 			IsPaused:    false,
 			IsCancelled: false,
-			PausedAt:    "", // Empty string for never-paused
+			PausedAt:    "", // Empty string for never-paused 注：从未暂停时为空字符串
 		}, nil
 	}
 
@@ -2310,6 +2370,7 @@ func (s *OrchestratorService) ListTasks(ctx context.Context, req *pb.ListTasksRe
 	}
 
 	// Enforce tenant scoping when available
+	// 可用时强制 tenant 范围
 	var tenantFilter *uuid.UUID
 	if uc, err := auth.GetUserContext(ctx); err == nil && uc != nil {
 		t := uc.TenantID
@@ -2317,6 +2378,7 @@ func (s *OrchestratorService) ListTasks(ctx context.Context, req *pb.ListTasksRe
 	}
 
 	// Build filters
+	// 构建过滤条件
 	where := []string{"1=1"}
 	args := []any{}
 	ai := 1
@@ -2328,6 +2390,7 @@ func (s *OrchestratorService) ListTasks(ctx context.Context, req *pb.ListTasksRe
 	}
 
 	// Filter by user_id if provided
+	// 若提供 user_id 则按其过滤
 	if req.UserId != "" {
 		if uid, err := uuid.Parse(req.UserId); err == nil {
 			where = append(where, fmt.Sprintf("(user_id = $%d OR user_id IS NULL)", ai))
@@ -2343,6 +2406,7 @@ func (s *OrchestratorService) ListTasks(ctx context.Context, req *pb.ListTasksRe
 		ai++
 	}
 	// Filter by status if provided
+	// 若提供 status 则按其过滤
 	if req.FilterStatus != pb.TaskStatus_TASK_STATUS_UNSPECIFIED {
 		statusStr := mapProtoStatusToDB(req.FilterStatus)
 		if statusStr != "" {
@@ -2353,6 +2417,7 @@ func (s *OrchestratorService) ListTasks(ctx context.Context, req *pb.ListTasksRe
 	}
 
 	// Pagination
+	// 分页
 	limit := int(req.Limit)
 	if limit <= 0 || limit > 100 {
 		limit = 20
@@ -2360,6 +2425,7 @@ func (s *OrchestratorService) ListTasks(ctx context.Context, req *pb.ListTasksRe
 	offset := max(int(req.Offset), 0)
 
 	// Total count query
+	// 总数统计查询
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM task_executions WHERE %s", strings.Join(where, " AND "))
 	var total int32
 	if err := s.dbClient.Wrapper().QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
@@ -2368,6 +2434,7 @@ func (s *OrchestratorService) ListTasks(ctx context.Context, req *pb.ListTasksRe
 	}
 
 	// Data query
+	// 数据查询
 	dataQuery := fmt.Sprintf(`
         SELECT workflow_id, query, status, mode,
                started_at, completed_at, created_at,
@@ -2403,6 +2470,7 @@ func (s *OrchestratorService) ListTasks(ctx context.Context, req *pb.ListTasksRe
 }
 
 // GetSessionContext gets session context
+// GetSessionContext 获取 session context
 func (s *OrchestratorService) GetSessionContext(ctx context.Context, req *pb.GetSessionContextRequest) (*pb.GetSessionContextResponse, error) {
 	s.logger.Info("GetSessionContext called", zap.String("session_id", req.SessionId))
 
@@ -2417,6 +2485,7 @@ func (s *OrchestratorService) GetSessionContext(ctx context.Context, req *pb.Get
 	}
 
 	// Get session from manager
+	// 从 manager 获取 session
 	sess, err := s.sessionManager.GetSession(ctx, req.SessionId)
 	if err != nil {
 		if err == session.ErrSessionNotFound {
@@ -2426,11 +2495,13 @@ func (s *OrchestratorService) GetSessionContext(ctx context.Context, req *pb.Get
 	}
 
 	// Build response with session data
+	// 用 session 数据构建 response
 	response := &pb.GetSessionContextResponse{
 		SessionId: req.SessionId,
 	}
 
 	// Add session token usage
+	// 附加 session token 用量
 	if sess.TotalTokensUsed > 0 {
 		response.SessionTokenUsage = &common.TokenUsage{
 			TotalTokens: int32(sess.TotalTokensUsed),
@@ -2438,6 +2509,7 @@ func (s *OrchestratorService) GetSessionContext(ctx context.Context, req *pb.Get
 	}
 
 	// Add session context as Struct
+	// 以 Struct 形式附加 session context
 	if sess.Context != nil {
 		contextStruct, err := structpb.NewStruct(sess.Context)
 		if err == nil {
@@ -2543,6 +2615,7 @@ func (s *OrchestratorService) loadRecentSessionTasks(ctx context.Context, sessio
 // 以支持双格式 session 标识（UUID 与外部字符串 ID）。
 func (s *OrchestratorService) loadRecentSessionTasksByIDs(ctx context.Context, sessionIDs []string, limit int, tenantID *uuid.UUID) ([]*pb.TaskSummary, error) {
 	// Normalize inputs
+	// 规范化输入
 	ids := make([]string, 0, 2)
 	for _, id := range sessionIDs {
 		if id != "" {
@@ -2567,6 +2640,7 @@ func (s *OrchestratorService) loadRecentSessionTasksByIDs(ctx context.Context, s
 	}
 
 	// Build query for two IDs
+	// 为两个 ID 构建查询
 	query := fmt.Sprintf(`
         SELECT workflow_id, query, status, mode,
                started_at, completed_at, created_at,
@@ -2599,6 +2673,7 @@ func (s *OrchestratorService) loadRecentSessionTasksByIDs(ctx context.Context, s
 }
 
 // scanTaskSummary scans one task_executions summary row and maps it to proto.
+// scanTaskSummary 扫描一行 task_executions 摘要并映射为 proto。
 func scanTaskSummary(rows *sql.Rows) (*pb.TaskSummary, error) {
 	var (
 		workflowID                    string
@@ -2711,8 +2786,7 @@ func (s *OrchestratorService) watchAndPersist(workflowID, runID string) {
 	// 循环直到 workflow 进入终态。每次迭代设置 timeout，
 	// 但不设总期限——workflow 合法地可能运行数小时/数天。
 	const pollInterval = 5 * time.Minute
-	const maxConsecutiveErrors = 12 // Give up after ~1 hour of consecutive errors
-	// 连续出错约 1 小时后放弃
+	const maxConsecutiveErrors = 12 // Give up after ~1 hour of consecutive errors 注：连续出错约 1 小时后放弃
 
 	consecutiveErrors := 0
 	for {
@@ -2721,12 +2795,14 @@ func (s *OrchestratorService) watchAndPersist(workflowID, runID string) {
 		waitCtx, waitCancel := context.WithTimeout(context.Background(), pollInterval)
 
 		// Try to wait for workflow completion
+		// 尝试等待 workflow 完成
 		we := s.temporalClient.GetWorkflow(waitCtx, workflowID, runID)
 		var tmp any
 		waitErr := we.Get(waitCtx, &tmp)
 		waitCancel()
 
 		// Check workflow status
+		// 检查 workflow 状态
 		descCtx, descCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		desc, err := s.temporalClient.DescribeWorkflowExecution(descCtx, workflowID, runID)
 		descCancel()
@@ -2742,10 +2818,10 @@ func (s *OrchestratorService) watchAndPersist(workflowID, runID string) {
 					zap.String("workflow_id", workflowID))
 				return
 			}
-			time.Sleep(30 * time.Second) // Back off before retry
+			time.Sleep(30 * time.Second) // Back off before retry 注：重试前退避
 			continue
 		}
-		consecutiveErrors = 0 // Reset on successful describe
+		consecutiveErrors = 0 // Reset on successful describe describe 注：成功时重置
 
 		st := desc.WorkflowExecutionInfo.GetStatus()
 		isTerminal := st == enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED ||
@@ -2766,6 +2842,7 @@ func (s *OrchestratorService) watchAndPersist(workflowID, runID string) {
 		}
 
 		// Workflow reached terminal state - persist it
+		// workflow 已到终态——持久化它
 		statusStr := "RUNNING"
 		switch st {
 		case enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED:
@@ -2792,6 +2869,7 @@ func (s *OrchestratorService) watchAndPersist(workflowID, runID string) {
 		durationMs := int(end.Sub(start).Milliseconds())
 
 		// Persist terminal state
+		// 持久化终态
 		persistCtx, persistCancel := context.WithTimeout(context.Background(), 30*time.Second)
 
 		// Update terminal fields only for terminal workflows
@@ -2855,7 +2933,7 @@ func (s *OrchestratorService) watchAndPersist(workflowID, runID string) {
 		}
 
 		persistCancel()
-		return // Done - workflow persisted
+		return // Done - workflow persisted 注：完成——workflow 已持久化
 	}
 }
 
@@ -2899,6 +2977,7 @@ func (s *OrchestratorService) getTaskStatusFromDB(ctx context.Context, taskID st
 	}
 
 	// Enforce tenant ownership
+	// 强制 tenant 归属校验
 	if dbTenantID.Valid && dbTenantID.String != "" {
 		if uc, ucErr := auth.GetUserContext(ctx); ucErr == nil && uc != nil {
 			if uc.TenantID.String() != dbTenantID.String {
@@ -2908,6 +2987,7 @@ func (s *OrchestratorService) getTaskStatusFromDB(ctx context.Context, taskID st
 	}
 
 	// Map DB status to proto status
+	// 把 DB 状态映射为 proto 状态
 	var pbStatus pb.TaskStatus
 	switch dbStatus {
 	case "COMPLETED":
@@ -3010,6 +3090,7 @@ func (s *OrchestratorService) ApproveTask(ctx context.Context, req *pb.ApproveTa
 	)
 
 	// Validate input
+	// 校验输入
 	if req.ApprovalId == "" || req.WorkflowId == "" {
 		return &pb.ApproveTaskResponse{
 			Success: false,
@@ -3018,6 +3099,7 @@ func (s *OrchestratorService) ApproveTask(ctx context.Context, req *pb.ApproveTa
 	}
 
 	// Enforce authentication and ownership
+	// 强制认证与归属校验
 	uc, err := auth.GetUserContext(ctx)
 	if err != nil || uc == nil {
 		return nil, status.Error(codes.Unauthenticated, "authentication required")
@@ -3045,6 +3127,7 @@ func (s *OrchestratorService) ApproveTask(ctx context.Context, req *pb.ApproveTa
 	}
 
 	// Create the approval result
+	// 创建 approval result
 	approvalResult := activities.HumanApprovalResult{
 		ApprovalID:     req.ApprovalId,
 		Approved:       req.Approved,
@@ -3061,12 +3144,12 @@ func (s *OrchestratorService) ApproveTask(ctx context.Context, req *pb.ApproveTa
 	}
 
 	// Send signal to the workflow
+	// 向 workflow 发送 signal
 	signalName := fmt.Sprintf("human-approval-%s", req.ApprovalId)
 	err = s.temporalClient.SignalWorkflow(
 		ctx,
 		req.WorkflowId,
-		req.RunId, // Can be empty to signal the current run
-		// 可为空，表示当前运行
+		req.RunId, // Can be empty to signal the current run 注：可为空，表示当前运行
 		signalName,
 		approvalResult,
 	)
@@ -3131,6 +3214,7 @@ func (s *OrchestratorService) SubmitReviewDecision(
 	}
 
 	// Authenticate
+	// 认证
 	uc, err := auth.GetUserContext(ctx)
 	if err != nil || uc == nil {
 		return nil, status.Error(codes.Unauthenticated, "authentication required")
@@ -3167,11 +3251,13 @@ func (s *OrchestratorService) SubmitReviewDecision(
 	}
 
 	// Build the Signal payload
+	// 构建 Signal payload
 	var conversation []activities.ReviewRound
 	if req.Conversation != "" {
 		if err := json.Unmarshal([]byte(req.Conversation), &conversation); err != nil {
 			s.logger.Warn("Failed to parse conversation JSON", zap.Error(err))
 			// Non-fatal: conversation is informational
+			// 非致命：conversation 仅作参考
 		}
 	}
 
@@ -3183,6 +3269,7 @@ func (s *OrchestratorService) SubmitReviewDecision(
 	}
 
 	// Send Signal to workflow
+	// 向 workflow 发送 Signal
 	sigName := "research-plan-approved-" + req.WorkflowId
 	err = s.temporalClient.SignalWorkflow(ctx, req.WorkflowId, "", sigName, reviewResult)
 	if err != nil {
@@ -3303,6 +3390,7 @@ func (s *OrchestratorService) RecordTokenUsage(
 // CreateSchedule 创建新的 scheduled task（含归属校验）
 func (s *OrchestratorService) CreateSchedule(ctx context.Context, req *pb.CreateScheduleRequest) (*pb.CreateScheduleResponse, error) {
 	// 1. Auth enforcement
+	// 1. 认证强制
 	uc, err := auth.GetUserContext(ctx)
 	if err != nil || uc == nil {
 		return nil, status.Error(codes.Unauthenticated, "authentication required")
@@ -3315,6 +3403,7 @@ func (s *OrchestratorService) CreateSchedule(ctx context.Context, req *pb.Create
 	}
 
 	// 3. Validate input
+	// 3. 校验输入
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "schedule name required")
 	}
@@ -3326,13 +3415,14 @@ func (s *OrchestratorService) CreateSchedule(ctx context.Context, req *pb.Create
 	}
 
 	// 4. Set defaults
+	// 4. 设置默认值
 	timezone := req.Timezone
 	if timezone == "" {
 		timezone = "UTC"
 	}
 	timeoutSecs := req.TimeoutSeconds
 	if timeoutSecs == 0 {
-		timeoutSecs = 3600 // 1 hour default
+		timeoutSecs = 3600 // 1 hour default 注：默认 1 小时
 	}
 
 	// 5. Convert proto map to Go map, decoding JSON-encoded values
@@ -3340,6 +3430,7 @@ func (s *OrchestratorService) CreateSchedule(ctx context.Context, req *pb.Create
 	taskContext := decodeTaskContext(req.TaskContext)
 
 	// 6. Create via schedule manager
+	// 6. 经 schedule manager 创建
 	input := &schedules.CreateScheduleInput{
 		UserID:             uc.UserID,
 		TenantID:           uc.TenantID,
@@ -3389,6 +3480,7 @@ func (s *OrchestratorService) CreateSchedule(ctx context.Context, req *pb.Create
 }
 
 // ownedSchedule parses the id, loads the schedule, and enforces ownership.
+// ownedSchedule 解析 id、加载 schedule 并强制归属校验。
 func (s *OrchestratorService) ownedSchedule(ctx context.Context, uc *auth.UserContext, scheduleIDStr string) (uuid.UUID, *schedules.Schedule, error) {
 	if s.scheduleManager == nil {
 		return uuid.UUID{}, nil, status.Error(codes.Unavailable, "scheduling feature not enabled")
@@ -3426,6 +3518,7 @@ func (s *OrchestratorService) GetSchedule(ctx context.Context, req *pb.GetSchedu
 }
 
 // ListSchedules retrieves schedules for a user
+// ListSchedules 获取某个用户的 schedule 列表
 func (s *OrchestratorService) ListSchedules(ctx context.Context, req *pb.ListSchedulesRequest) (*pb.ListSchedulesResponse, error) {
 	uc, err := auth.GetUserContext(ctx)
 	if err != nil || uc == nil {
@@ -3437,6 +3530,7 @@ func (s *OrchestratorService) ListSchedules(ctx context.Context, req *pb.ListSch
 	}
 
 	// Set defaults
+	// 设置默认值
 	pageSize := int(req.PageSize)
 	if pageSize <= 0 || pageSize > 100 {
 		pageSize = 50
@@ -3471,6 +3565,7 @@ func (s *OrchestratorService) ListSchedules(ctx context.Context, req *pb.ListSch
 }
 
 // UpdateSchedule updates a schedule
+// UpdateSchedule 更新 schedule
 func (s *OrchestratorService) UpdateSchedule(ctx context.Context, req *pb.UpdateScheduleRequest) (*pb.UpdateScheduleResponse, error) {
 	uc, err := auth.GetUserContext(ctx)
 	if err != nil || uc == nil {
@@ -3483,6 +3578,7 @@ func (s *OrchestratorService) UpdateSchedule(ctx context.Context, req *pb.Update
 	}
 
 	// Build update input
+	// 构建 update input
 	updateInput := &schedules.UpdateScheduleInput{
 		ScheduleID: scheduleID,
 	}
@@ -3502,6 +3598,7 @@ func (s *OrchestratorService) UpdateSchedule(ctx context.Context, req *pb.Update
 	// 两者都不满足：TaskContext 保持 nil，从而保留现有值
 
 	// Only set fields that are provided
+	// 仅设置已提供的字段
 	if req.Name != nil {
 		updateInput.Name = req.Name
 	}
@@ -3561,6 +3658,7 @@ func (s *OrchestratorService) UpdateSchedule(ctx context.Context, req *pb.Update
 }
 
 // DeleteSchedule deletes a schedule
+// DeleteSchedule 删除 schedule
 func (s *OrchestratorService) DeleteSchedule(ctx context.Context, req *pb.DeleteScheduleRequest) (*pb.DeleteScheduleResponse, error) {
 	uc, err := auth.GetUserContext(ctx)
 	if err != nil || uc == nil {
@@ -3584,6 +3682,7 @@ func (s *OrchestratorService) DeleteSchedule(ctx context.Context, req *pb.Delete
 }
 
 // PauseSchedule pauses a schedule
+// PauseSchedule 暂停 schedule
 func (s *OrchestratorService) PauseSchedule(ctx context.Context, req *pb.PauseScheduleRequest) (*pb.PauseScheduleResponse, error) {
 	uc, err := auth.GetUserContext(ctx)
 	if err != nil || uc == nil {
@@ -3606,6 +3705,7 @@ func (s *OrchestratorService) PauseSchedule(ctx context.Context, req *pb.PauseSc
 }
 
 // ResumeSchedule resumes a paused schedule
+// ResumeSchedule 恢复已暂停的 schedule
 func (s *OrchestratorService) ResumeSchedule(ctx context.Context, req *pb.ResumeScheduleRequest) (*pb.ResumeScheduleResponse, error) {
 	uc, err := auth.GetUserContext(ctx)
 	if err != nil || uc == nil {
@@ -3635,6 +3735,7 @@ func (s *OrchestratorService) ResumeSchedule(ctx context.Context, req *pb.Resume
 }
 
 // Helper to convert Schedule to proto
+// 把 Schedule 转换为 proto 的辅助函数
 func convertScheduleToProto(s *schedules.Schedule) *pb.ScheduleInfo {
 	taskContext := make(map[string]string)
 	for k, v := range s.TaskContext {
@@ -3691,15 +3792,17 @@ func decodeTaskContext(ctx map[string]string) map[string]any {
 	for k, v := range ctx {
 		if after, ok := strings.CutPrefix(v, jsonEncodedPrefix); ok {
 			// JSON-encoded value: decode it
+			// JSON 编码的值：解码它
 			jsonStr := after
 			var decoded any
 			if err := json.Unmarshal([]byte(jsonStr), &decoded); err == nil {
 				result[k] = decoded
 			} else {
-				result[k] = v // fallback to original if decode fails
+				result[k] = v // fallback to original if decode fails 注：解码失败时回退为原值
 			}
 		} else {
 			// Plain string: preserve as-is
+			// 纯字符串：原样保留
 			result[k] = v
 		}
 	}

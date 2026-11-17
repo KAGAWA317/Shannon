@@ -121,14 +121,12 @@ class BashExecutorTool(Tool):
             category="system",
             author="Shannon",
             requires_auth=True,
-            rate_limit=20,  # 20 executions per minute
+            rate_limit=20,  # 20 executions per minute 注：每分钟 20 次执行
             timeout_seconds=30,
             memory_limit_mb=512,
-            sandboxed=False,  # Runs on the host (not WASI)
-            # 在宿主机上运行（非 WASI）
+            sandboxed=False,  # Runs on the host (not WASI) 注：在宿主机上运行（非 WASI）
             session_aware=True,
-            dangerous=True,  # Command execution is inherently dangerous
-            # 命令执行本身即为危险操作
+            dangerous=True,  # Command execution is inherently dangerous 注：命令执行本身即为危险操作
             cost_per_use=0.002,
         )
 

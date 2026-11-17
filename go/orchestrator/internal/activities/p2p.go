@@ -33,8 +33,7 @@ type SendAgentMessageInput struct {
 	To         string         `json:"to"`
 	Type       MessageType    `json:"type"`
 	Payload    map[string]any `json:"payload"`
-	Timestamp  time.Time      `json:"timestamp"` // Passed from workflow.Now()
-	// 由 workflow.Now() 传入。
+	Timestamp  time.Time      `json:"timestamp"` // Passed from workflow.Now() 注：由 workflow.Now() 传入。
 }
 
 type SendAgentMessageResult struct {
@@ -50,8 +49,7 @@ func (a *Activities) SendAgentMessage(ctx context.Context, in SendAgentMessageIn
 
 	// Validate payload size to prevent memory exhaustion
 	// 校验 payload 大小，防止内存耗尽。
-	const maxPayloadSize = 1 * 1024 * 1024 // 1MB limit
-	// 上限 1MB。
+	const maxPayloadSize = 1 * 1024 * 1024 // 1MB limit 注：上限 1MB。
 	payloadSize := lenMust(in.Payload)
 	if payloadSize > maxPayloadSize {
 		return SendAgentMessageResult{}, fmt.Errorf("payload size %d exceeds maximum allowed size of %d bytes", payloadSize, maxPayloadSize)
@@ -71,8 +69,7 @@ func (a *Activities) SendAgentMessage(ctx context.Context, in SendAgentMessageIn
 	// 使用 workflow 传入的 timestamp，保证 replay 确定性。
 	ts := in.Timestamp
 	if ts.IsZero() {
-		ts = time.Now() // Fallback for backward compatibility
-		// 向后兼容的兜底。
+		ts = time.Now() // Fallback for backward compatibility 注：向后兼容的兜底。
 	}
 	msg := map[string]any{
 		"seq":     seq,
@@ -156,8 +153,7 @@ type WorkspaceAppendInput struct {
 	WorkflowID string         `json:"workflow_id"`
 	Topic      string         `json:"topic"`
 	Entry      map[string]any `json:"entry"`
-	Timestamp  time.Time      `json:"timestamp"` // Passed from workflow.Now()
-	// 由 workflow.Now() 传入。
+	Timestamp  time.Time      `json:"timestamp"` // Passed from workflow.Now() 注：由 workflow.Now() 传入。
 }
 
 type WorkspaceAppendResult struct {
@@ -173,8 +169,7 @@ func (a *Activities) WorkspaceAppend(ctx context.Context, in WorkspaceAppendInpu
 
 	// Validate entry size to prevent memory exhaustion
 	// 校验 entry 大小，防止内存耗尽。
-	const maxEntrySize = 1 * 1024 * 1024 // 1MB limit
-	// 上限 1MB。
+	const maxEntrySize = 1 * 1024 * 1024 // 1MB limit 注：上限 1MB。
 	entrySize := lenMust(in.Entry)
 	if entrySize > maxEntrySize {
 		return WorkspaceAppendResult{}, fmt.Errorf("entry size %d exceeds maximum allowed size of %d bytes", entrySize, maxEntrySize)
@@ -191,8 +186,7 @@ func (a *Activities) WorkspaceAppend(ctx context.Context, in WorkspaceAppendInpu
 	// 使用 workflow 传入的 timestamp，保证 replay 确定性。
 	ts := in.Timestamp
 	if ts.IsZero() {
-		ts = time.Now() // Fallback for backward compatibility
-		// 向后兼容的兜底。
+		ts = time.Now() // Fallback for backward compatibility 注：向后兼容的兜底。
 	}
 	entry := map[string]any{"seq": seq, "topic": in.Topic, "entry": in.Entry, "ts": ts.UnixNano()}
 	b, _ := json.Marshal(entry)
@@ -257,8 +251,7 @@ func (a *Activities) WorkspaceList(ctx context.Context, in WorkspaceListInput) (
 type WorkspaceListAllInput struct {
 	WorkflowID string `json:"workflow_id"`
 	SinceSeq   uint64 `json:"since_seq"`
-	MaxEntries int    `json:"max_entries"` // Max entries total across all topics
-	// 所有 topic 合计的最大 entry 数。
+	MaxEntries int    `json:"max_entries"` // Max entries total across all topics 注：所有 topic 合计的最大 entry 数。
 }
 
 // WorkspaceListAll returns recent entries from ALL workspace topics for a workflow.
@@ -282,8 +275,7 @@ func (a *Activities) WorkspaceListAll(ctx context.Context, in WorkspaceListAllIn
 	iter := rc.Scan(ctx, 0, prefix+"*", 100).Iterator()
 	for iter.Next(ctx) {
 		key := iter.Val()
-		if key != seqKey { // Skip the global seq counter
-			// 跳过全局 seq 计数器。
+		if key != seqKey { // Skip the global seq counter 注：跳过全局 seq 计数器。
 			topicKeys = append(topicKeys, key)
 			if len(topicKeys) >= maxTopics {
 				break
@@ -420,6 +412,7 @@ func lenMust(m map[string]any) int {
 }
 
 // Structured protocols (v1)
+// 结构化协议（v1）。
 type TaskRequest struct {
 	TaskID      string   `json:"task_id"`
 	Description string   `json:"description"`
@@ -441,6 +434,7 @@ type TaskAccept struct {
 }
 
 // Convenience wrappers
+// 便捷 wrapper。
 func (a *Activities) SendTaskRequest(ctx context.Context, wf, from, to string, req TaskRequest, timestamp time.Time) (SendAgentMessageResult, error) {
 	payload := map[string]any{
 		"task_id": req.TaskID, "description": req.Description, "required_by": req.RequiredBy, "skills": req.Skills, "topic": req.Topic,
@@ -512,14 +506,10 @@ func (a *Activities) SetupWorkspaceDirs(ctx context.Context, in SetupWorkspaceDi
 type SwarmTask struct {
 	ID          string `json:"id"`
 	Description string `json:"description"`
-	Status      string `json:"status"` // "pending", "in_progress", "completed"
-	// 取值："pending"、"in_progress"、"completed"。
-	Owner string `json:"owner"` // agent ID that owns this task
-	// 拥有该 task 的 agent ID。
-	CreatedBy string `json:"created_by"` // "decompose" or agent ID
-	// "decompose" 或 agent ID。
-	DependsOn []string `json:"depends_on"` // task IDs this depends on
-	// 该 task 依赖的 task ID。
+	Status      string `json:"status"` // "pending", "in_progress", "completed" 注：取值："pending"、"in_progress"、"completed"。
+	Owner string `json:"owner"` // agent ID that owns this task 注：拥有该 task 的 agent ID。
+	CreatedBy string `json:"created_by"` // "decompose" or agent ID 注："decompose" 或 agent ID。
+	DependsOn []string `json:"depends_on"` // task IDs this depends on 注：该 task 依赖的 task ID。
 	CreatedAt   string `json:"created_at"`
 	CompletedAt string `json:"completed_at,omitempty"`
 }
@@ -582,14 +572,11 @@ func ValidateStatusTransition(from, to string) error {
 	case from == "in_progress" && to == "completed":
 		return nil
 	case from == "pending" && to == "completed":
-		return nil // Lead can cancel pending tasks directly
-		// Lead 可以直接取消 pending 的 task。
+		return nil // Lead can cancel pending tasks directly 注：Lead 可以直接取消 pending 的 task。
 	case from == "in_progress" && to == "in_progress":
-		return nil // Lead can re-assign an in_progress task
-		// Lead 可以重新指派 in_progress 的 task。
+		return nil // Lead can re-assign an in_progress task 注：Lead 可以重新指派 in_progress 的 task。
 	case from == "completed" && to == "in_progress":
-		return nil // Reactivate: agent idle auto-completes task, then Lead assigns continuation
-		// 重新激活：agent 空闲时会自动完成 task，之后 Lead 再指派后续工作。
+		return nil // Reactivate: agent idle auto-completes task, then Lead assigns continuation 注：重新激活：agent 空闲时会自动完成 task，之后 Lead 再指派后续工作。
 	default:
 		return fmt.Errorf("invalid status transition: %s -> %s", from, to)
 	}
@@ -671,8 +658,7 @@ func (a *Activities) GetTaskList(ctx context.Context, in GetTaskListInput) ([]Sw
 	for _, v := range vals {
 		var t SwarmTask
 		if err := json.Unmarshal([]byte(v), &t); err != nil {
-			continue // skip malformed entries
-			// 跳过格式错误的 entry。
+			continue // skip malformed entries 注：跳过格式错误的 entry。
 		}
 		tasks = append(tasks, t)
 	}
@@ -686,10 +672,8 @@ func (a *Activities) GetTaskList(ctx context.Context, in GetTaskListInput) ([]Sw
 type UpdateTaskStatusInput struct {
 	WorkflowID string `json:"workflow_id"`
 	TaskID     string `json:"task_id"`
-	Status     string `json:"status"` // target status
-	// 目标状态。
-	AgentID string `json:"agent_id"` // who is making the change
-	// 发起变更的 agent。
+	Status     string `json:"status"` // target status 注：目标状态。
+	AgentID string `json:"agent_id"` // who is making the change 注：发起变更的 agent。
 }
 
 // UpdateTaskStatus performs a validated status transition on a single task.

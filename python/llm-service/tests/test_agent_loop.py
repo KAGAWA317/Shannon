@@ -72,6 +72,7 @@ class TestTieredHistory:
             history_lines.append(result_str)
 
         # All should be 100 chars (shorter than both limits)
+        # 长度都应为 100 字符（短于两个上限）
         for line in history_lines:
             assert len(line) == 100
 
