@@ -302,15 +302,16 @@ func DomainAnalysisWorkflow(ctx workflow.Context, input DomainAnalysisInput) (Do
 		for _, q := range allQueries {
 			fmt.Fprintf(&discoveryQuery, "- %s\n", q)
 		}
-		discoveryQuery.WriteString("\n" +
-			"STEP 2: After ALL searches complete, respond with ONLY this JSON:\n" +
-			"{\"domains\":[\"domain1.com\",\"domain2.com\"]}\n\n" +
-			"RULES:\n" +
-			"- Include: corporate sites, IR sites (abc.xyz), parent company sites\n" +
-			"- Exclude: login/accounts, store, support, third-party (wikipedia, linkedin)\n" +
-			"- Strip www prefix, no paths\n" +
-			fmt.Sprintf("- Max %d domains\n\n", maxPrefetch) +
-			"CRITICAL: Your response must be ONLY the JSON object, nothing else.\n")
+		fmt.Fprintf(&discoveryQuery, "\n"+
+			"STEP 2: After ALL searches complete, respond with ONLY this JSON:\n"+
+			"{\"domains\":[\"domain1.com\",\"domain2.com\"]}\n\n"+
+			"RULES:\n"+
+			"- Include: corporate sites, IR sites (abc.xyz), parent company sites\n"+
+			"- Exclude: login/accounts, store, support, third-party (wikipedia, linkedin)\n"+
+			"- Strip www prefix, no paths\n"+
+			"- Max %d domains\n\n"+
+			"CRITICAL: Your response must be ONLY the JSON object, nothing else.\n",
+			maxPrefetch)
 
 		fmt.Fprintf(&discoveryQuery, "\n=== RESEARCH FOCUS ===\n"+
 			"Original query: %s\n"+

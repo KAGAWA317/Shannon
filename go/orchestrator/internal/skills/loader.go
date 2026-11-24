@@ -48,7 +48,8 @@ func LoadSkill(reader io.Reader) (*Skill, error) {
 			foundEnd = true
 			break
 		}
-		frontmatter.WriteString(line + "\n")
+		frontmatter.WriteString(line)
+		frontmatter.WriteByte('\n')
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -72,7 +73,8 @@ func LoadSkill(reader io.Reader) (*Skill, error) {
 	// 把剩余内容作为 Markdown 读取
 	var content bytes.Buffer
 	for scanner.Scan() {
-		content.WriteString(scanner.Text() + "\n")
+		content.WriteString(scanner.Text())
+		content.WriteByte('\n')
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -153,6 +155,7 @@ func ParseVersion(version string) (major, minor, patch int) {
 //	-1 if a < b
 //	 0 if a == b
 //	 1 if a > b
+//
 // CompareVersions 返回：
 // -1 表示 a < b
 // 0 表示 a == b
